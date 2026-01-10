@@ -68,25 +68,57 @@ export function usePedidos() {
   return useQuery({
     queryKey: ['pedidos', user?.id],
     queryFn: async () => {
-      // Fetch pedidos
-      const { data: pedidos, error: pedidosError } = await supabase
-        .from('pedidos')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const pageSize = 1000;
+      
+      // Fetch all pedidos with pagination
+      let allPedidos: any[] = [];
+      let page = 0;
+      let hasMore = true;
 
-      if (pedidosError) throw pedidosError;
+      while (hasMore) {
+        const { data: pedidos, error: pedidosError } = await supabase
+          .from('pedidos')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      // Fetch all itens for user's pedidos
-      const { data: itens, error: itensError } = await supabase
-        .from('pedido_itens')
-        .select('*');
+        if (pedidosError) throw pedidosError;
 
-      if (itensError) throw itensError;
+        if (pedidos && pedidos.length > 0) {
+          allPedidos = [...allPedidos, ...pedidos];
+          hasMore = pedidos.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      // Fetch all itens with pagination
+      let allItens: any[] = [];
+      page = 0;
+      hasMore = true;
+
+      while (hasMore) {
+        const { data: itens, error: itensError } = await supabase
+          .from('pedido_itens')
+          .select('*')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (itensError) throw itensError;
+
+        if (itens && itens.length > 0) {
+          allItens = [...allItens, ...itens];
+          hasMore = itens.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
 
       // Map itens to their respective pedidos
-      const pedidosWithItens = (pedidos || []).map(pedido => ({
+      const pedidosWithItens = allPedidos.map(pedido => ({
         ...pedido,
-        itens: (itens || []).filter(item => item.pedido_id === pedido.id)
+        itens: allItens.filter(item => item.pedido_id === pedido.id)
       }));
 
       return pedidosWithItens as PedidoDB[];
