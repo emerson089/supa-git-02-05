@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { usePedidos, Pedido } from '@/contexts/PedidosContext';
 import { usePedidoById } from '@/hooks/usePedidosData';
 import { EditPedidoModal } from '@/components/pedidos/EditPedidoModal';
 import { useEstoque } from '@/contexts/EstoqueContext';
+import { ImportPedidosCSVModal } from '@/components/pedidos/ImportPedidosCSVModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -132,8 +133,8 @@ export default function PedidosCriados() {
   const [filterStatusEntrega, setFilterStatusEntrega] = useState<string>('all');
   const [filterModelo, setFilterModelo] = useState<string>('');
   
-  // CSV import ref
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // CSV import modal
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -577,48 +578,6 @@ export default function PedidosCriados() {
     toast.success(`${filteredAndSortedPedidos.length} pedidos exportados com sucesso!`);
   };
 
-  // CSV Import
-  const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result as string;
-        const lines = text.split('\n').filter(line => line.trim());
-        
-        if (lines.length < 2) {
-          toast.error('Arquivo CSV vazio ou inválido');
-          return;
-        }
-
-        // Skip header
-        let importedCount = 0;
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
-          
-          if (values.length >= 8) {
-            // Parse and create pedido - simplified import
-            toast.info('Importação de CSV em desenvolvimento');
-            importedCount++;
-          }
-        }
-        
-        if (importedCount > 0) {
-          toast.success(`${importedCount} pedidos importados com sucesso!`);
-        }
-      } catch (error) {
-        toast.error('Erro ao processar arquivo CSV');
-      }
-    };
-    reader.readAsText(file);
-    
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background flex overflow-hidden">
@@ -810,16 +769,9 @@ export default function PedidosCriados() {
                     Exportar CSV
                   </Button>
                   
-                  <input
-                    type="file"
-                    accept=".csv"
-                    ref={fileInputRef}
-                    onChange={handleImportCSV}
-                    className="hidden"
-                  />
                   <Button
                     variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => setImportModalOpen(true)}
                     className="h-10 rounded-xl neu-button border-0 bg-background gap-2"
                   >
                     <Upload className="h-4 w-4" />
@@ -1151,6 +1103,12 @@ export default function PedidosCriados() {
       <EditPedidoModalWrapper 
         pedidoId={editingPedidoId} 
         onClose={() => setEditingPedidoId(null)} 
+      />
+
+      {/* Import CSV Modal */}
+      <ImportPedidosCSVModal 
+        open={importModalOpen} 
+        onOpenChange={setImportModalOpen} 
       />
     </div>
   );
