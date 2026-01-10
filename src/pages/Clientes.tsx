@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2 } from 'lucide-react';
+import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle } from 'lucide-react';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useClientesContext, Cliente } from '@/contexts/ClientesContext';
 import { ImportCSVModal } from '@/components/clientes/ImportCSVModal';
+import { ClearDataModal } from '@/components/clientes/ClearDataModal';
 import { ClienteSchema } from '@/lib/validations';
 import {
   Dialog,
@@ -38,6 +39,7 @@ export default function Clientes() {
   const [busca, setBusca] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [formData, setFormData] = useState(emptyCliente);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -160,7 +162,15 @@ export default function Clientes() {
             <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Clientes</h1>
             <p className="text-muted-foreground mt-1">Gerencie sua base de clientes</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
+            <Button 
+              onClick={() => setClearDataModalOpen(true)}
+              variant="outline"
+              className="h-11 px-5 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              <AlertTriangle size={18} className="mr-2" />
+              Limpar Dados
+            </Button>
             <Button 
               onClick={handleExportCSV}
               className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-white transition-colors shadow-lg"
@@ -371,6 +381,9 @@ export default function Clientes() {
 
       {/* Modal de Importação CSV */}
       <ImportCSVModal open={importModalOpen} onOpenChange={setImportModalOpen} />
+
+      {/* Modal de Limpar Dados */}
+      <ClearDataModal open={clearDataModalOpen} onOpenChange={setClearDataModalOpen} />
 
       {/* Modal de Confirmação de Exclusão */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
