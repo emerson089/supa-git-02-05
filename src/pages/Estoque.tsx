@@ -1,0 +1,920 @@
+import { useState, useRef } from 'react';
+import { AppSidebar } from '@/components/layout/AppSidebar';
+import { useEstoque, ItemEstoque, TipoEstoque, StatusEstoque } from '@/contexts/EstoqueContext';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet } from 'lucide-react';
+import { toast } from 'sonner';
+import { useSignedUrl } from '@/hooks/useSignedUrl';
+import { supabase } from '@/integrations/supabase/client';
+import { ImportModelosCSVModal } from '@/components/estoque/ImportModelosCSVModal';
+import { ProductCard } from '@/components/estoque/ProductCard';
+import { EstoqueItemSchema, NovoModeloAcabadoSchema } from '@/lib/validations';
+const statusConfig: Record<StatusEstoque, { label: string; color: string }> = {
+  disponivel: { label: 'Disponível', color: 'bg-emerald-100 text-emerald-700' },
+  em_producao: { label: 'Em Produção', color: 'bg-blue-100 text-blue-700' },
+  reservado: { label: 'Reservado', color: 'bg-amber-100 text-amber-700' },
+  baixo_estoque: { label: 'Baixo Estoque', color: 'bg-red-100 text-red-700' },
+};
+
+const categoriasMateriaPrima = ['Tecido', 'Aviamentos', 'Acessórios', 'Embalagem'];
+
+// Component for product image with signed URL support
+function ProductImage({ imagemUrl, nome }: { imagemUrl?: string; nome: string }) {
+  const { signedUrl, loading } = useSignedUrl(imagemUrl);
+  
+  if (!imagemUrl) {
+    return (
+      <div className="p-2 rounded-lg bg-primary/10">
+        <Package size={20} className="text-primary" />
+      </div>
+    );
+  }
+  
+  if (loading) {
+    return (
+      <div className="w-12 h-12 rounded-lg bg-muted/50 animate-pulse" />
+    );
+  }
+  
+  return (
+    <div className="w-12 h-12 rounded-lg overflow-hidden shadow-[inset_1px_1px_3px_hsl(var(--muted)/0.4)] border border-border/30">
+      <img 
+        src={signedUrl || imagemUrl} 
+        alt={nome}
+        className="w-full h-full object-cover"
+      />
+    </div>
+  );
+}
+
+export default function Estoque() {
+  const { itens, addItem, updateItem, removeItem, getMateriasPrimas, getProdutosAcabados } = useEstoque();
+  const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'materia_prima' | 'produto_acabado'>('produto_acabado');
+  const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<ItemEstoque | null>(null);
+  const [editingItem, setEditingItem] = useState<ItemEstoque | null>(null);
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [editingPriceValue, setEditingPriceValue] = useState<number>(0);
+  const [formData, setFormData] = useState({
+    nome: '',
+    categoria: '',
+    quantidade: 0,
+    unidade: 'metros',
+    quantidadeMinima: 0,
+    precoUnitario: 0,
+    localizacao: '',
+  });
+
+  // Modal para Novo Modelo Acabado
+  const [showNovoModeloModal, setShowNovoModeloModal] = useState(false);
+  const [showDuplicadoModal, setShowDuplicadoModal] = useState(false);
+  const [produtoDuplicado, setProdutoDuplicado] = useState<ItemEstoque | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [novoModeloForm, setNovoModeloForm] = useState({
+    nome: '',
+    referencia: '',
+    quantidade: 0,
+    precoVenda: 0,
+    imagemUrl: '',
+    imagemPreview: '',
+  });
+
+  // Modal para importação CSV
+  const [showImportModal, setShowImportModal] = useState(false);
+
+  const materiasPrimas = getMateriasPrimas();
+  const produtosAcabados = getProdutosAcabados();
+
+  const itensExibidos = activeTab === 'materia_prima' ? materiasPrimas : produtosAcabados;
+  const itensFiltrados = itensExibidos.filter(
+    item =>
+      item.nome.toLowerCase().includes(search.toLowerCase()) ||
+      item.categoria.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const itensComBaixoEstoque = itens.filter(item => item.status === 'baixo_estoque');
+
+  const handleOpenModal = (item?: ItemEstoque) => {
+    if (item) {
+      setEditingItem(item);
+      setFormData({
+        nome: item.nome,
+        categoria: item.categoria,
+        quantidade: item.quantidade,
+        unidade: item.unidade,
+        quantidadeMinima: item.quantidadeMinima,
+        precoUnitario: item.precoUnitario,
+        localizacao: item.localizacao,
+      });
+    } else {
+      setEditingItem(null);
+      setFormData({
+        nome: '',
+        categoria: '',
+        quantidade: 0,
+        unidade: 'metros',
+        quantidadeMinima: 0,
+        precoUnitario: 0,
+        localizacao: '',
+      });
+    }
+    setShowModal(true);
+  };
+
+  const handleSave = () => {
+    // Validate with Zod schema
+    const result = EstoqueItemSchema.safeParse(formData);
+    if (!result.success) {
+      const firstError = result.error.errors[0]?.message || 'Dados inválidos';
+      toast.error(firstError);
+      return;
+    }
+
+    // Para matéria-prima, categoria é obrigatória
+    if ((!editingItem || editingItem.tipo === 'materia-prima') && !formData.categoria) {
+      toast.error('Preencha a categoria do item');
+      return;
+    }
+
+    if (editingItem) {
+      // Para produtos acabados, atualiza apenas nome, quantidade e localização
+      if (editingItem.tipo === 'acabado') {
+        updateItem(editingItem.id, {
+          nome: formData.nome,
+          quantidade: formData.quantidade,
+          localizacao: formData.localizacao,
+        });
+      } else {
+        updateItem(editingItem.id, formData);
+      }
+      toast.success('Item atualizado com sucesso!');
+    } else {
+      addItem({
+        ...formData,
+        tipo: 'materia_prima',
+      });
+      toast.success('Item adicionado ao estoque!');
+    }
+    setShowModal(false);
+  };
+
+  const handleDeleteClick = (item: ItemEstoque) => {
+    setItemToDelete(item);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (itemToDelete) {
+      removeItem(itemToDelete.id);
+      toast.success('Item removido do estoque');
+      setShowDeleteModal(false);
+      setItemToDelete(null);
+    }
+  };
+
+  const handleStartEditPrice = (item: ItemEstoque) => {
+    setEditingPriceId(item.id);
+    setEditingPriceValue(item.precoUnitario);
+  };
+
+  const handleSavePrice = (itemId: string) => {
+    updateItem(itemId, { precoUnitario: editingPriceValue });
+    setEditingPriceId(null);
+    toast.success('Preço atualizado!');
+  };
+
+  const handleCancelEditPrice = () => {
+    setEditingPriceId(null);
+    setEditingPriceValue(0);
+  };
+
+  // Handler para atualizar imagem de produto existente
+  const handleProductImageUpdate = async (productId: string, file: File) => {
+    if (!file) return;
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Você precisa estar autenticado');
+        return;
+      }
+
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `${user.id}/produtos/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('lotes')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      updateItem(productId, { imagemUrl: filePath });
+      toast.success('Imagem atualizada com sucesso!');
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Erro ao atualizar imagem:', error);
+      toast.error('Erro ao atualizar imagem');
+    }
+  };
+
+  // Handlers para Novo Modelo Acabado
+  const handleOpenNovoModelo = () => {
+    setNovoModeloForm({
+      nome: '',
+      referencia: '',
+      quantidade: 0,
+      precoVenda: 0,
+      imagemUrl: '',
+      imagemPreview: '',
+    });
+    setShowNovoModeloModal(true);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Preview local
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setNovoModeloForm(prev => ({ ...prev, imagemPreview: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+
+    // Upload para Supabase Storage
+    setUploadingImage(true);
+    try {
+      // Get current user for user-specific path (required by storage RLS)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Você precisa estar autenticado para enviar imagens.');
+        return;
+      }
+
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `${user.id}/produtos/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('lotes')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      setNovoModeloForm(prev => ({ ...prev, imagemUrl: filePath }));
+      toast.success('Imagem carregada!');
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Erro ao fazer upload:', error);
+      toast.error('Erro ao carregar imagem');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleSaveNovoModelo = () => {
+    // Validate with Zod schema
+    const result = NovoModeloAcabadoSchema.safeParse(novoModeloForm);
+    if (!result.success) {
+      const firstError = result.error.errors[0]?.message || 'Dados inválidos';
+      toast.error(firstError);
+      return;
+    }
+
+    // Verificar se já existe um produto com o mesmo nome/referência
+    const nomeCompleto = novoModeloForm.referencia 
+      ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` 
+      : novoModeloForm.nome;
+    
+    const produtoExistente = itens.find(
+      item => item.tipo === 'acabado' && 
+        item.nome.toLowerCase() === nomeCompleto.toLowerCase()
+    );
+
+    if (produtoExistente) {
+      setProdutoDuplicado(produtoExistente);
+      setShowDuplicadoModal(true);
+      return;
+    }
+
+    // Criar novo produto
+    criarNovoModeloAcabado(nomeCompleto, false);
+  };
+
+  const criarNovoModeloAcabado = (nomeCompleto: string, somarQuantidade: boolean) => {
+    if (somarQuantidade && produtoDuplicado) {
+      // Somar à quantidade existente
+        updateItem(produtoDuplicado.id, {
+          quantidade: produtoDuplicado.quantidade + novoModeloForm.quantidade,
+          precoUnitario: novoModeloForm.precoVenda || (produtoDuplicado.precoUnitario ?? 0),
+          imagemUrl: novoModeloForm.imagemUrl || produtoDuplicado.imagemUrl || undefined,
+      });
+        toast.success(`Quantidade somada ao produto existente!`);
+      } else {
+        // Criar novo
+        addItem({
+          nome: nomeCompleto,
+          tipo: 'acabado',
+          categoria: 'Modelo Manual',
+          quantidade: novoModeloForm.quantidade,
+          unidade: 'peças',
+          quantidadeMinima: 0,
+          precoUnitario: novoModeloForm.precoVenda,
+          localizacao: 'Estoque Produção',
+          imagemUrl: novoModeloForm.imagemUrl,
+      });
+      toast.success('Modelo adicionado ao estoque!');
+    }
+
+    setShowNovoModeloModal(false);
+    setShowDuplicadoModal(false);
+    setProdutoDuplicado(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex overflow-hidden">
+      <AppSidebar />
+
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Header */}
+        <header className="px-6 py-4 border-b border-border bg-card/50">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Controle de Estoque</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {itens.length} itens cadastrados
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* Alerta de baixo estoque */}
+              {itensComBaixoEstoque.length > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                  <AlertTriangle size={16} className="text-amber-600" />
+                  <span className="text-sm text-amber-700 font-medium">
+                    {itensComBaixoEstoque.length} itens com estoque baixo
+                  </span>
+                </div>
+              )}
+
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                <Input
+                  placeholder="Buscar item..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-10 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                />
+              </div>
+
+              {/* Add button */}
+              <Button onClick={() => handleOpenModal()} className="gap-2">
+                <Plus size={18} />
+                Novo Item
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-6">
+          <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'materia_prima' | 'produto_acabado')}>
+            <div className="flex items-center justify-between mb-6">
+              <TabsList className="shadow-[3px_3px_6px_hsl(var(--muted)/0.3),-3px_-3px_6px_hsl(var(--background))] bg-muted/30">
+                <TabsTrigger value="materia_prima" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
+                  <Layers size={16} />
+                  Matéria-Prima ({materiasPrimas.length})
+                </TabsTrigger>
+                <TabsTrigger value="produto_acabado" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
+                  <PackageCheck size={16} />
+                  Produtos Acabados ({produtosAcabados.length})
+                </TabsTrigger>
+              </TabsList>
+
+              {activeTab === 'produto_acabado' && (
+                <div className="flex items-center gap-3">
+                  <Button 
+                    onClick={() => setShowImportModal(true)}
+                    variant="outline"
+                    className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50"
+                  >
+                    <FileSpreadsheet size={18} />
+                    Importar Lista de Modelos
+                  </Button>
+                  <Button 
+                    onClick={handleOpenNovoModelo} 
+                    className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]"
+                  >
+                    <Plus size={18} />
+                    Novo Modelo Acabado
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <TabsContent value={activeTab} className="mt-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {itensFiltrados.map(item => (
+                  item.tipo === 'acabado' ? (
+                    <ProductCard
+                      key={item.id}
+                      item={item}
+                      editingPriceId={editingPriceId}
+                      editingPriceValue={editingPriceValue}
+                      onEditPrice={handleStartEditPrice}
+                      onSavePrice={handleSavePrice}
+                      onCancelEditPrice={handleCancelEditPrice}
+                      onPriceValueChange={setEditingPriceValue}
+                      onEdit={handleOpenModal}
+                      onDelete={handleDeleteClick}
+                      onImageUpdate={handleProductImageUpdate}
+                    />
+                  ) : (
+                    <Card
+                      key={item.id}
+                      className="overflow-hidden shadow-soft border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-2xl"
+                    >
+                      <CardContent className="p-6">
+                        {/* Two column layout */}
+                        <div className="flex gap-4 mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
+                          {/* Left: Image */}
+                          <ProductImage imagemUrl={item.imagemUrl} nome={item.nome} />
+                          
+                          {/* Right: Main info */}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-lg text-foreground truncate">{item.nome}</h3>
+                            <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mt-1">{item.categoria}</p>
+                          </div>
+                          
+                          <Badge className={statusConfig[item.status].color + " h-fit"}>
+                            {statusConfig[item.status].label}
+                          </Badge>
+                        </div>
+
+                        {/* Technical data - clean aligned layout */}
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Quantidade</span>
+                            <span className="font-bold text-lg text-foreground">
+                              {item.quantidade} <span className="text-xs font-normal text-muted-foreground">{item.unidade}</span>
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Mínimo</span>
+                            <span className="text-sm text-muted-foreground">{item.quantidadeMinima} {item.unidade}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Preço unit.</span>
+                            <span className="font-semibold text-primary">R$ {(item.precoUnitario ?? 0).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Localização</span>
+                            <span className="text-sm text-muted-foreground">{item.localizacao}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 gap-1.5 h-10 border-gray-200 dark:border-gray-600"
+                            onClick={() => handleOpenModal(item)}
+                          >
+                            <Edit size={14} />
+                            Editar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:text-destructive h-10 px-3 border-gray-200 dark:border-gray-600"
+                            onClick={() => handleDeleteClick(item)}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                ))}
+
+                {itensFiltrados.length === 0 && (
+                  <div className="col-span-full text-center py-12 text-muted-foreground">
+                    {search
+                      ? 'Nenhum item encontrado para a busca.'
+                      : activeTab === 'materia_prima'
+                      ? 'Nenhuma matéria-prima cadastrada.'
+                      : 'Nenhum produto acabado no estoque.'}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
+
+      {/* Modal de Novo/Editar Item */}
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>{editingItem ? 'Editar Item' : 'Novo Item de Estoque'}</DialogTitle>
+            <DialogDescription>
+              {editingItem ? 'Atualize as informações do item' : 'Adicione um novo item ao estoque'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="nome">Nome do Item</Label>
+              <Input
+                id="nome"
+                value={formData.nome}
+                onChange={e => setFormData({ ...formData, nome: e.target.value })}
+                placeholder="Ex: Jeans Azul Escuro"
+                className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+              />
+            </div>
+
+            {/* Campos apenas para matéria-prima */}
+            {(!editingItem || editingItem.tipo === 'materia-prima') && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="categoria">Categoria</Label>
+                    <Select
+                      value={formData.categoria}
+                      onValueChange={v => setFormData({ ...formData, categoria: v })}
+                    >
+                      <SelectTrigger className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categoriasMateriaPrima.map(cat => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="unidade">Unidade</Label>
+                    <Select
+                      value={formData.unidade}
+                      onValueChange={v => setFormData({ ...formData, unidade: v })}
+                    >
+                      <SelectTrigger className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="metros">Metros</SelectItem>
+                        <SelectItem value="unidades">Unidades</SelectItem>
+                        <SelectItem value="cones">Cones</SelectItem>
+                        <SelectItem value="peças">Peças</SelectItem>
+                        <SelectItem value="kg">Quilos (kg)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="quantidade">Quantidade</Label>
+                    <Input
+                      id="quantidade"
+                      type="number"
+                      value={formData.quantidade}
+                      onChange={e => setFormData({ ...formData, quantidade: Number(e.target.value) })}
+                      min={0}
+                      className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="quantidadeMinima">Qtd. Mínima</Label>
+                    <Input
+                      id="quantidadeMinima"
+                      type="number"
+                      value={formData.quantidadeMinima}
+                      onChange={e => setFormData({ ...formData, quantidadeMinima: Number(e.target.value) })}
+                      min={0}
+                      className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="precoUnitario">Preço Unitário (R$)</Label>
+                    <Input
+                      id="precoUnitario"
+                      type="number"
+                      step="0.01"
+                      value={formData.precoUnitario}
+                      onChange={e => setFormData({ ...formData, precoUnitario: Number(e.target.value) })}
+                      min={0}
+                      className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="localizacao">Localização</Label>
+                    <Input
+                      id="localizacao"
+                      value={formData.localizacao}
+                      onChange={e => setFormData({ ...formData, localizacao: e.target.value })}
+                      placeholder="Ex: Prateleira A1"
+                      className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Campos para produtos acabados */}
+            {editingItem?.tipo === 'acabado' && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="quantidade">Quantidade (peças)</Label>
+                  <Input
+                    id="quantidade"
+                    type="number"
+                    value={formData.quantidade}
+                    onChange={e => setFormData({ ...formData, quantidade: Number(e.target.value) })}
+                    min={0}
+                    className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="localizacao">Localização</Label>
+                  <Input
+                    id="localizacao"
+                    value={formData.localizacao}
+                    onChange={e => setFormData({ ...formData, localizacao: e.target.value })}
+                    placeholder="Ex: Estoque Produção"
+                    className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowModal(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave}>
+              {editingItem ? 'Atualizar' : 'Adicionar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmação de Exclusão */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 size={20} />
+              Remover Item
+            </DialogTitle>
+            <DialogDescription>
+              Deseja remover este lote do estoque?
+            </DialogDescription>
+          </DialogHeader>
+
+          {itemToDelete && (
+            <div className="py-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))]">
+                <ProductImage imagemUrl={itemToDelete.imagemUrl} nome={itemToDelete.nome} />
+                <div>
+                  <p className="font-medium text-foreground">{itemToDelete.nome}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {itemToDelete.quantidade} {itemToDelete.unidade}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>
+              <Trash2 size={16} className="mr-2" />
+              Confirmar Exclusão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Novo Modelo Acabado */}
+      <Dialog open={showNovoModeloModal} onOpenChange={setShowNovoModeloModal}>
+        <DialogContent className="sm:max-w-[480px] bg-muted/95 shadow-[12px_12px_30px_hsl(216_26%_80%/0.6),-12px_-12px_30px_hsl(0_0%_100%/0.9)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PackageCheck size={20} className="text-primary" />
+              Novo Modelo Acabado
+            </DialogTitle>
+            <DialogDescription>
+              Cadastre um produto acabado manualmente no estoque
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-4">
+            {/* Upload de Imagem */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Imagem do Produto</Label>
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="relative w-full h-32 rounded-xl bg-background shadow-[inset_3px_3px_8px_hsl(var(--muted)/0.4),inset_-3px_-3px_8px_hsl(var(--background))] border border-border/30 cursor-pointer hover:border-primary/50 transition-colors flex items-center justify-center overflow-hidden group"
+              >
+                {novoModeloForm.imagemPreview ? (
+                  <>
+                    <img 
+                      src={novoModeloForm.imagemPreview} 
+                      alt="Preview" 
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-white text-sm font-medium">Trocar imagem</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    {uploadingImage ? (
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                    ) : (
+                      <>
+                        <ImagePlus size={32} className="text-muted-foreground/50" />
+                        <span className="text-xs uppercase tracking-wider">Clique para adicionar</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+            </div>
+
+            {/* Nome e Referência */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Nome do Modelo</Label>
+                <Input
+                  value={novoModeloForm.nome}
+                  onChange={e => setNovoModeloForm({ ...novoModeloForm, nome: e.target.value })}
+                  placeholder="Ex: Short Jeans"
+                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Referência</Label>
+                <Input
+                  value={novoModeloForm.referencia}
+                  onChange={e => setNovoModeloForm({ ...novoModeloForm, referencia: e.target.value })}
+                  placeholder="Ex: SJ-001"
+                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                />
+              </div>
+            </div>
+
+            {/* Quantidade e Preço */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Quantidade Inicial</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={novoModeloForm.quantidade}
+                  onChange={e => setNovoModeloForm({ ...novoModeloForm, quantidade: Number(e.target.value) })}
+                  placeholder="0"
+                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Preço de Venda (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  value={novoModeloForm.precoVenda}
+                  onChange={e => setNovoModeloForm({ ...novoModeloForm, precoVenda: Number(e.target.value) })}
+                  placeholder="0.00"
+                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNovoModeloModal(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSaveNovoModelo}
+              disabled={uploadingImage}
+              className="gap-2 bg-gradient-to-r from-primary to-primary/80"
+            >
+              <Check size={16} />
+              Adicionar ao Estoque
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmação de Duplicado */}
+      <Dialog open={showDuplicadoModal} onOpenChange={setShowDuplicadoModal}>
+        <DialogContent className="sm:max-w-[450px] bg-muted/95 shadow-[12px_12px_30px_hsl(216_26%_80%/0.6),-12px_-12px_30px_hsl(0_0%_100%/0.9)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle size={20} />
+              Produto Já Existe
+            </DialogTitle>
+            <DialogDescription>
+              Um produto com esse nome já existe no estoque. O que deseja fazer?
+            </DialogDescription>
+          </DialogHeader>
+
+          {produtoDuplicado && (
+            <div className="py-4">
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))]">
+                <ProductImage imagemUrl={produtoDuplicado.imagemUrl} nome={produtoDuplicado.nome} />
+                <div className="flex-1">
+                  <p className="font-bold text-lg text-foreground">{produtoDuplicado.nome}</p>
+                  <div className="flex items-center gap-4 mt-1">
+                    <span className="text-sm text-muted-foreground">
+                      Estoque atual: <span className="font-semibold text-foreground">{produtoDuplicado.quantidade} peças</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <p className="text-sm text-amber-800">
+                  Você está tentando adicionar <strong>{novoModeloForm.quantidade} peças</strong>.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowDuplicadoModal(false)}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => {
+                const nomeCompleto = novoModeloForm.referencia 
+                  ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` 
+                  : novoModeloForm.nome;
+                criarNovoModeloAcabado(nomeCompleto + ` (${Date.now()})`, false);
+              }}
+              variant="outline"
+              className="flex-1"
+            >
+              Criar Novo Registro
+            </Button>
+            <Button 
+              onClick={() => {
+                const nomeCompleto = novoModeloForm.referencia 
+                  ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` 
+                  : novoModeloForm.nome;
+                criarNovoModeloAcabado(nomeCompleto, true);
+              }}
+              className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500"
+            >
+              Somar Quantidade
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Importação CSV */}
+      <ImportModelosCSVModal 
+        open={showImportModal} 
+        onOpenChange={setShowImportModal} 
+      />
+    </div>
+  );
+}

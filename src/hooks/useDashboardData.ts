@@ -1,0 +1,416 @@
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, startOfYear, getWeek } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+export type Periodo = "hoje" | "7dias" | "mes" | "personalizado";
+
+export interface DateRange {
+  from: Date | undefined;
+  to: Date | undefined;
+}
+
+export type TipoAgrupamento = "dia" | "semana" | "mes";
+
+interface KPIs {
+  faturamento: number;
+  faturamentoAnterior: number;
+  pecasVendidas: number;
+  pecasAnterior: number;
+  pedidosPendentes: number;
+  pedidosAnterior: number;
+  producaoAtiva: number;
+  producaoAnterior: number;
+}
+
+export interface TendenciaVenda {
+  dia: string;
+  diaCompleto: string;
+  valor: number;
+  pedidos: number;
+  pecas: number;
+  dataOriginal: Date;
+}
+
+export interface EstoqueBaixoItem {
+  id: string;
+  nome: string;
+  quantidade: number;
+  quantidade_minima: number;
+  imagem_url: string | null;
+  status: "baixo" | "zerado" | "negativo";
+}
+
+export interface TopModelo {
+  nome: string;
+  quantidade: number;
+}
+
+export interface StatusPedido {
+  status: string;
+  count: number;
+  color: string;
+}
+
+export interface ProducaoEtapa {
+  etapa: string;
+  pecas: number;
+  color: string;
+  isBottleneck: boolean;
+}
+
+interface DashboardData {
+  kpis: KPIs;
+  tendenciaVendas: TendenciaVenda[];
+  estoqueBaixo: EstoqueBaixoItem[];
+  topModelos: TopModelo[];
+  statusPedidos: StatusPedido[];
+  producaoKanban: ProducaoEtapa[];
+  tipoAgrupamento: TipoAgrupamento;
+}
+
+const ETAPA_COLORS: Record<string, string> = {
+  "Corte": "hsl(var(--stage-corte))",
+  "Costura": "hsl(var(--stage-costura))",
+  "Lavanderia": "hsl(var(--stage-lavanderia))",
+  "Acabamento": "hsl(var(--stage-acabamento))",
+  "Concluído": "hsl(var(--stage-concluido))",
+};
+
+export const STATUS_COLORS: Record<string, string> = {
+  "PAGO": "#22c55e",
+  "PENDENTE": "#eab308",
+  "INCOMPLETO": "#f97316",
+  "PEND. ENTREGA": "#3b82f6",
+  "CANCELADO": "#ef4444",
+  "GOLPE CANCELADO": "#dc2626",
+  "GOLPE": "#b91c1c",
+};
+
+const STATUS_CANCELADOS = ["CANCELADO", "GOLPE CANCELADO", "GOLPE"];
+
+function getDateRange(periodo: Periodo, dateRange?: DateRange) {
+  const now = new Date();
+
+  // Custom date range
+  if (periodo === "personalizado" && dateRange?.from && dateRange?.to) {
+    const startDate = startOfDay(dateRange.from);
+    const endDate = endOfDay(dateRange.to);
+    const days = differenceInDays(endDate, startDate) + 1;
+    const startDateAnterior = subDays(startDate, days);
+    const endDateAnterior = subDays(endDate, days);
+    return {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      startDateAnterior: startDateAnterior.toISOString(),
+      endDateAnterior: endDateAnterior.toISOString(),
+    };
+  }
+
+  let startDate: Date;
+  let startDateAnterior: Date;
+  let endDateAnterior: Date;
+
+  switch (periodo) {
+    case "hoje":
+      startDate = startOfDay(now);
+      startDateAnterior = startOfDay(subDays(now, 1));
+      endDateAnterior = startOfDay(now);
+      break;
+    case "7dias":
+      startDate = startOfDay(subDays(now, 7));
+      startDateAnterior = startOfDay(subDays(now, 14));
+      endDateAnterior = startOfDay(subDays(now, 7));
+      break;
+    case "mes":
+    default:
+      startDate = startOfMonth(now);
+      startDateAnterior = startOfMonth(subDays(startOfMonth(now), 1));
+      endDateAnterior = startOfMonth(now);
+      break;
+  }
+
+  return {
+    startDate: startDate.toISOString(),
+    endDate: now.toISOString(),
+    startDateAnterior: startDateAnterior.toISOString(),
+    endDateAnterior: endDateAnterior.toISOString(),
+  };
+}
+
+function getTipoAgrupamento(startDate: string, endDate: string): TipoAgrupamento {
+  const dias = differenceInDays(new Date(endDate), new Date(startDate));
+  if (dias > 90) return "mes";
+  if (dias > 30) return "semana";
+  return "dia";
+}
+
+function getEstoqueStatus(quantidade: number): "baixo" | "zerado" | "negativo" {
+  if (quantidade < 0) return "negativo";
+  if (quantidade === 0) return "zerado";
+  return "baixo";
+}
+
+function detectBottlenecks(etapas: ProducaoEtapa[]): ProducaoEtapa[] {
+  // Skip "Concluído" for bottleneck detection
+  const activeEtapas = etapas.filter(e => e.etapa !== "Concluído");
+  
+  return etapas.map((etapa) => {
+    if (etapa.etapa === "Concluído") {
+      return { ...etapa, isBottleneck: false };
+    }
+    
+    const currentIndex = activeEtapas.findIndex(e => e.etapa === etapa.etapa);
+    if (currentIndex < activeEtapas.length - 1) {
+      const nextEtapa = activeEtapas[currentIndex + 1];
+      // Is bottleneck if has 100+ pieces AND more than 3x the next stage
+      const isBottleneck = etapa.pecas > 100 && nextEtapa.pecas > 0 && etapa.pecas > nextEtapa.pecas * 3;
+      return { ...etapa, isBottleneck };
+    }
+    return { ...etapa, isBottleneck: false };
+  });
+}
+
+export function useDashboardData(
+  periodo: Periodo,
+  dateRange?: DateRange,
+  excluirCancelados: boolean = true
+) {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<DashboardData>({
+    kpis: {
+      faturamento: 0,
+      faturamentoAnterior: 0,
+      pecasVendidas: 0,
+      pecasAnterior: 0,
+      pedidosPendentes: 0,
+      pedidosAnterior: 0,
+      producaoAtiva: 0,
+      producaoAnterior: 0,
+    },
+    tendenciaVendas: [],
+    estoqueBaixo: [],
+    topModelos: [],
+    statusPedidos: [],
+    producaoKanban: [],
+    tipoAgrupamento: "dia",
+  });
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchData = async () => {
+      setLoading(true);
+      const { startDate, endDate, startDateAnterior, endDateAnterior } = getDateRange(periodo, dateRange);
+      const tipoAgrupamento = getTipoAgrupamento(startDate, endDate);
+
+      try {
+        // Fetch all data in parallel
+        const [
+          pedidosAtual,
+          pedidosAnterior,
+          estoque,
+          pedidoItens,
+          producao,
+          producaoAnterior,
+        ] = await Promise.all([
+          // Pedidos período atual
+          supabase
+            .from("pedidos")
+            .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at")
+            .eq("user_id", user.id)
+            .gte("created_at", startDate)
+            .lte("created_at", endDate),
+
+          // Pedidos período anterior (para comparação)
+          supabase
+            .from("pedidos")
+            .select("valor_total, total_pecas, status_pagamento, status_pedido")
+            .eq("user_id", user.id)
+            .gte("created_at", startDateAnterior)
+            .lt("created_at", endDateAnterior),
+
+          // Estoque baixo
+          supabase
+            .from("estoque_itens")
+            .select("id, nome, quantidade, quantidade_minima, imagem_url")
+            .eq("user_id", user.id)
+            .order("quantidade", { ascending: true })
+            .limit(10),
+
+          // Itens de pedido para top modelos
+          supabase
+            .from("pedido_itens")
+            .select("produto_nome, quantidade, pedidos!inner(user_id, created_at)")
+            .eq("pedidos.user_id", user.id)
+            .gte("pedidos.created_at", startDate),
+
+          // Produção atual
+          supabase
+            .from("producao")
+            .select("processo_atual, quantidade, created_date")
+            .eq("user_id", user.id),
+
+          // Produção período anterior (para comparação)
+          supabase
+            .from("producao")
+            .select("processo_atual, quantidade")
+            .eq("user_id", user.id)
+            .gte("created_date", startDateAnterior)
+            .lt("created_date", endDateAnterior),
+        ]);
+
+        // Calculate KPIs
+        const pedidosAtualData = pedidosAtual.data || [];
+        const pedidosAnteriorData = pedidosAnterior.data || [];
+
+        // Filter out canceled orders if excluirCancelados is true
+        const pedidosFiltrados = excluirCancelados
+          ? pedidosAtualData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
+          : pedidosAtualData;
+
+        const pedidosAnteriorFiltrados = excluirCancelados
+          ? pedidosAnteriorData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
+          : pedidosAnteriorData;
+
+        const faturamento = pedidosFiltrados.reduce((sum, p) => sum + (p.valor_total || 0), 0);
+        const faturamentoAnterior = pedidosAnteriorFiltrados.reduce((sum, p) => sum + (p.valor_total || 0), 0);
+        const pecasVendidas = pedidosFiltrados.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
+        const pecasAnterior = pedidosAnteriorFiltrados.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
+        const pedidosPendentes = pedidosAtualData.filter(p => p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO").length;
+        const pedidosAnteriorPendentes = pedidosAnteriorData.filter(p => p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO").length;
+
+        const producaoData = producao.data || [];
+        const producaoAnteriorData = producaoAnterior.data || [];
+        const producaoAtiva = producaoData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
+        const producaoAnteriorAtiva = producaoAnteriorData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
+
+        // Tendência de vendas (grouped by tipoAgrupamento)
+        const vendasAgrupadas: Record<string, { valor: number; pedidos: number; pecas: number; data: Date }> = {};
+        
+        pedidosFiltrados.forEach(p => {
+          const dataCompleta = parseISO(p.created_at);
+          let chave: string;
+          
+          switch (tipoAgrupamento) {
+            case "mes":
+              chave = format(dataCompleta, "MMM/yy", { locale: ptBR });
+              break;
+            case "semana":
+              chave = `Sem ${getWeek(dataCompleta)}`;
+              break;
+            default:
+              chave = format(dataCompleta, "dd/MM");
+          }
+          
+          if (!vendasAgrupadas[chave]) {
+            vendasAgrupadas[chave] = { valor: 0, pedidos: 0, pecas: 0, data: dataCompleta };
+          }
+          vendasAgrupadas[chave].valor += p.valor_total || 0;
+          vendasAgrupadas[chave].pedidos += 1;
+          vendasAgrupadas[chave].pecas += p.total_pecas || 0;
+        });
+
+        const tendenciaVendas: TendenciaVenda[] = Object.entries(vendasAgrupadas)
+          .map(([dia, dados]) => {
+            let diaCompleto: string;
+            switch (tipoAgrupamento) {
+              case "mes":
+                diaCompleto = format(dados.data, "MMMM 'de' yyyy", { locale: ptBR });
+                break;
+              case "semana":
+                diaCompleto = `Semana ${getWeek(dados.data)} de ${format(dados.data, "yyyy")}`;
+                break;
+              default:
+                diaCompleto = format(dados.data, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+            }
+            return {
+              dia,
+              diaCompleto,
+              valor: dados.valor,
+              pedidos: dados.pedidos,
+              pecas: dados.pecas,
+              dataOriginal: dados.data,
+            };
+          })
+          .sort((a, b) => a.dataOriginal.getTime() - b.dataOriginal.getTime());
+
+        // Estoque baixo (filtrar onde quantidade < quantidade_minima)
+        const estoqueData = estoque.data || [];
+        const estoqueBaixo: EstoqueBaixoItem[] = estoqueData
+          .filter(item => item.quantidade < (item.quantidade_minima || 0))
+          .map(item => ({
+            ...item,
+            status: getEstoqueStatus(item.quantidade),
+          }))
+          .slice(0, 5);
+
+        // Top modelos
+        const modelosMap: Record<string, number> = {};
+        (pedidoItens.data || []).forEach(item => {
+          const nome = item.produto_nome || "Sem nome";
+          modelosMap[nome] = (modelosMap[nome] || 0) + (item.quantidade || 0);
+        });
+        const topModelos = Object.entries(modelosMap)
+          .map(([nome, quantidade]) => ({ nome, quantidade }))
+          .sort((a, b) => b.quantidade - a.quantidade)
+          .slice(0, 5);
+
+        // Status de pedidos
+        const statusMap: Record<string, number> = {};
+        pedidosAtualData.forEach(p => {
+          const status = p.status_pagamento || "PENDENTE";
+          statusMap[status] = (statusMap[status] || 0) + 1;
+        });
+        const statusPedidos = Object.entries(statusMap).map(([status, count]) => ({
+          status,
+          count,
+          color: STATUS_COLORS[status] || "hsl(var(--muted))",
+        }));
+
+        // Produção por etapa com detecção de gargalos
+        const etapaMap: Record<string, number> = {};
+        producaoData.forEach(p => {
+          const etapa = p.processo_atual || "Corte";
+          etapaMap[etapa] = (etapaMap[etapa] || 0) + (p.quantidade || 0);
+        });
+        const producaoKanbanBase = ["Corte", "Costura", "Lavanderia", "Acabamento", "Concluído"].map(etapa => ({
+          etapa,
+          pecas: etapaMap[etapa] || 0,
+          color: ETAPA_COLORS[etapa] || "hsl(var(--muted))",
+          isBottleneck: false,
+        }));
+        const producaoKanban = detectBottlenecks(producaoKanbanBase);
+
+        setData({
+          kpis: {
+            faturamento,
+            faturamentoAnterior,
+            pecasVendidas,
+            pecasAnterior,
+            pedidosPendentes,
+            pedidosAnterior: pedidosAnteriorPendentes,
+            producaoAtiva,
+            producaoAnterior: producaoAnteriorAtiva,
+          },
+          tendenciaVendas,
+          estoqueBaixo,
+          topModelos,
+          statusPedidos,
+          producaoKanban,
+          tipoAgrupamento,
+        });
+      } catch (error) {
+        console.error("Erro ao buscar dados do dashboard:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user, periodo, dateRange?.from?.getTime(), dateRange?.to?.getTime(), excluirCancelados]);
+
+  return { data, loading };
+}
