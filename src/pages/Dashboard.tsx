@@ -275,7 +275,7 @@ export default function Dashboard() {
                 <PopoverContent className="w-auto p-0" align="end">
                   <Calendar
                     mode="range"
-                    selected={dateRange.from && dateRange.to ? { from: dateRange.from, to: dateRange.to } : undefined}
+                    selected={dateRange}
                     onSelect={handleDateRangeSelect}
                     numberOfMonths={isMobile ? 1 : 2}
                     locale={ptBR}
