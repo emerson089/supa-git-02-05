@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { usePedidos, Pedido } from '@/contexts/PedidosContext';
 import { usePedidoById } from '@/hooks/usePedidosData';
+import { usePedidosPaginated, PedidoPaginatedDB } from '@/hooks/usePedidosPaginated';
+import { usePedidosTotals } from '@/hooks/usePedidosTotals';
 import { EditPedidoModal } from '@/components/pedidos/EditPedidoModal';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { ImportPedidosCSVModal } from '@/components/pedidos/ImportPedidosCSVModal';
@@ -32,6 +34,14 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { 
   Search, 
   Plus, 
@@ -50,7 +60,8 @@ import {
   Calendar as CalendarIcon,
   X,
   Download,
-  Upload
+  Upload,
+  Loader2
 } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -79,6 +90,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Status colors mapping
 const statusPagamentoColors: Record<string, string> = {
@@ -109,19 +121,23 @@ const statusEntregaColors: Record<string, string> = {
   'CANCELADO': 'bg-red-100 text-red-700 border-red-300',
 };
 
-type SortField = 'dataCriacao' | 'valorTotal' | null;
+type SortField = 'created_at' | 'valor_total';
 type SortDirection = 'asc' | 'desc';
 
 export default function PedidosCriados() {
   const navigate = useNavigate();
-  const { pedidos, removePedido, updatePedido, getPedidoById } = usePedidos();
+  const { removePedido, updatePedido, getPedidoById } = usePedidos();
   const { itens: estoqueItens, updateItem: updateEstoqueItem } = useEstoque();
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
+  const [selectedPedido, setSelectedPedido] = useState<PedidoPaginatedDB | null>(null);
   const [editingPedidoId, setEditingPedidoId] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<SortField>('dataCriacao');
+  const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
   
   // Date filters
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
@@ -135,6 +151,42 @@ export default function PedidosCriados() {
   
   // CSV import modal
   const [importModalOpen, setImportModalOpen] = useState(false);
+
+  // Use paginated hook for data
+  const { data: paginatedResult, isLoading } = usePedidosPaginated({
+    page: currentPage,
+    pageSize,
+    search: searchTerm,
+    statusPagamento: filterStatusPagamento,
+    statusPedido: filterStatusPedido,
+    statusEntrega: filterStatusEntrega,
+    startDate,
+    endDate,
+    sortField,
+    sortDirection,
+    modeloFilter: filterModelo
+  });
+
+  // Use totals hook for summary cards
+  const { data: totals } = usePedidosTotals({
+    search: searchTerm,
+    statusPagamento: filterStatusPagamento,
+    statusPedido: filterStatusPedido,
+    statusEntrega: filterStatusEntrega,
+    startDate,
+    endDate,
+    modeloFilter: filterModelo
+  });
+
+  const pedidosList = paginatedResult?.data || [];
+  const totalPages = paginatedResult?.totalPages || 0;
+  const totalCount = paginatedResult?.count || 0;
+
+  // Reset to first page when filters change
+  const handleFilterChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) => {
+    setter(value);
+    setCurrentPage(0);
+  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -286,92 +338,7 @@ export default function PedidosCriados() {
     
     updatePedido(pedidoId, updates);
   };
-
-  const filteredAndSortedPedidos = useMemo(() => {
-    let filtered = pedidos;
-    
-    // Busca inteligente por cliente, ID ou status
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      
-      // Mapear termos de busca para valores de status
-      const matchesStatus = (status: string | undefined) => {
-        if (!status) return false;
-        const label = statusPagamentoOptions.find(o => o.value === status)?.label ||
-                     statusPedidoOptions.find(o => o.value === status)?.label ||
-                     statusEntregaOptions.find(o => o.value === status)?.label || status;
-        return label.toLowerCase().includes(searchLower) || status.toLowerCase().includes(searchLower);
-      };
-      
-      filtered = filtered.filter(pedido =>
-        pedido.clienteNome.toLowerCase().includes(searchLower) ||
-        pedido.id.toLowerCase().includes(searchLower) ||
-        matchesStatus(pedido.statusPagamento) ||
-        matchesStatus(pedido.statusPedido) ||
-        matchesStatus(pedido.statusEntrega)
-      );
-    }
-    
-    // Função para normalizar status para comparação case-insensitive
-    const normalizeStatus = (status: string | undefined): string => {
-      if (!status) return '';
-      return status.toLowerCase().replace(/\s+/g, '_').replace(/[áàã]/g, 'a').replace(/[éê]/g, 'e').replace(/ó/g, 'o');
-    };
-
-    // Filtro por status específicos (selects) - comparação case-insensitive
-    if (filterStatusPagamento !== 'all') {
-      filtered = filtered.filter(p => normalizeStatus(p.statusPagamento) === normalizeStatus(filterStatusPagamento));
-    }
-    if (filterStatusPedido !== 'all') {
-      filtered = filtered.filter(p => normalizeStatus(p.statusPedido) === normalizeStatus(filterStatusPedido));
-    }
-    if (filterStatusEntrega !== 'all') {
-      filtered = filtered.filter(p => normalizeStatus(p.statusEntrega) === normalizeStatus(filterStatusEntrega));
-    }
-    
-    // Filtro por modelo específico
-    if (filterModelo) {
-      const modeloLower = filterModelo.toLowerCase();
-      filtered = filtered.filter(pedido =>
-        pedido.itens.some(item => 
-          item.produtoNome.toLowerCase().includes(modeloLower)
-        )
-      );
-    }
-
-    // Apply date filter
-    if (startDate || endDate) {
-      filtered = filtered.filter(pedido => {
-        const pedidoDate = new Date(pedido.dataCriacao);
-        
-        if (startDate && endDate) {
-          return isWithinInterval(pedidoDate, {
-            start: startOfDay(startDate),
-            end: endOfDay(endDate)
-          });
-        } else if (startDate) {
-          return pedidoDate >= startOfDay(startDate);
-        } else if (endDate) {
-          return pedidoDate <= endOfDay(endDate);
-        }
-        return true;
-      });
-    }
-
-    if (sortField) {
-      filtered = [...filtered].sort((a, b) => {
-        let comparison = 0;
-        if (sortField === 'dataCriacao') {
-          comparison = new Date(a.dataCriacao).getTime() - new Date(b.dataCriacao).getTime();
-        } else if (sortField === 'valorTotal') {
-          comparison = a.valorTotal - b.valorTotal;
-        }
-        return sortDirection === 'asc' ? comparison : -comparison;
-      });
-    }
-
-    return filtered;
-  }, [pedidos, searchTerm, sortField, sortDirection, startDate, endDate, filterStatusPagamento, filterStatusPedido, filterStatusEntrega, filterModelo]);
+  // Removed client-side filtering - now handled by server-side pagination
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -388,10 +355,11 @@ export default function PedidosCriados() {
     }
   };
 
-  const getModelosResumo = (pedido: Pedido) => {
-    if (pedido.itens.length === 0) return '-';
-    if (pedido.itens.length === 1) return pedido.itens[0].produtoNome;
-    return `${pedido.itens[0].produtoNome} +${pedido.itens.length - 1}`;
+  const getModelosResumo = (pedido: PedidoPaginatedDB) => {
+    const itens = pedido.pedido_itens || [];
+    if (itens.length === 0) return '-';
+    if (itens.length === 1) return itens[0].produto_nome;
+    return `${itens[0].produto_nome} +${itens.length - 1}`;
   };
 
   const clearDateFilters = () => {
@@ -413,43 +381,18 @@ export default function PedidosCriados() {
     filterStatusPagamento !== 'all' || filterStatusPedido !== 'all' || 
     filterStatusEntrega !== 'all' || filterModelo;
 
-  // Calculate totals - now based on filtered data and modelo filter
-  const calculatedTotals = useMemo(() => {
-    // Se há filtro de modelo, calcular apenas valores desse modelo
-    if (filterModelo) {
-      const modeloLower = filterModelo.toLowerCase();
-      let pecasModelo = 0;
-      let valorModelo = 0;
-      
-      filteredAndSortedPedidos.forEach(pedido => {
-        pedido.itens.forEach(item => {
-          if (item.produtoNome.toLowerCase().includes(modeloLower)) {
-            pecasModelo += item.quantidade;
-            valorModelo += item.quantidade * item.valorUnitario;
-          }
-        });
-      });
-      
-      return {
-        totalPedidos: filteredAndSortedPedidos.length,
-        totalPecas: pecasModelo,
-        totalValor: valorModelo
-      };
-    }
-    
-    // Caso contrário, usar totais normais dos pedidos filtrados
-    return {
-      totalPedidos: filteredAndSortedPedidos.length,
-      totalPecas: filteredAndSortedPedidos.reduce((sum, p) => sum + p.totalPecas, 0),
-      totalValor: filteredAndSortedPedidos.reduce((sum, p) => sum + p.valorTotal, 0)
-    };
-  }, [filteredAndSortedPedidos, filterModelo]);
+  // Use totals from server-side hook
+  const calculatedTotals = {
+    totalPedidos: totals?.totalPedidos || 0,
+    totalPecas: totals?.totalPecas || 0,
+    totalValor: totals?.totalValor || 0
+  };
 
   const hasActiveFilters = startDate || endDate || filterStatusPagamento !== 'all' || 
     filterStatusPedido !== 'all' || filterStatusEntrega !== 'all' || filterModelo;
 
   // PDF Generation
-  const generatePDF = (pedido: Pedido) => {
+  const generatePDF = (pedido: PedidoPaginatedDB) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
@@ -470,7 +413,7 @@ export default function PedidosCriados() {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     const clienteData = [
-      `Nome: ${pedido.clienteNome}`,
+      `Nome: ${pedido.cliente_nome}`,
       `Telefone: ${pedido.telefone || '-'}`,
       `Cidade/Estado: ${pedido.cidade || '-'}, ${pedido.estado || '-'}`,
       `Excursão: ${pedido.excursao || '-'}`
@@ -489,14 +432,15 @@ export default function PedidosCriados() {
     doc.text(format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }), pageWidth - 70, 48);
     
     doc.text('Data do Pedido:', pageWidth - 70, 56);
-    doc.text(format(new Date(pedido.dataCriacao), "dd/MM/yyyy", { locale: ptBR }), pageWidth - 70, 62);
+    doc.text(format(new Date(pedido.created_at), "dd/MM/yyyy", { locale: ptBR }), pageWidth - 70, 62);
     
     // Items table
-    const tableData = pedido.itens.map(item => [
-      item.produtoNome,
-      formatCurrency(item.valorUnitario),
+    const itens = pedido.pedido_itens || [];
+    const tableData = itens.map(item => [
+      item.produto_nome,
+      formatCurrency(item.valor_unitario),
       item.quantidade.toString(),
-      formatCurrency(item.quantidade * item.valorUnitario)
+      formatCurrency(item.quantidade * item.valor_unitario)
     ]);
     
     autoTable(doc, {
@@ -530,12 +474,12 @@ export default function PedidosCriados() {
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text(`Total de Peças: ${pedido.totalPecas}`, 20, finalY + 10);
-    doc.text(`Valor Total: ${formatCurrency(pedido.valorTotal)}`, 20, finalY + 18);
+    doc.text(`Total de Peças: ${pedido.total_pecas || 0}`, 20, finalY + 10);
+    doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 18);
     
     // Status
     doc.setFontSize(10);
-    doc.text(`Status: ${pedido.statusPagamento} | ${pedido.statusPedido} | ${pedido.statusEntrega}`, pageWidth - 20, finalY + 14, { align: 'right' });
+    doc.text(`Status: ${pedido.status_pagamento} | ${pedido.status_pedido} | ${pedido.status_entrega}`, pageWidth - 20, finalY + 14, { align: 'right' });
     
     // Footer
     doc.setFont('helvetica', 'italic');
@@ -543,7 +487,7 @@ export default function PedidosCriados() {
     doc.text('Obrigado pela preferência! Delookii Jeans', pageWidth / 2, finalY + 35, { align: 'center' });
     
     // Download
-    const fileName = `Pedido_${pedido.clienteNome.replace(/\s+/g, '_')}_${format(new Date(pedido.dataCriacao), 'dd-MM-yyyy')}.pdf`;
+    const fileName = `Pedido_${pedido.cliente_nome.replace(/\s+/g, '_')}_${format(new Date(pedido.created_at), 'dd-MM-yyyy')}.pdf`;
     doc.save(fileName);
     toast.success('PDF gerado com sucesso!');
   };
@@ -552,15 +496,15 @@ export default function PedidosCriados() {
   const exportCSV = () => {
     const headers = ['Data', 'Cliente', 'Itens', 'Qtd Total', 'Valor Total', 'Status Pagamento', 'Status Pedido', 'Status Entrega'];
     
-    const rows = filteredAndSortedPedidos.map(pedido => [
-      format(new Date(pedido.dataCriacao), "dd/MM/yyyy"),
-      pedido.clienteNome,
-      pedido.itens.map(i => `${i.produtoNome}(${i.quantidade})`).join('; '),
-      pedido.totalPecas.toString(),
-      pedido.valorTotal.toFixed(2),
-      pedido.statusPagamento || 'Pendente',
-      pedido.statusPedido || 'Nao separado',
-      pedido.statusEntrega || 'Pend. Entrega'
+    const rows = pedidosList.map(pedido => [
+      format(new Date(pedido.created_at), "dd/MM/yyyy"),
+      pedido.cliente_nome,
+      (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '),
+      (pedido.total_pecas || 0).toString(),
+      (pedido.valor_total || 0).toFixed(2),
+      pedido.status_pagamento || 'Pendente',
+      pedido.status_pedido || 'Nao separado',
+      pedido.status_entrega || 'Pend. Entrega'
     ]);
     
     const csvContent = [
@@ -575,7 +519,7 @@ export default function PedidosCriados() {
     link.download = `pedidos_${format(new Date(), 'dd-MM-yyyy')}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    toast.success(`${filteredAndSortedPedidos.length} pedidos exportados com sucesso!`);
+    toast.success(`${pedidosList.length} pedidos exportados com sucesso!`);
   };
 
 
@@ -813,7 +757,12 @@ export default function PedidosCriados() {
 
             {/* Orders Table */}
             <div className="neu-card p-4 overflow-hidden">
-              {filteredAndSortedPedidos.length === 0 ? (
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <span className="ml-2 text-muted-foreground">Carregando pedidos...</span>
+                </div>
+              ) : pedidosList.length === 0 ? (
                 <div className="text-center py-12">
                   <ShoppingBag className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-foreground">Nenhum pedido encontrado</h3>
@@ -831,141 +780,194 @@ export default function PedidosCriados() {
                   )}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
-                      <TableRow className="border-b-2 border-border/50 hover:bg-transparent">
-                        <TableHead 
-                          className="text-xs font-bold text-foreground uppercase tracking-wider cursor-pointer hover:text-primary transition-colors py-3"
-                          onClick={() => handleSort('dataCriacao')}
-                        >
-                          <div className="flex items-center gap-1">
-                            Data
-                            <ArrowUpDown className="h-3 w-3" />
-                          </div>
-                        </TableHead>
-                        <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3">
-                          Cliente
-                        </TableHead>
-                        <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3">
-                          Modelos
-                        </TableHead>
-                        <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
-                          Qtd
-                        </TableHead>
-                        <TableHead 
-                          className="text-xs font-bold text-foreground uppercase tracking-wider cursor-pointer hover:text-primary transition-colors py-3"
-                          onClick={() => handleSort('valorTotal')}
-                        >
-                          <div className="flex items-center gap-1">
-                            Valor
-                            <ArrowUpDown className="h-3 w-3" />
-                          </div>
-                        </TableHead>
-                        <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
-                          Pagamento
-                        </TableHead>
-                        <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
-                          Pedido
-                        </TableHead>
-                        <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
-                          Entrega
-                        </TableHead>
-                        <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-right">
-                          Ações
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredAndSortedPedidos.map((pedido) => (
-                        <TableRow 
-                          key={pedido.id} 
-                          className="group border-0 transition-all duration-200 hover:shadow-[inset_0_2px_8px_rgba(0,0,0,0.06)] rounded-xl"
-                        >
-                          <TableCell className="py-2.5 text-sm text-muted-foreground font-medium">
-                            {format(new Date(pedido.dataCriacao), "dd/MM/yyyy", { locale: ptBR })}
-                          </TableCell>
-                          <TableCell className="py-2.5">
-                            <span className="font-semibold text-foreground text-sm">{pedido.clienteNome}</span>
-                          </TableCell>
-                          <TableCell className="py-2.5 text-sm text-muted-foreground max-w-[150px] truncate">
-                            {getModelosResumo(pedido)}
-                          </TableCell>
-                          <TableCell className="py-2.5 text-center">
-                            <span className="font-bold text-primary text-sm">{pedido.totalPecas}</span>
-                          </TableCell>
-                          <TableCell className="py-2.5">
-                            <span className="font-bold text-emerald-600 text-sm">{formatCurrency(pedido.valorTotal)}</span>
-                          </TableCell>
-                          <TableCell className="py-2.5">
-                            <InlineStatusSelect
-                              options={statusPagamentoOptions}
-                              value={pedido.statusPagamento || 'PENDENTE'}
-                              onChange={(value) => handleStatusUpdate(pedido.id, 'statusPagamento', value)}
-                            />
-                          </TableCell>
-                          <TableCell className="py-2.5">
-                            <InlineStatusSelect
-                              options={statusPedidoOptions}
-                              value={pedido.statusPedido || 'NÃO SEPARADO'}
-                              onChange={(value) => handleStatusUpdate(pedido.id, 'statusPedido', value)}
-                            />
-                          </TableCell>
-                          <TableCell className="py-2.5">
-                            <InlineStatusSelect
-                              options={statusEntregaOptions}
-                              value={pedido.statusEntrega || 'PEND. ENTREGA'}
-                              onChange={(value) => handleStatusUpdate(pedido.id, 'statusEntrega', value)}
-                            />
-                          </TableCell>
-                          <TableCell className="py-2.5 text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="neu-card border-0 rounded-xl shadow-lg z-50">
-                                <DropdownMenuItem 
-                                  onClick={() => setSelectedPedido(pedido)}
-                                  className="gap-2 cursor-pointer"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                  Ver Detalhes
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => setEditingPedidoId(pedido.id)}
-                                  className="gap-2 cursor-pointer"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                  Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => generatePDF(pedido)}
-                                  className="gap-2 cursor-pointer"
-                                >
-                                  <FileText className="h-4 w-4" />
-                                  Gerar PDF
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => setDeleteId(pedido.id)}
-                                  className="gap-2 cursor-pointer text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  Excluir
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
+                        <TableRow className="border-b-2 border-border/50 hover:bg-transparent">
+                          <TableHead 
+                            className="text-xs font-bold text-foreground uppercase tracking-wider cursor-pointer hover:text-primary transition-colors py-3"
+                            onClick={() => handleSort('created_at')}
+                          >
+                            <div className="flex items-center gap-1">
+                              Data
+                              <ArrowUpDown className="h-3 w-3" />
+                            </div>
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3">
+                            Cliente
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3">
+                            Modelos
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
+                            Qtd
+                          </TableHead>
+                          <TableHead 
+                            className="text-xs font-bold text-foreground uppercase tracking-wider cursor-pointer hover:text-primary transition-colors py-3"
+                            onClick={() => handleSort('valor_total')}
+                          >
+                            <div className="flex items-center gap-1">
+                              Valor
+                              <ArrowUpDown className="h-3 w-3" />
+                            </div>
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
+                            Pagamento
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
+                            Pedido
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
+                            Entrega
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-right">
+                            Ações
+                          </TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {pedidosList.map((pedido) => (
+                          <TableRow 
+                            key={pedido.id} 
+                            className="group border-0 transition-all duration-200 hover:shadow-[inset_0_2px_8px_rgba(0,0,0,0.06)] rounded-xl"
+                          >
+                            <TableCell className="py-2.5 text-sm text-muted-foreground font-medium">
+                              {format(new Date(pedido.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                            </TableCell>
+                            <TableCell className="py-2.5">
+                              <span className="font-semibold text-foreground text-sm">{pedido.cliente_nome}</span>
+                            </TableCell>
+                            <TableCell className="py-2.5 text-sm text-muted-foreground max-w-[150px] truncate">
+                              {getModelosResumo(pedido)}
+                            </TableCell>
+                            <TableCell className="py-2.5 text-center">
+                              <span className="font-bold text-primary text-sm">{pedido.total_pecas || 0}</span>
+                            </TableCell>
+                            <TableCell className="py-2.5">
+                              <span className="font-bold text-emerald-600 text-sm">{formatCurrency(pedido.valor_total || 0)}</span>
+                            </TableCell>
+                            <TableCell className="py-2.5">
+                              <InlineStatusSelect
+                                options={statusPagamentoOptions}
+                                value={pedido.status_pagamento || 'PENDENTE'}
+                                onChange={(value) => handleStatusUpdate(pedido.id, 'statusPagamento', value)}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2.5">
+                              <InlineStatusSelect
+                                options={statusPedidoOptions}
+                                value={pedido.status_pedido || 'NÃO SEPARADO'}
+                                onChange={(value) => handleStatusUpdate(pedido.id, 'statusPedido', value)}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2.5">
+                              <InlineStatusSelect
+                                options={statusEntregaOptions}
+                                value={pedido.status_entrega || 'PEND. ENTREGA'}
+                                onChange={(value) => handleStatusUpdate(pedido.id, 'statusEntrega', value)}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2.5 text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="neu-card border-0 rounded-xl shadow-lg z-50">
+                                  <DropdownMenuItem 
+                                    onClick={() => setSelectedPedido(pedido)}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                    Ver Detalhes
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => setEditingPedidoId(pedido.id)}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                    Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => generatePDF(pedido)}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                    Gerar PDF
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => setDeleteId(pedido.id)}
+                                    className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    Excluir
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50">
+                      <div className="text-sm text-muted-foreground">
+                        Mostrando {currentPage * pageSize + 1} - {Math.min((currentPage + 1) * pageSize, totalCount)} de {totalCount} pedidos
+                      </div>
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious 
+                              onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                              className={currentPage === 0 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                          
+                          {/* Page numbers */}
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum;
+                            if (totalPages <= 5) {
+                              pageNum = i;
+                            } else if (currentPage < 3) {
+                              pageNum = i;
+                            } else if (currentPage > totalPages - 4) {
+                              pageNum = totalPages - 5 + i;
+                            } else {
+                              pageNum = currentPage - 2 + i;
+                            }
+                            return (
+                              <PaginationItem key={pageNum}>
+                                <PaginationLink
+                                  onClick={() => setCurrentPage(pageNum)}
+                                  isActive={currentPage === pageNum}
+                                  className="cursor-pointer"
+                                >
+                                  {pageNum + 1}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          })}
+
+                          <PaginationItem>
+                            <PaginationNext 
+                              onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                              className={currentPage >= totalPages - 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -1000,8 +1002,8 @@ export default function PedidosCriados() {
             <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-3">
               Detalhes do Pedido
               <div className="flex gap-2">
-                <Badge className={`${statusPagamentoColors[selectedPedido?.statusPagamento || ''] || 'bg-muted'} border text-[10px]`}>
-                  {selectedPedido?.statusPagamento || 'Pendente'}
+                <Badge className={`${statusPagamentoColors[selectedPedido?.status_pagamento || ''] || 'bg-muted'} border text-[10px]`}>
+                  {selectedPedido?.status_pagamento || 'Pendente'}
                 </Badge>
               </div>
             </DialogTitle>
@@ -1015,7 +1017,7 @@ export default function PedidosCriados() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">Nome</p>
-                    <p className="font-medium text-foreground">{selectedPedido.clienteNome}</p>
+                    <p className="font-medium text-foreground">{selectedPedido.cliente_nome}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-muted-foreground" />
@@ -1039,24 +1041,24 @@ export default function PedidosCriados() {
                   <div>
                     <p className="text-muted-foreground">Data de Criação</p>
                     <p className="font-medium text-foreground">
-                      {format(new Date(selectedPedido.dataCriacao), "dd/MM/yyyy", { locale: ptBR })}
+                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy", { locale: ptBR })}
                     </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Forma de Pagamento</p>
-                    <p className="font-medium text-foreground">{selectedPedido.formaPagamento || '-'}</p>
+                    <p className="font-medium text-foreground">{selectedPedido.forma_pagamento || '-'}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Status</p>
                     <div className="flex flex-wrap gap-1 mt-1">
-                      <Badge className={`${statusPagamentoColors[selectedPedido.statusPagamento] || 'bg-muted'} border text-[9px]`}>
-                        {selectedPedido.statusPagamento || 'Pendente'}
+                      <Badge className={`${statusPagamentoColors[selectedPedido.status_pagamento || ''] || 'bg-muted'} border text-[9px]`}>
+                        {selectedPedido.status_pagamento || 'Pendente'}
                       </Badge>
-                      <Badge className={`${statusPedidoColors[selectedPedido.statusPedido] || 'bg-muted'} border text-[9px]`}>
-                        {selectedPedido.statusPedido || 'Nao separado'}
+                      <Badge className={`${statusPedidoColors[selectedPedido.status_pedido || ''] || 'bg-muted'} border text-[9px]`}>
+                        {selectedPedido.status_pedido || 'Nao separado'}
                       </Badge>
-                      <Badge className={`${statusEntregaColors[selectedPedido.statusEntrega] || 'bg-muted'} border text-[9px]`}>
-                        {selectedPedido.statusEntrega || 'Pend. Entrega'}
+                      <Badge className={`${statusEntregaColors[selectedPedido.status_entrega || ''] || 'bg-muted'} border text-[9px]`}>
+                        {selectedPedido.status_entrega || 'Pend. Entrega'}
                       </Badge>
                     </div>
                   </div>
@@ -1067,16 +1069,16 @@ export default function PedidosCriados() {
               <div className="neu-card p-4 rounded-xl">
                 <h3 className="font-semibold text-foreground mb-3">Itens do Pedido</h3>
                 <div className="space-y-2">
-                  {selectedPedido.itens.map((item, index) => (
+                  {(selectedPedido.pedido_itens || []).map((item, index) => (
                     <div key={item.id || index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                       <div>
-                        <p className="font-medium text-foreground">{item.produtoNome || 'Produto'}</p>
+                        <p className="font-medium text-foreground">{item.produto_nome || 'Produto'}</p>
                         <p className="text-sm text-muted-foreground">
-                          {item.quantidade} x {formatCurrency(item.valorUnitario)}
+                          {item.quantidade} x {formatCurrency(item.valor_unitario)}
                         </p>
                       </div>
                       <p className="font-bold text-emerald-600">
-                        {formatCurrency(item.quantidade * item.valorUnitario)}
+                        {formatCurrency(item.quantidade * item.valor_unitario)}
                       </p>
                     </div>
                   ))}
@@ -1087,11 +1089,11 @@ export default function PedidosCriados() {
               <div className="flex justify-between items-center p-4 neu-card rounded-xl">
                 <div>
                   <p className="text-sm text-muted-foreground">Total de Peças</p>
-                  <p className="text-xl font-bold text-primary">{selectedPedido.totalPecas} peças</p>
+                  <p className="text-xl font-bold text-primary">{selectedPedido.total_pecas || 0} peças</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">Valor Total</p>
-                  <p className="text-xl font-bold text-emerald-600">{formatCurrency(selectedPedido.valorTotal)}</p>
+                  <p className="text-xl font-bold text-emerald-600">{formatCurrency(selectedPedido.valor_total || 0)}</p>
                 </div>
               </div>
             </div>
