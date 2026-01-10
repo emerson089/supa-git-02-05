@@ -78,7 +78,7 @@ const parseCSV = (content: string): CSVRow[] => {
 };
 
 export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
-  const { addCliente } = useClientesContext();
+  const { addCliente, clientes } = useClientesContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -101,10 +101,24 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
         return;
       }
 
+      // Create a set of existing client names (normalized) for duplicate detection
+      const existingNames = new Set(
+        clientes.map(c => c.nome.toLowerCase().trim())
+      );
+
       let importedCount = 0;
+      let skippedCount = 0;
 
       for (const row of rows) {
         try {
+          const normalizedName = (row.nome || '').toLowerCase().trim();
+          
+          // Skip if client with same name already exists
+          if (existingNames.has(normalizedName)) {
+            skippedCount++;
+            continue;
+          }
+
           // Parse date if provided (format: YYYY-MM-DD)
           let createdAt: string | undefined;
           if (row.datahora) {
@@ -121,18 +135,32 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
             estado: row.estado || '',
             excursao: row.excursao || '',
           }, createdAt);
+          
+          // Add to existing names to prevent duplicates within the same import
+          existingNames.add(normalizedName);
           importedCount++;
         } catch (error) {
           console.error('Erro ao importar cliente:', row.nome, error);
         }
       }
 
-      toast.success(
-        <div className="flex items-center gap-2">
-          <CheckCircle size={18} className="text-green-500" />
-          <span>{importedCount} cliente{importedCount !== 1 ? 's' : ''} importado{importedCount !== 1 ? 's' : ''} com sucesso!</span>
-        </div>
-      );
+      if (importedCount > 0 && skippedCount > 0) {
+        toast.success(
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} className="text-green-500" />
+            <span>{importedCount} importado{importedCount !== 1 ? 's' : ''}, {skippedCount} duplicado{skippedCount !== 1 ? 's' : ''} ignorado{skippedCount !== 1 ? 's' : ''}</span>
+          </div>
+        );
+      } else if (importedCount > 0) {
+        toast.success(
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} className="text-green-500" />
+            <span>{importedCount} cliente{importedCount !== 1 ? 's' : ''} importado{importedCount !== 1 ? 's' : ''} com sucesso!</span>
+          </div>
+        );
+      } else if (skippedCount > 0) {
+        toast.info(`Todos os ${skippedCount} cliente${skippedCount !== 1 ? 's' : ''} já existem no sistema.`);
+      }
 
       onOpenChange(false);
     } catch (error) {
