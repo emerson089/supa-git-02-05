@@ -240,27 +240,76 @@ export function ImportPedidosCSVModal({ open, onOpenChange }: ImportPedidosCSVMo
     };
 
     try {
-      // Fetch existing clients
-      const { data: clientes } = await supabase
-        .from('clientes')
-        .select('id, nome')
-        .eq('user_id', user.id);
+      // Verify user session is still valid
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Sessão expirada. Por favor, faça login novamente.');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Fetch ALL existing clients with pagination (Supabase limit is 1000)
+      let allClientes: Array<{ id: string; nome: string }> = [];
+      let clientePage = 0;
+      let hasMoreClientes = true;
+      const pageSize = 1000;
+
+      while (hasMoreClientes) {
+        const { data: clientes } = await supabase
+          .from('clientes')
+          .select('id, nome')
+          .eq('user_id', user.id)
+          .range(clientePage * pageSize, (clientePage + 1) * pageSize - 1);
+
+        if (clientes && clientes.length > 0) {
+          allClientes = [...allClientes, ...clientes];
+          hasMoreClientes = clientes.length === pageSize;
+          clientePage++;
+        } else {
+          hasMoreClientes = false;
+        }
+      }
 
       const clientesMap = new Map<string, string>();
-      (clientes || []).forEach(c => {
+      allClientes.forEach(c => {
         clientesMap.set(c.nome.toLowerCase(), c.id);
       });
 
-      // Fetch existing pedidos for duplicate check
-      const { data: existingPedidos } = await supabase
-        .from('pedidos')
-        .select('cliente_nome, created_at, valor_total')
-        .eq('user_id', user.id);
+      // Fetch ALL existing pedidos for duplicate check with pagination
+      let existingPedidos: Array<{ cliente_nome: string; created_at: string; valor_total: number | null }> = [];
+      let pedidoPage = 0;
+      let hasMorePedidos = true;
+
+      while (hasMorePedidos) {
+        const { data: pedidos } = await supabase
+          .from('pedidos')
+          .select('cliente_nome, created_at, valor_total')
+          .eq('user_id', user.id)
+          .range(pedidoPage * pageSize, (pedidoPage + 1) * pageSize - 1);
+
+        if (pedidos && pedidos.length > 0) {
+          existingPedidos = [...existingPedidos, ...pedidos];
+          hasMorePedidos = pedidos.length === pageSize;
+          pedidoPage++;
+        } else {
+          hasMorePedidos = false;
+        }
+      }
 
       const batches = Math.ceil(rows.length / BATCH_SIZE);
       setTotalBatches(batches);
 
       for (let batchIndex = 0; batchIndex < batches; batchIndex++) {
+        // Check session before each batch to prevent RLS errors
+        if (batchIndex > 0 && batchIndex % 10 === 0) {
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          if (!currentSession) {
+            importResult.errors += rows.length - (batchIndex * BATCH_SIZE);
+            importResult.errorMessages.push('Sessão expirada durante a importação. Faça login novamente.');
+            break;
+          }
+        }
+
         setCurrentBatch(batchIndex + 1);
         const batchStart = batchIndex * BATCH_SIZE;
         const batchEnd = Math.min(batchStart + BATCH_SIZE, rows.length);
@@ -284,7 +333,7 @@ export function ImportPedidosCSVModal({ open, onOpenChange }: ImportPedidosCSVMo
             row.cliente, 
             parseDate(row.data), 
             row.valorTotal,
-            existingPedidos || []
+            existingPedidos
           );
 
           if (isDuplicate) {
@@ -319,13 +368,17 @@ export function ImportPedidosCSVModal({ open, onOpenChange }: ImportPedidosCSVMo
 
           if (error) {
             importResult.errors += pedidosToInsert.length;
-            importResult.errorMessages.push(`Lote ${batchIndex + 1}: ${error.message}`);
+            if (error.message.includes('row-level security')) {
+              importResult.errorMessages.push(`Lote ${batchIndex + 1}: Erro de permissão - verifique se você está logado corretamente`);
+            } else {
+              importResult.errorMessages.push(`Lote ${batchIndex + 1}: ${error.message}`);
+            }
           } else {
             importResult.imported += pedidosToInsert.length;
             
             // Add inserted pedidos to existingPedidos to prevent duplicates within same import
             pedidosToInsert.forEach(p => {
-              existingPedidos?.push({
+              existingPedidos.push({
                 cliente_nome: p.cliente_nome,
                 created_at: p.created_at,
                 valor_total: p.valor_total,
