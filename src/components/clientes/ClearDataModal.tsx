@@ -118,6 +118,7 @@ export function ClearDataModal({ open, onOpenChange }: ClearDataModalProps) {
       queryClient.invalidateQueries({ queryKey: ['pedidos'] });
 
       toast.success('Dados excluídos com sucesso!');
+      setIsDeleting(false);
     } catch (error) {
       console.error('Erro ao excluir dados:', error);
       toast.error('Erro ao excluir dados. Tente novamente.');
