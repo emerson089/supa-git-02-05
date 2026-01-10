@@ -20,7 +20,7 @@ export interface Cliente {
 interface ClientesContextType {
   clientes: Cliente[];
   isLoading: boolean;
-  addCliente: (cliente: Omit<Cliente, 'id' | 'dataCadastro'>) => Promise<Cliente>;
+  addCliente: (cliente: Omit<Cliente, 'id' | 'dataCadastro'>, createdAt?: string) => Promise<Cliente>;
   updateCliente: (id: string, data: Partial<Cliente>) => Promise<void>;
   removeCliente: (id: string) => Promise<void>;
   getClienteById: (id: string) => Cliente | undefined;
@@ -55,14 +55,27 @@ export function ClientesProvider({ children }: { children: ReactNode }) {
     return (clientesDB || []).map(mapDBToCliente);
   }, [clientesDB]);
 
-  const addCliente = useCallback(async (data: Omit<Cliente, 'id' | 'dataCadastro'>): Promise<Cliente> => {
-    const result = await addClienteMutation.mutateAsync({
+  const addCliente = useCallback(async (data: Omit<Cliente, 'id' | 'dataCadastro'>, createdAt?: string): Promise<Cliente> => {
+    const insertData: {
+      nome: string;
+      telefone: string;
+      cidade: string;
+      estado: string;
+      excursao: string;
+      created_at?: string;
+    } = {
       nome: data.nome,
       telefone: data.telefone,
       cidade: data.cidade,
       estado: data.estado,
       excursao: data.excursao,
-    });
+    };
+
+    if (createdAt) {
+      insertData.created_at = createdAt;
+    }
+
+    const result = await addClienteMutation.mutateAsync(insertData);
     return mapDBToCliente(result);
   }, [addClienteMutation]);
 

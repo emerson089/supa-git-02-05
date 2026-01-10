@@ -22,6 +22,7 @@ interface CSVRow {
   cidade?: string;
   estado?: string;
   excursao?: string;
+  datahora?: string;
 }
 
 const normalizeHeader = (header: string): string => {
@@ -46,6 +47,9 @@ const parseCSV = (content: string): CSVRow[] => {
     else if (header === 'cidade') columnMap.cidade = index;
     else if (header === 'estado') columnMap.estado = index;
     else if (header === 'excursao') columnMap.excursao = index;
+    else if (['data/hora', 'datahora', 'data', 'data_cadastro', 'created_at', 'data_criacao'].includes(header)) {
+      columnMap.datahora = index;
+    }
   });
 
   const rows: CSVRow[] = [];
@@ -61,6 +65,7 @@ const parseCSV = (content: string): CSVRow[] => {
       cidade: columnMap.cidade !== undefined ? values[columnMap.cidade] : '',
       estado: columnMap.estado !== undefined ? values[columnMap.estado] : '',
       excursao: columnMap.excursao !== undefined ? values[columnMap.excursao] : '',
+      datahora: columnMap.datahora !== undefined ? values[columnMap.datahora] : undefined,
     };
 
     // Only include rows with at least a name
@@ -100,13 +105,22 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
 
       for (const row of rows) {
         try {
+          // Parse date if provided (format: YYYY-MM-DD)
+          let createdAt: string | undefined;
+          if (row.datahora) {
+            const dateMatch = row.datahora.match(/^\d{4}-\d{2}-\d{2}/);
+            if (dateMatch) {
+              createdAt = new Date(dateMatch[0]).toISOString();
+            }
+          }
+
           await addCliente({
             nome: row.nome || '',
             telefone: row.telefone || '',
             cidade: row.cidade || '',
             estado: row.estado || '',
             excursao: row.excursao || '',
-          });
+          }, createdAt);
           importedCount++;
         } catch (error) {
           console.error('Erro ao importar cliente:', row.nome, error);
@@ -230,6 +244,7 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
                   <li><span className="font-medium text-foreground">Cidade</span> → Cidade</li>
                   <li><span className="font-medium text-foreground">Estado</span> → Estado</li>
                   <li><span className="font-medium text-foreground">Excursão</span> → Excursão</li>
+                  <li><span className="font-medium text-foreground">Data/Hora</span> → Data de cadastro (YYYY-MM-DD)</li>
                 </ul>
               </div>
             </div>

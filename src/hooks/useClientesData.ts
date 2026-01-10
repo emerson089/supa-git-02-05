@@ -15,6 +15,7 @@ export interface ClienteDB {
 }
 
 export type ClienteInsert = Omit<ClienteDB, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
+export type ClienteInsertWithDate = ClienteInsert & { created_at?: string };
 export type ClienteUpdate = Partial<ClienteInsert>;
 
 export function useClientes() {
@@ -40,15 +41,34 @@ export function useAddCliente() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (cliente: ClienteInsert) => {
+    mutationFn: async (cliente: ClienteInsertWithDate) => {
       if (!user) throw new Error('User not authenticated');
+
+      const insertData: {
+        nome: string;
+        telefone: string;
+        cidade: string;
+        estado: string;
+        excursao: string;
+        user_id: string;
+        created_at?: string;
+      } = {
+        nome: cliente.nome,
+        telefone: cliente.telefone,
+        cidade: cliente.cidade,
+        estado: cliente.estado,
+        excursao: cliente.excursao,
+        user_id: user.id,
+      };
+
+      // Include created_at if provided
+      if (cliente.created_at) {
+        insertData.created_at = cliente.created_at;
+      }
 
       const { data, error } = await supabase
         .from('clientes')
-        .insert({
-          ...cliente,
-          user_id: user.id,
-        })
+        .insert(insertData)
         .select()
         .single();
 
