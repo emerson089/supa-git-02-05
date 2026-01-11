@@ -74,14 +74,14 @@ export function ClienteInsightsCard({ clienteId }: ClienteInsightsCardProps) {
     {
       icon: Package,
       value: insights.totalPedidos,
-      label: 'Total de Pedidos',
+      label: 'Pedidos Pagos',
       color: 'text-primary',
       bgColor: 'bg-primary/10',
     },
     {
       icon: DollarSign,
       value: formatCurrency(insights.valorAcumulado),
-      label: 'Valor Acumulado',
+      label: 'Total Pago',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-500/10',
     },

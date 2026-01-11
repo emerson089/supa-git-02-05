@@ -16,18 +16,23 @@ export function useClienteInsights(clienteId: string | null) {
 
       const { data, error } = await supabase
         .from('pedidos')
-        .select('valor_total, total_pecas, status_pedido')
+        .select('valor_total, total_pecas, status_pedido, status_pagamento')
         .eq('cliente_id', clienteId);
 
       if (error) throw error;
 
       const pedidos = data || [];
       const statusCancelados = ['CANCELADO', 'GOLPE', 'GOLPE CANCELADO'];
+      
+      // Filtrar apenas pedidos pagos para os cálculos principais
+      const pedidosPagos = pedidos.filter(p => 
+        p.status_pagamento?.toUpperCase() === 'PAGO'
+      );
 
       return {
-        totalPedidos: pedidos.length,
-        valorAcumulado: pedidos.reduce((sum, p) => sum + (Number(p.valor_total) || 0), 0),
-        totalPecas: pedidos.reduce((sum, p) => sum + (Number(p.total_pecas) || 0), 0),
+        totalPedidos: pedidosPagos.length,
+        valorAcumulado: pedidosPagos.reduce((sum, p) => sum + (Number(p.valor_total) || 0), 0),
+        totalPecas: pedidosPagos.reduce((sum, p) => sum + (Number(p.total_pecas) || 0), 0),
         pedidosCancelados: pedidos.filter(p => 
           p.status_pedido && statusCancelados.includes(p.status_pedido.toUpperCase())
         ).length,
