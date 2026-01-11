@@ -63,19 +63,45 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
   const handleUpdateItem = async (itemId: string, data: { quantidade?: number; valor_unitario?: number }) => {
     if (!pedido) return;
-    
-    const itemAtual = pedido.itens.find(i => i.id === itemId);
-    if (!itemAtual) return;
 
     setUpdatingItemId(itemId);
     try {
+      // Buscar o item atual diretamente do banco para garantir dados corretos
+      const { data: itemDB, error: itemError } = await supabase
+        .from('pedido_itens')
+        .select('id, produto_id, produto_nome, quantidade')
+        .eq('id', itemId)
+        .maybeSingle();
+
+      if (itemError || !itemDB) {
+        console.error('Erro ao buscar item do pedido:', itemError);
+        toast.error('Erro ao buscar dados do item');
+        setUpdatingItemId(null);
+        return;
+      }
+
       // Se a quantidade mudou, ajustar estoque
-      if (data.quantidade !== undefined && data.quantidade !== itemAtual.quantidade) {
-        const diferenca = itemAtual.quantidade - data.quantidade; // positivo = devolve, negativo = subtrai
+      if (data.quantidade !== undefined && data.quantidade !== itemDB.quantidade) {
+        const diferenca = itemDB.quantidade - data.quantidade; // positivo = devolve, negativo = subtrai
         
-        const produtoId = itemAtual.produto_id;
+        let produtoId = itemDB.produto_id;
+        
+        // Fallback: se não tem produto_id, tentar encontrar pelo nome
+        if (!produtoId) {
+          const { data: estoqueByName } = await supabase
+            .from('estoque_itens')
+            .select('id')
+            .eq('tipo', 'acabado')
+            .ilike('nome', itemDB.produto_nome)
+            .maybeSingle();
+          
+          if (estoqueByName) {
+            produtoId = estoqueByName.id;
+          }
+        }
+
         if (produtoId) {
-          // Buscar quantidade atual diretamente do banco para evitar dados desatualizados
+          // Buscar quantidade atual do estoque diretamente do banco
           const { data: estoqueAtual, error: estoqueError } = await supabase
             .from('estoque_itens')
             .select('id, quantidade')
@@ -101,6 +127,8 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
               return;
             }
           }
+        } else {
+          console.warn('Produto não encontrado no estoque para ajuste:', itemDB.produto_nome);
         }
       }
 
@@ -120,16 +148,41 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
   const handleRemoveItem = async (itemId: string) => {
     if (!pedido) return;
-    
-    const itemToRemove = pedido.itens.find(i => i.id === itemId);
-    if (!itemToRemove) return;
 
     setRemovingItemId(itemId);
     try {
+      // Buscar o item atual diretamente do banco
+      const { data: itemDB, error: itemError } = await supabase
+        .from('pedido_itens')
+        .select('id, produto_id, produto_nome, quantidade')
+        .eq('id', itemId)
+        .maybeSingle();
+
+      if (itemError || !itemDB) {
+        console.error('Erro ao buscar item do pedido:', itemError);
+        toast.error('Erro ao buscar dados do item');
+        setRemovingItemId(null);
+        return;
+      }
+
+      let produtoId = itemDB.produto_id;
+      
+      // Fallback: se não tem produto_id, tentar encontrar pelo nome
+      if (!produtoId) {
+        const { data: estoqueByName } = await supabase
+          .from('estoque_itens')
+          .select('id')
+          .eq('tipo', 'acabado')
+          .ilike('nome', itemDB.produto_nome)
+          .maybeSingle();
+        
+        if (estoqueByName) {
+          produtoId = estoqueByName.id;
+        }
+      }
+
       // Devolver ao estoque antes de remover
-      const produtoId = itemToRemove.produto_id;
       if (produtoId) {
-        // Buscar quantidade atual diretamente do banco
         const { data: estoqueAtual, error: estoqueError } = await supabase
           .from('estoque_itens')
           .select('id, quantidade')
@@ -138,7 +191,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
         if (!estoqueError && estoqueAtual) {
           await updateEstoqueItem(estoqueAtual.id, {
-            quantidade: estoqueAtual.quantidade + itemToRemove.quantidade
+            quantidade: estoqueAtual.quantidade + itemDB.quantidade
           });
         }
       }
@@ -147,7 +200,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         id: itemId,
         pedidoId: pedido.id,
       });
-      toast.success(`Item removido! ${itemToRemove.quantidade} peças retornaram ao estoque.`);
+      toast.success(`Item removido! ${itemDB.quantidade} peças retornaram ao estoque.`);
     } catch (error) {
       console.error('Error removing item:', error);
       toast.error('Erro ao remover item');
