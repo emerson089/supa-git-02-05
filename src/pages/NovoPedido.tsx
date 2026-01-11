@@ -1,6 +1,9 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppSidebar } from '@/components/layout/AppSidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
+import { BottomNavigation } from '@/components/layout/BottomNavigation';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { ClienteInfoCard } from '@/components/pedidos/ClienteInfoCard';
 import { ClienteInsightsCard } from '@/components/pedidos/ClienteInsightsCard';
 import { 
@@ -21,8 +24,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ClienteSchema, PedidoItemSchema } from '@/lib/validations';
+import { cn } from '@/lib/utils';
 
 const NovoPedido = () => {
+  const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const navigate = useNavigate();
   const { clientes, addCliente, getClienteById } = useClientesContext();
   const { addPedido } = usePedidos();
