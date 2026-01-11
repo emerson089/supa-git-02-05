@@ -222,6 +222,8 @@ export function useUpdatePedido() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pedidos'] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
     },
   });
 }
@@ -241,6 +243,8 @@ export function useRemovePedido() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pedidos'] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
     },
   });
 }
