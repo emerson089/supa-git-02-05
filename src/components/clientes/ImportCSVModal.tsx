@@ -204,7 +204,7 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="neu-card border-0 rounded-2xl max-w-lg">
+      <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
             <FileSpreadsheet size={24} className="text-primary" />
