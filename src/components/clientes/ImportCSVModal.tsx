@@ -232,7 +232,7 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={isProcessing ? undefined : onOpenChange}>
-      <DialogContent className="neu-card border-0 rounded-2xl max-w-2xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-hidden bg-background shadow-[8px_8px_20px_hsl(216_26%_84%/0.6),-8px_-8px_20px_hsl(0_0%_100%/0.8)]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
             <FileSpreadsheet size={24} className="text-primary" />
