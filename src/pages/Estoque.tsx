@@ -18,8 +18,10 @@ import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { supabase } from '@/integrations/supabase/client';
 import { ImportModelosCSVModal } from '@/components/estoque/ImportModelosCSVModal';
 import { ProductCard } from '@/components/estoque/ProductCard';
+import { MobileProductCard } from '@/components/estoque/MobileProductCard';
 import { EstoqueItemSchema, NovoModeloAcabadoSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 const statusConfig: Record<StatusEstoque, { label: string; color: string }> = {
   disponivel: { label: 'Disponível', color: 'bg-emerald-100 text-emerald-700' },
   em_producao: { label: 'Em Produção', color: 'bg-blue-100 text-blue-700' },
@@ -416,76 +418,163 @@ export default function Estoque() {
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className={cn("flex-1 overflow-auto", isMobile ? "p-4" : "p-6")}>
           <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'materia_prima' | 'produto_acabado')}>
-            <div className="flex items-center justify-between mb-6">
-              <TabsList className="shadow-[3px_3px_6px_hsl(var(--muted)/0.3),-3px_-3px_6px_hsl(var(--background))] bg-muted/30">
-                <TabsTrigger value="materia_prima" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
-                  <Layers size={16} />
-                  Matéria-Prima ({materiasPrimas.length})
-                </TabsTrigger>
-                <TabsTrigger value="produto_acabado" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
-                  <PackageCheck size={16} />
-                  Produtos Acabados ({produtosAcabados.length})
-                </TabsTrigger>
-              </TabsList>
-
-              {activeTab === 'produto_acabado' && (
-                <div className="flex items-center gap-3">
-                  <Button 
-                    onClick={() => setShowImportModal(true)}
-                    variant="outline"
-                    className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50"
+            {/* Mobile: Scrollable tabs */}
+            {isMobile ? (
+              <ScrollArea className="w-full mb-4">
+                <div className="flex gap-2 pb-2">
+                  <button
+                    onClick={() => setActiveTab('materia_prima')}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap",
+                      "border text-sm font-medium",
+                      activeTab === 'materia_prima'
+                        ? "bg-primary/10 text-primary border-primary/30 shadow-sm"
+                        : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+                    )}
                   >
-                    <FileSpreadsheet size={18} />
-                    Importar Lista de Modelos
-                  </Button>
-                  <Button 
-                    onClick={handleOpenNovoModelo} 
-                    className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]"
+                    <Layers className="h-4 w-4 shrink-0" />
+                    <span>Matéria-Prima</span>
+                    <span className={cn(
+                      "inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold",
+                      activeTab === 'materia_prima'
+                        ? "bg-primary/20 text-primary"
+                        : "bg-muted text-muted-foreground"
+                    )}>
+                      {materiasPrimas.length}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('produto_acabado')}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap",
+                      "border text-sm font-medium",
+                      activeTab === 'produto_acabado'
+                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 shadow-sm"
+                        : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+                    )}
                   >
-                    <Plus size={18} />
-                    Novo Modelo Acabado
-                  </Button>
+                    <PackageCheck className="h-4 w-4 shrink-0" />
+                    <span>Produtos</span>
+                    <span className={cn(
+                      "inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold",
+                      activeTab === 'produto_acabado'
+                        ? "bg-emerald-500/20 text-emerald-600"
+                        : "bg-muted text-muted-foreground"
+                    )}>
+                      {produtosAcabados.length}
+                    </span>
+                  </button>
                 </div>
-              )}
-            </div>
+                <ScrollBar orientation="horizontal" className="h-2" />
+              </ScrollArea>
+            ) : (
+              /* Desktop: Original tabs */
+              <div className="flex items-center justify-between mb-6">
+                <TabsList className="shadow-[3px_3px_6px_hsl(var(--muted)/0.3),-3px_-3px_6px_hsl(var(--background))] bg-muted/30">
+                  <TabsTrigger value="materia_prima" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
+                    <Layers size={16} />
+                    Matéria-Prima ({materiasPrimas.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="produto_acabado" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
+                    <PackageCheck size={16} />
+                    Produtos Acabados ({produtosAcabados.length})
+                  </TabsTrigger>
+                </TabsList>
+
+                {activeTab === 'produto_acabado' && (
+                  <div className="flex items-center gap-3">
+                    <Button 
+                      onClick={() => setShowImportModal(true)}
+                      variant="outline"
+                      className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50"
+                    >
+                      <FileSpreadsheet size={18} />
+                      Importar Lista de Modelos
+                    </Button>
+                    <Button 
+                      onClick={handleOpenNovoModelo} 
+                      className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]"
+                    >
+                      <Plus size={18} />
+                      Novo Modelo Acabado
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <TabsContent value={activeTab} className="mt-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className={cn(
+                "grid gap-3",
+                isMobile 
+                  ? "grid-cols-1" 
+                  : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+              )}>
                 {itensFiltrados.map(item => (
                   item.tipo === 'acabado' ? (
-                    <ProductCard
-                      key={item.id}
-                      item={item}
-                      editingPriceId={editingPriceId}
-                      editingPriceValue={editingPriceValue}
-                      onEditPrice={handleStartEditPrice}
-                      onSavePrice={handleSavePrice}
-                      onCancelEditPrice={handleCancelEditPrice}
-                      onPriceValueChange={setEditingPriceValue}
-                      onEdit={handleOpenModal}
-                      onDelete={handleDeleteClick}
-                      onImageUpdate={handleProductImageUpdate}
-                    />
+                    isMobile ? (
+                      <MobileProductCard
+                        key={item.id}
+                        item={{
+                          id: item.id,
+                          nome: item.nome,
+                          categoria: item.categoria,
+                          quantidade: item.quantidade,
+                          precoUnitario: item.precoUnitario,
+                          imagemUrl: item.imagemUrl,
+                          localizacao: item.localizacao,
+                        }}
+                        editingPriceId={editingPriceId}
+                        editingPrice={editingPriceValue.toString()}
+                        onEditPrice={(id, price) => {
+                          setEditingPriceId(id);
+                          setEditingPriceValue(price);
+                        }}
+                        onSavePrice={handleSavePrice}
+                        onCancelEditPrice={handleCancelEditPrice}
+                        onPriceChange={(v) => setEditingPriceValue(Number(v))}
+                        onEdit={handleOpenModal}
+                        onDelete={handleDeleteClick}
+                        onImageUpdate={handleProductImageUpdate}
+                      />
+                    ) : (
+                      <ProductCard
+                        key={item.id}
+                        item={item}
+                        editingPriceId={editingPriceId}
+                        editingPriceValue={editingPriceValue}
+                        onEditPrice={handleStartEditPrice}
+                        onSavePrice={handleSavePrice}
+                        onCancelEditPrice={handleCancelEditPrice}
+                        onPriceValueChange={setEditingPriceValue}
+                        onEdit={handleOpenModal}
+                        onDelete={handleDeleteClick}
+                        onImageUpdate={handleProductImageUpdate}
+                      />
+                    )
                   ) : (
                     <Card
                       key={item.id}
-                      className="overflow-hidden shadow-soft border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-2xl"
+                      className="overflow-hidden shadow-soft border border-border/50 bg-card rounded-2xl"
                     >
-                      <CardContent className="p-6">
+                      <CardContent className={cn("p-6", isMobile && "p-4")}>
                         {/* Two column layout */}
-                        <div className="flex gap-4 mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
+                        <div className="flex gap-4 mb-4 pb-4 border-b border-border/30">
                           {/* Left: Image */}
                           <ProductImage imagemUrl={item.imagemUrl} nome={item.nome} />
                           
                           {/* Right: Main info */}
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-lg text-foreground truncate">{item.nome}</h3>
+                            <h3 className={cn(
+                              "font-bold text-foreground",
+                              isMobile ? "text-sm line-clamp-2" : "text-lg truncate"
+                            )}>{item.nome}</h3>
                             <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mt-1">{item.categoria}</p>
                           </div>
                           
-                          <Badge className={statusConfig[item.status].color + " h-fit"}>
+                          <Badge className={statusConfig[item.status].color + " h-fit shrink-0"}>
                             {statusConfig[item.status].label}
                           </Badge>
                         </div>
@@ -512,11 +601,11 @@ export default function Estoque() {
                           </div>
                         </div>
 
-                        <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <div className="flex gap-3 mt-5 pt-4 border-t border-border/30">
                           <Button
                             variant="outline"
                             size="sm"
-                            className="flex-1 gap-1.5 h-10 border-gray-200 dark:border-gray-600"
+                            className="flex-1 gap-1.5 h-10"
                             onClick={() => handleOpenModal(item)}
                           >
                             <Edit size={14} />
@@ -525,7 +614,7 @@ export default function Estoque() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="text-destructive hover:text-destructive h-10 px-3 border-gray-200 dark:border-gray-600"
+                            className="text-destructive hover:text-destructive h-10 px-3"
                             onClick={() => handleDeleteClick(item)}
                           >
                             <Trash2 size={14} />
@@ -549,6 +638,16 @@ export default function Estoque() {
             </TabsContent>
           </Tabs>
         </div>
+
+        {/* Mobile FAB for adding products */}
+        {isMobile && activeTab === 'produto_acabado' && (
+          <Button
+            onClick={handleOpenNovoModelo}
+            className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90"
+          >
+            <Plus size={24} />
+          </Button>
+        )}
       </main>
 
       {/* Modal de Novo/Editar Item */}
