@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,8 +8,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { useClientesContext } from '@/contexts/ClientesContext';
+import { useClientesBatchImport } from '@/hooks/useClientesBatchImport';
+import { ClienteInsertWithDate } from '@/hooks/useClientesData';
 
 interface ImportCSVModalProps {
   open: boolean;
@@ -78,10 +81,20 @@ const parseCSV = (content: string): CSVRow[] => {
 };
 
 export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
-  const { addCliente, clientes } = useClientesContext();
+  const { clientes } = useClientesContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [importedCount, setImportedCount] = useState(0);
+  const [totalToImport, setTotalToImport] = useState(0);
+
+  const handleProgress = useCallback((imported: number, total: number) => {
+    setImportedCount(imported);
+    setProgress((imported / total) * 100);
+  }, []);
+
+  const batchImportMutation = useClientesBatchImport({ onProgress: handleProgress });
 
   const handleFileSelect = async (file: File) => {
     if (!file.name.endsWith('.csv')) {
@@ -90,6 +103,8 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
     }
 
     setIsProcessing(true);
+    setProgress(0);
+    setImportedCount(0);
 
     try {
       const content = await file.text();
@@ -106,60 +121,67 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
         clientes.map(c => c.nome.toLowerCase().trim())
       );
 
-      let importedCount = 0;
+      // Filter out duplicates and prepare data for batch import
+      const clientesToImport: ClienteInsertWithDate[] = [];
       let skippedCount = 0;
 
       for (const row of rows) {
-        try {
-          const normalizedName = (row.nome || '').toLowerCase().trim();
-          
-          // Skip if client with same name already exists
-          if (existingNames.has(normalizedName)) {
-            skippedCount++;
-            continue;
-          }
-
-          // Parse date if provided (format: YYYY-MM-DD)
-          let createdAt: string | undefined;
-          if (row.datahora) {
-            const dateMatch = row.datahora.match(/^\d{4}-\d{2}-\d{2}/);
-            if (dateMatch) {
-              createdAt = new Date(dateMatch[0]).toISOString();
-            }
-          }
-
-          await addCliente({
-            nome: row.nome || '',
-            telefone: row.telefone || '',
-            cidade: row.cidade || '',
-            estado: row.estado || '',
-            excursao: row.excursao || '',
-          }, createdAt);
-          
-          // Add to existing names to prevent duplicates within the same import
-          existingNames.add(normalizedName);
-          importedCount++;
-        } catch (error) {
-          console.error('Erro ao importar cliente:', row.nome, error);
+        const normalizedName = (row.nome || '').toLowerCase().trim();
+        
+        // Skip if client with same name already exists
+        if (existingNames.has(normalizedName)) {
+          skippedCount++;
+          continue;
         }
+
+        // Parse date if provided (format: YYYY-MM-DD)
+        let createdAt: string | undefined;
+        if (row.datahora) {
+          const dateMatch = row.datahora.match(/^\d{4}-\d{2}-\d{2}/);
+          if (dateMatch) {
+            createdAt = new Date(dateMatch[0]).toISOString();
+          }
+        }
+
+        clientesToImport.push({
+          nome: row.nome || '',
+          telefone: row.telefone || '',
+          cidade: row.cidade || '',
+          estado: row.estado || '',
+          excursao: row.excursao || '',
+          created_at: createdAt,
+        });
+
+        // Add to existing names to prevent duplicates within the same import
+        existingNames.add(normalizedName);
       }
 
-      if (importedCount > 0 && skippedCount > 0) {
-        toast.success(
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} className="text-green-500" />
-            <span>{importedCount} importado{importedCount !== 1 ? 's' : ''}, {skippedCount} duplicado{skippedCount !== 1 ? 's' : ''} ignorado{skippedCount !== 1 ? 's' : ''}</span>
-          </div>
-        );
-      } else if (importedCount > 0) {
-        toast.success(
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} className="text-green-500" />
-            <span>{importedCount} cliente{importedCount !== 1 ? 's' : ''} importado{importedCount !== 1 ? 's' : ''} com sucesso!</span>
-          </div>
-        );
-      } else if (skippedCount > 0) {
+      if (clientesToImport.length === 0) {
         toast.info(`Todos os ${skippedCount} cliente${skippedCount !== 1 ? 's' : ''} já existem no sistema.`);
+        setIsProcessing(false);
+        return;
+      }
+
+      setTotalToImport(clientesToImport.length);
+
+      // Batch import all clients
+      const result = await batchImportMutation.mutateAsync(clientesToImport);
+      const importedTotal = result.imported.length;
+
+      if (importedTotal > 0 && skippedCount > 0) {
+        toast.success(
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} className="text-green-500" />
+            <span>{importedTotal} importado{importedTotal !== 1 ? 's' : ''}, {skippedCount} duplicado{skippedCount !== 1 ? 's' : ''} ignorado{skippedCount !== 1 ? 's' : ''}</span>
+          </div>
+        );
+      } else if (importedTotal > 0) {
+        toast.success(
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} className="text-green-500" />
+            <span>{importedTotal} cliente{importedTotal !== 1 ? 's' : ''} importado{importedTotal !== 1 ? 's' : ''} com sucesso!</span>
+          </div>
+        );
       }
 
       onOpenChange(false);
@@ -168,6 +190,9 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
       toast.error('Erro ao processar o arquivo. Verifique o formato.');
     } finally {
       setIsProcessing(false);
+      setProgress(0);
+      setImportedCount(0);
+      setTotalToImport(0);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -199,11 +224,13 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
   };
 
   const handleClick = () => {
-    fileInputRef.current?.click();
+    if (!isProcessing) {
+      fileInputRef.current?.click();
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={isProcessing ? undefined : onOpenChange}>
       <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -216,6 +243,20 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
         </DialogHeader>
 
         <div className="mt-4 space-y-4">
+          {/* Progress Bar - shown during import */}
+          {isProcessing && totalToImport > 0 && (
+            <div className="space-y-2 p-4 rounded-xl bg-secondary/50">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-foreground">Importando clientes...</span>
+                <span className="text-muted-foreground">{importedCount} de {totalToImport}</span>
+              </div>
+              <Progress value={progress} className="h-2" />
+              <p className="text-xs text-muted-foreground text-center">
+                Aguarde, isso pode levar alguns segundos...
+              </p>
+            </div>
+          )}
+
           {/* Drop Zone */}
           <div
             onClick={handleClick}
@@ -239,6 +280,7 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
               accept=".csv"
               onChange={handleInputChange}
               className="hidden"
+              disabled={isProcessing}
             />
             
             <div className="flex flex-col items-center gap-3">
@@ -282,6 +324,7 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={isProcessing}
               className="flex-1 h-11 rounded-xl neu-button border-0 text-muted-foreground hover:text-foreground"
             >
               Cancelar
