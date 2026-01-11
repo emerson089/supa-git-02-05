@@ -9,6 +9,7 @@ import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { ProductionHeader } from '@/components/production/ProductionHeader';
 import { KanbanBoard } from '@/components/production/KanbanBoard';
+import { MobileKanban } from '@/components/production/MobileKanban';
 import { ListView } from '@/components/production/ListView';
 import { CustosLoteModal } from '@/components/production/CustosLoteModal';
 import ProducaoForm from '@/components/producao/ProducaoForm';
@@ -227,14 +228,24 @@ const Index = () => {
         {/* Content Area */}
         <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-6 pt-2">
           {viewMode === 'kanban' ? (
-            <KanbanBoard 
-              lots={filteredLots} 
-              onMoveCard={moveCard}
-              onDragMove={handleDragMove}
-              onEditCard={handleEditCard}
-              onDeleteCard={handleDeleteCard}
-              onManageCosts={handleManageCosts}
-            />
+            isMobile ? (
+              <MobileKanban
+                lots={filteredLots}
+                onMoveCard={moveCard}
+                onEditCard={handleEditCard}
+                onDeleteCard={handleDeleteCard}
+                onManageCosts={handleManageCosts}
+              />
+            ) : (
+              <KanbanBoard 
+                lots={filteredLots} 
+                onMoveCard={moveCard}
+                onDragMove={handleDragMove}
+                onEditCard={handleEditCard}
+                onDeleteCard={handleDeleteCard}
+                onManageCosts={handleManageCosts}
+              />
+            )
           ) : (
             <ListView lots={filteredLots} onMoveCard={moveCard} />
           )}
