@@ -79,9 +79,15 @@ export function usePedidosPaginated(params: PaginatedParams) {
         .from('pedidos')
         .select('*, pedido_itens(*)', { count: 'exact' });
 
-      // Apply search filter (client name or ID)
+      // Apply search filter (client name only - UUID search not supported with ilike)
       if (debouncedSearch) {
-        query = query.or(`cliente_nome.ilike.%${debouncedSearch}%,id.ilike.%${debouncedSearch}%`);
+        // Check if search term looks like a UUID
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(debouncedSearch);
+        if (isUUID) {
+          query = query.eq('id', debouncedSearch);
+        } else {
+          query = query.ilike('cliente_nome', `%${debouncedSearch}%`);
+        }
       }
 
       // Apply status filters
