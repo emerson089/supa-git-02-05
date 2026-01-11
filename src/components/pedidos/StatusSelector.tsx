@@ -69,31 +69,31 @@ export function StatusSelector({ label, options, value, onChange }: StatusSelect
 
 // Predefined status options with colors
 export const statusPagamentoOptions: StatusOption[] = [
-  { value: 'pendente', label: 'PENDENTE', color: 'yellow' },
-  { value: 'pago', label: 'PAGO', color: 'green' },
-  { value: 'cancelado', label: 'CANCELADO', color: 'red' },
-  { value: 'incompleto', label: 'INCOMPLETO', color: 'purple' },
-  { value: 'pend_entrega', label: 'PEND. ENTREGA', color: 'blue' },
-  { value: 'golpe', label: 'GOLPE CANCELADO', color: 'black' },
+  { value: 'PENDENTE', label: 'PENDENTE', color: 'yellow' },
+  { value: 'PAGO', label: 'PAGO', color: 'green' },
+  { value: 'CANCELADO', label: 'CANCELADO', color: 'red' },
+  { value: 'INCOMPLETO', label: 'INCOMPLETO', color: 'purple' },
+  { value: 'PEND. ENTREGA', label: 'PEND. ENTREGA', color: 'blue' },
+  { value: 'GOLPE CANCELADO', label: 'GOLPE CANCELADO', color: 'black' },
 ];
 
 export const statusPedidoOptions: StatusOption[] = [
-  { value: 'incompleto', label: 'INCOMPLETO', color: 'purple' },
-  { value: 'separado', label: 'SEPARADO', color: 'green' },
-  { value: 'cancelado', label: 'CANCELADO', color: 'red' },
-  { value: 'golpe', label: 'GOLPE CANCELADO', color: 'black' },
-  { value: 'amanha', label: 'AMANHÃ', color: 'blue' },
-  { value: 'nao_separado', label: 'NÃO SEPARADO', color: 'yellow' },
+  { value: 'INCOMPLETO', label: 'INCOMPLETO', color: 'purple' },
+  { value: 'SEPARADO', label: 'SEPARADO', color: 'green' },
+  { value: 'CANCELADO', label: 'CANCELADO', color: 'red' },
+  { value: 'GOLPE CANCELADO', label: 'GOLPE CANCELADO', color: 'black' },
+  { value: 'AMANHÃ', label: 'AMANHÃ', color: 'blue' },
+  { value: 'NÃO SEPARADO', label: 'NÃO SEPARADO', color: 'yellow' },
 ];
 
 export const statusEntregaOptions: StatusOption[] = [
-  { value: 'nao_entregue', label: 'NÃO ENTREGUE', color: 'yellow' },
-  { value: 'no_carro', label: 'NO CARRO', color: 'purple' },
-  { value: 'entregue', label: 'ENTREGUE', color: 'green' },
-  { value: 'retirada', label: 'RETIRADA', color: 'blue' },
-  { value: 'prox_semana', label: 'PRÓX. SEMANA', color: 'blue' },
-  { value: 'entregou_errado', label: 'ENTREGOU ERRADO', color: 'red' },
-  { value: 'cancelado', label: 'CANCELADO', color: 'red' },
+  { value: 'NÃO ENTREGUE', label: 'NÃO ENTREGUE', color: 'yellow' },
+  { value: 'NO CARRO', label: 'NO CARRO', color: 'purple' },
+  { value: 'ENTREGUE', label: 'ENTREGUE', color: 'green' },
+  { value: 'RETIRADA', label: 'RETIRADA', color: 'blue' },
+  { value: 'PRÓX. SEMANA', label: 'PRÓX. SEMANA', color: 'blue' },
+  { value: 'ENTREGOU ERRADO', label: 'ENTREGOU ERRADO', color: 'red' },
+  { value: 'CANCELADO', label: 'CANCELADO', color: 'red' },
 ];
 
 // Helper to get label from value
