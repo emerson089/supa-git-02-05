@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle } from 'lucide-react';
 import { AppSidebar } from '@/components/layout/AppSidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
+import { BottomNavigation } from '@/components/layout/BottomNavigation';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +12,7 @@ import { useClientesContext, Cliente } from '@/contexts/ClientesContext';
 import { ImportCSVModal } from '@/components/clientes/ImportCSVModal';
 import { ClearDataModal } from '@/components/clientes/ClearDataModal';
 import { ClienteSchema } from '@/lib/validations';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -35,6 +39,7 @@ const emptyCliente = {
 };
 
 export default function Clientes() {
+  const isMobile = useIsMobile();
   const { clientes, isLoading, addCliente, updateCliente, removeCliente } = useClientesContext();
   const [busca, setBusca] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -153,9 +158,16 @@ export default function Clientes() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <AppSidebar />
+      {/* Mobile Header */}
+      {isMobile && <MobileHeader title="Clientes" />}
       
-      <main className="flex-1 p-6 lg:p-8 overflow-auto">
+      {/* Sidebar - Desktop only */}
+      {!isMobile && <AppSidebar />}
+      
+      <main className={cn(
+        "flex-1 p-6 lg:p-8 overflow-auto",
+        isMobile && "pt-20 pb-24"
+      )}>
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
@@ -407,6 +419,9 @@ export default function Clientes() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Bottom Navigation */}
+      <BottomNavigation />
     </div>
   );
 }
