@@ -510,15 +510,15 @@ export function ImportPedidosCSVModal({ open, onOpenChange }: ImportPedidosCSVMo
                 )}
 
                 {result.clientesNaoEncontrados.length > 0 && (
-                  <div className="neu-input p-3 rounded-xl">
+                  <div className="neu-input p-3 rounded-xl border-l-4 border-emerald-500">
                     <div className="flex items-start gap-2">
-                      <AlertCircle size={18} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                      <CheckCircle size={18} className="text-emerald-500 mt-0.5 flex-shrink-0" />
                       <div className="text-sm">
                         <p className="font-medium text-foreground mb-1">
-                          {result.clientesNaoEncontrados.length} clientes não encontrados
+                          {result.clientesNaoEncontrados.length} clientes sem cadastro
                         </p>
                         <p className="text-muted-foreground text-xs mb-2">
-                          Os pedidos foram criados sem vinculação ao cadastro do cliente
+                          Pedidos importados com sucesso! Os clientes abaixo não possuem cadastro, mas os pedidos foram contabilizados normalmente.
                         </p>
                         <div className="max-h-24 overflow-y-auto">
                           {result.clientesNaoEncontrados.slice(0, 10).map((nome, i) => (
