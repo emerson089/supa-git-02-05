@@ -7,6 +7,7 @@ import { EditableItemRow, EditableItem } from './EditableItemRow';
 import { AddItemSelector } from './AddItemSelector';
 import { useAddPedidoItem, useUpdatePedidoItem, useRemovePedidoItem } from '@/hooks/usePedidoItensData';
 import { useEstoque } from '@/contexts/EstoqueContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface PedidoData {
@@ -74,17 +75,28 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         
         const produtoId = itemAtual.produto_id;
         if (produtoId) {
-          const produtoEstoque = estoqueItens.find(
-            p => p.tipo === 'acabado' && p.id === produtoId
-          );
-          if (produtoEstoque) {
-            const novaQuantidadeEstoque = produtoEstoque.quantidade + diferenca;
+          // Buscar quantidade atual diretamente do banco para evitar dados desatualizados
+          const { data: estoqueAtual, error: estoqueError } = await supabase
+            .from('estoque_itens')
+            .select('id, quantidade')
+            .eq('id', produtoId)
+            .maybeSingle();
+
+          if (estoqueError) {
+            console.error('Erro ao buscar estoque:', estoqueError);
+            toast.error('Erro ao verificar estoque');
+            setUpdatingItemId(null);
+            return;
+          }
+
+          if (estoqueAtual) {
+            const novaQuantidadeEstoque = estoqueAtual.quantidade + diferenca;
             if (novaQuantidadeEstoque >= 0) {
-              await updateEstoqueItem(produtoEstoque.id, {
+              await updateEstoqueItem(estoqueAtual.id, {
                 quantidade: novaQuantidadeEstoque
               });
             } else {
-              toast.error(`Estoque insuficiente! Disponível: ${produtoEstoque.quantidade}`);
+              toast.error(`Estoque insuficiente! Disponível: ${estoqueAtual.quantidade}`);
               setUpdatingItemId(null);
               return;
             }
@@ -117,12 +129,16 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
       // Devolver ao estoque antes de remover
       const produtoId = itemToRemove.produto_id;
       if (produtoId) {
-        const produtoEstoque = estoqueItens.find(
-          p => p.tipo === 'acabado' && p.id === produtoId
-        );
-        if (produtoEstoque) {
-          await updateEstoqueItem(produtoEstoque.id, {
-            quantidade: produtoEstoque.quantidade + itemToRemove.quantidade
+        // Buscar quantidade atual diretamente do banco
+        const { data: estoqueAtual, error: estoqueError } = await supabase
+          .from('estoque_itens')
+          .select('id, quantidade')
+          .eq('id', produtoId)
+          .maybeSingle();
+
+        if (!estoqueError && estoqueAtual) {
+          await updateEstoqueItem(estoqueAtual.id, {
+            quantidade: estoqueAtual.quantidade + itemToRemove.quantidade
           });
         }
       }
@@ -144,19 +160,28 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
     if (!pedido) return;
 
     try {
-      // Verificar disponibilidade no estoque
-      const produtoEstoque = estoqueItens.find(
-        p => p.tipo === 'acabado' && p.id === produto.id
-      );
+      // Buscar quantidade atual diretamente do banco
+      const { data: estoqueAtual, error: estoqueError } = await supabase
+        .from('estoque_itens')
+        .select('id, quantidade, tipo')
+        .eq('id', produto.id)
+        .eq('tipo', 'acabado')
+        .maybeSingle();
 
-      if (!produtoEstoque || produtoEstoque.quantidade < 1) {
+      if (estoqueError) {
+        console.error('Erro ao buscar estoque:', estoqueError);
+        toast.error('Erro ao verificar estoque');
+        return;
+      }
+
+      if (!estoqueAtual || estoqueAtual.quantidade < 1) {
         toast.error('Estoque insuficiente para este produto!');
         return;
       }
 
       // Deduzir 1 unidade do estoque
-      await updateEstoqueItem(produtoEstoque.id, {
-        quantidade: produtoEstoque.quantidade - 1
+      await updateEstoqueItem(estoqueAtual.id, {
+        quantidade: estoqueAtual.quantidade - 1
       });
 
       // Adicionar item ao pedido
