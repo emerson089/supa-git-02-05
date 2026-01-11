@@ -4,10 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Producao, ProducaoData, ProducaoInsert, ProducaoUpdate, PrioridadeType } from '@/entities/Producao';
+import { Producao, ProducaoData, ProducaoInsert, ProducaoUpdate } from '@/entities/Producao';
 import { STAGES } from '@/data/production-data';
 import { supabase } from '@/integrations/supabase/client';
-import { Upload, Loader2, X, Circle, AlertTriangle, Flame } from 'lucide-react';
+import { Upload, Loader2, X } from 'lucide-react';
 import { ProducaoFormSchema, getValidationErrors } from '@/lib/validations';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
@@ -32,8 +32,7 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
     processo_atual: 'Corte',
     responsavel: '',
     observacoes: '',
-    imagem_url: '',
-    prioridade: 'normal' as PrioridadeType
+    imagem_url: ''
   });
 
   // Load existing lot data for editing
@@ -46,8 +45,7 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
         processo_atual: lote.processo_atual || 'Corte',
         responsavel: lote.responsavel || '',
         observacoes: lote.observacoes || '',
-        imagem_url: lote.imagem_url || '',
-        prioridade: (lote.prioridade as PrioridadeType) || 'normal'
+        imagem_url: lote.imagem_url || ''
       });
     }
   }, [lote]);
@@ -150,7 +148,7 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
     setLoading(true);
     
     try {
-      await onSave(formData);
+      await onSave({ ...formData, prioridade: 'normal' });
     } catch (error: any) {
       if (import.meta.env.DEV) console.error('Error saving:', error);
       const errorMessage = error?.message || 'Erro ao salvar. Tente novamente.';
@@ -186,15 +184,23 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
           <Input
             id="quantidade"
             type="number"
-            value={formData.quantidade}
+            value={formData.quantidade === 0 ? '' : formData.quantidade}
             onChange={(e) => {
-              const val = parseInt(e.target.value) || 0;
-              setFormData({ ...formData, quantidade: Math.min(val, 100000) });
+              const value = e.target.value;
+              if (value === '') {
+                setFormData({ ...formData, quantidade: 0 });
+              } else {
+                const val = parseInt(value);
+                if (!isNaN(val)) {
+                  setFormData({ ...formData, quantidade: Math.min(Math.max(val, 0), 100000) });
+                }
+              }
               if (errors.quantidade) setErrors({ ...errors, quantidade: '' });
             }}
             min={0}
             max={100000}
             required
+            placeholder="0"
             className={errors.quantidade ? 'border-destructive' : ''}
           />
           {errors.quantidade && <p className="text-xs text-destructive">{errors.quantidade}</p>}
@@ -248,38 +254,6 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
             maxLength={100}
           />
         </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="prioridade">Prioridade</Label>
-          <Select
-            value={formData.prioridade}
-            onValueChange={(value: PrioridadeType) => setFormData({ ...formData, prioridade: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione a prioridade" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="normal">
-                <span className="flex items-center gap-2">
-                  <Circle size={10} className="text-blue-500 fill-blue-500" />
-                  Normal
-                </span>
-              </SelectItem>
-              <SelectItem value="atencao">
-                <span className="flex items-center gap-2">
-                  <AlertTriangle size={10} className="text-amber-500 fill-amber-500" />
-                  Atenção
-                </span>
-              </SelectItem>
-              <SelectItem value="urgente">
-                <span className="flex items-center gap-2">
-                  <Flame size={10} className="text-red-500 fill-red-500" />
-                  Urgente
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
       <div className="space-y-2">

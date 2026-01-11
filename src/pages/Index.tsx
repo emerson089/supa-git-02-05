@@ -254,7 +254,7 @@ const Index = () => {
 
       {/* Form Modal */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingLote ? 'Editar Lote' : 'Novo Lote de Produção'}
