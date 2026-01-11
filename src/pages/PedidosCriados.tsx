@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { usePedidos, Pedido } from '@/contexts/PedidosContext';
@@ -182,10 +182,14 @@ export default function PedidosCriados() {
   const totalPages = paginatedResult?.totalPages || 0;
   const totalCount = paginatedResult?.count || 0;
 
-  // Reset to first page when filters change
+  // Reset to first page when any filter changes
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, filterStatusPagamento, filterStatusPedido, filterStatusEntrega, startDate, endDate, filterModelo]);
+
+  // Legacy handler for backwards compatibility
   const handleFilterChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) => {
     setter(value);
-    setCurrentPage(0);
   };
 
   const handleSort = (field: SortField) => {
