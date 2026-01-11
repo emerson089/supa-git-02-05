@@ -125,11 +125,63 @@ const statusEntregaColors: Record<string, string> = {
 type SortField = 'created_at' | 'valor_total';
 type SortDirection = 'asc' | 'desc';
 
+// Constante para chave do localStorage
+const FILTERS_STORAGE_KEY = 'pedidosCriados_filters';
+
+// Interface para filtros persistidos
+interface PersistedFilters {
+  startDate?: string;
+  endDate?: string;
+  filterStatusPagamento: string;
+  filterStatusPedido: string;
+  filterStatusEntrega: string;
+  filterModelo: string;
+  searchTerm: string;
+}
+
+// Função para carregar filtros do localStorage com tratamento de erro
+const loadPersistedFilters = (): PersistedFilters => {
+  const defaultFilters: PersistedFilters = {
+    filterStatusPagamento: 'all',
+    filterStatusPedido: 'all',
+    filterStatusEntrega: 'all',
+    filterModelo: '',
+    searchTerm: '',
+  };
+  
+  try {
+    const stored = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return { ...defaultFilters, ...parsed };
+    }
+  } catch (error) {
+    console.error('Erro ao carregar filtros do localStorage:', error);
+    // Remove dados corrompidos
+    localStorage.removeItem(FILTERS_STORAGE_KEY);
+  }
+  
+  return defaultFilters;
+};
+
+// Função para salvar filtros no localStorage
+const savePersistedFilters = (filters: PersistedFilters): void => {
+  try {
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  } catch (error) {
+    console.error('Erro ao salvar filtros no localStorage:', error);
+  }
+};
+
 export default function PedidosCriados() {
   const navigate = useNavigate();
   const { removePedido, updatePedido, getPedidoById } = usePedidos();
   const { itens: estoqueItens, updateItem: updateEstoqueItem } = useEstoque();
-  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Carregar filtros persistidos uma única vez
+  const [persistedFilters] = useState(() => loadPersistedFilters());
+  
+  const [searchTerm, setSearchTerm] = useState(persistedFilters.searchTerm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedPedido, setSelectedPedido] = useState<PedidoPaginatedDB | null>(null);
   const [editingPedidoId, setEditingPedidoId] = useState<string | null>(null);
@@ -140,15 +192,19 @@ export default function PedidosCriados() {
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   
-  // Date filters
-  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
-  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  // Date filters - carregar do localStorage
+  const [startDate, setStartDate] = useState<Date | undefined>(
+    persistedFilters.startDate ? new Date(persistedFilters.startDate) : undefined
+  );
+  const [endDate, setEndDate] = useState<Date | undefined>(
+    persistedFilters.endDate ? new Date(persistedFilters.endDate) : undefined
+  );
   
-  // Advanced filters
-  const [filterStatusPagamento, setFilterStatusPagamento] = useState<string>('all');
-  const [filterStatusPedido, setFilterStatusPedido] = useState<string>('all');
-  const [filterStatusEntrega, setFilterStatusEntrega] = useState<string>('all');
-  const [filterModelo, setFilterModelo] = useState<string>('');
+  // Advanced filters - carregar do localStorage
+  const [filterStatusPagamento, setFilterStatusPagamento] = useState(persistedFilters.filterStatusPagamento);
+  const [filterStatusPedido, setFilterStatusPedido] = useState(persistedFilters.filterStatusPedido);
+  const [filterStatusEntrega, setFilterStatusEntrega] = useState(persistedFilters.filterStatusEntrega);
+  const [filterModelo, setFilterModelo] = useState(persistedFilters.filterModelo);
   
   // CSV import modal
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -188,6 +244,19 @@ export default function PedidosCriados() {
   useEffect(() => {
     setCurrentPage(0);
   }, [searchTerm, filterStatusPagamento, filterStatusPedido, filterStatusEntrega, startDate, endDate, filterModelo]);
+
+  // Persistir filtros no localStorage quando mudarem
+  useEffect(() => {
+    savePersistedFilters({
+      startDate: startDate?.toISOString(),
+      endDate: endDate?.toISOString(),
+      filterStatusPagamento,
+      filterStatusPedido,
+      filterStatusEntrega,
+      filterModelo,
+      searchTerm,
+    });
+  }, [startDate, endDate, filterStatusPagamento, filterStatusPedido, filterStatusEntrega, filterModelo, searchTerm]);
 
   // Legacy handler for backwards compatibility
   const handleFilterChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) => {
@@ -381,6 +450,8 @@ export default function PedidosCriados() {
     setFilterStatusPedido('all');
     setFilterStatusEntrega('all');
     setFilterModelo('');
+    // Limpar também do localStorage
+    localStorage.removeItem(FILTERS_STORAGE_KEY);
   };
 
   const hasAnyFilter = searchTerm || startDate || endDate || 
