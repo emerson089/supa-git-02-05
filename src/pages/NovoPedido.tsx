@@ -36,17 +36,17 @@ const NovoPedido = () => {
   const [excursao, setExcursao] = useState('');
 
   // Status
-  const [statusPagamento, setStatusPagamento] = useState('pendente');
-  const [statusPedido, setStatusPedido] = useState('nao_separado');
-  const [statusEntrega, setStatusEntrega] = useState('nao_entregue');
+  const [statusPagamento, setStatusPagamento] = useState('PENDENTE');
+  const [statusPedido, setStatusPedido] = useState('NÃO SEPARADO');
+  const [statusEntrega, setStatusEntrega] = useState('NÃO ENTREGUE');
 
   // Automação: quando Cancelado é selecionado no pagamento, cancela tudo
   // NOTA: No NovoPedido, não há estorno pois o pedido ainda não foi criado
   const handleStatusPagamentoChange = (value: string) => {
     setStatusPagamento(value);
-    if (value === 'cancelado') {
-      setStatusPedido('cancelado');
-      setStatusEntrega('cancelado');
+    if (value === 'CANCELADO') {
+      setStatusPedido('CANCELADO');
+      setStatusEntrega('CANCELADO');
     }
   };
 
@@ -54,8 +54,8 @@ const NovoPedido = () => {
   const handleStatusPedidoChange = (value: string) => {
     setStatusPedido(value);
     // Se cancelar o pedido, cancela a entrega também
-    if (value === 'cancelado') {
-      setStatusEntrega('cancelado');
+    if (value === 'CANCELADO') {
+      setStatusEntrega('CANCELADO');
     }
   };
 
@@ -112,9 +112,9 @@ const NovoPedido = () => {
     setEstado('');
     setTelefone('');
     setExcursao('');
-    setStatusPagamento('pendente');
-    setStatusPedido('nao_separado');
-    setStatusEntrega('nao_entregue');
+    setStatusPagamento('PENDENTE');
+    setStatusPedido('NÃO SEPARADO');
+    setStatusEntrega('NÃO ENTREGUE');
     setItems([]);
     toast.success('Formulário limpo');
   };
