@@ -8,6 +8,7 @@ import { usePedidosTotals } from '@/hooks/usePedidosTotals';
 import { EditPedidoModal } from '@/components/pedidos/EditPedidoModal';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { ImportPedidosCSVModal } from '@/components/pedidos/ImportPedidosCSVModal';
+import { ClearPedidosDataModal } from '@/components/pedidos/ClearPedidosDataModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -151,6 +152,7 @@ export default function PedidosCriados() {
   
   // CSV import modal
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
 
   // Use paginated hook for data
   const { data: paginatedResult, isLoading } = usePedidosPaginated({
@@ -706,8 +708,17 @@ export default function PedidosCriados() {
               
               {/* Second row: CSV and New Order */}
               <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border/50 items-center justify-between">
-                {/* CSV Buttons */}
+                {/* CSV and Clear Buttons */}
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setClearDataModalOpen(true)}
+                    className="h-10 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Limpar Dados
+                  </Button>
+                  
                   <Button
                     variant="outline"
                     onClick={exportCSV}
@@ -1115,6 +1126,12 @@ export default function PedidosCriados() {
       <ImportPedidosCSVModal 
         open={importModalOpen} 
         onOpenChange={setImportModalOpen} 
+      />
+
+      {/* Clear Data Modal */}
+      <ClearPedidosDataModal 
+        open={clearDataModalOpen} 
+        onOpenChange={setClearDataModalOpen} 
       />
     </div>
   );
