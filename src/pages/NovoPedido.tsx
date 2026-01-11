@@ -29,7 +29,6 @@ import { cn } from '@/lib/utils';
 const NovoPedido = () => {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const navigate = useNavigate();
   const { clientes, addCliente, getClienteById } = useClientesContext();
   const { addPedido } = usePedidos();
   const { getProdutosAcabados, deduzirEstoque, getItemById, updateItem } = useEstoque();
