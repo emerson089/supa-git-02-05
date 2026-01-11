@@ -1,5 +1,8 @@
 import { useState, useRef } from 'react';
 import { AppSidebar } from '@/components/layout/AppSidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
+import { BottomNavigation } from '@/components/layout/BottomNavigation';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useEstoque, ItemEstoque, TipoEstoque, StatusEstoque } from '@/contexts/EstoqueContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,6 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ImportModelosCSVModal } from '@/components/estoque/ImportModelosCSVModal';
 import { ProductCard } from '@/components/estoque/ProductCard';
 import { EstoqueItemSchema, NovoModeloAcabadoSchema } from '@/lib/validations';
+import { cn } from '@/lib/utils';
 const statusConfig: Record<StatusEstoque, { label: string; color: string }> = {
   disponivel: { label: 'Disponível', color: 'bg-emerald-100 text-emerald-700' },
   em_producao: { label: 'Em Produção', color: 'bg-blue-100 text-blue-700' },
@@ -55,6 +59,7 @@ function ProductImage({ imagemUrl, nome }: { imagemUrl?: string; nome: string })
 }
 
 export default function Estoque() {
+  const isMobile = useIsMobile();
   const { itens, addItem, updateItem, removeItem, getMateriasPrimas, getProdutosAcabados } = useEstoque();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'materia_prima' | 'produto_acabado'>('produto_acabado');
@@ -342,49 +347,73 @@ export default function Estoque() {
 
   return (
     <div className="min-h-screen bg-background flex overflow-hidden">
-      <AppSidebar />
+      {/* Mobile Header */}
+      {isMobile && <MobileHeader title="Estoque" />}
+      
+      {/* Sidebar - Desktop only */}
+      {!isMobile && <AppSidebar />}
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Header */}
-        <header className="px-6 py-4 border-b border-border bg-card/50">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Controle de Estoque</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {itens.length} itens cadastrados
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Alerta de baixo estoque */}
-              {itensComBaixoEstoque.length > 0 && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
-                  <AlertTriangle size={16} className="text-amber-600" />
-                  <span className="text-sm text-amber-700 font-medium">
-                    {itensComBaixoEstoque.length} itens com estoque baixo
-                  </span>
-                </div>
-              )}
-
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                <Input
-                  placeholder="Buscar item..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="pl-10 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                />
+      <main className={cn(
+        "flex-1 flex flex-col h-screen overflow-hidden",
+        isMobile && "pt-14 pb-20"
+      )}>
+        {/* Header - Desktop only */}
+        {!isMobile && (
+          <header className="px-6 py-4 border-b border-border bg-card/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">Controle de Estoque</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {itens.length} itens cadastrados
+                </p>
               </div>
 
-              {/* Add button */}
-              <Button onClick={() => handleOpenModal()} className="gap-2">
-                <Plus size={18} />
-                Novo Item
-              </Button>
+              <div className="flex items-center gap-4">
+                {/* Alerta de baixo estoque */}
+                {itensComBaixoEstoque.length > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                    <AlertTriangle size={16} className="text-amber-600" />
+                    <span className="text-sm text-amber-700 font-medium">
+                      {itensComBaixoEstoque.length} itens com estoque baixo
+                    </span>
+                  </div>
+                )}
+
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <Input
+                    placeholder="Buscar item..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="pl-10 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                  />
+                </div>
+
+                {/* Add button */}
+                <Button onClick={() => handleOpenModal()} className="gap-2">
+                  <Plus size={18} />
+                  Novo Item
+                </Button>
+              </div>
+            </div>
+          </header>
+        )}
+        
+        {/* Mobile Search */}
+        {isMobile && (
+          <div className="px-4 py-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+              <Input
+                placeholder="Buscar item..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-10 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+              />
             </div>
           </div>
-        </header>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
@@ -915,6 +944,9 @@ export default function Estoque() {
         open={showImportModal} 
         onOpenChange={setShowImportModal} 
       />
+      
+      {/* Bottom Navigation */}
+      <BottomNavigation />
     </div>
   );
 }

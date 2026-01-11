@@ -253,18 +253,26 @@ const NovoPedido = () => {
 
   return (
     <div className="min-h-screen bg-background flex overflow-hidden">
+      {/* Mobile Header */}
+      {isMobile && <MobileHeader title="Novo Pedido" />}
+      
       {/* Sidebar */}
-      <AppSidebar />
+      {!isMobile && <AppSidebar />}
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Header */}
-        <header className="px-8 py-6 flex-shrink-0">
-          <h1 className="text-2xl font-bold text-foreground">Novo Pedido</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Cadastre pedidos vinculados a clientes e estoque
-          </p>
-        </header>
+      <main className={cn(
+        "flex-1 flex flex-col h-screen overflow-hidden",
+        isMobile && "pt-14 pb-20"
+      )}>
+        {/* Header - Desktop only */}
+        {!isMobile && (
+          <header className="px-8 py-6 flex-shrink-0">
+            <h1 className="text-2xl font-bold text-foreground">Novo Pedido</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Cadastre pedidos vinculados a clientes e estoque
+            </p>
+          </header>
+        )}
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto px-8 pb-8">
@@ -414,6 +422,9 @@ const NovoPedido = () => {
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* Bottom Navigation */}
+      <BottomNavigation />
     </div>
   );
 };
