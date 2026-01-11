@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppSidebar } from '@/components/layout/AppSidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
+import { BottomNavigation } from '@/components/layout/BottomNavigation';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { usePedidos, Pedido } from '@/contexts/PedidosContext';
 import { usePedidoById } from '@/hooks/usePedidosData';
 import { usePedidosPaginated, PedidoPaginatedDB } from '@/hooks/usePedidosPaginated';
@@ -9,6 +12,9 @@ import { EditPedidoModal } from '@/components/pedidos/EditPedidoModal';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { ImportPedidosCSVModal } from '@/components/pedidos/ImportPedidosCSVModal';
 import { ClearPedidosDataModal } from '@/components/pedidos/ClearPedidosDataModal';
+import { MobileOrderCard } from '@/components/pedidos/MobileOrderCard';
+import { MobileFiltersSheet } from '@/components/pedidos/MobileFiltersSheet';
+import { MobileSummaryCards } from '@/components/pedidos/MobileSummaryCards';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -92,6 +98,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 // Status colors mapping
 const statusPagamentoColors: Record<string, string> = {
@@ -174,6 +181,7 @@ const savePersistedFilters = (filters: PersistedFilters): void => {
 };
 
 export default function PedidosCriados() {
+  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const { removePedido, updatePedido, getPedidoById } = usePedidos();
   const { itens: estoqueItens, updateItem: updateEstoqueItem } = useEstoque();
@@ -468,6 +476,16 @@ export default function PedidosCriados() {
   const hasActiveFilters = startDate || endDate || filterStatusPagamento !== 'all' || 
     filterStatusPedido !== 'all' || filterStatusEntrega !== 'all' || filterModelo;
 
+  // Count active filters for mobile badge
+  const activeFilterCount = [
+    startDate,
+    endDate,
+    filterStatusPagamento !== 'all' ? filterStatusPagamento : null,
+    filterStatusPedido !== 'all' ? filterStatusPedido : null,
+    filterStatusEntrega !== 'all' ? filterStatusEntrega : null,
+    filterModelo,
+  ].filter(Boolean).length;
+
   // PDF Generation
   const generatePDF = (pedido: PedidoPaginatedDB) => {
     const doc = new jsPDF();
@@ -602,271 +620,344 @@ export default function PedidosCriados() {
 
   return (
     <div className="min-h-screen bg-background flex overflow-hidden">
-      <AppSidebar />
+      {/* Mobile Header */}
+      {isMobile && <MobileHeader title="Vendas" />}
+      
+      {/* Desktop Sidebar */}
+      {!isMobile && <AppSidebar />}
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Header */}
-        <header className="px-8 py-6 flex-shrink-0">
-          <h1 className="text-2xl font-bold text-foreground">Pedidos Criados</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Centro operacional de gestão de pedidos
-          </p>
-        </header>
+      <main className={cn(
+        "flex-1 flex flex-col h-screen overflow-hidden",
+        isMobile && "pt-14 pb-20"
+      )}>
+        {/* Desktop Header */}
+        {!isMobile && (
+          <header className="px-8 py-6 flex-shrink-0">
+            <h1 className="text-2xl font-bold text-foreground">Pedidos Criados</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Centro operacional de gestão de pedidos
+            </p>
+          </header>
+        )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-8 pb-8">
-          <div className="max-w-full space-y-5">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="neu-card p-5 flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-primary/10 shadow-inner">
-                  <ShoppingBag className="h-6 w-6 text-primary" />
+        <div className={cn(
+          "flex-1 overflow-y-auto pb-8",
+          isMobile ? "px-4" : "px-8"
+        )}>
+          <div className="max-w-full space-y-4">
+            {/* Summary Cards - Mobile uses compact 3-column layout */}
+            {isMobile ? (
+              <MobileSummaryCards
+                totalPedidos={calculatedTotals.totalPedidos}
+                totalValor={calculatedTotals.totalValor}
+                totalPecas={calculatedTotals.totalPecas}
+                filterModelo={filterModelo}
+              />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="neu-card p-5 flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-primary/10 shadow-inner">
+                    <ShoppingBag className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total de Pedidos</p>
+                    <p className="text-2xl font-bold text-primary">{calculatedTotals.totalPedidos}</p>
+                    {filterModelo && (
+                      <Badge variant="outline" className="text-xs text-primary border-primary mt-1">
+                        Modelo: "{filterModelo}"
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total de Pedidos</p>
-                  <p className="text-2xl font-bold text-primary">{calculatedTotals.totalPedidos}</p>
-                  {filterModelo && (
-                    <Badge variant="outline" className="text-xs text-primary border-primary mt-1">
-                      Modelo: "{filterModelo}"
-                    </Badge>
-                  )}
-                </div>
-              </div>
 
-              <div className="neu-card p-5 flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-emerald-500/10 shadow-inner">
-                  <DollarSign className="h-6 w-6 text-emerald-600" />
+                <div className="neu-card p-5 flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-emerald-500/10 shadow-inner">
+                    <DollarSign className="h-6 w-6 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Valor Total</p>
+                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(calculatedTotals.totalValor)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Valor Total</p>
-                  <p className="text-2xl font-bold text-emerald-600">{formatCurrency(calculatedTotals.totalValor)}</p>
-                </div>
-              </div>
 
-              <div className="neu-card p-5 flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-primary/10 shadow-inner">
-                  <Package className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total de Peças</p>
-                  <p className="text-2xl font-bold text-primary">{calculatedTotals.totalPecas}</p>
+                <div className="neu-card p-5 flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-primary/10 shadow-inner">
+                    <Package className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total de Peças</p>
+                    <p className="text-2xl font-bold text-primary">{calculatedTotals.totalPecas}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Filters and Actions Bar */}
-            <div className="neu-card p-4">
-              <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+            {isMobile ? (
+              /* Mobile Filters */
+              <div className="space-y-3">
                 {/* Search */}
-                <div className="relative flex-1 w-full lg:max-w-xs">
+                <div className="relative w-full">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar cliente, ID ou status..."
+                    placeholder="Buscar cliente..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 h-11 rounded-xl neu-input border-0 bg-background"
                   />
                 </div>
+                
+                {/* Filters Sheet + New Order Button */}
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <MobileFiltersSheet
+                      filterStatusPagamento={filterStatusPagamento}
+                      filterStatusPedido={filterStatusPedido}
+                      filterStatusEntrega={filterStatusEntrega}
+                      filterModelo={filterModelo}
+                      startDate={startDate}
+                      endDate={endDate}
+                      onFilterStatusPagamentoChange={setFilterStatusPagamento}
+                      onFilterStatusPedidoChange={setFilterStatusPedido}
+                      onFilterStatusEntregaChange={setFilterStatusEntrega}
+                      onFilterModeloChange={setFilterModelo}
+                      onStartDateChange={setStartDate}
+                      onEndDateChange={setEndDate}
+                      onClearAll={clearAllFilters}
+                      activeCount={activeFilterCount}
+                    />
+                  </div>
+                  <Button
+                    onClick={() => navigate('/pedidos/novo')}
+                    className="h-11 px-4 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-medium gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Novo
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              /* Desktop Filters */
+              <div className="neu-card p-4">
+                <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+                  {/* Search */}
+                  <div className="relative flex-1 w-full lg:max-w-xs">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar cliente, ID ou status..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 h-11 rounded-xl neu-input border-0 bg-background"
+                    />
+                  </div>
 
-                {/* Status Filters */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <Select value={filterStatusPagamento} onValueChange={setFilterStatusPagamento}>
-                    <SelectTrigger className="h-11 w-[140px] rounded-xl neu-input border-0 bg-background">
-                      <SelectValue placeholder="Pagamento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos Pagamentos</SelectItem>
-                      {statusPagamentoOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* Status Filters */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select value={filterStatusPagamento} onValueChange={setFilterStatusPagamento}>
+                      <SelectTrigger className="h-11 w-[140px] rounded-xl neu-input border-0 bg-background">
+                        <SelectValue placeholder="Pagamento" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos Pagamentos</SelectItem>
+                        {statusPagamentoOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={filterStatusPedido} onValueChange={setFilterStatusPedido}>
+                      <SelectTrigger className="h-11 w-[140px] rounded-xl neu-input border-0 bg-background">
+                        <SelectValue placeholder="Separação" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos Pedidos</SelectItem>
+                        {statusPedidoOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={filterStatusEntrega} onValueChange={setFilterStatusEntrega}>
+                      <SelectTrigger className="h-11 w-[140px] rounded-xl neu-input border-0 bg-background">
+                        <SelectValue placeholder="Entrega" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas Entregas</SelectItem>
+                        {statusEntregaOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   
-                  <Select value={filterStatusPedido} onValueChange={setFilterStatusPedido}>
-                    <SelectTrigger className="h-11 w-[140px] rounded-xl neu-input border-0 bg-background">
-                      <SelectValue placeholder="Separação" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos Pedidos</SelectItem>
-                      {statusPedidoOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  <Select value={filterStatusEntrega} onValueChange={setFilterStatusEntrega}>
-                    <SelectTrigger className="h-11 w-[140px] rounded-xl neu-input border-0 bg-background">
-                      <SelectValue placeholder="Entrega" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas Entregas</SelectItem>
-                      {statusEntregaOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* Modelo Filter */}
+                  <div className="relative w-full lg:w-40">
+                    <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Modelo..."
+                      value={filterModelo}
+                      onChange={(e) => setFilterModelo(e.target.value)}
+                      className="pl-10 h-11 rounded-xl neu-input border-0 bg-background"
+                    />
+                  </div>
+
+                  {/* Date Range Filter */}
+                  <div className="flex items-center gap-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="h-11 rounded-xl neu-button border-0 bg-background gap-2"
+                        >
+                          <CalendarIcon className="h-4 w-4" />
+                          {startDate ? format(startDate, "dd/MM/yy") : "Início"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 z-50" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={startDate}
+                          onSelect={setStartDate}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+
+                    <span className="text-muted-foreground">-</span>
+
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="h-11 rounded-xl neu-button border-0 bg-background gap-2"
+                        >
+                          <CalendarIcon className="h-4 w-4" />
+                          {endDate ? format(endDate, "dd/MM/yy") : "Fim"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 z-50" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={endDate}
+                          onSelect={setEndDate}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+
+                    {hasAnyFilter && (
+                      <Button
+                        variant="ghost"
+                        onClick={clearAllFilters}
+                        className="h-11 rounded-xl hover:bg-destructive/10 hover:text-destructive gap-2"
+                      >
+                        <X className="h-4 w-4" />
+                        Limpar
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 
-                {/* Modelo Filter */}
-                <div className="relative w-full lg:w-40">
-                  <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Modelo..."
-                    value={filterModelo}
-                    onChange={(e) => setFilterModelo(e.target.value)}
-                    className="pl-10 h-11 rounded-xl neu-input border-0 bg-background"
+                {/* Second row: CSV and New Order */}
+                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border/50 items-center justify-between">
+                  {/* CSV and Clear Buttons */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setClearDataModalOpen(true)}
+                      className="h-10 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Limpar Dados
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={exportCSV}
+                      className="h-10 rounded-xl neu-button border-0 bg-background gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      Exportar CSV
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={() => setImportModalOpen(true)}
+                      className="h-10 rounded-xl neu-button border-0 bg-background gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Importar CSV
+                    </Button>
+                  </div>
+
+                  {/* New Order Button */}
+                  <Button
+                    onClick={() => navigate('/pedidos/novo')}
+                    className="h-10 px-5 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-medium gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Novo Pedido
+                  </Button>
+                </div>
+
+                {/* Filtered Totals Panel */}
+                {hasActiveFilters && (
+                  <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap items-center gap-6 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-primary" />
+                      <span className="text-muted-foreground">Total de Peças Filtrado:</span>
+                      <span className="font-bold text-primary">{calculatedTotals.totalPecas}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-emerald-600" />
+                      <span className="text-muted-foreground">Valor Total Filtrado:</span>
+                      <span className="font-bold text-emerald-600">{formatCurrency(calculatedTotals.totalValor)}</span>
+                    </div>
+                    {filterModelo && (
+                      <Badge variant="outline" className="text-xs border-primary text-primary">
+                        Filtrando modelo: "{filterModelo}"
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Orders - Mobile Cards or Desktop Table */}
+            {isLoading ? (
+              <div className="neu-card p-4 flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-2 text-muted-foreground">Carregando pedidos...</span>
+              </div>
+            ) : pedidosList.length === 0 ? (
+              <div className="neu-card p-4 text-center py-12">
+                <ShoppingBag className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground">Nenhum pedido encontrado</h3>
+                <p className="text-muted-foreground mb-4">
+                  {hasAnyFilter ? 'Nenhum pedido com os filtros selecionados' : 'Crie seu primeiro pedido para começar'}
+                </p>
+              </div>
+            ) : isMobile ? (
+              /* Mobile: Card List */
+              <div className="space-y-3">
+                {pedidosList.map((pedido) => (
+                  <MobileOrderCard
+                    key={pedido.id}
+                    pedido={pedido}
+                    onView={() => setSelectedPedido(pedido)}
+                    onEdit={() => setEditingPedidoId(pedido.id)}
+                    onDelete={() => setDeleteId(pedido.id)}
+                    onGeneratePDF={() => generatePDF(pedido)}
+                    onStatusUpdate={(field, value) => handleStatusUpdate(pedido.id, field, value)}
                   />
-                </div>
-
-                {/* Date Range Filter */}
-                <div className="flex items-center gap-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="h-11 rounded-xl neu-button border-0 bg-background gap-2"
-                      >
-                        <CalendarIcon className="h-4 w-4" />
-                        {startDate ? format(startDate, "dd/MM/yy") : "Início"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 z-50" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={startDate}
-                        onSelect={setStartDate}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  <span className="text-muted-foreground">-</span>
-
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="h-11 rounded-xl neu-button border-0 bg-background gap-2"
-                      >
-                        <CalendarIcon className="h-4 w-4" />
-                        {endDate ? format(endDate, "dd/MM/yy") : "Fim"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 z-50" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={endDate}
-                        onSelect={setEndDate}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  {hasAnyFilter && (
-                    <Button
-                      variant="ghost"
-                      onClick={clearAllFilters}
-                      className="h-11 rounded-xl hover:bg-destructive/10 hover:text-destructive gap-2"
-                    >
-                      <X className="h-4 w-4" />
-                      Limpar
-                    </Button>
-                  )}
-                </div>
+                ))}
               </div>
-              
-              {/* Second row: CSV and New Order */}
-              <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border/50 items-center justify-between">
-                {/* CSV and Clear Buttons */}
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setClearDataModalOpen(true)}
-                    className="h-10 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 gap-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Limpar Dados
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={exportCSV}
-                    className="h-10 rounded-xl neu-button border-0 bg-background gap-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    Exportar CSV
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={() => setImportModalOpen(true)}
-                    className="h-10 rounded-xl neu-button border-0 bg-background gap-2"
-                  >
-                    <Upload className="h-4 w-4" />
-                    Importar CSV
-                  </Button>
-                </div>
-
-                {/* New Order Button */}
-                <Button
-                  onClick={() => navigate('/pedidos/novo')}
-                  className="h-10 px-5 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-medium gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Novo Pedido
-                </Button>
-              </div>
-
-              {/* Filtered Totals Panel */}
-              {hasActiveFilters && (
-                <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap items-center gap-6 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-primary" />
-                    <span className="text-muted-foreground">Total de Peças Filtrado:</span>
-                    <span className="font-bold text-primary">{calculatedTotals.totalPecas}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-emerald-600" />
-                    <span className="text-muted-foreground">Valor Total Filtrado:</span>
-                    <span className="font-bold text-emerald-600">{formatCurrency(calculatedTotals.totalValor)}</span>
-                  </div>
-                  {filterModelo && (
-                    <Badge variant="outline" className="text-xs border-primary text-primary">
-                      Filtrando modelo: "{filterModelo}"
-                    </Badge>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Orders Table */}
-            <div className="neu-card p-4 overflow-hidden">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <span className="ml-2 text-muted-foreground">Carregando pedidos...</span>
-                </div>
-              ) : pedidosList.length === 0 ? (
-                <div className="text-center py-12">
-                  <ShoppingBag className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-foreground">Nenhum pedido encontrado</h3>
-                  <p className="text-muted-foreground mb-4">
-                    {hasAnyFilter ? 'Nenhum pedido com os filtros selecionados' : 'Crie seu primeiro pedido para começar'}
-                  </p>
-                  {!hasAnyFilter && (
-                    <Button
-                      onClick={() => navigate('/pedidos/novo')}
-                      className="h-11 px-5 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-medium gap-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Novo Pedido
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <>
+            ) : (
+              /* Desktop: Table */
+              <div className="neu-card p-4 overflow-hidden">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
@@ -1053,12 +1144,14 @@ export default function PedidosCriados() {
                       </Pagination>
                     </div>
                   )}
-                </>
+                </div>
               )}
-            </div>
           </div>
         </div>
       </main>
+
+      {/* Bottom Navigation for Mobile */}
+      <BottomNavigation />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
