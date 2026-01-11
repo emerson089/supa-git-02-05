@@ -1222,6 +1222,7 @@ function EditPedidoModalWrapper({ pedidoId, onClose }: { pedidoId: string | null
     valor_total: pedidoDB.valor_total || 0,
     itens: (pedidoDB.itens || []).map(item => ({
       id: item.id,
+      produto_id: item.produto_id,
       produto_nome: item.produto_nome,
       quantidade: item.quantidade,
       valor_unitario: item.valor_unitario,
