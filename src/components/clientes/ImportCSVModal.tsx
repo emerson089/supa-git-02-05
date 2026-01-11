@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { useClientesContext } from '@/contexts/ClientesContext';
 import { useClientesBatchImport } from '@/hooks/useClientesBatchImport';
@@ -231,7 +232,7 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={isProcessing ? undefined : onOpenChange}>
-      <DialogContent className="sm:max-w-[450px]">
+      <DialogContent className="neu-card border-0 rounded-2xl max-w-2xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
             <FileSpreadsheet size={24} className="text-primary" />
@@ -242,95 +243,100 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-4 space-y-4">
-          {/* Progress Bar - shown during import */}
-          {isProcessing && totalToImport > 0 && (
-            <div className="space-y-2 p-4 rounded-xl bg-secondary/50">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-foreground">Importando clientes...</span>
-                <span className="text-muted-foreground">{importedCount} de {totalToImport}</span>
-              </div>
-              <Progress value={progress} className="h-2" />
-              <p className="text-xs text-muted-foreground text-center">
-                Aguarde, isso pode levar alguns segundos...
-              </p>
-            </div>
-          )}
-
-          {/* Drop Zone */}
-          <div
-            onClick={handleClick}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            className={`
-              relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer
-              transition-all duration-200
-              ${dragActive 
-                ? 'border-primary bg-primary/5' 
-                : 'border-muted-foreground/30 hover:border-primary/50 hover:bg-secondary/50'
-              }
-              ${isProcessing ? 'opacity-50 pointer-events-none' : ''}
-            `}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleInputChange}
-              className="hidden"
-              disabled={isProcessing}
-            />
-            
-            <div className="flex flex-col items-center gap-3">
-              <div className={`
-                w-16 h-16 rounded-xl flex items-center justify-center
-                ${dragActive ? 'bg-primary/20' : 'bg-secondary'}
-              `}>
-                <Upload size={28} className={dragActive ? 'text-primary' : 'text-muted-foreground'} />
-              </div>
-              
-              <div>
-                <p className="font-medium text-foreground">
-                  {isProcessing ? 'Processando...' : 'Clique ou arraste o arquivo aqui'}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Apenas arquivos .csv
+        <ScrollArea className="max-h-[calc(90vh-180px)]">
+          <div className="space-y-4 pr-4">
+            {/* Progress Bar - shown during import */}
+            {isProcessing && totalToImport > 0 && (
+              <div className="space-y-2 p-4 rounded-xl bg-secondary/50">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-foreground">Importando clientes...</span>
+                  <span className="text-muted-foreground">{importedCount} de {totalToImport}</span>
+                </div>
+                <Progress value={progress} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">
+                  Aguarde, isso pode levar alguns segundos...
                 </p>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Column Info */}
-          <div className="neu-input p-4 rounded-xl">
-            <div className="flex items-start gap-2">
-              <AlertCircle size={18} className="text-primary mt-0.5 flex-shrink-0" />
-              <div className="text-sm">
-                <p className="font-medium text-foreground mb-2">Formato esperado das colunas:</p>
-                <ul className="text-muted-foreground space-y-1">
-                  <li><span className="font-medium text-foreground">Nome</span> → Nome do Cliente</li>
-                  <li><span className="font-medium text-foreground">Telefone</span> → Telefone</li>
-                  <li><span className="font-medium text-foreground">Cidade</span> → Cidade</li>
-                  <li><span className="font-medium text-foreground">Estado</span> → Estado</li>
-                  <li><span className="font-medium text-foreground">Excursão</span> → Excursão</li>
-                  <li><span className="font-medium text-foreground">Data/Hora</span> → Data de cadastro (YYYY-MM-DD)</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isProcessing}
-              className="flex-1 h-11 rounded-xl neu-button border-0 text-muted-foreground hover:text-foreground"
+            {/* Drop Zone */}
+            <div
+              onClick={handleClick}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+              className={`
+                relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer
+                transition-all duration-200
+                ${dragActive 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-muted-foreground/30 hover:border-primary/50 hover:bg-secondary/50'
+                }
+                ${isProcessing ? 'opacity-50 pointer-events-none' : ''}
+              `}
             >
-              Cancelar
-            </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleInputChange}
+                className="hidden"
+                disabled={isProcessing}
+              />
+              
+              <div className="flex flex-col items-center gap-3">
+                <div className={`
+                  w-16 h-16 rounded-xl flex items-center justify-center
+                  ${dragActive ? 'bg-primary/20' : 'bg-secondary'}
+                `}>
+                  <Upload size={28} className={dragActive ? 'text-primary' : 'text-muted-foreground'} />
+                </div>
+                
+                <div>
+                  <p className="font-medium text-foreground">
+                    {isProcessing ? 'Processando...' : 'Clique ou arraste o arquivo aqui'}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Suporta arquivos com mais de 4.000 linhas
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Column Info */}
+            <div className="neu-input p-4 rounded-xl">
+              <div className="flex items-start gap-2">
+                <AlertCircle size={18} className="text-primary mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-foreground mb-2">Formato esperado das colunas:</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
+                    <div><span className="font-medium text-foreground">Nome</span> → Nome do Cliente</div>
+                    <div><span className="font-medium text-foreground">Telefone</span> → Telefone</div>
+                    <div><span className="font-medium text-foreground">Cidade</span> → Cidade</div>
+                    <div><span className="font-medium text-foreground">Estado</span> → Estado</div>
+                    <div><span className="font-medium text-foreground">Excursão</span> → Excursão</div>
+                    <div><span className="font-medium text-foreground">Data/Hora</span> → YYYY-MM-DD</div>
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Separador: ponto e vírgula (;) ou vírgula (,)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isProcessing}
+                className="flex-1 h-11 rounded-xl neu-button border-0 text-muted-foreground hover:text-foreground"
+              >
+                Cancelar
+              </Button>
+            </div>
           </div>
-        </div>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
