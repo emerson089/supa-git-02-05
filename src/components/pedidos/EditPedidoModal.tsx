@@ -144,6 +144,22 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
     if (!pedido) return;
 
     try {
+      // Verificar disponibilidade no estoque
+      const produtoEstoque = estoqueItens.find(
+        p => p.tipo === 'acabado' && p.id === produto.id
+      );
+
+      if (!produtoEstoque || produtoEstoque.quantidade < 1) {
+        toast.error('Estoque insuficiente para este produto!');
+        return;
+      }
+
+      // Deduzir 1 unidade do estoque
+      await updateEstoqueItem(produtoEstoque.id, {
+        quantidade: produtoEstoque.quantidade - 1
+      });
+
+      // Adicionar item ao pedido
       await addItemMutation.mutateAsync({
         pedido_id: pedido.id,
         produto_id: produto.id,
@@ -151,7 +167,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         quantidade: 1,
         valor_unitario: produto.preco_unitario || 0,
       });
-      toast.success('Item adicionado!');
+      toast.success('Item adicionado! 1 peça deduzida do estoque.');
     } catch (error) {
       console.error('Error adding item:', error);
       toast.error('Erro ao adicionar item');
