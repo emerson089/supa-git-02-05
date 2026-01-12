@@ -156,13 +156,13 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
       "bg-muted/30 hover:bg-muted/50",
       isDisabled && "opacity-60"
     )}>
-      {/* Product Name */}
-      <div className="flex-1 min-w-0">
+      {/* Product Name - Limited width to ensure other columns fit */}
+      <div className="flex-1 min-w-0 max-w-[200px] sm:max-w-[280px] md:max-w-[350px]">
         <p className="font-medium text-foreground truncate">{item.produto_nome}</p>
       </div>
 
       {/* Quantity Input */}
-      <div className="w-16 shrink-0">
+      <div className="w-14 shrink-0">
         <Input
           type="number"
           min={1}
@@ -174,7 +174,7 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
       </div>
 
       {/* Unit Value Input */}
-      <div className="w-24 shrink-0">
+      <div className="w-20 shrink-0">
         <div className="relative">
           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
           <Input
@@ -190,14 +190,14 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
       </div>
 
       {/* Subtotal */}
-      <div className="w-28 text-right shrink-0">
-        <p className="font-bold text-emerald-600">
+      <div className="w-24 text-right shrink-0">
+        <p className="font-bold text-emerald-600 text-sm">
           R$ {formatCurrency(subtotal)}
         </p>
       </div>
 
-      {/* Actions */}
-      <div className="w-10 flex justify-end shrink-0">
+      {/* Actions - Delete Button */}
+      <div className="w-9 flex justify-center shrink-0">
         <Button
           type="button"
           variant="ghost"
