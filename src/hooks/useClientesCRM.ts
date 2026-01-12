@@ -15,6 +15,9 @@ export interface CRMMetrics {
   totalClientes: number;
   ticketMedio: number;
   faturamentoTotal: number;
+  ltvMedio: number;
+  taxaRetencao: number;
+  clientesPagantes: number;
 }
 
 export type ClienteStatus = {
@@ -138,12 +141,23 @@ export function useClientesCRM() {
       const clienteStats = Array.from(statsMap.values());
       const ticketMedio = totalPedidosPagos > 0 ? faturamentoTotal / totalPedidosPagos : 0;
       
+      // Calculate LTV Médio: faturamentoTotal / clientes únicos que pagaram
+      const clientesPagantes = clienteStats.filter(s => s.pedidosPagos > 0).length;
+      const ltvMedio = clientesPagantes > 0 ? faturamentoTotal / clientesPagantes : 0;
+      
+      // Calculate Taxa de Retenção: % de clientes com 2+ pedidos pagos
+      const clientesRecorrentes = clienteStats.filter(s => s.pedidosPagos >= 2).length;
+      const taxaRetencao = clientesPagantes > 0 ? (clientesRecorrentes / clientesPagantes) * 100 : 0;
+      
       return {
         stats: clienteStats,
         statsMap,
         metrics: {
           faturamentoTotal,
           ticketMedio,
+          ltvMedio,
+          taxaRetencao,
+          clientesPagantes,
         } as Omit<CRMMetrics, 'totalClientes'>,
       };
     },
