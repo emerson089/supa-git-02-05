@@ -263,13 +263,18 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0">
+      <DialogContent className="w-[95vw] max-w-3xl h-[90vh] sm:h-auto sm:max-h-[85vh] flex flex-col p-0 gap-0 rounded-xl [&>button]:hidden">
         {/* Header */}
-        <DialogHeader className="px-6 py-5 border-b border-border/50 flex-shrink-0">
+        <DialogHeader className="px-4 sm:px-6 py-4 sm:py-5 border-b border-border/50 flex-shrink-0">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-bold text-foreground">
-              Editar Pedido
-            </DialogTitle>
+            <div>
+              <DialogTitle className="text-lg sm:text-xl font-bold text-foreground">
+                Editar Pedido
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {pedido.cliente_nome}
+              </p>
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -279,43 +284,40 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            {pedido.cliente_nome}
-          </p>
         </DialogHeader>
 
         {/* Totals Banner */}
-        <div className="px-6 py-4 bg-muted/30 border-b border-border/50 flex-shrink-0">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-muted/30 border-b border-border/50 flex-shrink-0">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4">
             {/* Total Peças */}
-            <div className="flex items-center gap-3 p-4 bg-background rounded-xl shadow-sm">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Package className="h-5 w-5 text-primary" />
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-4 bg-background rounded-lg sm:rounded-xl shadow-sm">
+              <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-primary/10">
+                <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Peças</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider">Total Peças</p>
                 <div className="flex items-center gap-2">
                   {isSyncing ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin text-primary" />
                   ) : (
-                    <p className="text-2xl font-bold text-primary">{pedido.total_pecas}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-primary">{pedido.total_pecas}</p>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Valor Total */}
-            <div className="flex items-center gap-3 p-4 bg-background rounded-xl shadow-sm">
-              <div className="p-2 rounded-lg bg-emerald-500/10">
-                <DollarSign className="h-5 w-5 text-emerald-600" />
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-4 bg-background rounded-lg sm:rounded-xl shadow-sm">
+              <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-emerald-500/10">
+                <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Valor Total</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider">Valor Total</p>
                 <div className="flex items-center gap-2">
                   {isSyncing ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+                    <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin text-emerald-600" />
                   ) : (
-                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(pedido.valor_total)}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-emerald-600">{formatCurrency(pedido.valor_total)}</p>
                   )}
                 </div>
               </div>
@@ -324,11 +326,11 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         </div>
 
         {/* Items List */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          <div className="px-6 py-3 flex-shrink-0">
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+          <div className="px-4 sm:px-6 py-2 sm:py-3 flex-shrink-0">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-foreground">Itens do Pedido</h3>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider">
+              <h3 className="text-sm sm:text-base font-semibold text-foreground">Itens do Pedido</h3>
+              <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider">
                 <span className="w-16 text-center shrink-0">Qtd</span>
                 <span className="w-24 text-center shrink-0">Valor Unit.</span>
                 <span className="w-28 text-right shrink-0">Subtotal</span>
@@ -337,12 +339,12 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
             </div>
           </div>
 
-          <ScrollArea className="flex-1">
-            <div className="space-y-2 pb-4 px-6">
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="space-y-2 pb-4 px-4 sm:px-6">
               {pedido.itens.length === 0 ? (
                 <div className="py-8 text-center text-muted-foreground">
-                  <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>Nenhum item no pedido</p>
+                  <Package className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Nenhum item no pedido</p>
                 </div>
               ) : (
                 pedido.itens.map((item) => (
@@ -361,7 +363,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         </div>
 
         {/* Add Item Section */}
-        <div className="px-6 py-4 border-t border-border/50 flex-shrink-0">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border/50 flex-shrink-0">
           <AddItemSelector
             produtos={produtosAcabados}
             onAdd={handleAddItem}
