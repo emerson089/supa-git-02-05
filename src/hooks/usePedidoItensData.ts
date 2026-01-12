@@ -79,6 +79,8 @@ export function useAddPedidoItem() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['pedidos'] });
       queryClient.invalidateQueries({ queryKey: ['pedido', variables.pedido_id] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
     },
   });
 }
@@ -106,6 +108,8 @@ export function useUpdatePedidoItem() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['pedidos'] });
       queryClient.invalidateQueries({ queryKey: ['pedido', variables.pedidoId] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
     },
   });
 }
@@ -131,6 +135,8 @@ export function useRemovePedidoItem() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['pedidos'] });
       queryClient.invalidateQueries({ queryKey: ['pedido', variables.pedidoId] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
     },
   });
 }
