@@ -92,11 +92,11 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
       "bg-muted/30 hover:bg-muted/50",
       isDisabled && "opacity-60"
     )}>
-      {/* Compact Layout - Mobile/Tablet (< lg) */}
-      <div className="lg:hidden space-y-2 overflow-hidden">
+      {/* Compact Layout - Mobile/Tablet (< lg) - 3 linhas para garantir que cabe */}
+      <div className="lg:hidden space-y-2 w-full overflow-hidden">
         {/* Linha 1: Nome + Lixeira */}
-        <div className="flex items-center gap-2 min-w-0">
-          <p className="font-medium text-foreground truncate flex-1 text-sm min-w-0">
+        <div className="flex items-center gap-2 w-full">
+          <p className="font-medium text-foreground text-sm truncate flex-1 min-w-0">
             {item.produto_nome}
           </p>
           <Button
@@ -115,32 +115,33 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
           </Button>
         </div>
         
-        {/* Linha 2: Qtd × Valor = Subtotal */}
-        <div className="flex items-center gap-1.5 min-w-0">
+        {/* Linha 2: Quantidade × Valor */}
+        <div className="flex items-center gap-2 w-full">
           <Input
             type="number"
             min={1}
             value={quantidade}
             onChange={handleQuantidadeChange}
             disabled={isDisabled}
-            className="w-11 h-8 text-center text-sm font-semibold shrink-0 rounded-lg border-border/50 px-1"
+            className="w-14 h-8 text-center text-sm font-semibold shrink-0 rounded-lg border-border/50"
           />
           <span className="text-muted-foreground text-xs shrink-0">×</span>
-          <div className="relative flex-1 min-w-[65px]">
-            <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
-            <Input
-              type="number"
-              step="0.01"
-              min={0}
-              value={valorUnitario}
-              onChange={handleValorChange}
-              disabled={isDisabled}
-              className="h-8 pl-6 pr-1 text-right text-sm font-semibold rounded-lg border-border/50 w-full"
-            />
-          </div>
-          <span className="text-muted-foreground text-xs shrink-0">=</span>
-          <p className="font-bold text-emerald-600 text-sm whitespace-nowrap shrink-0">
-            R$ {formatCurrency(subtotal)}
+          <span className="text-muted-foreground text-xs shrink-0">R$</span>
+          <Input
+            type="number"
+            step="0.01"
+            min={0}
+            value={valorUnitario}
+            onChange={handleValorChange}
+            disabled={isDisabled}
+            className="flex-1 h-8 text-right text-sm font-semibold rounded-lg border-border/50 min-w-[60px]"
+          />
+        </div>
+        
+        {/* Linha 3: Subtotal (linha dedicada) */}
+        <div className="flex justify-end w-full">
+          <p className="font-bold text-emerald-600 text-sm">
+            Subtotal: R$ {formatCurrency(subtotal)}
           </p>
         </div>
       </div>

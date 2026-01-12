@@ -263,7 +263,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="w-[95vw] max-w-3xl h-[90vh] sm:h-auto sm:max-h-[85vh] flex flex-col p-0 gap-0 rounded-xl [&>button]:hidden">
+      <DialogContent className="w-full max-w-[100vw] sm:w-[95vw] sm:max-w-3xl h-[90vh] sm:h-auto sm:max-h-[85vh] flex flex-col p-0 gap-0 rounded-xl overflow-hidden [&>button]:hidden">
         {/* Header */}
         <DialogHeader className="px-4 sm:px-6 py-4 sm:py-5 border-b border-border/50 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -340,7 +340,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
           </div>
 
           <ScrollArea className="flex-1 min-h-0">
-            <div className="space-y-2 pb-4 px-3 sm:px-6 overflow-x-hidden">
+            <div className="space-y-2 pb-4 px-3 sm:px-6 w-full max-w-full overflow-hidden">
               {pedido.itens.length === 0 ? (
                 <div className="py-8 text-center text-muted-foreground">
                   <Package className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 opacity-30" />
