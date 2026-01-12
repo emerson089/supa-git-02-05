@@ -53,19 +53,42 @@ export function hasRiskAlert(stats: ClienteCRMStats | undefined): boolean {
   return stats.cancelamentos >= 2;
 }
 
+const PAGE_SIZE = 1000;
+
+async function fetchAllPedidos() {
+  let allPedidos: any[] = [];
+  let from = 0;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select('cliente_id, valor_total, status_pagamento, status_pedido, created_at')
+      .not('cliente_id', 'is', null)
+      .range(from, from + PAGE_SIZE - 1);
+    
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      allPedidos = [...allPedidos, ...data];
+      from += PAGE_SIZE;
+      hasMore = data.length === PAGE_SIZE;
+    } else {
+      hasMore = false;
+    }
+  }
+  
+  return allPedidos;
+}
+
 export function useClientesCRM() {
   const { user } = useAuth();
 
   return useQuery({
     queryKey: ['clientes-crm', user?.id],
     queryFn: async () => {
-      // Fetch all pedidos for the user
-      const { data: pedidos, error } = await supabase
-        .from('pedidos')
-        .select('cliente_id, valor_total, status_pagamento, status_pedido, created_at')
-        .not('cliente_id', 'is', null);
-
-      if (error) throw error;
+      // Fetch ALL pedidos using pagination to avoid 1000 row limit
+      const pedidos = await fetchAllPedidos();
 
       const statusCancelados = ['CANCELADO', 'GOLPE', 'GOLPE CANCELADO'];
       
