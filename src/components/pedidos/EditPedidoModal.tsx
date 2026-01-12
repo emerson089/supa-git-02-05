@@ -327,7 +327,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
         {/* Items List */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-          <div className="px-4 sm:px-6 py-2 sm:py-3 flex-shrink-0">
+          <div className="px-3 sm:px-6 py-2 sm:py-3 flex-shrink-0">
             <div className="flex items-center justify-between">
               <h3 className="text-sm sm:text-base font-semibold text-foreground">Itens do Pedido</h3>
               <div className="hidden lg:flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider">
@@ -340,7 +340,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
           </div>
 
           <ScrollArea className="flex-1 min-h-0">
-            <div className="space-y-2 pb-4 px-4 sm:px-6">
+            <div className="space-y-2 pb-4 px-3 sm:px-6 overflow-x-hidden">
               {pedido.itens.length === 0 ? (
                 <div className="py-8 text-center text-muted-foreground">
                   <Package className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 opacity-30" />
