@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar } from 'lucide-react';
+import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw } from 'lucide-react';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -14,6 +14,7 @@ import { useClientesContext, Cliente } from '@/contexts/ClientesContext';
 import { useClientesCRM, getClienteStatus, hasRiskAlert, ClienteCRMStats } from '@/hooks/useClientesCRM';
 import { ImportCSVModal } from '@/components/clientes/ImportCSVModal';
 import { ClearDataModal } from '@/components/clientes/ClearDataModal';
+import { WhatsAppButton } from '@/components/clientes/WhatsAppButton';
 import { ClienteSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -77,7 +78,8 @@ export default function Clientes() {
     return {
       totalClientes: clientes.length,
       ticketMedio: crmData?.metrics.ticketMedio || 0,
-      faturamentoTotal: crmData?.metrics.faturamentoTotal || 0,
+      ltvMedio: crmData?.metrics.ltvMedio || 0,
+      taxaRetencao: crmData?.metrics.taxaRetencao || 0,
     };
   }, [clientes.length, crmData?.metrics]);
 
@@ -286,7 +288,7 @@ export default function Clientes() {
         </div>
 
         {/* Dashboard de Métricas CRM */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <Card className="p-4 neu-card rounded-xl">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -313,12 +315,30 @@ export default function Clientes() {
           
           <Card className="p-4 neu-card rounded-xl">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-primary" />
+              <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-indigo-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Faturamento Total</p>
-                <p className="text-2xl font-bold text-foreground">{formatCurrency(crmMetrics.faturamentoTotal)}</p>
+                <p className="text-sm text-muted-foreground">LTV Médio</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrency(crmMetrics.ltvMedio)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Valor médio gerado por cliente ao longo do tempo
+                </p>
+              </div>
+            </div>
+          </Card>
+          
+          <Card className="p-4 neu-card rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-teal-500/10 flex items-center justify-center">
+                <RefreshCw className="h-6 w-6 text-teal-500" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Taxa de Retenção</p>
+                <p className="text-2xl font-bold text-foreground">{crmMetrics.taxaRetencao.toFixed(1)}%</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Clientes que compraram mais de uma vez
+                </p>
               </div>
             </div>
           </Card>
@@ -400,6 +420,7 @@ export default function Clientes() {
 
                 {/* Action Buttons */}
                 <div className="absolute top-12 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <WhatsAppButton cliente={cliente} stats={stats} />
                   <button
                     onClick={() => handleOpenEdit(cliente)}
                     className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors"
@@ -413,6 +434,13 @@ export default function Clientes() {
                     <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
                   </button>
                 </div>
+
+                {/* Mobile WhatsApp Button - Always Visible */}
+                {isMobile && (
+                  <div className="absolute top-4 right-14">
+                    <WhatsAppButton cliente={cliente} stats={stats} />
+                  </div>
+                )}
 
                 {/* Header do Card */}
                 <div className="flex items-start gap-4 mb-4">
