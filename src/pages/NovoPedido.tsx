@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
@@ -7,7 +7,6 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { ClienteInfoCard } from '@/components/pedidos/ClienteInfoCard';
 import { ClienteInsightsCard } from '@/components/pedidos/ClienteInsightsCard';
 import { 
-  StatusSelector, 
   statusPagamentoOptions, 
   statusPedidoOptions, 
   statusEntregaOptions
@@ -26,6 +25,8 @@ import { Button } from '@/components/ui/button';
 import { ClienteSchema, PedidoItemSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 
+const STORAGE_KEY = 'novo-pedido-draft';
+
 const NovoPedido = () => {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -40,32 +41,45 @@ const NovoPedido = () => {
   const [telefone, setTelefone] = useState('');
   const [excursao, setExcursao] = useState('');
 
-  // Status
-  const [statusPagamento, setStatusPagamento] = useState('PENDENTE');
-  const [statusPedido, setStatusPedido] = useState('NÃO SEPARADO');
-  const [statusEntrega, setStatusEntrega] = useState('NÃO ENTREGUE');
-
-  // Automação: quando Cancelado é selecionado no pagamento, cancela tudo
-  // NOTA: No NovoPedido, não há estorno pois o pedido ainda não foi criado
-  const handleStatusPagamentoChange = (value: string) => {
-    setStatusPagamento(value);
-    if (value === 'CANCELADO') {
-      setStatusPedido('CANCELADO');
-      setStatusEntrega('CANCELADO');
-    }
-  };
-
-  // Automação para Status Pedido
-  const handleStatusPedidoChange = (value: string) => {
-    setStatusPedido(value);
-    // Se cancelar o pedido, cancela a entrega também
-    if (value === 'CANCELADO') {
-      setStatusEntrega('CANCELADO');
-    }
-  };
+  // Status - valores fixos, não editáveis na UI
+  const statusPagamento = 'PENDENTE';
+  const statusPedido = 'NÃO SEPARADO';
+  const statusEntrega = 'NÃO ENTREGUE';
 
   // Items
   const [items, setItems] = useState<ItemPedido[]>([]);
+
+  // Flag para indicar se já carregou do localStorage
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Carregar dados do localStorage ao iniciar
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        if (data.clienteId) setClienteId(data.clienteId);
+        if (data.cidade) setCidade(data.cidade);
+        if (data.estado) setEstado(data.estado);
+        if (data.telefone) setTelefone(data.telefone);
+        if (data.excursao) setExcursao(data.excursao);
+        if (data.items && Array.isArray(data.items)) setItems(data.items);
+      } catch (e) {
+        // Ignorar erro de parse
+      }
+    }
+    setIsInitialized(true);
+  }, []);
+
+  // Salvar automaticamente quando dados mudam (após inicialização)
+  useEffect(() => {
+    if (!isInitialized) return;
+    const data = { clienteId, cidade, estado, telefone, excursao, items };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }, [clienteId, cidade, estado, telefone, excursao, items, isInitialized]);
+
+  // Função para limpar o rascunho
+  const clearDraft = () => localStorage.removeItem(STORAGE_KEY);
 
   // Loading
   const [isLoading, setIsLoading] = useState(false);
@@ -117,10 +131,8 @@ const NovoPedido = () => {
     setEstado('');
     setTelefone('');
     setExcursao('');
-    setStatusPagamento('PENDENTE');
-    setStatusPedido('NÃO SEPARADO');
-    setStatusEntrega('NÃO ENTREGUE');
     setItems([]);
+    clearDraft();
     toast.success('Formulário limpo');
   };
 
@@ -201,6 +213,7 @@ const NovoPedido = () => {
       });
 
       toast.success('Pedido cadastrado com sucesso! Estoque atualizado.');
+      clearDraft();
       handleLimpar();
       
       // Redirecionar para página de pedidos criados
@@ -295,30 +308,7 @@ const NovoPedido = () => {
             {/* Insights do Cliente - Apenas para consulta interna */}
             <ClienteInsightsCard clienteId={clienteId} />
 
-            {/* Configurações do Pedido */}
-            <div className="neu-card p-7">
-              <h2 className="text-lg font-bold text-foreground mb-6">Configurações do Pedido</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <StatusSelector
-                  label="Status Pagamento"
-                  options={statusPagamentoOptions}
-                  value={statusPagamento}
-                  onChange={handleStatusPagamentoChange}
-                />
-                <StatusSelector
-                  label="Status do Pedido"
-                  options={statusPedidoOptions}
-                  value={statusPedido}
-                  onChange={handleStatusPedidoChange}
-                />
-                <StatusSelector
-                  label="Status de Entrega"
-                  options={statusEntregaOptions}
-                  value={statusEntrega}
-                  onChange={setStatusEntrega}
-                />
-              </div>
-            </div>
+            {/* Status padrão: PENDENTE, NÃO SEPARADO, NÃO ENTREGUE - configurável apenas ao editar pedido */}
 
             {/* Items Card */}
             <ItensPedidoCard
