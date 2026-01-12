@@ -18,21 +18,45 @@ export type ClienteInsert = Omit<ClienteDB, 'id' | 'user_id' | 'created_at' | 'u
 export type ClienteInsertWithDate = ClienteInsert & { created_at?: string };
 export type ClienteUpdate = Partial<ClienteInsert>;
 
+const PAGE_SIZE = 1000;
+
+async function fetchAllClientes(userId: string): Promise<ClienteDB[]> {
+  let allClientes: ClienteDB[] = [];
+  let from = 0;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+    
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      allClientes = [...allClientes, ...data];
+      from += PAGE_SIZE;
+      hasMore = data.length === PAGE_SIZE;
+    } else {
+      hasMore = false;
+    }
+  }
+  
+  return allClientes;
+}
+
 export function useClientes() {
   const { user } = useAuth();
 
   return useQuery({
     queryKey: ['clientes', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clientes')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data as ClienteDB[];
+      if (!user) return [];
+      return await fetchAllClientes(user.id);
     },
     enabled: !!user,
+    staleTime: 60000, // Cache for 1 minute
   });
 }
 
