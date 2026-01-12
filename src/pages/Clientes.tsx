@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar } from 'lucide-react';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -7,12 +7,17 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useClientesContext, Cliente } from '@/contexts/ClientesContext';
+import { useClientesCRM, getClienteStatus, hasRiskAlert, ClienteCRMStats } from '@/hooks/useClientesCRM';
 import { ImportCSVModal } from '@/components/clientes/ImportCSVModal';
 import { ClearDataModal } from '@/components/clientes/ClearDataModal';
 import { ClienteSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +34,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const emptyCliente = {
   nome: '',
@@ -38,10 +50,20 @@ const emptyCliente = {
   excursao: '',
 };
 
+type Ordenacao = 'nome' | 'comprador' | 'ultima';
+type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'inativo' | 'risco';
+
+function formatCurrency(value: number): string {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 export default function Clientes() {
   const isMobile = useIsMobile();
   const { clientes, isLoading, addCliente, updateCliente, removeCliente } = useClientesContext();
+  const { data: crmData, isLoading: crmLoading } = useClientesCRM();
   const [busca, setBusca] = useState('');
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>('nome');
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('todos');
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
@@ -50,12 +72,69 @@ export default function Clientes() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clienteToDelete, setClienteToDelete] = useState<Cliente | null>(null);
 
-  const clientesFiltrados = clientes.filter(cliente =>
-    cliente.nome.toLowerCase().includes(busca.toLowerCase()) ||
-    cliente.telefone.includes(busca) ||
-    cliente.cidade.toLowerCase().includes(busca.toLowerCase()) ||
-    cliente.excursao.toLowerCase().includes(busca.toLowerCase())
-  );
+  // Calculate CRM metrics
+  const crmMetrics = useMemo(() => {
+    return {
+      totalClientes: clientes.length,
+      ticketMedio: crmData?.metrics.ticketMedio || 0,
+      faturamentoTotal: crmData?.metrics.faturamentoTotal || 0,
+    };
+  }, [clientes.length, crmData?.metrics]);
+
+  // Get stats for a specific client
+  const getClienteStats = (clienteId: string): ClienteCRMStats | undefined => {
+    return crmData?.statsMap.get(clienteId);
+  };
+
+  // Filter and sort clients
+  const clientesFiltrados = useMemo(() => {
+    let filtered = clientes.filter(cliente =>
+      cliente.nome.toLowerCase().includes(busca.toLowerCase()) ||
+      cliente.telefone.includes(busca) ||
+      cliente.cidade.toLowerCase().includes(busca.toLowerCase()) ||
+      cliente.excursao.toLowerCase().includes(busca.toLowerCase())
+    );
+
+    // Apply status filter
+    if (filtroStatus !== 'todos') {
+      filtered = filtered.filter(cliente => {
+        const stats = getClienteStats(cliente.id);
+        const status = getClienteStatus(stats);
+        const isRisk = hasRiskAlert(stats);
+
+        switch (filtroStatus) {
+          case 'vip':
+            return status?.label === 'VIP';
+          case 'frequente':
+            return status?.label === 'Frequente';
+          case 'inativo':
+            return status?.label === 'Inativo';
+          case 'risco':
+            return isRisk;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply sorting
+    return filtered.sort((a, b) => {
+      const statsA = getClienteStats(a.id);
+      const statsB = getClienteStats(b.id);
+
+      switch (ordenacao) {
+        case 'comprador':
+          return (statsB?.totalComprado || 0) - (statsA?.totalComprado || 0);
+        case 'ultima':
+          const dateA = statsA?.ultimaCompra?.getTime() || 0;
+          const dateB = statsB?.ultimaCompra?.getTime() || 0;
+          return dateB - dateA;
+        case 'nome':
+        default:
+          return a.nome.localeCompare(b.nome);
+      }
+    });
+  }, [clientes, busca, filtroStatus, ordenacao, crmData]);
 
   const handleOpenNew = () => {
     setEditingCliente(null);
@@ -76,7 +155,6 @@ export default function Clientes() {
   };
 
   const handleSave = async () => {
-    // Validate with Zod schema
     const result = ClienteSchema.safeParse(formData);
     if (!result.success) {
       const firstError = result.error.errors[0]?.message || 'Dados inválidos';
@@ -169,10 +247,10 @@ export default function Clientes() {
         isMobile && "pt-20 pb-24"
       )}>
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Clientes</h1>
-            <p className="text-muted-foreground mt-1">Gerencie sua base de clientes</p>
+            <p className="text-muted-foreground mt-1">Painel CRM - Gerencie sua base de clientes</p>
           </div>
           <div className="flex gap-3 flex-wrap">
             <Button 
@@ -181,34 +259,73 @@ export default function Clientes() {
               className="h-11 px-5 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 transition-colors"
             >
               <AlertTriangle size={18} className="mr-2" />
-              Limpar Dados
+              <span className="hidden sm:inline">Limpar Dados</span>
             </Button>
             <Button 
               onClick={handleExportCSV}
-              className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-white transition-colors shadow-lg"
+              className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg"
             >
               <Download size={18} className="mr-2" />
-              Exportar Clientes
+              <span className="hidden sm:inline">Exportar</span>
             </Button>
             <Button 
               onClick={() => setImportModalOpen(true)}
-              className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-white transition-colors shadow-lg"
+              className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg"
             >
               <FileSpreadsheet size={18} className="mr-2" />
-              Importar Planilha
+              <span className="hidden sm:inline">Importar</span>
             </Button>
             <Button 
               onClick={handleOpenNew}
-              className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-white transition-colors shadow-lg"
+              className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg"
             >
               <Plus size={18} className="mr-2" />
-              Novo Cliente
+              <span className="hidden sm:inline">Novo Cliente</span>
             </Button>
           </div>
         </div>
 
+        {/* Dashboard de Métricas CRM */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card className="p-4 neu-card rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total de Clientes</p>
+                <p className="text-2xl font-bold text-foreground">{crmMetrics.totalClientes.toLocaleString()}</p>
+              </div>
+            </div>
+          </Card>
+          
+          <Card className="p-4 neu-card rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                <Receipt className="h-6 w-6 text-emerald-500" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Ticket Médio</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrency(crmMetrics.ticketMedio)}</p>
+              </div>
+            </div>
+          </Card>
+          
+          <Card className="p-4 neu-card rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Faturamento Total</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrency(crmMetrics.faturamentoTotal)}</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
         {/* Search Bar */}
-        <div className="neu-card p-4 mb-8 rounded-2xl">
+        <div className="neu-card p-4 mb-4 rounded-2xl">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
             <Input
@@ -220,73 +337,147 @@ export default function Clientes() {
           </div>
         </div>
 
+        {/* Filters and Sorting */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          <Select value={ordenacao} onValueChange={(v) => setOrdenacao(v as Ordenacao)}>
+            <SelectTrigger className="w-full sm:w-[200px] h-10 rounded-xl">
+              <SelectValue placeholder="Ordenar por" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nome">Nome (A-Z)</SelectItem>
+              <SelectItem value="comprador">Maior Comprador</SelectItem>
+              <SelectItem value="ultima">Última Compra</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <div className="flex gap-2 flex-wrap">
+            {(['todos', 'vip', 'frequente', 'inativo', 'risco'] as FiltroStatus[]).map((filtro) => (
+              <Button
+                key={filtro}
+                size="sm"
+                variant={filtroStatus === filtro ? 'default' : 'outline'}
+                onClick={() => setFiltroStatus(filtro)}
+                className={cn(
+                  "rounded-xl h-10 px-4",
+                  filtroStatus === filtro && "bg-primary text-primary-foreground"
+                )}
+              >
+                {filtro === 'todos' && 'Todos'}
+                {filtro === 'vip' && '⭐ VIP'}
+                {filtro === 'frequente' && '🔵 Frequentes'}
+                {filtro === 'inativo' && '⚪ Inativos'}
+                {filtro === 'risco' && '⚠️ Risco'}
+              </Button>
+            ))}
+          </div>
+        </div>
+
         {/* Clients Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {clientesFiltrados.map((cliente) => (
-            <div
-              key={cliente.id}
-              className="neu-card p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group relative"
-            >
-              {/* Action Buttons */}
-              <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => handleOpenEdit(cliente)}
-                  className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors"
-                >
-                  <Pencil size={14} className="text-muted-foreground hover:text-primary" />
-                </button>
-                <button
-                  onClick={() => handleDeleteClick(cliente)}
-                  className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors"
-                >
-                  <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
-                </button>
-              </div>
+          {clientesFiltrados.map((cliente) => {
+            const stats = getClienteStats(cliente.id);
+            const status = getClienteStatus(stats);
+            const isRisk = hasRiskAlert(stats);
+            
+            return (
+              <div
+                key={cliente.id}
+                className="neu-card p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group relative"
+              >
+                {/* Status Badge and Risk Alert */}
+                <div className="absolute top-4 right-4 flex items-center gap-2">
+                  {isRisk && (
+                    <div className="w-7 h-7 rounded-full bg-destructive/10 flex items-center justify-center" title="Histórico de cancelamentos">
+                      <AlertTriangle size={14} className="text-destructive" />
+                    </div>
+                  )}
+                  {status && (
+                    <Badge className={cn("text-xs px-2 py-0.5", status.color)}>
+                      {status.label}
+                    </Badge>
+                  )}
+                </div>
 
-              {/* Header do Card */}
-              <div className="flex items-start gap-4 mb-4">
-                <div className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
-                  <User size={24} className="text-muted-foreground" />
+                {/* Action Buttons */}
+                <div className="absolute top-12 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => handleOpenEdit(cliente)}
+                    className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors"
+                  >
+                    <Pencil size={14} className="text-muted-foreground hover:text-primary" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(cliente)}
+                    className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors"
+                  >
+                    <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
+                  </button>
                 </div>
-                <div className="flex-1 min-w-0 pr-8">
-                  <h3 className="font-semibold text-foreground text-lg truncate group-hover:text-primary transition-colors">
-                    {cliente.nome}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Cadastrado em {cliente.dataCadastro}
-                  </p>
-                </div>
-              </div>
 
-              {/* Info do Card */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                    <Phone size={14} className="text-muted-foreground" />
+                {/* Header do Card */}
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
+                    <User size={24} className="text-muted-foreground" />
                   </div>
-                  <span className="text-foreground">{cliente.telefone}</span>
+                  <div className="flex-1 min-w-0 pr-20">
+                    <h3 className="font-semibold text-foreground text-lg truncate group-hover:text-primary transition-colors">
+                      {cliente.nome}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Cadastrado em {cliente.dataCadastro}
+                    </p>
+                  </div>
                 </div>
-                
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                    <MapPin size={14} className="text-muted-foreground" />
+
+                {/* Info do Card */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-sm">
+                    <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+                      <Phone size={14} className="text-muted-foreground" />
+                    </div>
+                    <span className="text-foreground">{cliente.telefone}</span>
                   </div>
-                  <span className="text-foreground">
-                    {cliente.cidade}, {cliente.estado}
-                  </span>
+                  
+                  <div className="flex items-center gap-3 text-sm">
+                    <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+                      <MapPin size={14} className="text-muted-foreground" />
+                    </div>
+                    <span className="text-foreground">
+                      {cliente.cidade}, {cliente.estado}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-3 text-sm">
+                    <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+                      <Tag size={14} className="text-muted-foreground" />
+                    </div>
+                    <span className="text-foreground">
+                      Excursão: <span className="font-medium text-primary">{cliente.excursao}</span>
+                    </span>
+                  </div>
                 </div>
-                
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                    <Tag size={14} className="text-muted-foreground" />
+
+                {/* CRM Stats Section */}
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-muted-foreground">Total Comprado:</span>
+                    <span className="font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded-md">
+                      {formatCurrency(stats?.totalComprado || 0)}
+                    </span>
                   </div>
-                  <span className="text-foreground">
-                    Excursão: <span className="font-medium text-primary">{cliente.excursao}</span>
-                  </span>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar size={14} />
+                    <span>
+                      {stats?.ultimaCompra 
+                        ? `Última compra: ${format(stats.ultimaCompra, "dd/MM/yyyy", { locale: ptBR })}`
+                        : 'Nenhuma compra registrada'
+                      }
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Empty State */}
@@ -299,7 +490,7 @@ export default function Clientes() {
               Nenhum cliente encontrado
             </h3>
             <p className="text-muted-foreground">
-              Tente ajustar os termos da busca ou adicione um novo cliente.
+              Tente ajustar os termos da busca ou os filtros.
             </p>
           </div>
         )}
