@@ -3,6 +3,7 @@ import { Trash2, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export interface EditableItem {
   id: string;
@@ -21,6 +22,7 @@ interface EditableItemRowProps {
 }
 
 export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemoving }: EditableItemRowProps) {
+  const isMobile = useIsMobile();
   const [quantidade, setQuantidade] = useState(item.quantidade);
   const [valorUnitario, setValorUnitario] = useState(item.valor_unitario);
   const [pendingUpdate, setPendingUpdate] = useState<NodeJS.Timeout | null>(null);
@@ -86,6 +88,68 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
 
   const isDisabled = isUpdating || isRemoving;
 
+  // Mobile Layout
+  if (isMobile) {
+    return (
+      <div className={cn(
+        "py-3 px-3 rounded-xl transition-all space-y-2",
+        "bg-muted/30 hover:bg-muted/50",
+        isDisabled && "opacity-60"
+      )}>
+        {/* First line: Product Name + Delete */}
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-medium text-foreground truncate flex-1">
+            {item.produto_nome}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleRemove}
+            disabled={isDisabled}
+            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg shrink-0"
+          >
+            {isRemoving || isUpdating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+        
+        {/* Second line: Qty x Value = Subtotal */}
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={1}
+            value={quantidade}
+            onChange={handleQuantidadeChange}
+            disabled={isDisabled}
+            className="h-8 w-14 text-center text-sm font-semibold rounded-lg border-border/50"
+          />
+          <span className="text-muted-foreground text-sm">x</span>
+          <div className="relative flex-1">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              value={valorUnitario}
+              onChange={handleValorChange}
+              disabled={isDisabled}
+              className="h-8 pl-7 text-right text-sm font-semibold rounded-lg border-border/50"
+            />
+          </div>
+          <span className="text-muted-foreground text-sm">=</span>
+          <p className="font-bold text-emerald-600 whitespace-nowrap">
+            R$ {formatCurrency(subtotal)}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop Layout
   return (
     <div className={cn(
       "flex items-center gap-2 py-3 px-3 rounded-xl transition-all",
