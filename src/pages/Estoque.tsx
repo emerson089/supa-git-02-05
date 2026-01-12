@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet } from 'lucide-react';
+import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,6 +22,8 @@ import { MobileProductCard } from '@/components/estoque/MobileProductCard';
 import { EstoqueItemSchema, NovoModeloAcabadoSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+
+type FiltroRapido = 'todos' | 'esgotado' | 'baixo';
 const statusConfig: Record<StatusEstoque, { label: string; color: string }> = {
   disponivel: { label: 'Disponível', color: 'bg-emerald-100 text-emerald-700' },
   em_producao: { label: 'Em Produção', color: 'bg-blue-100 text-blue-700' },
@@ -99,17 +101,35 @@ export default function Estoque() {
   // Modal para importação CSV
   const [showImportModal, setShowImportModal] = useState(false);
 
+  // Filtro rápido
+  const [filtroRapido, setFiltroRapido] = useState<FiltroRapido>('todos');
+
   const materiasPrimas = getMateriasPrimas();
   const produtosAcabados = getProdutosAcabados();
 
   const itensExibidos = activeTab === 'materia_prima' ? materiasPrimas : produtosAcabados;
-  const itensFiltrados = itensExibidos.filter(
+  
+  // Apply search filter
+  let itensFiltrados = itensExibidos.filter(
     item =>
       item.nome.toLowerCase().includes(search.toLowerCase()) ||
       item.categoria.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Apply quick filter
+  if (filtroRapido === 'esgotado') {
+    itensFiltrados = itensFiltrados.filter(item => item.quantidade === 0);
+  } else if (filtroRapido === 'baixo') {
+    itensFiltrados = itensFiltrados.filter(item => item.quantidade > 0 && item.quantidade <= 20);
+  }
+
   const itensComBaixoEstoque = itens.filter(item => item.status === 'baixo_estoque');
+
+  // Metrics calculations
+  const totalPecas = itensExibidos.reduce((sum, item) => sum + item.quantidade, 0);
+  const valorTotal = itensExibidos.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0);
+  const itensAlerta = itensExibidos.filter(item => item.quantidade > 0 && item.quantidade <= 20).length;
+  const itensEsgotados = itensExibidos.filter(item => item.quantidade === 0).length;
 
   const handleOpenModal = (item?: ItemEstoque) => {
     if (item) {
@@ -391,12 +411,6 @@ export default function Estoque() {
                     className="pl-10 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
                   />
                 </div>
-
-                {/* Add button */}
-                <Button onClick={() => handleOpenModal()} className="gap-2">
-                  <Plus size={18} />
-                  Novo Item
-                </Button>
               </div>
             </div>
           </header>
@@ -419,6 +433,97 @@ export default function Estoque() {
 
         {/* Content */}
         <div className={cn("flex-1 overflow-auto", isMobile ? "p-4" : "p-6")}>
+          {/* Metrics Cards */}
+          <div className={cn(
+            "grid gap-3 mb-4",
+            isMobile ? "grid-cols-3" : "grid-cols-4"
+          )}>
+            <Card className="p-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Package className="h-4 w-4 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Total Peças</p>
+                  <p className="font-bold text-sm sm:text-lg">{totalPecas.toLocaleString()}</p>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-emerald-500/10">
+                  <DollarSign className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Valor Total</p>
+                  <p className="font-bold text-sm sm:text-lg text-emerald-600">
+                    {isMobile ? `${(valorTotal / 1000).toFixed(1)}k` : `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                  </p>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-amber-500/10">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Em Alerta</p>
+                  <p className="font-bold text-sm sm:text-lg text-amber-600">{itensAlerta}</p>
+                </div>
+              </div>
+            </Card>
+            {!isMobile && (
+              <Card className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-red-500/10">
+                    <PackageX className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Esgotados</p>
+                    <p className="font-bold text-lg text-red-600">{itensEsgotados}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+
+          {/* Quick Filters */}
+          <div className="flex gap-2 mb-4 flex-wrap">
+            <Button
+              variant={filtroRapido === 'todos' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFiltroRapido('todos')}
+              className="h-8"
+            >
+              Ver Todos
+            </Button>
+            <Button
+              variant={filtroRapido === 'esgotado' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFiltroRapido('esgotado')}
+              className={cn(
+                "h-8 gap-1",
+                filtroRapido === 'esgotado' ? "bg-red-600 hover:bg-red-700" : "text-red-600 border-red-200 hover:bg-red-50"
+              )}
+            >
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              Esgotados ({itensEsgotados})
+            </Button>
+            <Button
+              variant={filtroRapido === 'baixo' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFiltroRapido('baixo')}
+              className={cn(
+                "h-8 gap-1",
+                filtroRapido === 'baixo' ? "bg-amber-600 hover:bg-amber-700" : "text-amber-600 border-amber-200 hover:bg-amber-50"
+              )}
+            >
+              <div className="w-2 h-2 rounded-full bg-amber-500" />
+              Estoque Baixo ({itensAlerta})
+            </Button>
+          </div>
+
           <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'materia_prima' | 'produto_acabado')}>
             {/* Mobile: Scrollable tabs */}
             {isMobile ? (
@@ -502,6 +607,15 @@ export default function Estoque() {
                     </Button>
                   </div>
                 )}
+                {activeTab === 'materia_prima' && (
+                  <Button 
+                    onClick={() => handleOpenModal()} 
+                    className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]"
+                  >
+                    <Plus size={18} />
+                    Novo Item
+                  </Button>
+                )}
               </div>
             )}
 
@@ -525,6 +639,7 @@ export default function Estoque() {
                           precoUnitario: item.precoUnitario,
                           imagemUrl: item.imagemUrl,
                           localizacao: item.localizacao,
+                          tipo: item.tipo,
                         }}
                         editingPriceId={editingPriceId}
                         editingPrice={editingPriceValue.toString()}
@@ -639,10 +754,18 @@ export default function Estoque() {
           </Tabs>
         </div>
 
-        {/* Mobile FAB for adding products */}
+        {/* Mobile FAB for adding items */}
         {isMobile && activeTab === 'produto_acabado' && (
           <Button
             onClick={handleOpenNovoModelo}
+            className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90"
+          >
+            <Plus size={24} />
+          </Button>
+        )}
+        {isMobile && activeTab === 'materia_prima' && (
+          <Button
+            onClick={() => handleOpenModal()}
             className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90"
           >
             <Plus size={24} />

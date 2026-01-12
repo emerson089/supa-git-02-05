@@ -1,9 +1,9 @@
 import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Camera, Pencil, Check, X } from 'lucide-react';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 interface ProductCardProps {
   item: {
@@ -86,6 +86,15 @@ export function ProductCard({
 }: ProductCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Status indicator based on quantity
+  const getStockStatus = (quantidade: number) => {
+    if (quantidade === 0) return { color: 'bg-red-500', label: 'Esgotado' };
+    if (quantidade <= 20) return { color: 'bg-amber-500', label: 'Baixo' };
+    return { color: 'bg-emerald-500', label: 'Disponível' };
+  };
+
+  const stockStatus = getStockStatus(item.quantidade);
+
   const handleImageClick = () => {
     fileInputRef.current?.click();
   };
@@ -102,7 +111,15 @@ export function ProductCard({
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-soft transition-all duration-300 hover:shadow-lg">
+    <div className="overflow-hidden rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-soft transition-all duration-300 hover:shadow-lg relative">
+      {/* Stock status indicator */}
+      <div 
+        className={cn(
+          "absolute top-3 right-3 w-3 h-3 rounded-full z-10 shadow-sm",
+          stockStatus.color
+        )}
+        title={stockStatus.label}
+      />
       {/* Hidden file input */}
       <input
         type="file"
