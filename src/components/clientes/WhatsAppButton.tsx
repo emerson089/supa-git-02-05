@@ -82,7 +82,16 @@ export function WhatsAppButton({ cliente, stats }: WhatsAppButtonProps) {
     const telefone = cliente.telefone.replace(/\D/g, '');
     const telefoneFormatado = telefone.startsWith('55') ? telefone : `55${telefone}`;
     const url = `https://wa.me/${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
-    window.open(url, '_blank');
+    
+    // Criar link temporário para contornar restrições de CORS/pop-up blocker
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
     setModalOpen(false);
   };
 
