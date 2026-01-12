@@ -10,7 +10,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Pencil, Trash2, DollarSign, Camera, MapPin, Package } from 'lucide-react';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
+import { cn } from '@/lib/utils';
 
 interface MobileProductCardProps {
   item: {
@@ -21,6 +22,7 @@ interface MobileProductCardProps {
     precoUnitario: number;
     imagemUrl: string | null;
     localizacao?: string | null;
+    tipo?: string;
   };
   editingPriceId: string | null;
   editingPrice: string;
@@ -107,8 +109,26 @@ export function MobileProductCard({
     e.target.value = '';
   };
 
+  // Status indicator based on quantity
+  const getStockStatus = (quantidade: number) => {
+    if (quantidade === 0) return { color: 'bg-red-500', label: 'Esgotado' };
+    if (quantidade <= 20) return { color: 'bg-amber-500', label: 'Baixo' };
+    return { color: 'bg-emerald-500', label: 'Disponível' };
+  };
+
+  const stockStatus = getStockStatus(item.quantidade);
+
   return (
-    <Card className="p-3">
+    <Card className="p-3 relative">
+      {/* Stock status indicator */}
+      <div 
+        className={cn(
+          "absolute top-2 right-2 w-3 h-3 rounded-full z-10",
+          stockStatus.color
+        )}
+        title={stockStatus.label}
+      />
+      
       <input
         type="file"
         ref={fileInputRef}
@@ -191,7 +211,7 @@ export function MobileProductCard({
                 </Button>
               </div>
             ) : (
-              <span className="font-bold text-sm text-emerald-600">
+              <span className="font-bold text-base text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-md">
                 R$ {item.precoUnitario.toFixed(2)}
               </span>
             )}
