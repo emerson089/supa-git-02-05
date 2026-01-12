@@ -330,7 +330,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
           <div className="px-4 sm:px-6 py-2 sm:py-3 flex-shrink-0">
             <div className="flex items-center justify-between">
               <h3 className="text-sm sm:text-base font-semibold text-foreground">Itens do Pedido</h3>
-              <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider">
+              <div className="hidden lg:flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider">
                 <span className="w-14 text-center shrink-0">Qtd</span>
                 <span className="w-20 text-center shrink-0">Valor Unit.</span>
                 <span className="w-24 text-right shrink-0">Subtotal</span>
