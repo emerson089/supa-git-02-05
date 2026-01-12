@@ -615,7 +615,11 @@ export default function PedidosCriados() {
     link.click();
     URL.revokeObjectURL(url);
     toast.success(`${pedidosList.length} pedidos exportados com sucesso!`);
-  };
+};
+
+const formatNumber = (value: number) => {
+  return new Intl.NumberFormat('pt-BR').format(value);
+};
 
 
   return (
@@ -662,7 +666,7 @@ export default function PedidosCriados() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Total de Pedidos</p>
-                    <p className="text-2xl font-bold text-primary">{calculatedTotals.totalPedidos}</p>
+                    <p className="text-2xl font-bold text-primary">{formatNumber(calculatedTotals.totalPedidos)}</p>
                     {filterModelo && (
                       <Badge variant="outline" className="text-xs text-primary border-primary mt-1">
                         Modelo: "{filterModelo}"
@@ -687,7 +691,7 @@ export default function PedidosCriados() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Total de Peças</p>
-                    <p className="text-2xl font-bold text-primary">{calculatedTotals.totalPecas}</p>
+                    <p className="text-2xl font-bold text-primary">{formatNumber(calculatedTotals.totalPecas)}</p>
                   </div>
                 </div>
               </div>

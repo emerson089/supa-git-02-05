@@ -16,6 +16,10 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
+const formatNumber = (value: number) => {
+  return new Intl.NumberFormat('pt-BR').format(value);
+};
+
 export function MobileSummaryCards({
   totalPedidos,
   totalValor,
@@ -30,7 +34,7 @@ export function MobileSummaryCards({
           <ShoppingBag className="h-4 w-4 text-primary" />
         </div>
         <p className="text-[10px] text-muted-foreground leading-tight">Pedidos</p>
-        <p className="text-lg font-bold text-primary">{totalPedidos}</p>
+        <p className="text-lg font-bold text-primary">{formatNumber(totalPedidos)}</p>
         {filterModelo && (
           <Badge variant="outline" className="text-[8px] text-primary border-primary mt-1 px-1">
             "{filterModelo}"
@@ -53,7 +57,7 @@ export function MobileSummaryCards({
           <Package className="h-4 w-4 text-primary" />
         </div>
         <p className="text-[10px] text-muted-foreground leading-tight">Peças</p>
-        <p className="text-lg font-bold text-primary">{totalPecas}</p>
+        <p className="text-lg font-bold text-primary">{formatNumber(totalPecas)}</p>
       </div>
     </div>
   );
