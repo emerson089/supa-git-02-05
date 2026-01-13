@@ -14,6 +14,7 @@ import { ListView } from '@/components/production/ListView';
 import { CustosLoteModal } from '@/components/production/CustosLoteModal';
 import { AprontamentoChecklist, isChecklistComplete } from '@/components/production/AprontamentoChecklist';
 import { ImportProducaoCSVModal } from '@/components/production/ImportProducaoCSVModal';
+import { ImportCustosCSVModal } from '@/components/production/ImportCustosCSVModal';
 import ProducaoForm from '@/components/producao/ProducaoForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,9 @@ const Index = () => {
   
   // Import modal
   const [showImportModal, setShowImportModal] = useState(false);
+  
+  // Import custos modal
+  const [showImportCustosModal, setShowImportCustosModal] = useState(false);
 
   // Fetch data from database
   const fetchData = useCallback(async () => {
@@ -273,6 +277,113 @@ const Index = () => {
     toast.success(`${lots.length} lotes exportados com sucesso!`);
   };
 
+  // Export costs to CSV
+  const handleExportCustos = async () => {
+    try {
+      // Fetch all lots
+      const { data: lotesData, error: lotesError } = await supabase
+        .from('producao')
+        .select('id, id_producao, modelo_nome_cache, quantidade');
+
+      if (lotesError) throw lotesError;
+      if (!lotesData || lotesData.length === 0) {
+        toast.error('Não há lotes para exportar custos.');
+        return;
+      }
+
+      // Fetch all cost configs
+      const { data: configs, error: configError } = await supabase
+        .from('lote_custos_config')
+        .select('*');
+
+      if (configError) throw configError;
+
+      // Fetch all cost items
+      const { data: itens, error: itensError } = await supabase
+        .from('lote_custos_itens')
+        .select('*');
+
+      if (itensError) throw itensError;
+
+      // Create lookup maps
+      const configMap = new Map(configs?.map(c => [c.producao_id, c]) || []);
+      const itensMap = new Map<string, typeof itens>();
+      itens?.forEach(item => {
+        const existing = itensMap.get(item.producao_id) || [];
+        itensMap.set(item.producao_id, [...existing, item]);
+      });
+
+      // Build CSV rows
+      const headers = [
+        'Referência', 'Modelo', 'Quantidade', 'Metros Tecido', 'Valor/Metro', 
+        'Preço Venda', 'Tipo Custo', 'Descrição Custo', 'Valor Unitário', 
+        'Pago', 'Data Pagamento'
+      ];
+
+      const rows: string[][] = [];
+
+      for (const lote of lotesData) {
+        const config = configMap.get(lote.id);
+        const custoItens = itensMap.get(lote.id) || [];
+
+        if (custoItens.length > 0) {
+          // One row per cost item
+          for (const item of custoItens) {
+            rows.push([
+              lote.id_producao,
+              lote.modelo_nome_cache || '',
+              lote.quantidade?.toString() || '0',
+              config?.metros_corte?.toString() || '0',
+              config?.valor_metro?.toString() || '0',
+              config?.preco_venda?.toString() || '0',
+              item.tipo || '',
+              item.descricao || '',
+              item.valor_unitario?.toString() || '0',
+              item.is_paid ? 'Sim' : 'Não',
+              item.data_pagamento ? format(new Date(item.data_pagamento), 'dd/MM/yyyy') : ''
+            ]);
+          }
+        } else if (config) {
+          // Only config, no cost items
+          rows.push([
+            lote.id_producao,
+            lote.modelo_nome_cache || '',
+            lote.quantidade?.toString() || '0',
+            config.metros_corte?.toString() || '0',
+            config.valor_metro?.toString() || '0',
+            config.preco_venda?.toString() || '0',
+            '', '', '0', 'Não', ''
+          ]);
+        }
+      }
+
+      if (rows.length === 0) {
+        toast.error('Não há custos configurados para exportar.');
+        return;
+      }
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `custos_producao_${format(new Date(), 'dd-MM-yyyy')}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`${rows.length} registros de custos exportados com sucesso!`);
+    } catch (error) {
+      console.error('Erro ao exportar custos:', error);
+      toast.error('Erro ao exportar custos');
+    }
+  };
+
   // Filter lots
   const filteredLots = lots.filter(l =>
     (l.modelo_nome_cache || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -302,6 +413,8 @@ const Index = () => {
           onRefresh={fetchData}
           onExport={handleExportProducao}
           onImport={() => setShowImportModal(true)}
+          onExportCustos={handleExportCustos}
+          onImportCustos={() => setShowImportCustosModal(true)}
           loading={loading}
           totalLots={lots.length}
         />
@@ -381,6 +494,13 @@ const Index = () => {
       <ImportProducaoCSVModal
         open={showImportModal}
         onOpenChange={setShowImportModal}
+        onSuccess={fetchData}
+      />
+
+      {/* Import Custos Modal */}
+      <ImportCustosCSVModal
+        open={showImportCustosModal}
+        onOpenChange={setShowImportCustosModal}
         onSuccess={fetchData}
       />
       
