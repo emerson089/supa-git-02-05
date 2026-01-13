@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Separator } from "@/components/ui/separator";
 import { 
   KpiCardSkeleton, 
   ChartSkeleton, 
@@ -34,12 +35,14 @@ import {
   Wand2,
   Target,
   Pencil,
+  X,
+  Filter,
 } from "lucide-react";
 import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, STATUS_COLORS, MetaYoY } from "@/hooks/useDashboardData";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   AreaChart,
@@ -98,10 +101,50 @@ function CustomTooltip({
 }
 
 export default function Dashboard() {
-  const [periodo, setPeriodo] = useState<Periodo>("mes");
-  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
-  const [excluirCancelados, setExcluirCancelados] = useState(true);
+  // Estado inicial vindo do localStorage
+  const [periodo, setPeriodo] = useState<Periodo>(() => {
+    const saved = localStorage.getItem('dashboard-periodo');
+    return (saved as Periodo) || 'mes';
+  });
+  
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const saved = localStorage.getItem('dashboard-daterange');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          from: parsed.from ? new Date(parsed.from) : undefined,
+          to: parsed.to ? new Date(parsed.to) : undefined,
+        };
+      } catch {
+        return { from: undefined, to: undefined };
+      }
+    }
+    return { from: undefined, to: undefined };
+  });
+  
+  const [excluirCancelados, setExcluirCancelados] = useState(() => {
+    const saved = localStorage.getItem('dashboard-excluir-cancelados');
+    return saved !== null ? saved === 'true' : true;
+  });
+  
   const [calendarOpen, setCalendarOpen] = useState(false);
+  
+  // Persistir mudanças no localStorage
+  useEffect(() => {
+    localStorage.setItem('dashboard-periodo', periodo);
+  }, [periodo]);
+
+  useEffect(() => {
+    localStorage.setItem('dashboard-daterange', JSON.stringify({
+      from: dateRange.from?.toISOString(),
+      to: dateRange.to?.toISOString(),
+    }));
+  }, [dateRange]);
+
+  useEffect(() => {
+    localStorage.setItem('dashboard-excluir-cancelados', String(excluirCancelados));
+  }, [excluirCancelados]);
   
   const { data, loading } = useDashboardData(periodo, dateRange, excluirCancelados);
   const navigate = useNavigate();
@@ -112,6 +155,16 @@ export default function Dashboard() {
     { label: "7 dias", value: "7dias" },
     { label: "Mês", value: "mes" },
   ];
+
+  // Verifica se há filtros ativos (diferente do padrão)
+  const hasActiveFilters = periodo !== 'mes' || dateRange.from !== undefined || !excluirCancelados;
+
+  const handleClearFilters = () => {
+    setPeriodo('mes');
+    setDateRange({ from: undefined, to: undefined });
+    setExcluirCancelados(true);
+    setCalendarOpen(false);
+  };
 
   const handlePeriodoClick = (value: Periodo) => {
     setPeriodo(value);
@@ -127,6 +180,24 @@ export default function Dashboard() {
         setPeriodo("personalizado");
         setCalendarOpen(false);
       }
+    }
+  };
+
+  const getPeriodoLabel = () => {
+    switch (periodo) {
+      case 'hoje':
+        return 'Hoje';
+      case '7dias':
+        return 'Últimos 7 dias';
+      case 'mes':
+        return `${format(startOfMonth(new Date()), "dd/MM")} - ${format(new Date(), "dd/MM")} (Mês atual)`;
+      case 'personalizado':
+        if (dateRange.from && dateRange.to) {
+          return `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}`;
+        }
+        return 'Período personalizado';
+      default:
+        return 'Mês';
     }
   };
 
@@ -227,73 +298,207 @@ export default function Dashboard() {
         "flex-1 overflow-auto",
         isMobile ? "p-4 pt-[72px] pb-20" : "p-6"
       )}>
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
-          <div className={isMobile ? "hidden" : ""}>
-            <h1 className="text-2xl font-bold text-foreground">Dashboard Geral</h1>
-            <p className="text-muted-foreground text-sm">
-              Visão geral do desempenho e controle
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full md:w-auto">
-            {/* Switch for raw metrics */}
-            <div className="flex items-center gap-2">
-              <Switch 
-                id="show-raw" 
-                checked={!excluirCancelados}
-                onCheckedChange={(checked) => setExcluirCancelados(!checked)}
-                className="min-h-[44px] min-w-[44px]"
-              />
-              <Label htmlFor="show-raw" className="text-xs text-muted-foreground cursor-pointer">
-                Incluir cancelados
-              </Label>
+        {/* Header com Filtros Reorganizados */}
+        <div className="mb-6 sm:mb-8">
+          {/* Título - apenas desktop */}
+          {!isMobile && (
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">Dashboard Geral</h1>
+                <p className="text-muted-foreground text-sm">
+                  Visão geral do desempenho e controle
+                </p>
+              </div>
             </div>
+          )}
 
-            <div className="flex items-center gap-2 flex-wrap">
-              {periodos.map((p) => (
-                <Button
-                  key={p.value}
-                  variant={periodo === p.value ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handlePeriodoClick(p.value)}
-                  className={cn(
-                    "min-h-[44px] min-w-[44px]",
-                    periodo === p.value && "shadow-neu-inset"
-                  )}
-                >
-                  {p.label}
-                </Button>
-              ))}
-              
-              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant={periodo === "personalizado" ? "default" : "outline"} 
-                    size="sm" 
-                    className={cn(
-                      "gap-2 min-h-[44px] min-w-[44px]",
-                      periodo === "personalizado" && "shadow-neu-inset"
+          {/* Card de Filtros */}
+          <Card className="border-border/50 bg-muted/30">
+            <CardContent className="p-3 sm:p-4">
+              {isMobile ? (
+                /* Layout Mobile - Vertical */
+                <div className="space-y-3">
+                  {/* Linha 1: Botões de período + Calendário */}
+                  <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                    {periodos.map((p) => (
+                      <Button
+                        key={p.value}
+                        variant={periodo === p.value ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePeriodoClick(p.value)}
+                        className={cn(
+                          "h-9 whitespace-nowrap flex-shrink-0",
+                          periodo === p.value && "shadow-neu-inset"
+                        )}
+                      >
+                        {p.label}
+                      </Button>
+                    ))}
+                    
+                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button 
+                          variant={periodo === "personalizado" ? "default" : "outline"} 
+                          size="sm" 
+                          className={cn(
+                            "gap-2 h-9 flex-shrink-0",
+                            periodo === "personalizado" && "shadow-neu-inset"
+                          )}
+                        >
+                          <CalendarIcon size={14} />
+                          {getDateRangeLabel()}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="end">
+                        <Calendar
+                          mode="range"
+                          selected={dateRange}
+                          onSelect={handleDateRangeSelect}
+                          numberOfMonths={1}
+                          locale={ptBR}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  
+                  {/* Linha 2: Switch + Limpar */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="show-raw-mobile" 
+                        checked={!excluirCancelados}
+                        onCheckedChange={(checked) => setExcluirCancelados(!checked)}
+                      />
+                      <Label htmlFor="show-raw-mobile" className="text-xs text-muted-foreground cursor-pointer">
+                        Incluir cancelados
+                      </Label>
+                    </div>
+                    
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearFilters}
+                        className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                      >
+                        <X size={14} className="mr-1" />
+                        Limpar
+                      </Button>
                     )}
-                  >
-                    <CalendarIcon size={16} />
-                    <span className="hidden sm:inline">{getDateRangeLabel()}</span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                  <Calendar
-                    mode="range"
-                    selected={dateRange}
-                    onSelect={handleDateRangeSelect}
-                    numberOfMonths={isMobile ? 1 : 2}
-                    locale={ptBR}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
+                  </div>
+                </div>
+              ) : (
+                /* Layout Desktop - Horizontal */
+                <div className="flex items-center justify-between gap-4">
+                  {/* Lado esquerdo: Filtros */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Filter size={14} />
+                      <span className="text-xs font-medium">Filtros</span>
+                    </div>
+                    
+                    <Separator orientation="vertical" className="h-6" />
+                    
+                    {/* Botões de período */}
+                    <div className="flex items-center gap-1">
+                      {periodos.map((p) => (
+                        <Button
+                          key={p.value}
+                          variant={periodo === p.value ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => handlePeriodoClick(p.value)}
+                          className={cn(
+                            "h-8",
+                            periodo === p.value && "shadow-neu-inset"
+                          )}
+                        >
+                          {p.label}
+                        </Button>
+                      ))}
+                    </div>
+                    
+                    <Separator orientation="vertical" className="h-6" />
+                    
+                    {/* Calendário */}
+                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button 
+                          variant={periodo === "personalizado" ? "default" : "outline"} 
+                          size="sm" 
+                          className={cn(
+                            "gap-2 h-8",
+                            periodo === "personalizado" && "shadow-neu-inset"
+                          )}
+                        >
+                          <CalendarIcon size={14} />
+                          {periodo === "personalizado" && dateRange.from && dateRange.to ? (
+                            <span className="font-medium">
+                              {format(dateRange.from, "dd/MM")} - {format(dateRange.to, "dd/MM")}
+                            </span>
+                          ) : (
+                            <span>Período</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="range"
+                          selected={dateRange}
+                          onSelect={handleDateRangeSelect}
+                          numberOfMonths={2}
+                          locale={ptBR}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    
+                    <Separator orientation="vertical" className="h-6" />
+                    
+                    {/* Switch cancelados */}
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="show-raw" 
+                        checked={!excluirCancelados}
+                        onCheckedChange={(checked) => setExcluirCancelados(!checked)}
+                      />
+                      <Label htmlFor="show-raw" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                        Incluir cancelados
+                      </Label>
+                    </div>
+                  </div>
+                  
+                  {/* Lado direito: Limpar filtros */}
+                  {hasActiveFilters && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearFilters}
+                      className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                    >
+                      <X size={14} className="mr-1" />
+                      Limpar filtros
+                    </Button>
+                  )}
+                </div>
+              )}
+              
+              {/* Indicador de Período Ativo */}
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
+                <span className="text-xs text-muted-foreground">Exibindo:</span>
+                <Badge variant="secondary" className="font-normal text-xs">
+                  {getPeriodoLabel()}
+                </Badge>
+                {!excluirCancelados && (
+                  <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-xs">
+                    + Cancelados
+                  </Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Meta YoY Card - Destaque */}
