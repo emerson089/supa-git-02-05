@@ -1,4 +1,4 @@
-import { Search, LayoutGrid, List, Plus, RefreshCw, Download, Upload } from 'lucide-react';
+import { Search, LayoutGrid, List, Plus, RefreshCw, Download, Upload, DollarSign } from 'lucide-react';
 import { ViewMode } from '@/types/production';
 
 interface ProductionHeaderProps {
@@ -10,6 +10,8 @@ interface ProductionHeaderProps {
   onRefresh?: () => void;
   onExport?: () => void;
   onImport?: () => void;
+  onExportCustos?: () => void;
+  onImportCustos?: () => void;
   loading?: boolean;
   totalLots?: number;
 }
@@ -23,6 +25,8 @@ export function ProductionHeader({
   onRefresh,
   onExport,
   onImport,
+  onExportCustos,
+  onImportCustos,
   loading,
   totalLots = 0
 }: ProductionHeaderProps) {
@@ -69,6 +73,35 @@ export function ProductionHeader({
             title="Importar CSV"
           >
             <Upload size={18} />
+          </button>
+        )}
+
+        {/* Separator */}
+        {(onExportCustos || onImportCustos) && (
+          <div className="h-6 w-px bg-border mx-1" />
+        )}
+
+        {/* Export Custos Button */}
+        {onExportCustos && (
+          <button
+            onClick={onExportCustos}
+            className="p-2.5 rounded-xl neu-button text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+            title="Exportar Custos CSV"
+          >
+            <DollarSign size={14} />
+            <Download size={14} />
+          </button>
+        )}
+
+        {/* Import Custos Button */}
+        {onImportCustos && (
+          <button
+            onClick={onImportCustos}
+            className="p-2.5 rounded-xl neu-button text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+            title="Importar Custos CSV"
+          >
+            <DollarSign size={14} />
+            <Upload size={14} />
           </button>
         )}
 
