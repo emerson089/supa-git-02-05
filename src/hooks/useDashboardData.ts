@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, startOfYear, getWeek } from "date-fns";
+import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, startOfYear, getWeek, endOfMonth, subYears, getMonth, getYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export type Periodo = "hoje" | "7dias" | "mes" | "personalizado";
@@ -60,6 +60,19 @@ export interface ProducaoEtapa {
   isBottleneck: boolean;
 }
 
+export interface MetaYoY {
+  metaAnual: number;              // Ano anterior + 15%
+  faturamentoAnoPassado: number;  // Total do mês inteiro ano passado
+  faturamentoAtualAcumulado: number; // Total acumulado até hoje
+  faturamentoMesmoDiaAnoPassado: number; // Até o mesmo dia do ano passado
+  percentualAtingido: number;     // % da meta atingida
+  variacaoVsMesmoDia: number;     // Comparativo mesmo dia YoY
+  faltaParaMeta: number;          // Quanto falta para atingir
+  temDadosAnoPassado: boolean;    // Flag para fallback manual
+  mesAtual: string;               // Nome do mês atual
+  anoPassado: number;             // Ano anterior
+}
+
 interface DashboardData {
   kpis: KPIs;
   tendenciaVendas: TendenciaVenda[];
@@ -68,6 +81,7 @@ interface DashboardData {
   statusPedidos: StatusPedido[];
   producaoKanban: ProducaoEtapa[];
   tipoAgrupamento: TipoAgrupamento;
+  metaYoY: MetaYoY;
 }
 
 const ETAPA_COLORS: Record<string, string> = {
@@ -196,6 +210,18 @@ export function useDashboardData(
     statusPedidos: [],
     producaoKanban: [],
     tipoAgrupamento: "dia",
+    metaYoY: {
+      metaAnual: 0,
+      faturamentoAnoPassado: 0,
+      faturamentoAtualAcumulado: 0,
+      faturamentoMesmoDiaAnoPassado: 0,
+      percentualAtingido: 0,
+      variacaoVsMesmoDia: 0,
+      faltaParaMeta: 0,
+      temDadosAnoPassado: false,
+      mesAtual: "",
+      anoPassado: 0,
+    },
   });
 
   useEffect(() => {
@@ -208,6 +234,24 @@ export function useDashboardData(
 
       try {
         // Fetch all data in parallel
+        // Meta YoY: calcular datas do mesmo mês do ano passado
+        const now = new Date();
+        const mesAtual = getMonth(now);
+        const anoAtual = getYear(now);
+        const anoPassado = anoAtual - 1;
+        const nomeMesAtual = format(now, "MMMM", { locale: ptBR });
+        
+        // Mês completo do ano passado
+        const inicioMesAnoPassado = new Date(anoPassado, mesAtual, 1);
+        const fimMesAnoPassado = endOfMonth(inicioMesAnoPassado);
+        
+        // Início do mês atual
+        const inicioMesAtual = startOfMonth(now);
+        
+        // Mesmo dia do ano passado
+        const mesmoDiaAnoPassado = subYears(now, 1);
+        const inicioMesmoDiaAnoPassado = new Date(anoPassado, mesAtual, 1);
+
         const [
           pedidosAtual,
           pedidosAnterior,
@@ -215,6 +259,9 @@ export function useDashboardData(
           pedidoItens,
           producao,
           producaoAnterior,
+          pedidosMesAnoPassadoCompleto,
+          pedidosMesAnoPassadoAteDia,
+          pedidosMesAtualAcumulado,
         ] = await Promise.all([
           // Pedidos período atual
           supabase
@@ -260,6 +307,33 @@ export function useDashboardData(
             .eq("user_id", user.id)
             .gte("created_date", startDateAnterior)
             .lt("created_date", endDateAnterior),
+
+          // Meta YoY: Pedidos do mês completo do ano passado (status PAGO)
+          supabase
+            .from("pedidos")
+            .select("valor_total")
+            .eq("user_id", user.id)
+            .eq("status_pagamento", "PAGO")
+            .gte("created_at", inicioMesAnoPassado.toISOString())
+            .lte("created_at", fimMesAnoPassado.toISOString()),
+
+          // Meta YoY: Pedidos até o mesmo dia do ano passado
+          supabase
+            .from("pedidos")
+            .select("valor_total")
+            .eq("user_id", user.id)
+            .eq("status_pagamento", "PAGO")
+            .gte("created_at", inicioMesmoDiaAnoPassado.toISOString())
+            .lte("created_at", mesmoDiaAnoPassado.toISOString()),
+
+          // Meta YoY: Faturamento acumulado do mês atual
+          supabase
+            .from("pedidos")
+            .select("valor_total")
+            .eq("user_id", user.id)
+            .eq("status_pagamento", "PAGO")
+            .gte("created_at", inicioMesAtual.toISOString())
+            .lte("created_at", now.toISOString()),
         ]);
 
         // Calculate KPIs
@@ -384,6 +458,25 @@ export function useDashboardData(
         }));
         const producaoKanban = detectBottlenecks(producaoKanbanBase);
 
+        // Calcular Meta YoY
+        const faturamentoAnoPassadoTotal = (pedidosMesAnoPassadoCompleto.data || []).reduce(
+          (sum, p) => sum + (p.valor_total || 0), 0
+        );
+        const faturamentoMesmoDiaAnoPassadoTotal = (pedidosMesAnoPassadoAteDia.data || []).reduce(
+          (sum, p) => sum + (p.valor_total || 0), 0
+        );
+        const faturamentoAtualAcumulado = (pedidosMesAtualAcumulado.data || []).reduce(
+          (sum, p) => sum + (p.valor_total || 0), 0
+        );
+        
+        const temDadosAnoPassado = faturamentoAnoPassadoTotal > 0;
+        const metaAnual = faturamentoAnoPassadoTotal * 1.15; // +15%
+        const percentualAtingido = metaAnual > 0 ? (faturamentoAtualAcumulado / metaAnual) * 100 : 0;
+        const faltaParaMeta = Math.max(0, faturamentoAnoPassadoTotal - faturamentoAtualAcumulado);
+        const variacaoVsMesmoDia = faturamentoMesmoDiaAnoPassadoTotal > 0 
+          ? ((faturamentoAtualAcumulado - faturamentoMesmoDiaAnoPassadoTotal) / faturamentoMesmoDiaAnoPassadoTotal) * 100
+          : 0;
+
         setData({
           kpis: {
             faturamento,
@@ -401,6 +494,18 @@ export function useDashboardData(
           statusPedidos,
           producaoKanban,
           tipoAgrupamento,
+          metaYoY: {
+            metaAnual,
+            faturamentoAnoPassado: faturamentoAnoPassadoTotal,
+            faturamentoAtualAcumulado,
+            faturamentoMesmoDiaAnoPassado: faturamentoMesmoDiaAnoPassadoTotal,
+            percentualAtingido,
+            variacaoVsMesmoDia,
+            faltaParaMeta,
+            temDadosAnoPassado,
+            mesAtual: nomeMesAtual,
+            anoPassado,
+          },
         });
       } catch (error) {
         console.error("Erro ao buscar dados do dashboard:", error);

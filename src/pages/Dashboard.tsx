@@ -31,9 +31,11 @@ import {
   AlertTriangle,
   ChevronRight,
   Wrench,
-  Wand2
+  Wand2,
+  Target,
+  Pencil,
 } from "lucide-react";
-import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, STATUS_COLORS } from "@/hooks/useDashboardData";
+import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, STATUS_COLORS, MetaYoY } from "@/hooks/useDashboardData";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -57,6 +59,10 @@ function formatCurrency(value: number) {
     style: "currency",
     currency: "BRL",
   }).format(value);
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("pt-BR").format(value);
 }
 
 function calcVariation(atual: number, anterior: number): { value: number; isPositive: boolean } {
@@ -144,7 +150,7 @@ export default function Dashboard() {
     },
     {
       title: "Peças Vendidas",
-      value: `${data.kpis.pecasVendidas} un`,
+      value: `${formatNumber(data.kpis.pecasVendidas)} un`,
       icon: Package,
       variation: calcVariation(data.kpis.pecasVendidas, data.kpis.pecasAnterior),
       color: "text-blue-600",
@@ -154,7 +160,7 @@ export default function Dashboard() {
     },
     {
       title: "Pedidos Pendentes",
-      value: data.kpis.pedidosPendentes.toString(),
+      value: formatNumber(data.kpis.pedidosPendentes),
       icon: AlertCircle,
       variation: calcVariation(data.kpis.pedidosPendentes, data.kpis.pedidosAnterior),
       color: "text-amber-600",
@@ -166,7 +172,7 @@ export default function Dashboard() {
     },
     {
       title: "Produção Ativa",
-      value: `${data.kpis.producaoAtiva} pçs`,
+      value: `${formatNumber(data.kpis.producaoAtiva)} pçs`,
       icon: Factory,
       variation: calcVariation(data.kpis.producaoAtiva, data.kpis.producaoAnterior),
       color: "text-violet-600",
@@ -286,6 +292,105 @@ export default function Dashboard() {
               </Popover>
             </div>
           </div>
+        </div>
+
+        {/* Meta YoY Card - Destaque */}
+        <div className="mb-6">
+          <Card className="neu-card border-primary/20 shadow-lg bg-gradient-to-br from-card to-primary/5">
+            <CardContent className="p-4 sm:p-6">
+              {loading ? (
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Skeleton className="h-24 flex-1" />
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 sm:items-center">
+                  {/* Ícone e título */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Target size={24} className="text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Meta Mensal (YoY)</h3>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {data.metaYoY.mesAtual} {new Date().getFullYear()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Conteúdo principal */}
+                  {data.metaYoY.temDadosAnoPassado ? (
+                    <div className="flex-1 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Meta (+15%)</p>
+                          <p className="text-xl sm:text-2xl font-bold text-foreground">
+                            {formatCurrency(data.metaYoY.metaAnual)}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            Base {data.metaYoY.anoPassado}: {formatCurrency(data.metaYoY.faturamentoAnoPassado)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Faturado</p>
+                          <p className="text-xl sm:text-2xl font-bold text-primary">
+                            {formatCurrency(data.metaYoY.faturamentoAtualAcumulado)}
+                          </p>
+                          <div className={cn(
+                            "flex items-center gap-1 text-xs font-semibold justify-end",
+                            data.metaYoY.variacaoVsMesmoDia >= 0 ? "text-emerald-600" : "text-red-500"
+                          )}>
+                            {data.metaYoY.variacaoVsMesmoDia >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                            <span>{Math.abs(data.metaYoY.variacaoVsMesmoDia).toFixed(1)}% vs. mesmo dia</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Barra de progresso */}
+                      <div className="space-y-1">
+                        <Progress 
+                          value={Math.min(data.metaYoY.percentualAtingido, 100)} 
+                          className={cn(
+                            "h-3",
+                            data.metaYoY.percentualAtingido >= 80 ? "[&>div]:bg-emerald-500" :
+                            data.metaYoY.percentualAtingido >= 50 ? "[&>div]:bg-amber-500" :
+                            "[&>div]:bg-red-500"
+                          )}
+                        />
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground">
+                            {data.metaYoY.faltaParaMeta > 0 
+                              ? `Faltam ${formatCurrency(data.metaYoY.faltaParaMeta)} para superar ${data.metaYoY.mesAtual} ${data.metaYoY.anoPassado}`
+                              : `🎉 Meta de ${data.metaYoY.anoPassado} superada!`
+                            }
+                          </span>
+                          <span className={cn(
+                            "text-sm font-bold",
+                            data.metaYoY.percentualAtingido >= 80 ? "text-emerald-600" :
+                            data.metaYoY.percentualAtingido >= 50 ? "text-amber-600" :
+                            "text-red-500"
+                          )}>
+                            {data.metaYoY.percentualAtingido.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center py-4">
+                      <div className="text-center">
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Sem dados de {data.metaYoY.mesAtual} {data.metaYoY.anoPassado}
+                        </p>
+                        <Button variant="outline" size="sm" className="gap-2">
+                          <Pencil size={14} />
+                          Definir meta manual
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* KPI Cards - 2 columns on mobile */}
@@ -518,7 +623,7 @@ export default function Dashboard() {
                           <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-medium">
                             {index + 1}
                           </span>
-                          <span className="truncate max-w-[120px]">{modelo.nome}</span>
+                          <span className="flex-1 leading-tight" title={modelo.nome}>{modelo.nome}</span>
                         </span>
                         <span className="font-medium">{modelo.quantidade} un</span>
                       </div>
@@ -664,34 +769,54 @@ export default function Dashboard() {
                     <Skeleton key={i} className="h-20 w-full" />
                   ))}
                 </div>
-              ) : (
-                <div className="grid grid-cols-5 gap-2">
-                  {data.producaoKanban.map((etapa) => (
-                    <div 
-                      key={etapa.etapa}
-                      className={cn(
-                        "flex flex-col items-center justify-center p-2 rounded-lg text-center cursor-pointer transition-all hover:scale-105",
-                        etapa.isBottleneck && "ring-2 ring-amber-400 animate-pulse"
-                      )}
-                      style={{ backgroundColor: `${etapa.color}20` }}
-                      onClick={() => navigate("/")}
-                    >
-                      {etapa.isBottleneck && (
-                        <AlertTriangle size={12} className="text-amber-500 mb-0.5" />
-                      )}
-                      <span 
-                        className="text-lg font-bold"
-                        style={{ color: etapa.color }}
-                      >
-                        {etapa.pecas}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground truncate w-full">
-                        {etapa.etapa.slice(0, 4)}.
-                      </span>
+              ) : (() => {
+                const etapasAtivas = data.producaoKanban.filter(e => e.pecas > 0);
+                
+                if (etapasAtivas.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                      <Factory size={24} className="mb-2 opacity-50" />
+                      <span className="text-sm">Sem movimentação</span>
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                }
+                
+                return (
+                  <div className={cn(
+                    "grid gap-2",
+                    etapasAtivas.length === 1 ? "grid-cols-1" :
+                    etapasAtivas.length === 2 ? "grid-cols-2" :
+                    etapasAtivas.length === 3 ? "grid-cols-3" :
+                    etapasAtivas.length === 4 ? "grid-cols-4" :
+                    "grid-cols-5"
+                  )}>
+                    {etapasAtivas.map((etapa) => (
+                      <div 
+                        key={etapa.etapa}
+                        className={cn(
+                          "flex flex-col items-center justify-center p-2 rounded-lg text-center cursor-pointer transition-all hover:scale-105",
+                          etapa.isBottleneck && "ring-2 ring-amber-400 animate-pulse"
+                        )}
+                        style={{ backgroundColor: `${etapa.color}20` }}
+                        onClick={() => navigate("/")}
+                      >
+                        {etapa.isBottleneck && (
+                          <AlertTriangle size={12} className="text-amber-500 mb-0.5" />
+                        )}
+                        <span 
+                          className="text-lg font-bold"
+                          style={{ color: etapa.color }}
+                        >
+                          {formatNumber(etapa.pecas)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground truncate w-full">
+                          {etapa.etapa.slice(0, 4)}.
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </div>
