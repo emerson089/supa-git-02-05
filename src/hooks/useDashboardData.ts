@@ -268,7 +268,6 @@ export function useDashboardData(
           pedidosMesAnoPassadoCompleto,
           pedidosMesAnoPassadoAteDia,
           pedidosMesAtualAcumulado,
-          pedidosPendentesTotais, // TODOS os pendentes, sem filtro de data
         ] = await Promise.all([
           // Pedidos período atual
           supabase
@@ -342,12 +341,6 @@ export function useDashboardData(
             .gte("created_at", inicioMesAtual.toISOString())
             .lte("created_at", now.toISOString()),
 
-          // NOVO: Pedidos pendentes totais (sem filtro de data)
-          supabase
-            .from("pedidos")
-            .select("id, status_pagamento")
-            .eq("user_id", user.id)
-            .in("status_pagamento", ["PENDENTE", "INCOMPLETO"]),
         ]);
 
         // Calculate KPIs
@@ -367,9 +360,13 @@ export function useDashboardData(
         const faturamentoYoY = pedidosYoYFiltrados.reduce((sum, p) => sum + (p.valor_total || 0), 0);
         const pecasVendidas = pedidosFiltrados.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
         const pecasYoY = pedidosYoYFiltrados.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
-        // Usar query separada para pedidos pendentes (sem filtro de data)
-        const pedidosPendentes = (pedidosPendentesTotais.data || []).length;
-        const pedidosYoYPendentes = pedidosYoYData.filter(p => p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO").length;
+        // Pedidos pendentes do período filtrado
+        const pedidosPendentes = pedidosFiltrados.filter(p => 
+          p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO"
+        ).length;
+        const pedidosYoYPendentes = pedidosYoYFiltrados.filter(p => 
+          p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO"
+        ).length;
 
         const producaoData = producao.data || [];
         const producaoYoYData = producaoYoY.data || [];
