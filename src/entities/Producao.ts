@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { ChecklistAprontamento } from "@/types/production";
+import { Json } from "@/integrations/supabase/types";
 
 export type PrioridadeType = 'urgente' | 'atencao' | 'normal';
 
@@ -18,6 +20,7 @@ export interface ProducaoData {
   integrado_estoque: boolean;
   prioridade: PrioridadeType | string;
   pecas_concluidas: number;
+  checklist_aprontamento?: ChecklistAprontamento;
 }
 
 export interface ProducaoInsert {
@@ -45,6 +48,14 @@ export interface ProducaoUpdate {
   integrado_estoque?: boolean;
   prioridade?: PrioridadeType;
   pecas_concluidas?: number;
+}
+
+// Helper to convert database row to ProducaoData
+function toProducaoData(row: any): ProducaoData {
+  return {
+    ...row,
+    checklist_aprontamento: row.checklist_aprontamento as ChecklistAprontamento | undefined,
+  };
 }
 
 export const Producao = {
@@ -89,7 +100,7 @@ export const Producao = {
       throw error;
     }
 
-    return data || [];
+    return (data || []).map(toProducaoData);
   },
 
   async get(id: string): Promise<ProducaoData | null> {
@@ -104,7 +115,7 @@ export const Producao = {
       throw error;
     }
 
-    return data;
+    return data ? toProducaoData(data) : null;
   },
 
   async create(producao: ProducaoInsert): Promise<ProducaoData> {
@@ -128,13 +139,13 @@ export const Producao = {
       throw error;
     }
 
-    return data;
+    return toProducaoData(data);
   },
 
   async update(id: string, updates: ProducaoUpdate): Promise<ProducaoData> {
     const { data, error } = await supabase
       .from("producao")
-      .update(updates)
+      .update(updates as any)
       .eq("id", id)
       .select()
       .single();
@@ -144,7 +155,23 @@ export const Producao = {
       throw error;
     }
 
-    return data;
+    return toProducaoData(data);
+  },
+
+  async updateChecklist(id: string, checklist: ChecklistAprontamento): Promise<ProducaoData> {
+    const { data, error } = await supabase
+      .from("producao")
+      .update({ checklist_aprontamento: checklist as unknown as Json })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      if (import.meta.env.DEV) console.error("Error updating checklist:", error);
+      throw error;
+    }
+
+    return toProducaoData(data);
   },
 
   async delete(id: string): Promise<void> {

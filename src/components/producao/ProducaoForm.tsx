@@ -11,6 +11,7 @@ import { Upload, Loader2, X } from 'lucide-react';
 import { ProducaoFormSchema, getValidationErrors } from '@/lib/validations';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
+import { ResponsavelSelector } from '@/components/production/ResponsavelSelector';
 
 interface ProducaoFormProps {
   lote?: ProducaoData | null;
@@ -246,12 +247,10 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
 
         <div className="space-y-2">
           <Label htmlFor="responsavel">Responsável</Label>
-          <Input
-            id="responsavel"
+          <ResponsavelSelector
             value={formData.responsavel}
-            onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
-            placeholder="Nome do responsável"
-            maxLength={100}
+            onChange={(value) => setFormData({ ...formData, responsavel: value })}
+            etapaAtual={formData.processo_atual}
           />
         </div>
         </div>

@@ -1,6 +1,14 @@
 import { ProducaoData } from '@/entities/Producao';
 
-export type StageId = 'Corte' | 'Facção/Costura' | 'Lavanderia' | 'Acabamento' | 'Concluído';
+export type StageId = 
+  | 'Corte' 
+  | 'Costura/Facção' 
+  | 'Travete' 
+  | 'Destroyed' 
+  | 'Lavanderia' 
+  | 'Limpado' 
+  | 'Aprontamento'
+  | 'Vendas';
 
 export interface Stage {
   id: StageId;
@@ -11,6 +19,13 @@ export interface Stage {
 }
 
 export type ViewMode = 'kanban' | 'list';
+
+export interface ChecklistAprontamento {
+  botao: boolean;
+  bolsa: boolean;
+  cordao: boolean;
+  tag: boolean;
+}
 
 // Re-export for backward compatibility
 export type ProductionLot = ProducaoData;

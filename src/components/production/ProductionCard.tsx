@@ -23,9 +23,11 @@ interface ProductionCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onManageCosts?: () => void;
+  onOpenChecklist?: () => void;
   isFirstStage: boolean;
   isLastStage: boolean;
   isDragging?: boolean;
+  currentStage?: string;
 }
 
 const priorityConfig = {
@@ -56,9 +58,11 @@ export function ProductionCard({
   onEdit,
   onDelete,
   onManageCosts,
+  onOpenChecklist,
   isFirstStage, 
   isLastStage,
-  isDragging: isDraggingProp 
+  isDragging: isDraggingProp,
+  currentStage
 }: ProductionCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging: isDraggingDnd } = useDraggable({
     id: lot.id,
