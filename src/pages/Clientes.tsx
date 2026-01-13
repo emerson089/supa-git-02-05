@@ -418,8 +418,11 @@ export default function Clientes() {
                   )}
                 </div>
 
-                {/* Action Buttons */}
-                <div className="absolute top-12 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Action Buttons - Desktop: hover, Mobile: always visible */}
+                <div className={cn(
+                  "absolute top-12 right-4 flex gap-2 transition-opacity",
+                  isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                )}>
                   <WhatsAppButton cliente={cliente} stats={stats} />
                   <button
                     onClick={() => handleOpenEdit(cliente)}
@@ -434,13 +437,6 @@ export default function Clientes() {
                     <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
                   </button>
                 </div>
-
-                {/* Mobile WhatsApp Button - Always Visible */}
-                {isMobile && (
-                  <div className="absolute top-4 right-14">
-                    <WhatsAppButton cliente={cliente} stats={stats} />
-                  </div>
-                )}
 
                 {/* Header do Card */}
                 <div className="flex items-start gap-4 mb-4">
