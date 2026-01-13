@@ -214,6 +214,13 @@ const Index = () => {
     }
   };
 
+  // Handle progress update
+  const handleUpdateProgress = (lotId: string, pecasConcluidas: number) => {
+    setLots(prev => prev.map(l => 
+      l.id === lotId ? { ...l, pecas_concluidas: pecasConcluidas } : l
+    ));
+  };
+
   // Handle open checklist
   const handleOpenChecklist = (lot: ProducaoData) => {
     setSelectedLoteForChecklist(lot);
@@ -430,6 +437,7 @@ const Index = () => {
                 onDeleteCard={handleDeleteCard}
                 onManageCosts={handleManageCosts}
                 onOpenChecklist={handleOpenChecklist}
+                onUpdateProgress={handleUpdateProgress}
               />
             ) : (
               <KanbanBoard 
@@ -440,6 +448,7 @@ const Index = () => {
                 onDeleteCard={handleDeleteCard}
                 onManageCosts={handleManageCosts}
                 onOpenChecklist={handleOpenChecklist}
+                onUpdateProgress={handleUpdateProgress}
               />
             )
           ) : (

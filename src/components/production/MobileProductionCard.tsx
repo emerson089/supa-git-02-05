@@ -1,7 +1,9 @@
-import { ProducaoData, ChecklistAprontamento } from '@/entities/Producao';
+import { useState } from 'react';
+import { ProducaoData, ChecklistAprontamento, Producao } from '@/entities/Producao';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -22,7 +24,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { LotImage } from './LotImage';
 import { STAGES, getStageIndex } from '@/data/production-data';
+import { useTempoNaEtapa } from '@/hooks/useTempoNaEtapa';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface MobileProductionCardProps {
   lot: ProducaoData;
@@ -32,6 +36,7 @@ interface MobileProductionCardProps {
   onDelete?: () => void;
   onManageCosts?: () => void;
   onOpenChecklist?: () => void;
+  onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
   isFirstStage: boolean;
   isLastStage: boolean;
   currentStage: string;
@@ -63,10 +68,14 @@ export function MobileProductionCard({
   onDelete,
   onManageCosts,
   onOpenChecklist,
+  onUpdateProgress,
   isFirstStage,
   isLastStage,
   currentStage,
 }: MobileProductionCardProps) {
+  const [editingProgress, setEditingProgress] = useState(false);
+  const [tempPecas, setTempPecas] = useState(lot.pecas_concluidas || 0);
+  
   const priority = (lot.prioridade as keyof typeof priorityConfig) || 'normal';
   const config = priorityConfig[priority];
   const PriorityIcon = config.icon;
@@ -74,9 +83,30 @@ export function MobileProductionCard({
   const currentStageIndex = getStageIndex(lot.processo_atual);
   const progress = ((currentStageIndex + 1) / STAGES.length) * 100;
 
+  const pecasConcluidas = lot.pecas_concluidas || 0;
   const completedPercentage = lot.quantidade > 0
-    ? Math.round(((lot.pecas_concluidas || 0) / lot.quantidade) * 100)
+    ? Math.round((pecasConcluidas / lot.quantidade) * 100)
     : 0;
+
+  const { dias, corClasse, label: tempoLabel } = useTempoNaEtapa(lot.updated_at);
+
+  // Handle save progress
+  const handleSaveProgress = async () => {
+    const newValue = Math.min(Math.max(0, tempPecas), lot.quantidade);
+    setEditingProgress(false);
+    
+    if (newValue !== pecasConcluidas) {
+      try {
+        await Producao.update(lot.id, { pecas_concluidas: newValue });
+        onUpdateProgress?.(lot.id, newValue);
+        toast.success('Progresso atualizado!');
+      } catch (error) {
+        console.error('Erro ao atualizar progresso:', error);
+        toast.error('Erro ao atualizar progresso');
+        setTempPecas(pecasConcluidas);
+      }
+    }
+  };
 
   return (
     <Card className={cn(
@@ -98,7 +128,7 @@ export function MobileProductionCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
+              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                 <span className="font-mono text-xs text-muted-foreground">
                   {lot.id_producao}
                 </span>
@@ -107,6 +137,16 @@ export function MobileProductionCard({
                     <PriorityIcon className="h-3 w-3 mr-0.5" />
                     {config.label}
                   </Badge>
+                )}
+                {/* Time indicator */}
+                {dias > 0 && (
+                  <span className={cn(
+                    "text-[10px] font-medium px-1.5 py-0 rounded-full flex items-center gap-0.5",
+                    corClasse
+                  )}>
+                    <Clock className="h-2.5 w-2.5" />
+                    {tempoLabel}
+                  </span>
                 )}
               </div>
               <h3 className="font-medium text-sm truncate">
@@ -169,9 +209,33 @@ export function MobileProductionCard({
                 style={{ width: `${completedPercentage}%` }}
               />
             </div>
-            <span className="text-[10px] text-muted-foreground font-medium">
-              {completedPercentage}%
-            </span>
+            {editingProgress ? (
+              <div className="flex items-center gap-0.5">
+                <Input
+                  type="number"
+                  value={tempPecas}
+                  onChange={(e) => setTempPecas(Number(e.target.value))}
+                  onBlur={handleSaveProgress}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress()}
+                  className="w-10 h-5 text-[10px] px-1 text-right"
+                  min={0}
+                  max={lot.quantidade}
+                  autoFocus
+                />
+                <span className="text-[10px] text-muted-foreground">/{lot.quantidade}</span>
+              </div>
+            ) : (
+              <span 
+                onClick={() => {
+                  setTempPecas(pecasConcluidas);
+                  setEditingProgress(true);
+                }}
+                className="text-[10px] text-muted-foreground font-medium cursor-pointer hover:text-primary"
+                title="Clique para editar"
+              >
+                {completedPercentage}%
+              </span>
+            )}
           </div>
 
           {/* Checklist indicator for Aprontamento */}

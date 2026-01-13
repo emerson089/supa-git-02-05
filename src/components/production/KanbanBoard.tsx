@@ -22,6 +22,7 @@ interface KanbanBoardProps {
   onDeleteCard?: (lot: ProducaoData) => void;
   onManageCosts?: (lot: ProducaoData) => void;
   onOpenChecklist?: (lot: ProducaoData) => void;
+  onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
 }
 
 export function KanbanBoard({ 
@@ -31,7 +32,8 @@ export function KanbanBoard({
   onEditCard, 
   onDeleteCard, 
   onManageCosts,
-  onOpenChecklist
+  onOpenChecklist,
+  onUpdateProgress
 }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeLot = activeId ? lots.find(l => l.id === activeId) : null;
@@ -81,6 +83,7 @@ export function KanbanBoard({
               onDeleteCard={onDeleteCard}
               onManageCosts={onManageCosts}
               onOpenChecklist={onOpenChecklist}
+              onUpdateProgress={onUpdateProgress}
               isFirstStage={index === 0}
               isLastStage={index === STAGES.length - 1}
             />

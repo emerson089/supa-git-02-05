@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreVertical, ArrowRight, ArrowLeft, Trash2, Pencil, DollarSign, PackageCheck, Flame, AlertTriangle, Circle } from 'lucide-react';
-import { ProducaoData } from '@/entities/Producao';
+import { MoreVertical, ArrowRight, ArrowLeft, Trash2, Pencil, DollarSign, PackageCheck, Flame, AlertTriangle, Circle, Clock } from 'lucide-react';
+import { ProducaoData, Producao } from '@/entities/Producao';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { useLoteCustos } from '@/hooks/useLoteCustos';
+import { useTempoNaEtapa } from '@/hooks/useTempoNaEtapa';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface ProductionCardProps {
   lot: ProducaoData;
@@ -24,6 +28,7 @@ interface ProductionCardProps {
   onDelete?: () => void;
   onManageCosts?: () => void;
   onOpenChecklist?: () => void;
+  onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
   isFirstStage: boolean;
   isLastStage: boolean;
   isDragging?: boolean;
@@ -59,11 +64,14 @@ export function ProductionCard({
   onDelete,
   onManageCosts,
   onOpenChecklist,
+  onUpdateProgress,
   isFirstStage, 
   isLastStage,
   isDragging: isDraggingProp,
   currentStage
 }: ProductionCardProps) {
+  const [editingProgress, setEditingProgress] = useState(false);
+  const [tempPecas, setTempPecas] = useState(lot.pecas_concluidas || 0);
   const { attributes, listeners, setNodeRef, transform, isDragging: isDraggingDnd } = useDraggable({
     id: lot.id,
   });
@@ -76,6 +84,7 @@ export function ProductionCard({
 
   const { signedUrl } = useSignedUrl(lot.imagem_url);
   const { config } = useLoteCustos(lot.id);
+  const { dias, corClasse, label: tempoLabel } = useTempoNaEtapa(lot.updated_at);
   
   const handleDelete = () => {
     if (window.confirm(`Tem certeza que deseja excluir o lote ${lot.id_producao}?`)) {
@@ -93,6 +102,24 @@ export function ProductionCard({
   const progressPercent = lot.quantidade > 0 
     ? Math.min((pecasConcluidas / lot.quantidade) * 100, 100)
     : 0;
+
+  // Handle save progress
+  const handleSaveProgress = async () => {
+    const newValue = Math.min(Math.max(0, tempPecas), lot.quantidade);
+    setEditingProgress(false);
+    
+    if (newValue !== pecasConcluidas) {
+      try {
+        await Producao.update(lot.id, { pecas_concluidas: newValue });
+        onUpdateProgress?.(lot.id, newValue);
+        toast.success('Progresso atualizado!');
+      } catch (error) {
+        console.error('Erro ao atualizar progresso:', error);
+        toast.error('Erro ao atualizar progresso');
+        setTempPecas(pecasConcluidas);
+      }
+    }
+  };
 
   return (
     <div
@@ -172,9 +199,21 @@ export function ProductionCard({
 
       {/* Model Name & Quantity */}
       <div className="mb-3">
-        <h4 className="font-bold text-foreground text-base truncate leading-tight mb-1">
-          {lot.modelo_nome_cache || 'Sem modelo'}
-        </h4>
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="font-bold text-foreground text-base truncate leading-tight flex-1 mr-2">
+            {lot.modelo_nome_cache || 'Sem modelo'}
+          </h4>
+          {/* Time indicator */}
+          {dias > 0 && (
+            <span className={cn(
+              "text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0",
+              corClasse
+            )}>
+              <Clock size={10} />
+              {tempoLabel}
+            </span>
+          )}
+        </div>
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-foreground">
             {lot.quantidade} <span className="text-xs font-normal text-muted-foreground">peças</span>
@@ -191,9 +230,34 @@ export function ProductionCard({
       <div className="mb-4">
         <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
           <span>Progresso</span>
-          <span className="font-medium">
-            {pecasConcluidas}/{lot.quantidade}
-          </span>
+          {editingProgress ? (
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                value={tempPecas}
+                onChange={(e) => setTempPecas(Number(e.target.value))}
+                onBlur={handleSaveProgress}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress()}
+                className="w-14 h-5 text-xs px-1 text-right"
+                min={0}
+                max={lot.quantidade}
+                autoFocus
+              />
+              <span className="text-muted-foreground">/{lot.quantidade}</span>
+            </div>
+          ) : (
+            <span 
+              onClick={(e) => {
+                e.stopPropagation();
+                setTempPecas(pecasConcluidas);
+                setEditingProgress(true);
+              }}
+              className="font-medium cursor-pointer hover:text-primary hover:underline"
+              title="Clique para editar"
+            >
+              {pecasConcluidas}/{lot.quantidade}
+            </span>
+          )}
         </div>
         <Progress value={progressPercent} className="h-2" />
       </div>

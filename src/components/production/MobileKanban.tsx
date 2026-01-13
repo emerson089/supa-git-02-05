@@ -12,6 +12,7 @@ interface MobileKanbanProps {
   onDeleteCard?: (lot: ProducaoData) => void;
   onManageCosts?: (lot: ProducaoData) => void;
   onOpenChecklist?: (lot: ProducaoData) => void;
+  onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
 }
 
 export function MobileKanban({
@@ -21,6 +22,7 @@ export function MobileKanban({
   onDeleteCard,
   onManageCosts,
   onOpenChecklist,
+  onUpdateProgress,
 }: MobileKanbanProps) {
   const [activeStage, setActiveStage] = useState<string>(STAGES[0].id);
 
@@ -80,6 +82,7 @@ export function MobileKanban({
                 onDelete={onDeleteCard ? () => onDeleteCard(lot) : undefined}
                 onManageCosts={onManageCosts ? () => onManageCosts(lot) : undefined}
                 onOpenChecklist={onOpenChecklist ? () => onOpenChecklist(lot) : undefined}
+                onUpdateProgress={onUpdateProgress}
                 isFirstStage={isFirstStage}
                 isLastStage={isLastStage}
                 currentStage={activeStage}
