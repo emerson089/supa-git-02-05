@@ -112,7 +112,10 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove }: ItemPedido
   };
 
   return (
-    <div className="neu-card p-6 space-y-4">
+    <div className={cn(
+      "neu-card p-6 space-y-4",
+      isOpen && "relative z-[100]"
+    )}>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* Modelo - Combobox */}
         <div className="lg:col-span-5 space-y-2">
@@ -154,7 +157,7 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove }: ItemPedido
 
             {/* Dropdown */}
             {isOpen && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-xl z-[200] max-h-64 overflow-y-auto">
                 {filteredProdutos.length === 0 ? (
                   <div className="py-4 px-4 text-center text-muted-foreground text-sm">
                     {searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto disponível'}
