@@ -15,13 +15,14 @@ export type TipoAgrupamento = "dia" | "semana" | "mes";
 
 interface KPIs {
   faturamento: number;
-  faturamentoAnterior: number;
+  faturamentoYoY: number; // Mesmo período do ano passado
   pecasVendidas: number;
-  pecasAnterior: number;
+  pecasYoY: number; // Mesmo período do ano passado
   pedidosPendentes: number;
-  pedidosAnterior: number;
+  pedidosYoY: number; // Mesmo período do ano passado
   producaoAtiva: number;
-  producaoAnterior: number;
+  producaoYoY: number; // Mesmo período do ano passado
+  anoPassado: number; // Ano de referência
 }
 
 export interface TendenciaVenda {
@@ -196,13 +197,14 @@ export function useDashboardData(
   const [data, setData] = useState<DashboardData>({
     kpis: {
       faturamento: 0,
-      faturamentoAnterior: 0,
+      faturamentoYoY: 0,
       pecasVendidas: 0,
-      pecasAnterior: 0,
+      pecasYoY: 0,
       pedidosPendentes: 0,
-      pedidosAnterior: 0,
+      pedidosYoY: 0,
       producaoAtiva: 0,
-      producaoAnterior: 0,
+      producaoYoY: 0,
+      anoPassado: new Date().getFullYear() - 1,
     },
     tendenciaVendas: [],
     estoqueBaixo: [],
@@ -252,13 +254,17 @@ export function useDashboardData(
         const mesmoDiaAnoPassado = subYears(now, 1);
         const inicioMesmoDiaAnoPassado = new Date(anoPassado, mesAtual, 1);
 
+        // YoY: Calcular datas para comparar mesmo período do ano passado
+        const startDateYoY = subYears(new Date(startDate), 1).toISOString();
+        const endDateYoY = subYears(new Date(endDate), 1).toISOString();
+
         const [
           pedidosAtual,
-          pedidosAnterior,
+          pedidosYoY, // Mesmo período do ano passado (YoY)
           estoque,
           pedidoItens,
           producao,
-          producaoAnterior,
+          producaoYoY, // Produção do mesmo período do ano passado (YoY)
           pedidosMesAnoPassadoCompleto,
           pedidosMesAnoPassadoAteDia,
           pedidosMesAtualAcumulado,
@@ -271,13 +277,13 @@ export function useDashboardData(
             .gte("created_at", startDate)
             .lte("created_at", endDate),
 
-          // Pedidos período anterior (para comparação)
+          // Pedidos mesmo período do ano passado (YoY)
           supabase
             .from("pedidos")
             .select("valor_total, total_pecas, status_pagamento, status_pedido")
             .eq("user_id", user.id)
-            .gte("created_at", startDateAnterior)
-            .lt("created_at", endDateAnterior),
+            .gte("created_at", startDateYoY)
+            .lte("created_at", endDateYoY),
 
           // Estoque baixo
           supabase
@@ -300,13 +306,13 @@ export function useDashboardData(
             .select("processo_atual, quantidade, created_date")
             .eq("user_id", user.id),
 
-          // Produção período anterior (para comparação)
+          // Produção mesmo período do ano passado (YoY)
           supabase
             .from("producao")
             .select("processo_atual, quantidade")
             .eq("user_id", user.id)
-            .gte("created_date", startDateAnterior)
-            .lt("created_date", endDateAnterior),
+            .gte("created_date", startDateYoY)
+            .lte("created_date", endDateYoY),
 
           // Meta YoY: Pedidos do mês completo do ano passado (status PAGO)
           supabase
@@ -338,28 +344,28 @@ export function useDashboardData(
 
         // Calculate KPIs
         const pedidosAtualData = pedidosAtual.data || [];
-        const pedidosAnteriorData = pedidosAnterior.data || [];
+        const pedidosYoYData = pedidosYoY.data || [];
 
         // Filter out canceled orders if excluirCancelados is true
         const pedidosFiltrados = excluirCancelados
           ? pedidosAtualData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
           : pedidosAtualData;
 
-        const pedidosAnteriorFiltrados = excluirCancelados
-          ? pedidosAnteriorData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
-          : pedidosAnteriorData;
+        const pedidosYoYFiltrados = excluirCancelados
+          ? pedidosYoYData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
+          : pedidosYoYData;
 
         const faturamento = pedidosFiltrados.reduce((sum, p) => sum + (p.valor_total || 0), 0);
-        const faturamentoAnterior = pedidosAnteriorFiltrados.reduce((sum, p) => sum + (p.valor_total || 0), 0);
+        const faturamentoYoY = pedidosYoYFiltrados.reduce((sum, p) => sum + (p.valor_total || 0), 0);
         const pecasVendidas = pedidosFiltrados.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
-        const pecasAnterior = pedidosAnteriorFiltrados.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
+        const pecasYoY = pedidosYoYFiltrados.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
         const pedidosPendentes = pedidosAtualData.filter(p => p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO").length;
-        const pedidosAnteriorPendentes = pedidosAnteriorData.filter(p => p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO").length;
+        const pedidosYoYPendentes = pedidosYoYData.filter(p => p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO").length;
 
         const producaoData = producao.data || [];
-        const producaoAnteriorData = producaoAnterior.data || [];
+        const producaoYoYData = producaoYoY.data || [];
         const producaoAtiva = producaoData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
-        const producaoAnteriorAtiva = producaoAnteriorData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
+        const producaoYoYAtiva = producaoYoYData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
 
         // Tendência de vendas (grouped by tipoAgrupamento)
         const vendasAgrupadas: Record<string, { valor: number; pedidos: number; pecas: number; data: Date }> = {};
@@ -480,13 +486,14 @@ export function useDashboardData(
         setData({
           kpis: {
             faturamento,
-            faturamentoAnterior,
+            faturamentoYoY,
             pecasVendidas,
-            pecasAnterior,
+            pecasYoY,
             pedidosPendentes,
-            pedidosAnterior: pedidosAnteriorPendentes,
+            pedidosYoY: pedidosYoYPendentes,
             producaoAtiva,
-            producaoAnterior: producaoAnteriorAtiva,
+            producaoYoY: producaoYoYAtiva,
+            anoPassado,
           },
           tendenciaVendas,
           estoqueBaixo,
