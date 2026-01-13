@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -185,6 +185,7 @@ const savePersistedFilters = (filters: PersistedFilters): void => {
 export default function PedidosCriados() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { removePedido, updatePedido, getPedidoById } = usePedidos();
   const { itens: estoqueItens, updateItem: updateEstoqueItem } = useEstoque();
   
@@ -210,8 +211,15 @@ export default function PedidosCriados() {
     persistedFilters.endDate ? new Date(persistedFilters.endDate) : undefined
   );
   
-  // Advanced filters - carregar do localStorage
-  const [filterStatusPagamento, setFilterStatusPagamento] = useState(persistedFilters.filterStatusPagamento);
+  // Advanced filters - priorizar URL sobre localStorage
+  const [filterStatusPagamento, setFilterStatusPagamento] = useState(() => {
+    const urlStatus = searchParams.get('status');
+    if (urlStatus) {
+      const statuses = urlStatus.split(',');
+      return statuses[0] || 'all';
+    }
+    return persistedFilters.filterStatusPagamento;
+  });
   const [filterStatusPedido, setFilterStatusPedido] = useState(persistedFilters.filterStatusPedido);
   const [filterStatusEntrega, setFilterStatusEntrega] = useState(persistedFilters.filterStatusEntrega);
   const [filterModelo, setFilterModelo] = useState(persistedFilters.filterModelo);

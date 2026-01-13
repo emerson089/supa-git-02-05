@@ -240,7 +240,7 @@ export default function Dashboard() {
       bgColor: "bg-amber-100",
       invertVariation: true,
       clickable: true,
-      onClick: () => navigate("/pedidos-criados?status=PENDENTE,INCOMPLETO"),
+      onClick: () => navigate("/pedidos/criados?status=PENDENTE,INCOMPLETO"),
       showBruto: false,
     },
     {
