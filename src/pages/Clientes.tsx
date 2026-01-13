@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useClientesContext, Cliente } from '@/contexts/ClientesContext';
 import { useClientesCRM, getClienteStatus, hasRiskAlert, ClienteCRMStats } from '@/hooks/useClientesCRM';
+import { useClientes as useClientesRaw } from '@/hooks/useClientesData';
 import { ImportCSVModal } from '@/components/clientes/ImportCSVModal';
 import { ClearDataModal } from '@/components/clientes/ClearDataModal';
 import { WhatsAppButton } from '@/components/clientes/WhatsAppButton';
@@ -51,7 +52,7 @@ const emptyCliente = {
   excursao: '',
 };
 
-type Ordenacao = 'nome' | 'comprador' | 'ultima';
+type Ordenacao = 'nome' | 'comprador' | 'ultima' | 'recente';
 type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'inativo' | 'risco';
 
 function formatCurrency(value: number): string {
@@ -61,6 +62,7 @@ function formatCurrency(value: number): string {
 export default function Clientes() {
   const isMobile = useIsMobile();
   const { clientes, isLoading, addCliente, updateCliente, removeCliente } = useClientesContext();
+  const { data: clientesDB } = useClientesRaw();
   const { data: crmData, isLoading: crmLoading } = useClientesCRM();
   const [busca, setBusca] = useState('');
   const [ordenacao, setOrdenacao] = useState<Ordenacao>('nome');
@@ -131,12 +133,19 @@ export default function Clientes() {
           const dateA = statsA?.ultimaCompra?.getTime() || 0;
           const dateB = statsB?.ultimaCompra?.getTime() || 0;
           return dateB - dateA;
+        case 'recente':
+          // Get created_at from raw DB data
+          const clienteDbA = clientesDB?.find(c => c.id === a.id);
+          const clienteDbB = clientesDB?.find(c => c.id === b.id);
+          const createdA = clienteDbA ? new Date(clienteDbA.created_at).getTime() : 0;
+          const createdB = clienteDbB ? new Date(clienteDbB.created_at).getTime() : 0;
+          return createdB - createdA; // Most recent first
         case 'nome':
         default:
           return a.nome.localeCompare(b.nome);
       }
     });
-  }, [clientes, busca, filtroStatus, ordenacao, crmData]);
+  }, [clientes, busca, filtroStatus, ordenacao, crmData, clientesDB]);
 
   const handleOpenNew = () => {
     setEditingCliente(null);
@@ -212,14 +221,26 @@ export default function Clientes() {
       return;
     }
 
-    const headers = ['Nome', 'Telefone', 'Cidade', 'Estado', 'Excursão'];
+    const headers = ['Nome', 'Telefone', 'Cidade', 'Estado', 'Excursão', 'Data Cadastro', 'Hora Cadastro'];
     const csvRows = [
       headers.join(','),
-      ...clientes.map(c => 
-        [c.nome, c.telefone, c.cidade, c.estado, c.excursao]
+      ...clientes.map(c => {
+        // Get the raw created_at from DB data
+        const clienteDb = clientesDB?.find(db => db.id === c.id);
+        const createdAt = clienteDb ? new Date(clienteDb.created_at) : new Date();
+        
+        return [
+          c.nome, 
+          c.telefone, 
+          c.cidade, 
+          c.estado, 
+          c.excursao,
+          format(createdAt, 'dd/MM/yyyy'),
+          format(createdAt, 'HH:mm:ss')
+        ]
           .map(field => `"${(field || '').replace(/"/g, '""')}"`)
-          .join(',')
-      )
+          .join(',');
+      })
     ];
 
     const csvContent = csvRows.join('\n');
@@ -365,6 +386,7 @@ export default function Clientes() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="nome">Nome (A-Z)</SelectItem>
+              <SelectItem value="recente">Cadastro (Mais Recente)</SelectItem>
               <SelectItem value="comprador">Maior Comprador</SelectItem>
               <SelectItem value="ultima">Última Compra</SelectItem>
             </SelectContent>

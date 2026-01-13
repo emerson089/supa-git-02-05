@@ -1,4 +1,4 @@
-import { Search, LayoutGrid, List, Plus, RefreshCw } from 'lucide-react';
+import { Search, LayoutGrid, List, Plus, RefreshCw, Download, Upload } from 'lucide-react';
 import { ViewMode } from '@/types/production';
 
 interface ProductionHeaderProps {
@@ -8,6 +8,8 @@ interface ProductionHeaderProps {
   onViewModeChange: (mode: ViewMode) => void;
   onNewLot: () => void;
   onRefresh?: () => void;
+  onExport?: () => void;
+  onImport?: () => void;
   loading?: boolean;
   totalLots?: number;
 }
@@ -19,6 +21,8 @@ export function ProductionHeader({
   onViewModeChange,
   onNewLot,
   onRefresh,
+  onExport,
+  onImport,
   loading,
   totalLots = 0
 }: ProductionHeaderProps) {
@@ -33,7 +37,7 @@ export function ProductionHeader({
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         {/* Refresh Button */}
         {onRefresh && (
           <button
@@ -43,6 +47,28 @@ export function ProductionHeader({
             title="Atualizar"
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          </button>
+        )}
+
+        {/* Export Button */}
+        {onExport && (
+          <button
+            onClick={onExport}
+            className="p-2.5 rounded-xl neu-button text-muted-foreground hover:text-foreground transition-colors"
+            title="Exportar CSV"
+          >
+            <Download size={18} />
+          </button>
+        )}
+
+        {/* Import Button */}
+        {onImport && (
+          <button
+            onClick={onImport}
+            className="p-2.5 rounded-xl neu-button text-muted-foreground hover:text-foreground transition-colors"
+            title="Importar CSV"
+          >
+            <Upload size={18} />
           </button>
         )}
 

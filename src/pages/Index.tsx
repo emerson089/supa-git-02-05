@@ -13,12 +13,16 @@ import { MobileKanban } from '@/components/production/MobileKanban';
 import { ListView } from '@/components/production/ListView';
 import { CustosLoteModal } from '@/components/production/CustosLoteModal';
 import { AprontamentoChecklist, isChecklistComplete } from '@/components/production/AprontamentoChecklist';
+import { ImportProducaoCSVModal } from '@/components/production/ImportProducaoCSVModal';
 import ProducaoForm from '@/components/producao/ProducaoForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+import { Download, Upload } from 'lucide-react';
 
 const Index = () => {
   const { integrarProducao } = useEstoque();
@@ -38,6 +42,9 @@ const Index = () => {
   // Checklist modal
   const [showChecklistModal, setShowChecklistModal] = useState(false);
   const [selectedLoteForChecklist, setSelectedLoteForChecklist] = useState<ProducaoData | null>(null);
+  
+  // Import modal
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // Fetch data from database
   const fetchData = useCallback(async () => {
@@ -227,6 +234,45 @@ const Index = () => {
     setShowForm(true);
   };
 
+  // Export production to CSV
+  const handleExportProducao = () => {
+    if (lots.length === 0) {
+      toast.error('Não há lotes para exportar.');
+      return;
+    }
+
+    const headers = ['Referência', 'Modelo', 'Quantidade', 'Etapa Atual', 'Responsável', 'Prioridade', 'Peças Concluídas', 'Observações', 'Data Criação'];
+    
+    const rows = lots.map(lot => [
+      lot.id_producao,
+      lot.modelo_nome_cache || '',
+      lot.quantidade.toString(),
+      lot.processo_atual,
+      lot.responsavel || '',
+      lot.prioridade || 'normal',
+      (lot.pecas_concluidas || 0).toString(),
+      lot.observacoes || '',
+      format(new Date(lot.created_date), 'dd/MM/yyyy HH:mm')
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `producao_${format(new Date(), 'dd-MM-yyyy')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`${lots.length} lotes exportados com sucesso!`);
+  };
+
   // Filter lots
   const filteredLots = lots.filter(l =>
     (l.modelo_nome_cache || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -254,6 +300,8 @@ const Index = () => {
           onViewModeChange={setViewMode}
           onNewLot={handleNewLot}
           onRefresh={fetchData}
+          onExport={handleExportProducao}
+          onImport={() => setShowImportModal(true)}
           loading={loading}
           totalLots={lots.length}
         />
@@ -328,6 +376,13 @@ const Index = () => {
           onUpdate={handleChecklistUpdate}
         />
       )}
+
+      {/* Import Modal */}
+      <ImportProducaoCSVModal
+        open={showImportModal}
+        onOpenChange={setShowImportModal}
+        onSuccess={fetchData}
+      />
       
       {/* Bottom Navigation for Mobile */}
       <BottomNavigation />
