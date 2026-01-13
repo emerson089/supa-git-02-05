@@ -1,4 +1,4 @@
-import { ProducaoData } from '@/entities/Producao';
+import { ProducaoData, ChecklistAprontamento } from '@/entities/Producao';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,8 @@ import {
   DollarSign,
   AlertTriangle,
   AlertCircle,
-  Clock
+  Clock,
+  ClipboardCheck
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -30,8 +31,10 @@ interface MobileProductionCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onManageCosts?: () => void;
+  onOpenChecklist?: () => void;
   isFirstStage: boolean;
   isLastStage: boolean;
+  currentStage: string;
 }
 
 const priorityConfig = {
@@ -59,8 +62,10 @@ export function MobileProductionCard({
   onEdit,
   onDelete,
   onManageCosts,
+  onOpenChecklist,
   isFirstStage,
   isLastStage,
+  currentStage,
 }: MobileProductionCardProps) {
   const priority = (lot.prioridade as keyof typeof priorityConfig) || 'normal';
   const config = priorityConfig[priority];
@@ -129,6 +134,12 @@ export function MobileProductionCard({
                     Custos
                   </DropdownMenuItem>
                 )}
+                {currentStage === 'Aprontamento' && onOpenChecklist && (
+                  <DropdownMenuItem onClick={onOpenChecklist}>
+                    <ClipboardCheck className="h-4 w-4 mr-2" />
+                    Checklist
+                  </DropdownMenuItem>
+                )}
                 {onDelete && (
                   <DropdownMenuItem onClick={onDelete} className="text-destructive">
                     <Trash2 className="h-4 w-4 mr-2" />
@@ -162,6 +173,31 @@ export function MobileProductionCard({
               {completedPercentage}%
             </span>
           </div>
+
+          {/* Checklist indicator for Aprontamento */}
+          {currentStage === 'Aprontamento' && lot.checklist_aprontamento && (
+            <div className="mt-2">
+              {(() => {
+                const checklist = lot.checklist_aprontamento as ChecklistAprontamento;
+                const items = ['botao', 'bolsa', 'cordao', 'tag'] as const;
+                const completed = items.filter(item => checklist[item]).length;
+                return (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={onOpenChecklist}
+                    className={cn(
+                      "w-full h-7 text-xs",
+                      completed === 4 && "border-emerald-500 text-emerald-600 bg-emerald-50"
+                    )}
+                  >
+                    <ClipboardCheck className="h-3 w-3 mr-1.5" />
+                    Checklist: {completed}/4
+                  </Button>
+                );
+              })()}
+            </div>
+          )}
         </div>
       </div>
 

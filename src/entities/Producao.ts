@@ -2,6 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { ChecklistAprontamento } from "@/types/production";
 import { Json } from "@/integrations/supabase/types";
 
+export type { ChecklistAprontamento };
+
 export type PrioridadeType = 'urgente' | 'atencao' | 'normal';
 
 export interface ProducaoData {
