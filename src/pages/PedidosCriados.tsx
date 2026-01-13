@@ -71,6 +71,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay, parse } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -217,6 +219,9 @@ export default function PedidosCriados() {
   // CSV import modal
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
+  const [exportingCSV, setExportingCSV] = useState(false);
+  
+  const { user } = useAuth();
 
   // Use paginated hook for data
   const { data: paginatedResult, isLoading } = usePedidosPaginated({
@@ -587,35 +592,120 @@ export default function PedidosCriados() {
     toast.success('PDF gerado com sucesso!');
   };
 
-  // CSV Export
-  const exportCSV = () => {
-    const headers = ['Data', 'Cliente', 'Itens', 'Qtd Total', 'Valor Total', 'Status Pagamento', 'Status Pedido', 'Status Entrega'];
+  // CSV Export - Fetch ALL filtered pedidos from database
+  const exportCSV = async () => {
+    if (!user) {
+      toast.error('Usuário não autenticado');
+      return;
+    }
     
-    const rows = pedidosList.map(pedido => [
-      format(new Date(pedido.created_at), "dd/MM/yyyy"),
-      pedido.cliente_nome,
-      (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '),
-      (pedido.total_pecas || 0).toString(),
-      (pedido.valor_total || 0).toFixed(2),
-      pedido.status_pagamento || 'Pendente',
-      pedido.status_pedido || 'Nao separado',
-      pedido.status_entrega || 'Pend. Entrega'
-    ]);
+    setExportingCSV(true);
     
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
-    
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `pedidos_${format(new Date(), 'dd-MM-yyyy')}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    toast.success(`${pedidosList.length} pedidos exportados com sucesso!`);
-};
+    try {
+      // Fetch all pedidos with same filters applied
+      const PAGE_SIZE = 1000;
+      let allPedidos: PedidoPaginatedDB[] = [];
+      let from = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        let query = supabase
+          .from('pedidos')
+          .select(`
+            *,
+            pedido_itens (
+              id,
+              produto_nome,
+              quantidade,
+              valor_unitario
+            )
+          `)
+          .order('created_at', { ascending: sortDirection === 'asc' });
+        
+        // Apply filters
+        if (searchTerm) {
+          query = query.or(`cliente_nome.ilike.%${searchTerm}%,telefone.ilike.%${searchTerm}%,cidade.ilike.%${searchTerm}%`);
+        }
+        if (filterStatusPagamento !== 'all') {
+          query = query.eq('status_pagamento', filterStatusPagamento);
+        }
+        if (filterStatusPedido !== 'all') {
+          query = query.eq('status_pedido', filterStatusPedido);
+        }
+        if (filterStatusEntrega !== 'all') {
+          query = query.eq('status_entrega', filterStatusEntrega);
+        }
+        if (startDate) {
+          query = query.gte('created_at', startOfDay(startDate).toISOString());
+        }
+        if (endDate) {
+          query = query.lte('created_at', endOfDay(endDate).toISOString());
+        }
+        
+        query = query.range(from, from + PAGE_SIZE - 1);
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          // Filter by model if needed (client-side)
+          let filteredData = data as PedidoPaginatedDB[];
+          if (filterModelo) {
+            const modeloLower = filterModelo.toLowerCase();
+            filteredData = filteredData.filter(p => 
+              p.pedido_itens?.some(i => i.produto_nome.toLowerCase().includes(modeloLower))
+            );
+          }
+          allPedidos = [...allPedidos, ...filteredData];
+          from += PAGE_SIZE;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      if (allPedidos.length === 0) {
+        toast.error('Nenhum pedido encontrado para exportar');
+        return;
+      }
+      
+      const headers = ['Data', 'Cliente', 'Telefone', 'Cidade', 'Estado', 'Itens', 'Qtd Total', 'Valor Total', 'Status Pagamento', 'Status Pedido', 'Status Entrega'];
+      
+      const rows = allPedidos.map(pedido => [
+        format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm"),
+        pedido.cliente_nome,
+        pedido.telefone || '',
+        pedido.cidade || '',
+        pedido.estado || '',
+        (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '),
+        (pedido.total_pecas || 0).toString(),
+        (pedido.valor_total || 0).toFixed(2),
+        pedido.status_pagamento || 'Pendente',
+        pedido.status_pedido || 'Nao separado',
+        pedido.status_entrega || 'Pend. Entrega'
+      ]);
+      
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+      
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pedidos_${format(new Date(), 'dd-MM-yyyy')}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${allPedidos.length} pedidos exportados com sucesso!`);
+    } catch (error) {
+      console.error('Erro ao exportar CSV:', error);
+      toast.error('Erro ao exportar pedidos');
+    } finally {
+      setExportingCSV(false);
+    }
+  };
 
 const formatNumber = (value: number) => {
   return new Intl.NumberFormat('pt-BR').format(value);

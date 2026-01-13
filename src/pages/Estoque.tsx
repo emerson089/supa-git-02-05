@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX } from 'lucide-react';
+import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { supabase } from '@/integrations/supabase/client';
@@ -103,6 +103,43 @@ export default function Estoque() {
 
   // Filtro rápido
   const [filtroRapido, setFiltroRapido] = useState<FiltroRapido>('todos');
+
+  // Export function
+  const handleExportModelos = () => {
+    if (itensFiltrados.length === 0) {
+      toast.error('Não há modelos para exportar.');
+      return;
+    }
+
+    const headers = ['Nome', 'Categoria', 'Quantidade', 'Unidade', 'Preço Unitário', 'Localização'];
+    
+    const csvRows = [
+      headers.join(','),
+      ...itensFiltrados.map(item => 
+        [
+          item.nome,
+          item.categoria,
+          item.quantidade.toString(),
+          item.unidade,
+          (item.precoUnitario || 0).toFixed(2),
+          item.localizacao || ''
+        ].map(field => `"${(field || '').replace(/"/g, '""')}"`).join(',')
+      )
+    ];
+
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `modelos_estoque_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`${itensFiltrados.length} modelos exportados com sucesso!`);
+  };
 
   const materiasPrimas = getMateriasPrimas();
   const produtosAcabados = getProdutosAcabados();
@@ -590,6 +627,14 @@ export default function Estoque() {
 
                 {activeTab === 'produto_acabado' && (
                   <div className="flex items-center gap-3">
+                    <Button 
+                      onClick={handleExportModelos}
+                      variant="outline"
+                      className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50"
+                    >
+                      <Download size={18} />
+                      Exportar Modelos
+                    </Button>
                     <Button 
                       onClick={() => setShowImportModal(true)}
                       variant="outline"
