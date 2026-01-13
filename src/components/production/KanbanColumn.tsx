@@ -1,5 +1,16 @@
 import { useDroppable } from '@dnd-kit/core';
-import { Scissors, Shirt, Droplets, Tag, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { 
+  Scissors, 
+  Shirt, 
+  Droplets, 
+  Tag, 
+  CheckCircle2, 
+  AlertTriangle,
+  Layers,
+  Zap,
+  Sparkles,
+  ClipboardCheck
+} from 'lucide-react';
 import { ProducaoData } from '@/entities/Producao';
 import { Stage } from '@/types/production';
 import { ProductionCard } from './ProductionCard';
@@ -11,6 +22,10 @@ const iconMap: Record<string, React.ElementType> = {
   Droplets,
   Tag,
   CheckCircle2,
+  Layers,
+  Zap,
+  Sparkles,
+  ClipboardCheck,
 };
 
 interface KanbanColumnProps {
@@ -20,6 +35,7 @@ interface KanbanColumnProps {
   onEditCard?: (lot: ProducaoData) => void;
   onDeleteCard?: (lot: ProducaoData) => void;
   onManageCosts?: (lot: ProducaoData) => void;
+  onOpenChecklist?: (lot: ProducaoData) => void;
   isFirstStage: boolean;
   isLastStage: boolean;
 }
@@ -33,6 +49,7 @@ export function KanbanColumn({
   onEditCard,
   onDeleteCard,
   onManageCosts,
+  onOpenChecklist,
   isFirstStage, 
   isLastStage 
 }: KanbanColumnProps) {
@@ -100,8 +117,10 @@ export function KanbanColumn({
             onEdit={() => onEditCard?.(lot)}
             onDelete={() => onDeleteCard?.(lot)}
             onManageCosts={() => onManageCosts?.(lot)}
+            onOpenChecklist={() => onOpenChecklist?.(lot)}
             isFirstStage={isFirstStage}
             isLastStage={isLastStage}
+            currentStage={stage.id}
           />
         ))}
         

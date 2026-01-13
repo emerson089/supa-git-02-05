@@ -1,5 +1,5 @@
 import { STAGES } from '@/data/production-data';
-import { Scissors, Shirt, Droplets, Tag, CheckCircle2 } from 'lucide-react';
+import { Scissors, Shirt, Droplets, Tag, CheckCircle2, Layers, Zap, Sparkles, ClipboardCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
@@ -9,6 +9,10 @@ const iconMap: Record<string, React.ElementType> = {
   Droplets,
   Tag,
   CheckCircle2,
+  Layers,
+  Zap,
+  Sparkles,
+  ClipboardCheck,
 };
 
 interface StageTabBarProps {

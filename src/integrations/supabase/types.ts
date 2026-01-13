@@ -351,8 +351,36 @@ export type Database = {
           },
         ]
       }
+      prestadores_servico: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          etapas: string[]
+          id: string
+          nome: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          etapas: string[]
+          id?: string
+          nome: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          etapas?: string[]
+          id?: string
+          nome?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       producao: {
         Row: {
+          checklist_aprontamento: Json | null
           created_date: string
           id: string
           id_producao: string
@@ -370,6 +398,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          checklist_aprontamento?: Json | null
           created_date?: string
           id?: string
           id_producao: string
@@ -387,6 +416,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          checklist_aprontamento?: Json | null
           created_date?: string
           id?: string
           id_producao?: string

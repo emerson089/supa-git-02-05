@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ViewMode } from '@/types/production';
+import { ViewMode, ChecklistAprontamento } from '@/types/production';
 import { Producao, ProducaoData, ProducaoInsert, ProducaoUpdate } from '@/entities/Producao';
 import { ProducaoLog } from '@/entities/ProducaoLog';
 import { STAGES, getNextStage, getPrevStage } from '@/data/production-data';
@@ -12,6 +12,7 @@ import { KanbanBoard } from '@/components/production/KanbanBoard';
 import { MobileKanban } from '@/components/production/MobileKanban';
 import { ListView } from '@/components/production/ListView';
 import { CustosLoteModal } from '@/components/production/CustosLoteModal';
+import { AprontamentoChecklist, isChecklistComplete } from '@/components/production/AprontamentoChecklist';
 import ProducaoForm from '@/components/producao/ProducaoForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
@@ -33,6 +34,10 @@ const Index = () => {
   // Costs modal
   const [showCustosModal, setShowCustosModal] = useState(false);
   const [selectedLoteForCustos, setSelectedLoteForCustos] = useState<ProducaoData | null>(null);
+  
+  // Checklist modal
+  const [showChecklistModal, setShowChecklistModal] = useState(false);
+  const [selectedLoteForChecklist, setSelectedLoteForChecklist] = useState<ProducaoData | null>(null);
 
   // Fetch data from database
   const fetchData = useCallback(async () => {
@@ -109,6 +114,17 @@ const Index = () => {
   const handleStageChange = async (lot: ProducaoData, newStage: string) => {
     const currentStage = lot.processo_atual;
 
+    // Validação: Se movendo de Aprontamento para Vendas, verifica checklist
+    if (currentStage === 'Aprontamento' && newStage === 'Vendas') {
+      const checklist = lot.checklist_aprontamento;
+      if (!isChecklistComplete(checklist)) {
+        toast.error('Complete o checklist de Aprontamento antes de mover para Vendas!');
+        setSelectedLoteForChecklist(lot);
+        setShowChecklistModal(true);
+        return;
+      }
+    }
+
     // Optimistic update
     const originalLots = [...lots];
     setLots(prev => prev.map(l => 
@@ -129,8 +145,8 @@ const Index = () => {
         responsavel: lot.responsavel
       }));
 
-      // Quando move para "Concluído" (Estoque/Pronto), integra ao estoque
-      if (newStage === 'Concluído' && !lot.integrado_estoque) {
+      // Quando move para "Vendas" (Estoque/Pronto), integra ao estoque
+      if (newStage === 'Vendas' && !lot.integrado_estoque) {
         // Buscar preço de venda do lote
         let precoVenda = 0;
         try {
@@ -174,6 +190,23 @@ const Index = () => {
       toast.error("Erro ao mover lote");
       setLots(originalLots); // Revert on error
     }
+  };
+
+  // Handle checklist update
+  const handleChecklistUpdate = (checklist: ChecklistAprontamento) => {
+    if (selectedLoteForChecklist) {
+      setLots(prev => prev.map(l => 
+        l.id === selectedLoteForChecklist.id 
+          ? { ...l, checklist_aprontamento: checklist } 
+          : l
+      ));
+    }
+  };
+
+  // Handle open checklist
+  const handleOpenChecklist = (lot: ProducaoData) => {
+    setSelectedLoteForChecklist(lot);
+    setShowChecklistModal(true);
   };
 
   // Handle edit card
@@ -235,6 +268,7 @@ const Index = () => {
                 onEditCard={handleEditCard}
                 onDeleteCard={handleDeleteCard}
                 onManageCosts={handleManageCosts}
+                onOpenChecklist={handleOpenChecklist}
               />
             ) : (
               <KanbanBoard 
@@ -244,6 +278,7 @@ const Index = () => {
                 onEditCard={handleEditCard}
                 onDeleteCard={handleDeleteCard}
                 onManageCosts={handleManageCosts}
+                onOpenChecklist={handleOpenChecklist}
               />
             )
           ) : (
@@ -280,6 +315,19 @@ const Index = () => {
           setSelectedLoteForCustos(null);
         }}
       />
+
+      {/* Checklist Modal */}
+      {selectedLoteForChecklist && (
+        <AprontamentoChecklist
+          lot={selectedLoteForChecklist}
+          open={showChecklistModal}
+          onClose={() => {
+            setShowChecklistModal(false);
+            setSelectedLoteForChecklist(null);
+          }}
+          onUpdate={handleChecklistUpdate}
+        />
+      )}
       
       {/* Bottom Navigation for Mobile */}
       <BottomNavigation />
