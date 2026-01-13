@@ -137,12 +137,14 @@ export default function Dashboard() {
     return "Período";
   };
 
+  const anoPassado = data.kpis.anoPassado;
+
   const kpiCards = [
     {
       title: "Faturamento Total",
       value: formatCurrency(data.kpis.faturamento),
       icon: Banknote,
-      variation: calcVariation(data.kpis.faturamento, data.kpis.faturamentoAnterior),
+      variation: calcVariation(data.kpis.faturamento, data.kpis.faturamentoYoY),
       color: "text-emerald-600",
       bgColor: "bg-emerald-100",
       clickable: false,
@@ -152,7 +154,7 @@ export default function Dashboard() {
       title: "Peças Vendidas",
       value: `${formatNumber(data.kpis.pecasVendidas)} un`,
       icon: Package,
-      variation: calcVariation(data.kpis.pecasVendidas, data.kpis.pecasAnterior),
+      variation: calcVariation(data.kpis.pecasVendidas, data.kpis.pecasYoY),
       color: "text-blue-600",
       bgColor: "bg-blue-100",
       clickable: false,
@@ -162,7 +164,7 @@ export default function Dashboard() {
       title: "Pedidos Pendentes",
       value: formatNumber(data.kpis.pedidosPendentes),
       icon: AlertCircle,
-      variation: calcVariation(data.kpis.pedidosPendentes, data.kpis.pedidosAnterior),
+      variation: calcVariation(data.kpis.pedidosPendentes, data.kpis.pedidosYoY),
       color: "text-amber-600",
       bgColor: "bg-amber-100",
       invertVariation: true,
@@ -174,7 +176,7 @@ export default function Dashboard() {
       title: "Produção Ativa",
       value: `${formatNumber(data.kpis.producaoAtiva)} pçs`,
       icon: Factory,
-      variation: calcVariation(data.kpis.producaoAtiva, data.kpis.producaoAnterior),
+      variation: calcVariation(data.kpis.producaoAtiva, data.kpis.producaoYoY),
       color: "text-violet-600",
       bgColor: "bg-violet-100",
       clickable: true,
@@ -440,7 +442,9 @@ export default function Dashboard() {
                       }
                       <span>{kpi.variation.value.toFixed(1)}%</span>
                     </div>
-                    <span className="text-[8px] sm:text-[10px] text-muted-foreground/60 mt-0.5 hidden sm:block">vs. anterior</span>
+                    <span className="text-[8px] sm:text-[10px] text-muted-foreground/50 mt-0.5">
+                      vs. mesmo período de {anoPassado}
+                    </span>
                   </div>
                 </div>
               </CardContent>
