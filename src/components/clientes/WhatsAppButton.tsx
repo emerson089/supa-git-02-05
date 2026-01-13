@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, forwardRef } from 'react';
 import { MessageCircle, ShoppingBag, RefreshCw, Clock, Copy } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
@@ -98,7 +98,8 @@ const templates = [
   },
 ];
 
-export function WhatsAppButton({ cliente, stats }: WhatsAppButtonProps) {
+export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>(
+  function WhatsAppButton({ cliente, stats }, ref) {
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -374,4 +375,6 @@ export function WhatsAppButton({ cliente, stats }: WhatsAppButtonProps) {
       {renderMessageModal()}
     </>
   );
-}
+});
+
+WhatsAppButton.displayName = 'WhatsAppButton';

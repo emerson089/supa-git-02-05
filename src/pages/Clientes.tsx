@@ -420,7 +420,7 @@ export default function Clientes() {
 
                 {/* Action Buttons - Desktop: hover, Mobile: always visible */}
                 <div className={cn(
-                  "absolute top-12 right-4 flex gap-2 transition-opacity",
+                  "absolute top-12 right-4 flex gap-2 transition-opacity z-50",
                   isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                 )}>
                   <WhatsAppButton cliente={cliente} stats={stats} />
