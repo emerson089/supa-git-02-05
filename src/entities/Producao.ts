@@ -70,7 +70,6 @@ export const Producao = {
         .limit(200);
 
       if (error) {
-        if (import.meta.env.DEV) console.error("Error fetching references:", error);
         return String(Date.now()).slice(-6);
       }
 
@@ -98,7 +97,6 @@ export const Producao = {
       .limit(limit);
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error fetching producao:", error);
       throw error;
     }
 
@@ -113,7 +111,6 @@ export const Producao = {
       .maybeSingle();
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error fetching producao:", error);
       throw error;
     }
 
@@ -131,7 +128,6 @@ export const Producao = {
       .single();
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error creating producao:", error);
       // Handle duplicate key error with user-friendly message
       if (error.code === '23505') {
         const duplicateError = new Error(`Já existe um lote com a referência "${producao.id_producao}". Por favor, use outra referência.`);
@@ -153,7 +149,6 @@ export const Producao = {
       .single();
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error updating producao:", error);
       throw error;
     }
 
@@ -169,7 +164,6 @@ export const Producao = {
       .single();
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error updating checklist:", error);
       throw error;
     }
 
@@ -183,7 +177,6 @@ export const Producao = {
       .eq("id", id);
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error deleting producao:", error);
       throw error;
     }
   }

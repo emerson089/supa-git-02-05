@@ -27,7 +27,6 @@ export const Produto = {
       .limit(limit);
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error fetching produtos:", error);
       throw error;
     }
 
@@ -42,7 +41,6 @@ export const Produto = {
       .maybeSingle();
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error fetching produto:", error);
       throw error;
     }
 
@@ -60,7 +58,6 @@ export const Produto = {
       .single();
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error creating produto:", error);
       throw error;
     }
 
