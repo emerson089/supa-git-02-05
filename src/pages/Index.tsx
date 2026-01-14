@@ -24,6 +24,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { Download, Upload } from 'lucide-react';
+import jsPDF from 'jspdf';
+import { getSignedUrl, getImageAsBase64 } from '@/utils/imageUtils';
 
 const Index = () => {
   const { integrarProducao } = useEstoque();
@@ -284,6 +286,121 @@ const Index = () => {
     toast.success(`${lots.length} lotes exportados com sucesso!`);
   };
 
+  // Export production to PDF with images
+  const handleExportProducaoPDF = async () => {
+    if (lots.length === 0) {
+      toast.error('Não há lotes para exportar.');
+      return;
+    }
+
+    toast.info('Gerando PDF com imagens... Isso pode levar alguns segundos.');
+    
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      // Title
+      doc.setFontSize(18);
+      doc.text('Lotes de Produção', pageWidth / 2, 20, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Exportado em: ${format(new Date(), 'dd/MM/yyyy HH:mm')} - ${lots.length} lotes`, pageWidth / 2, 28, { align: 'center' });
+      
+      let yPosition = 45;
+      const itemsPerRow = 3;
+      const cardWidth = 55;
+      const cardHeight = 72;
+      const imageHeight = 38;
+      const margin = 15;
+      const spacing = 5;
+      
+      // Stage colors
+      const stageColors: Record<string, [number, number, number]> = {
+        'Corte': [59, 130, 246],
+        'Preparação': [168, 85, 247],
+        'Costura': [34, 197, 94],
+        'Acabamento': [249, 115, 22],
+        'Aprontamento': [236, 72, 153],
+        'Vendas': [20, 184, 166],
+      };
+      
+      for (let i = 0; i < lots.length; i++) {
+        const lot = lots[i];
+        const col = i % itemsPerRow;
+        const xPosition = margin + (col * (cardWidth + spacing));
+        
+        // New page if needed
+        if (i > 0 && col === 0 && yPosition + cardHeight > pageHeight - 20) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        
+        // Draw card background
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(xPosition, yPosition, cardWidth, cardHeight, 3, 3, 'F');
+        
+        // Stage badge
+        const stageColor = stageColors[lot.processo_atual] || [100, 100, 100];
+        doc.setFillColor(stageColor[0], stageColor[1], stageColor[2]);
+        doc.roundedRect(xPosition + 2, yPosition + 2, cardWidth - 4, 6, 1, 1, 'F');
+        doc.setFontSize(5);
+        doc.setTextColor(255, 255, 255);
+        doc.text(lot.processo_atual, xPosition + cardWidth / 2, yPosition + 6, { align: 'center' });
+        
+        // Fetch and add image
+        if (lot.imagem_url) {
+          try {
+            const signedUrl = await getSignedUrl(lot.imagem_url);
+            if (signedUrl) {
+              const base64 = await getImageAsBase64(signedUrl);
+              if (base64) {
+                doc.addImage(base64, 'JPEG', xPosition + 2, yPosition + 10, cardWidth - 4, imageHeight - 4, undefined, 'MEDIUM');
+              }
+            }
+          } catch (e) {
+            console.error('Erro ao carregar imagem:', e);
+          }
+        } else {
+          // Placeholder for no image
+          doc.setFillColor(220, 220, 220);
+          doc.rect(xPosition + 2, yPosition + 10, cardWidth - 4, imageHeight - 4, 'F');
+          doc.setFontSize(8);
+          doc.setTextColor(150, 150, 150);
+          doc.text('Sem imagem', xPosition + cardWidth / 2, yPosition + imageHeight / 2 + 6, { align: 'center' });
+        }
+        
+        // Lot data
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(7);
+        doc.setFont(undefined, 'bold');
+        doc.text(lot.id_producao, xPosition + 2, yPosition + imageHeight + 12);
+        
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(6);
+        const modelo = (lot.modelo_nome_cache || 'Sem modelo').substring(0, 25);
+        doc.text(modelo, xPosition + 2, yPosition + imageHeight + 18);
+        
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Qtd: ${lot.quantidade} pçs`, xPosition + 2, yPosition + imageHeight + 24);
+        
+        if (lot.responsavel) {
+          doc.text(`Resp: ${lot.responsavel.substring(0, 15)}`, xPosition + 2, yPosition + imageHeight + 30);
+        }
+        
+        // Next row
+        if (col === itemsPerRow - 1) {
+          yPosition += cardHeight + spacing;
+        }
+      }
+      
+      doc.save(`producao_${format(new Date(), 'dd-MM-yyyy')}.pdf`);
+      toast.success(`${lots.length} lotes exportados em PDF!`);
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF. Tente novamente.');
+    }
+  };
+
   // Export costs to CSV
   const handleExportCustos = async () => {
     try {
@@ -419,6 +536,7 @@ const Index = () => {
           onNewLot={handleNewLot}
           onRefresh={fetchData}
           onExport={handleExportProducao}
+          onExportPDF={handleExportProducaoPDF}
           onImport={() => setShowImportModal(true)}
           onExportCustos={handleExportCustos}
           onImportCustos={() => setShowImportCustosModal(true)}

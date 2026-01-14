@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download, FileText, Image, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,6 +23,8 @@ import { MobileProductCard } from '@/components/estoque/MobileProductCard';
 import { EstoqueItemSchema, NovoModeloAcabadoSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { getSignedUrl, getImageAsBase64 } from '@/utils/imageUtils';
+import jsPDF from 'jspdf';
 
 type FiltroRapido = 'todos' | 'esgotado' | 'baixo';
 const statusConfig: Record<StatusEstoque, { label: string; color: string }> = {
@@ -104,7 +107,7 @@ export default function Estoque() {
   // Filtro rápido
   const [filtroRapido, setFiltroRapido] = useState<FiltroRapido>('todos');
 
-  // Export function
+  // Export CSV function
   const handleExportModelos = () => {
     if (itensFiltrados.length === 0) {
       toast.error('Não há modelos para exportar.');
@@ -139,6 +142,98 @@ export default function Estoque() {
     URL.revokeObjectURL(url);
 
     toast.success(`${itensFiltrados.length} modelos exportados com sucesso!`);
+  };
+
+  // Export PDF with images function
+  const handleExportModelosPDF = async () => {
+    if (itensFiltrados.length === 0) {
+      toast.error('Não há modelos para exportar.');
+      return;
+    }
+
+    toast.info('Gerando PDF com imagens... Isso pode levar alguns segundos.');
+    
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      // Title
+      doc.setFontSize(18);
+      doc.text('Catálogo de Modelos', pageWidth / 2, 20, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Exportado em: ${new Date().toLocaleDateString('pt-BR')} - ${itensFiltrados.length} modelos`, pageWidth / 2, 28, { align: 'center' });
+      
+      let yPosition = 45;
+      const itemsPerRow = 3;
+      const cardWidth = 55;
+      const cardHeight = 65;
+      const imageHeight = 38;
+      const margin = 15;
+      const spacing = 5;
+      
+      for (let i = 0; i < itensFiltrados.length; i++) {
+        const item = itensFiltrados[i];
+        const col = i % itemsPerRow;
+        const xPosition = margin + (col * (cardWidth + spacing));
+        
+        // New page if needed
+        if (i > 0 && col === 0 && yPosition + cardHeight > pageHeight - 20) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        
+        // Draw card background
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(xPosition, yPosition, cardWidth, cardHeight, 3, 3, 'F');
+        
+        // Fetch and add image
+        if (item.imagemUrl) {
+          try {
+            const signedUrl = await getSignedUrl(item.imagemUrl);
+            if (signedUrl) {
+              const base64 = await getImageAsBase64(signedUrl);
+              if (base64) {
+                doc.addImage(base64, 'JPEG', xPosition + 2, yPosition + 2, cardWidth - 4, imageHeight, undefined, 'MEDIUM');
+              }
+            }
+          } catch (e) {
+            console.error('Erro ao carregar imagem:', e);
+          }
+        } else {
+          // Placeholder for no image
+          doc.setFillColor(220, 220, 220);
+          doc.rect(xPosition + 2, yPosition + 2, cardWidth - 4, imageHeight, 'F');
+          doc.setFontSize(8);
+          doc.setTextColor(150, 150, 150);
+          doc.text('Sem imagem', xPosition + cardWidth / 2, yPosition + imageHeight / 2 + 2, { align: 'center' });
+        }
+        
+        // Product data
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(7);
+        const nome = item.nome.length > 30 ? item.nome.substring(0, 30) + '...' : item.nome;
+        doc.text(nome, xPosition + 2, yPosition + imageHeight + 8);
+        
+        doc.setFontSize(6);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Qtd: ${item.quantidade} ${item.unidade}`, xPosition + 2, yPosition + imageHeight + 14);
+        
+        doc.setTextColor(0, 128, 0);
+        doc.text(`R$ ${(item.precoUnitario || 0).toFixed(2)}`, xPosition + 2, yPosition + imageHeight + 20);
+        
+        // Next row
+        if (col === itemsPerRow - 1) {
+          yPosition += cardHeight + spacing;
+        }
+      }
+      
+      doc.save(`modelos_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
+      toast.success(`${itensFiltrados.length} modelos exportados em PDF!`);
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF. Tente novamente.');
+    }
   };
 
   const materiasPrimas = getMateriasPrimas();
@@ -627,14 +722,28 @@ export default function Estoque() {
 
                 {activeTab === 'produto_acabado' && (
                   <div className="flex items-center gap-3">
-                    <Button 
-                      onClick={handleExportModelos}
-                      variant="outline"
-                      className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50"
-                    >
-                      <Download size={18} />
-                      Exportar Modelos
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="outline"
+                          className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50"
+                        >
+                          <Download size={18} />
+                          Exportar Modelos
+                          <ChevronDown size={14} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={handleExportModelos} className="gap-2 cursor-pointer">
+                          <FileText size={16} />
+                          Exportar CSV (texto)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleExportModelosPDF} className="gap-2 cursor-pointer">
+                          <Image size={16} />
+                          Exportar PDF (com imagens)
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <Button 
                       onClick={() => setShowImportModal(true)}
                       variant="outline"

@@ -1,5 +1,6 @@
-import { Search, LayoutGrid, List, Plus, RefreshCw, Download, Upload, DollarSign } from 'lucide-react';
+import { Search, LayoutGrid, List, Plus, RefreshCw, Download, Upload, DollarSign, FileText, Image, ChevronDown } from 'lucide-react';
 import { ViewMode } from '@/types/production';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface ProductionHeaderProps {
   search: string;
@@ -9,6 +10,7 @@ interface ProductionHeaderProps {
   onNewLot: () => void;
   onRefresh?: () => void;
   onExport?: () => void;
+  onExportPDF?: () => void;
   onImport?: () => void;
   onExportCustos?: () => void;
   onImportCustos?: () => void;
@@ -24,6 +26,7 @@ export function ProductionHeader({
   onNewLot,
   onRefresh,
   onExport,
+  onExportPDF,
   onImport,
   onExportCustos,
   onImportCustos,
@@ -54,15 +57,33 @@ export function ProductionHeader({
           </button>
         )}
 
-        {/* Export Button */}
-        {onExport && (
-          <button
-            onClick={onExport}
-            className="p-2.5 rounded-xl neu-button text-muted-foreground hover:text-foreground transition-colors"
-            title="Exportar CSV"
-          >
-            <Download size={18} />
-          </button>
+        {/* Export Dropdown */}
+        {(onExport || onExportPDF) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="p-2.5 rounded-xl neu-button text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                title="Exportar CSV"
+              >
+                <Download size={18} />
+                <ChevronDown size={14} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {onExport && (
+                <DropdownMenuItem onClick={onExport} className="gap-2 cursor-pointer">
+                  <FileText size={16} />
+                  Exportar CSV (texto)
+                </DropdownMenuItem>
+              )}
+              {onExportPDF && (
+                <DropdownMenuItem onClick={onExportPDF} className="gap-2 cursor-pointer">
+                  <Image size={16} />
+                  Exportar PDF (com imagens)
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
 
         {/* Import Button */}
