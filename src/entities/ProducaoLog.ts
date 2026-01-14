@@ -28,7 +28,6 @@ export const ProducaoLog = {
       .order("created_at", { ascending: false });
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error fetching producao_log:", error);
       throw error;
     }
 
@@ -46,7 +45,6 @@ export const ProducaoLog = {
       .single();
 
     if (error) {
-      if (import.meta.env.DEV) console.error("Error creating producao_log:", error);
       throw error;
     }
 

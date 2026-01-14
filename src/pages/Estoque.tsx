@@ -380,8 +380,7 @@ export default function Estoque() {
 
       updateItem(productId, { imagemUrl: filePath });
       toast.success('Imagem atualizada com sucesso!');
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Erro ao atualizar imagem:', error);
+    } catch {
       toast.error('Erro ao atualizar imagem');
     }
   };
@@ -432,8 +431,7 @@ export default function Estoque() {
 
       setNovoModeloForm(prev => ({ ...prev, imagemUrl: filePath }));
       toast.success('Imagem carregada!');
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Erro ao fazer upload:', error);
+    } catch {
       toast.error('Erro ao carregar imagem');
     } finally {
       setUploadingImage(false);

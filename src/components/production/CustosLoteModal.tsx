@@ -112,8 +112,7 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
       } else {
         setCustos([]);
       }
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Error loading data:', error);
+    } catch {
       toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
@@ -158,8 +157,7 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
             user_id: user.id
           });
       }
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Error saving config:', error);
+    } catch {
       toast.error('Erro ao salvar configuração');
     } finally {
       setSaving(false);
@@ -243,8 +241,7 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
       setNovaDescricao('');
       setNovoValor('');
       toast.success('Custo adicionado');
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Error adding cost:', error);
+    } catch {
       toast.error('Erro ao adicionar custo');
     }
   };
@@ -254,8 +251,7 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
       await supabase.from('lote_custos_itens').delete().eq('id', id);
       setCustos(custos.filter(c => c.id !== id));
       toast.success('Custo removido');
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Error removing cost:', error);
+    } catch {
       toast.error('Erro ao remover custo');
     }
   };
@@ -286,8 +282,7 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
         }
         return c;
       }));
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Error updating cost:', error);
+    } catch {
       toast.error('Erro ao atualizar custo');
     }
   };
@@ -305,8 +300,8 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
         }
         return c;
       }));
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Error updating date:', error);
+    } catch {
+      // Date update failed silently - user can retry
     }
   };
 

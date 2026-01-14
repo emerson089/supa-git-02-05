@@ -59,8 +59,8 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
         try {
           const nextRef = await Producao.getNextReference();
           setFormData(prev => ({ ...prev, id_producao: nextRef }));
-        } catch (error) {
-          if (import.meta.env.DEV) console.error('Erro ao gerar referência:', error);
+        } catch {
+          // Reference generation failed - silently continue
         } finally {
           setLoadingRef(false);
         }
@@ -111,8 +111,7 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
       // Store the file path (not URL) for signed URL generation
       setFormData({ ...formData, imagem_url: filePath });
       toast.success('Imagem enviada com sucesso!');
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Erro ao fazer upload:', error);
+    } catch {
       toast.error('Erro ao fazer upload da imagem. Tente novamente.');
     } finally {
       setUploading(false);
@@ -150,9 +149,8 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
     
     try {
       await onSave({ ...formData, prioridade: 'normal' });
-    } catch (error: any) {
-      if (import.meta.env.DEV) console.error('Error saving:', error);
-      const errorMessage = error?.message || 'Erro ao salvar. Tente novamente.';
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro ao salvar. Tente novamente.';
       toast.error(errorMessage);
     } finally {
       setLoading(false);

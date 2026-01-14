@@ -10,9 +10,6 @@ export async function callWithRetry<T>(
       return await fn();
     } catch (error) {
       lastError = error;
-      if (import.meta.env.DEV) {
-        console.warn(`Attempt ${i + 1} failed, retrying in ${delay}ms...`, error);
-      }
       
       if (i < retries - 1) {
         await new Promise(resolve => setTimeout(resolve, delay));
