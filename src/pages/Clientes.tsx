@@ -53,7 +53,7 @@ const emptyCliente = {
 };
 
 type Ordenacao = 'nome' | 'comprador' | 'ultima' | 'recente';
-type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'inativo' | 'risco';
+type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'inativo' | 'risco' | 'pendente';
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -115,6 +115,8 @@ export default function Clientes() {
             return status?.label === 'Inativo';
           case 'risco':
             return isRisk;
+          case 'pendente':
+            return stats?.ultimoPedidoStatus?.toUpperCase() === 'PENDENTE';
           default:
             return true;
         }
@@ -393,7 +395,7 @@ export default function Clientes() {
           </Select>
           
           <div className="flex gap-2 flex-wrap">
-            {(['todos', 'vip', 'frequente', 'inativo', 'risco'] as FiltroStatus[]).map((filtro) => (
+            {(['todos', 'vip', 'frequente', 'inativo', 'risco', 'pendente'] as FiltroStatus[]).map((filtro) => (
               <Button
                 key={filtro}
                 size="sm"
@@ -401,7 +403,8 @@ export default function Clientes() {
                 onClick={() => setFiltroStatus(filtro)}
                 className={cn(
                   "rounded-xl h-10 px-4",
-                  filtroStatus === filtro && "bg-primary text-primary-foreground"
+                  filtroStatus === filtro && "bg-primary text-primary-foreground",
+                  filtro === 'pendente' && filtroStatus !== filtro && "border-yellow-400 text-yellow-700"
                 )}
               >
                 {filtro === 'todos' && 'Todos'}
@@ -409,6 +412,7 @@ export default function Clientes() {
                 {filtro === 'frequente' && '🔵 Frequentes'}
                 {filtro === 'inativo' && '⚪ Inativos'}
                 {filtro === 'risco' && '⚠️ Risco'}
+                {filtro === 'pendente' && '🟡 Pendentes'}
               </Button>
             ))}
           </div>
