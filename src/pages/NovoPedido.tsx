@@ -48,6 +48,7 @@ const NovoPedido = () => {
 
   // Items
   const [items, setItems] = useState<ItemPedido[]>([]);
+  const [newItemId, setNewItemId] = useState<string | null>(null);
 
   // Flag para indicar se já carregou do localStorage
   const [isInitialized, setIsInitialized] = useState(false);
@@ -105,13 +106,15 @@ const NovoPedido = () => {
 
   // Item handlers
   const handleAddItem = useCallback(() => {
+    const newId = crypto.randomUUID();
     const newItem: ItemPedido = {
-      id: crypto.randomUUID(),
+      id: newId,
       produtoId: '',
       quantidade: 1,
       valorUnitario: 0,
     };
-    setItems(prev => [...prev, newItem]);
+    setItems(prev => [newItem, ...prev]); // Inserir no topo
+    setNewItemId(newId); // Marcar para auto-focus
   }, []);
 
   const handleUpdateItem = useCallback((updatedItem: ItemPedido) => {
@@ -316,6 +319,8 @@ const NovoPedido = () => {
               onAddItem={handleAddItem}
               onUpdateItem={handleUpdateItem}
               onRemoveItem={handleRemoveItem}
+              newItemId={newItemId}
+              onNewItemFocused={() => setNewItemId(null)}
             />
 
             {/* Resumo Card */}
