@@ -9,9 +9,11 @@ interface ItensPedidoCardProps {
   onAddItem: () => void;
   onUpdateItem: (item: ItemPedido) => void;
   onRemoveItem: (id: string) => void;
+  newItemId?: string | null;
+  onNewItemFocused?: () => void;
 }
 
-export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem }: ItensPedidoCardProps) {
+export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, newItemId, onNewItemFocused }: ItensPedidoCardProps) {
   const { getProdutosAcabados } = useEstoque();
   
   // Obter produtos acabados do estoque e transformar para o formato esperado
@@ -55,6 +57,8 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem }
               produtos={produtos}
               onUpdate={onUpdateItem}
               onRemove={onRemoveItem}
+              autoFocus={item.id === newItemId}
+              onAutoFocusComplete={onNewItemFocused}
             />
           ))}
         </div>

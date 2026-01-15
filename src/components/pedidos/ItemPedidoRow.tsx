@@ -19,13 +19,16 @@ interface ItemPedidoRowProps {
   produtos: { id: string; nome: string; preco: number; quantidadeDisponivel: number; referencia?: string }[];
   onUpdate: (item: ItemPedido) => void;
   onRemove: (id: string) => void;
+  autoFocus?: boolean;
+  onAutoFocusComplete?: () => void;
 }
 
-export function ItemPedidoRow({ item, produtos, onUpdate, onRemove }: ItemPedidoRowProps) {
+export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, onAutoFocusComplete }: ItemPedidoRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
 
   const total = item.quantidade * item.valorUnitario;
   
@@ -67,6 +70,23 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove }: ItemPedido
       inputRef.current.focus();
     }
   }, [isOpen]);
+
+  // Auto-focus quando o item é criado (inserido no topo)
+  useEffect(() => {
+    if (autoFocus && rowRef.current) {
+      // Scroll para o item
+      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      
+      // Abrir dropdown e focar no input após um pequeno delay
+      setTimeout(() => {
+        setIsOpen(true);
+        setTimeout(() => {
+          inputRef.current?.focus();
+          onAutoFocusComplete?.();
+        }, 50);
+      }, 100);
+    }
+  }, [autoFocus, onAutoFocusComplete]);
 
   const handleProdutoChange = (produtoId: string) => {
     const produto = produtos.find(p => p.id === produtoId);
@@ -112,10 +132,13 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove }: ItemPedido
   };
 
   return (
-    <div className={cn(
-      "neu-card p-6 space-y-4",
-      isOpen && "relative z-[100]"
-    )}>
+    <div 
+      ref={rowRef}
+      className={cn(
+        "neu-card p-6 space-y-4",
+        isOpen && "relative z-[100]"
+      )}
+    >
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* Modelo - Combobox */}
         <div className="lg:col-span-5 space-y-2">
