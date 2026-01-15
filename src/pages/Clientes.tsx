@@ -521,8 +521,16 @@ export default function Clientes() {
                         </span>
                         {stats.ultimoPedidoStatus && (
                           <Badge 
-                            variant={stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' ? 'default' : 'secondary'}
-                            className="text-xs"
+                            className={cn(
+                              "text-xs border-0",
+                              stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' 
+                                ? "bg-green-100 text-green-700" 
+                                : stats.ultimoPedidoStatus.toUpperCase() === 'PENDENTE'
+                                ? "bg-yellow-100 text-yellow-700"
+                                : stats.ultimoPedidoStatus.toUpperCase() === 'CANCELADO'
+                                ? "bg-red-100 text-red-700"
+                                : "bg-secondary text-secondary-foreground"
+                            )}
                           >
                             {stats.ultimoPedidoStatus}
                           </Badge>
