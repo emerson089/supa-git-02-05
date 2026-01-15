@@ -16,7 +16,7 @@ const navItems: NavItem[] = [
   { label: 'Estoque', icon: <Warehouse size={18} />, path: '/estoque' },
   { label: 'Novo Pedido', icon: <ShoppingCart size={18} />, path: '/pedidos/novo' },
   { label: 'Pedidos Criados', icon: <FileText size={18} />, path: '/pedidos/criados' },
-  { label: 'Produção', icon: <Factory size={18} />, path: '/' },
+  { label: 'Produção', icon: <Factory size={18} />, path: '/producao' },
 ];
 
 const bottomNavItems: NavItem[] = [
