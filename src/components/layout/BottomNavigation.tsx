@@ -16,7 +16,7 @@ const leftNavItems: NavItemType[] = [
 
 const rightNavItems: NavItemType[] = [
   { label: 'Estoque', icon: Warehouse, path: '/estoque' },
-  { label: 'Produção', icon: Factory, path: '/' },
+  { label: 'Produção', icon: Factory, path: '/producao' },
 ];
 
 interface NavItemProps {
@@ -57,7 +57,7 @@ export function BottomNavigation() {
   const navigate = useNavigate();
 
   const isActive = (path: string) => {
-    if (path === '/') return location.pathname === '/';
+    if (path === '/producao') return location.pathname === '/producao';
     return location.pathname.startsWith(path);
   };
 
