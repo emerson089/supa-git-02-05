@@ -228,7 +228,7 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
                 onChange={(e) => setMensagem(e.target.value)}
                 rows={6}
                 className="text-base min-h-[140px] resize-none"
-                placeholder="Digite sua mensagem..."
+                placeholder="Oi Aline, seu pedido de R$ 1.447,00 ainda está reservado, mas a procura está alta. Podemos confirmar o pagamento para garantir suas peças?"
               />
             </div>
 
@@ -275,7 +275,7 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
               onChange={(e) => setMensagem(e.target.value)}
               rows={6}
               className="text-base min-h-[140px] resize-none"
-              placeholder="Digite sua mensagem..."
+              placeholder="Oi Aline, seu pedido de R$ 1.447,00 ainda está reservado, mas a procura está alta. Podemos confirmar o pagamento para garantir suas peças?"
             />
           </div>
 
