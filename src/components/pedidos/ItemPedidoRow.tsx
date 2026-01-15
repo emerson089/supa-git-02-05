@@ -73,18 +73,13 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
 
   // Auto-focus quando o item é criado (inserido no topo)
   useEffect(() => {
-    if (autoFocus && rowRef.current) {
-      // Scroll para o item
-      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      
-      // Abrir dropdown e focar no input após um pequeno delay
+    if (autoFocus) {
+      // Abrir dropdown e focar no input
+      setIsOpen(true);
       setTimeout(() => {
-        setIsOpen(true);
-        setTimeout(() => {
-          inputRef.current?.focus();
-          onAutoFocusComplete?.();
-        }, 50);
-      }, 100);
+        inputRef.current?.focus();
+        onAutoFocusComplete?.();
+      }, 50);
     }
   }, [autoFocus, onAutoFocusComplete]);
 
