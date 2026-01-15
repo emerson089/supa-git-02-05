@@ -106,14 +106,22 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
   const [modalOpen, setModalOpen] = useState(false);
   const [mensagem, setMensagem] = useState('');
 
-  const processarMensagem = (texto: string) => {
+  const processarMensagem = (texto: string, templateId: string) => {
     const nome = cliente.nome.split(' ')[0];
-    const valor = formatCurrency(stats?.totalComprado || 0);
+    
+    // For "pendente" template, use the value of the last pending order
+    let valor: string;
+    if (templateId === 'pendente' && stats?.ultimoPedidoPendenteValor) {
+      valor = formatCurrency(stats.ultimoPedidoPendenteValor);
+    } else {
+      valor = formatCurrency(stats?.totalComprado || 0);
+    }
+    
     return texto.replace('[Nome]', nome).replace('[Valor]', valor);
   };
 
   const handleSelectTemplate = (template: typeof templates[0]) => {
-    const mensagemProcessada = processarMensagem(template.mensagem);
+    const mensagemProcessada = processarMensagem(template.mensagem, template.id);
     setMensagem(mensagemProcessada);
     setMenuOpen(false);
     setModalOpen(true);

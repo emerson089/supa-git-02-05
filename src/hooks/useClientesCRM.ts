@@ -9,6 +9,10 @@ export interface ClienteCRMStats {
   pedidosPagos: number;
   cancelamentos: number;
   ultimaCompra: Date | null;
+  ultimoPedidoValor: number | null;
+  ultimoPedidoStatus: string | null;
+  ultimoPedidoPendenteValor: number | null;
+  ultimoPedidoPendenteData: Date | null;
 }
 
 export interface CRMMetrics {
@@ -117,6 +121,10 @@ export function useClientesCRM() {
             pedidosPagos: 0,
             cancelamentos: 0,
             ultimaCompra: null,
+            ultimoPedidoValor: null,
+            ultimoPedidoStatus: null,
+            ultimoPedidoPendenteValor: null,
+            ultimoPedidoPendenteData: null,
           });
         }
         
@@ -133,8 +141,20 @@ export function useClientesCRM() {
           stats.cancelamentos += 1;
         }
         
+        // Track the most recent order (any status)
         if (createdAt && (!stats.ultimaCompra || createdAt > stats.ultimaCompra)) {
           stats.ultimaCompra = createdAt;
+          stats.ultimoPedidoValor = valorTotal;
+          stats.ultimoPedidoStatus = pedido.status_pagamento || null;
+        }
+        
+        // Track the most recent PENDING order
+        const isPendente = pedido.status_pagamento?.toUpperCase() === 'PENDENTE';
+        if (isPendente && createdAt) {
+          if (!stats.ultimoPedidoPendenteData || createdAt > stats.ultimoPedidoPendenteData) {
+            stats.ultimoPedidoPendenteData = createdAt;
+            stats.ultimoPedidoPendenteValor = valorTotal;
+          }
         }
       }
       
