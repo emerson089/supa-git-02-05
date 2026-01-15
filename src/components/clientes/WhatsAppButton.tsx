@@ -94,7 +94,7 @@ const templates = [
     id: 'pendente',
     label: 'Pedido Pendente',
     icon: Clock,
-    mensagem: 'Oi [Nome], seu pedido de R$ [Valor] ainda está reservado, mas a procura está alta. Podemos confirmar o pagamento para garantir suas peças?',
+    mensagem: 'Oi [Nome], seu pedido de [Valor] ainda está reservado, mas a procura está alta. Podemos confirmar o pagamento para garantir suas peças?',
   },
 ];
 
