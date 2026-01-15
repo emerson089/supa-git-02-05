@@ -42,6 +42,14 @@ function App() {
                     path="/"
                     element={
                       <ProtectedRoute>
+                        <Navigate to="/pedidos/novo" replace />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/producao"
+                    element={
+                      <ProtectedRoute>
                         <Index />
                       </ProtectedRoute>
                     }

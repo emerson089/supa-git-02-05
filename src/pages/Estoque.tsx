@@ -76,13 +76,21 @@ export default function Estoque() {
   const [editingItem, setEditingItem] = useState<ItemEstoque | null>(null);
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [editingPriceValue, setEditingPriceValue] = useState<number>(0);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    nome: string;
+    categoria: string;
+    quantidade: number | string;
+    unidade: string;
+    quantidadeMinima: number | string;
+    precoUnitario: number | string;
+    localizacao: string;
+  }>({
     nome: '',
     categoria: '',
-    quantidade: 0,
+    quantidade: '',
     unidade: 'metros',
-    quantidadeMinima: 0,
-    precoUnitario: 0,
+    quantidadeMinima: '',
+    precoUnitario: '',
     localizacao: '',
   });
 
@@ -305,21 +313,32 @@ export default function Estoque() {
       return;
     }
 
+    // Converter valores para número (campos podem estar vazios como string)
+    const dataToSave = {
+      nome: formData.nome,
+      categoria: formData.categoria,
+      quantidade: formData.quantidade === '' ? 0 : Number(formData.quantidade),
+      unidade: formData.unidade,
+      quantidadeMinima: formData.quantidadeMinima === '' ? 0 : Number(formData.quantidadeMinima),
+      precoUnitario: formData.precoUnitario === '' ? 0 : Number(formData.precoUnitario),
+      localizacao: formData.localizacao,
+    };
+
     if (editingItem) {
       // Para produtos acabados, atualiza apenas nome, quantidade e localização
       if (editingItem.tipo === 'acabado') {
         updateItem(editingItem.id, {
-          nome: formData.nome,
-          quantidade: formData.quantidade,
-          localizacao: formData.localizacao,
+          nome: dataToSave.nome,
+          quantidade: dataToSave.quantidade,
+          localizacao: dataToSave.localizacao,
         });
       } else {
-        updateItem(editingItem.id, formData);
+        updateItem(editingItem.id, dataToSave);
       }
       toast.success('Item atualizado com sucesso!');
     } else {
       addItem({
-        ...formData,
+        ...dataToSave,
         tipo: 'materia_prima',
       });
       toast.success('Item adicionado ao estoque!');
@@ -997,7 +1016,7 @@ export default function Estoque() {
                       id="quantidade"
                       type="number"
                       value={formData.quantidade}
-                      onChange={e => setFormData({ ...formData, quantidade: Number(e.target.value) })}
+                      onChange={e => setFormData({ ...formData, quantidade: e.target.value === '' ? '' : Number(e.target.value) })}
                       min={0}
                       className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
                     />
@@ -1009,7 +1028,7 @@ export default function Estoque() {
                       id="quantidadeMinima"
                       type="number"
                       value={formData.quantidadeMinima}
-                      onChange={e => setFormData({ ...formData, quantidadeMinima: Number(e.target.value) })}
+                      onChange={e => setFormData({ ...formData, quantidadeMinima: e.target.value === '' ? '' : Number(e.target.value) })}
                       min={0}
                       className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
                     />
@@ -1024,7 +1043,7 @@ export default function Estoque() {
                       type="number"
                       step="0.01"
                       value={formData.precoUnitario}
-                      onChange={e => setFormData({ ...formData, precoUnitario: Number(e.target.value) })}
+                      onChange={e => setFormData({ ...formData, precoUnitario: e.target.value === '' ? '' : Number(e.target.value) })}
                       min={0}
                       className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
                     />
@@ -1053,7 +1072,7 @@ export default function Estoque() {
                     id="quantidade"
                     type="number"
                     value={formData.quantidade}
-                    onChange={e => setFormData({ ...formData, quantidade: Number(e.target.value) })}
+                    onChange={e => setFormData({ ...formData, quantidade: e.target.value === '' ? '' : Number(e.target.value) })}
                     min={0}
                     className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
                   />
