@@ -511,14 +511,26 @@ export default function Clientes() {
                       {formatCurrency(stats?.totalComprado || 0)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
                     <Calendar size={14} />
-                    <span>
-                      {stats?.ultimaCompra 
-                        ? `Última compra: ${format(stats.ultimaCompra, "dd/MM/yyyy", { locale: ptBR })}`
-                        : 'Nenhuma compra registrada'
-                      }
-                    </span>
+                    {stats?.ultimaCompra ? (
+                      <>
+                        <span>Última Compra ({format(stats.ultimaCompra, "dd/MM/yy")}):</span>
+                        <span className="font-semibold text-foreground">
+                          {formatCurrency(stats.ultimoPedidoValor || 0)}
+                        </span>
+                        {stats.ultimoPedidoStatus && (
+                          <Badge 
+                            variant={stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' ? 'default' : 'secondary'}
+                            className="text-xs"
+                          >
+                            {stats.ultimoPedidoStatus}
+                          </Badge>
+                        )}
+                      </>
+                    ) : (
+                      <span>Nenhuma compra registrada</span>
+                    )}
                   </div>
                 </div>
               </div>
