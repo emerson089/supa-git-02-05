@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format, startOfDay, endOfDay, subDays, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { sincronizarEstoqueTotal } from './useTransferencias';
 export type PeriodoTipo = 'hoje' | 'ontem' | '7dias' | '30dias' | 'custom';
 
 export interface PeriodoFeira {
@@ -323,25 +324,11 @@ export function isDataHoje(dataStr: string): boolean {
   return isToday(new Date(dataStr));
 }
 
-// Helper: sincronizar total geral do estoque_itens
-async function sincronizarTotalGeral(itemId: string, userId: string) {
-  // Buscar soma de quantidade em todos os locais
-  const { data: estoques } = await supabase
-    .from('estoque_por_local')
-    .select('quantidade')
-    .eq('item_id', itemId)
-    .eq('user_id', userId);
-
-  const total = (estoques || []).reduce((sum, e) => sum + (Number(e.quantidade) || 0), 0);
-
-  // Atualizar estoque_itens.quantidade (total geral)
-  await supabase
-    .from('estoque_itens')
-    .update({ quantidade: total, updated_at: new Date().toISOString() })
-    .eq('id', itemId);
-}
+// REMOVIDO: sincronizarTotalGeral foi substituído por sincronizarEstoqueTotal exportado de useTransferencias
+// Regra unificada: estoque_itens.quantidade = SOMENTE Central
 
 // Hook: excluir carga da feira (soft delete) com reversão de estoque
+// REGRA: Apenas cargas em_andamento podem ser excluídas. Cargas concluídas devem ser ESTORNADAS.
 export function useExcluirCargaFeira() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -368,6 +355,11 @@ export function useExcluirCargaFeira() {
 
       if (cargaError || !carga) throw new Error('Carga não encontrada');
       if (carga.deleted_at) throw new Error('Esta carga já foi excluída');
+      
+      // NOVA VALIDAÇÃO: Cargas concluídas não podem ser excluídas
+      if (carga.status === 'concluida') {
+        throw new Error('Cargas concluídas não podem ser excluídas. Use a opção "Estornar" para reverter a venda.');
+      }
 
       // 2. Buscar locais Central e Banca
       const { data: locais } = await supabase
@@ -455,8 +447,8 @@ export function useExcluirCargaFeira() {
             .eq('id', estoqueBanca.id);
         }
 
-        // Sincronizar estoque_itens.quantidade (total geral)
-        await sincronizarTotalGeral(item.item_id, user.id);
+        // Sincronizar estoque_itens.quantidade (usando função unificada)
+        await sincronizarEstoqueTotal(item.item_id, user.id);
       }
 
       // 5. Marcar transferência como deletada (soft delete)

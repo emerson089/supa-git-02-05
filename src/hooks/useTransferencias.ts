@@ -168,20 +168,20 @@ export function useCargasHoje() {
   });
 }
 
-// Função auxiliar para sincronizar estoque_itens.quantidade com a soma de todos os locais
-// Sincroniza estoque_itens.quantidade apenas com o estoque do Central
-async function sincronizarEstoqueTotal(itemId: string, userId: string) {
+// Função auxiliar para sincronizar estoque_itens.quantidade com o estoque do Central
+// REGRA UNIFICADA: estoque_itens.quantidade = SOMENTE quantidade do Central
+export async function sincronizarEstoqueTotal(itemId: string, userId: string) {
   // Buscar o local Central do usuário
-  const { data: central } = await supabase
+  const { data: central, error: centralError } = await supabase
     .from('estoque_locais')
     .select('id')
     .eq('user_id', userId)
     .eq('tipo', 'central')
     .single();
 
-  if (!central) {
-    console.warn('Local Central não encontrado para sincronização de estoque');
-    return;
+  if (centralError || !central) {
+    console.error('[sincronizarEstoqueTotal] Local Central não encontrado:', centralError);
+    throw new Error('Local Central não encontrado para sincronização de estoque');
   }
 
   // Buscar quantidade apenas do Central (estoque disponível para venda)
@@ -195,10 +195,15 @@ async function sincronizarEstoqueTotal(itemId: string, userId: string) {
   const quantidadeCentral = estoqueCentral ? Number(estoqueCentral.quantidade) : 0;
 
   // Atualizar estoque_itens com quantidade do Central apenas
-  await supabase
+  const { error: updateError } = await supabase
     .from('estoque_itens')
     .update({ quantidade: quantidadeCentral, updated_at: new Date().toISOString() })
     .eq('id', itemId);
+
+  if (updateError) {
+    console.error('[sincronizarEstoqueTotal] Erro ao atualizar estoque_itens:', updateError);
+    throw new Error(`Falha ao sincronizar estoque: ${updateError.message}`);
+  }
 }
 
 // Hook para criar carga da feira
@@ -293,8 +298,8 @@ export function useCriarCargaFeira() {
         const quantidadeAntesCentral = estoqueCentral ? Number(estoqueCentral.quantidade) : 0;
         const quantidadeDepoisCentral = quantidadeAntesCentral - item.quantidade;
 
-        // Registrar movimentação de auditoria: ENVIO_FEIRA
-        await supabase.from('estoque_movimentacoes').insert({
+        // Registrar movimentação de auditoria: ENVIO_FEIRA (COM TRATAMENTO DE ERRO)
+        const { error: movEnvioError } = await supabase.from('estoque_movimentacoes').insert({
           user_id: user.id,
           item_id: item.itemId,
           tipo: 'ENVIO_FEIRA',
@@ -305,6 +310,11 @@ export function useCriarCargaFeira() {
           estoque_antes: quantidadeAntesCentral,
           estoque_depois: quantidadeDepoisCentral,
         });
+
+        if (movEnvioError) {
+          console.error('[useCriarCargaFeira] ERRO ao registrar ENVIO_FEIRA:', movEnvioError);
+          throw new Error(`Falha ao registrar movimentação de estoque: ${movEnvioError.message}`);
+        }
 
         // Mover estoque: Central -> Banca
         // Reduzir no Central
@@ -453,9 +463,9 @@ export function useRegistrarRetornoFeira() {
 
         const quantidadeAntesCentral = estoqueCentral ? Number(estoqueCentral.quantidade) : 0;
 
-        // Registrar movimentação RETORNO_FEIRA se retornado > 0
+        // Registrar movimentação RETORNO_FEIRA se retornado > 0 (COM TRATAMENTO DE ERRO)
         if (retornado > 0) {
-          await supabase.from('estoque_movimentacoes').insert({
+          const { error: movRetornoError } = await supabase.from('estoque_movimentacoes').insert({
             user_id: user.id,
             item_id: item.itemId,
             tipo: 'RETORNO_FEIRA',
@@ -466,11 +476,16 @@ export function useRegistrarRetornoFeira() {
             estoque_antes: quantidadeAntesCentral,
             estoque_depois: quantidadeAntesCentral + retornado,
           });
+
+          if (movRetornoError) {
+            console.error('[useRegistrarRetornoFeira] ERRO ao registrar RETORNO_FEIRA:', movRetornoError);
+            throw new Error(`Falha ao registrar movimentação de retorno: ${movRetornoError.message}`);
+          }
         }
 
-        // Registrar movimentação VENDA_FEIRA se vendido > 0
+        // Registrar movimentação VENDA_FEIRA se vendido > 0 (COM TRATAMENTO DE ERRO)
         if (vendido > 0) {
-          await supabase.from('estoque_movimentacoes').insert({
+          const { error: movVendaError } = await supabase.from('estoque_movimentacoes').insert({
             user_id: user.id,
             item_id: item.itemId,
             tipo: 'VENDA_FEIRA',
@@ -481,6 +496,11 @@ export function useRegistrarRetornoFeira() {
             estoque_antes: quantidadeAntesBanca,
             estoque_depois: 0, // Banca fica zerada após fechamento
           });
+
+          if (movVendaError) {
+            console.error('[useRegistrarRetornoFeira] ERRO ao registrar VENDA_FEIRA:', movVendaError);
+            throw new Error(`Falha ao registrar movimentação de venda: ${movVendaError.message}`);
+          }
         }
 
         // Mover estoque: Banca -> Central (apenas o retornado)
