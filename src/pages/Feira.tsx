@@ -5,8 +5,20 @@ import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { useDisponivelCentral, useLocais, useEnsureDefaultLocais, useSincronizarEstoqueInicial } from '@/hooks/useEstoqueLocais';
-import { useCargasHoje, useCriarCargaFeira, useRegistrarRetornoFeira, useResumoFeira, TransferenciaComItens } from '@/hooks/useTransferencias';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useCriarCargaFeira, useRegistrarRetornoFeira, TransferenciaComItens } from '@/hooks/useTransferencias';
+import { 
+  PeriodoFeira, 
+  calcularPeriodo, 
+  useResumoFeiraPeriodo, 
+  useHistoricoAgrupado, 
+  useTodasCargasAtivas,
+  TransferenciaComItensHistorico
+} from '@/hooks/useFeiraHistorico';
+import { FiltroPeriodo, salvarFiltroPeriodo, carregarFiltroPeriodo } from '@/components/feira/FiltroPeriodo';
+import { HistoricoAgrupado } from '@/components/feira/HistoricoAgrupado';
+import { DetalhesCargaModal } from '@/components/feira/DetalhesCargaModal';
+import { CargasAtivasAlerta } from '@/components/feira/CargasAtivasAlerta';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +28,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface ItemCarga {
@@ -34,18 +46,39 @@ export default function Feira() {
   const { data: locais } = useLocais();
   const ensureLocais = useEnsureDefaultLocais();
   const sincronizarEstoque = useSincronizarEstoqueInicial();
-  const { cargas, resumo, isLoading: isLoadingCargas } = useResumoFeira();
   const criarCarga = useCriarCargaFeira();
   const registrarRetorno = useRegistrarRetornoFeira();
 
+  // Estado do período - carregado do localStorage
+  const [periodo, setPeriodo] = useState<PeriodoFeira>(() => carregarFiltroPeriodo());
+
+  // Hooks de histórico baseados no período
+  const { resumo, isLoading: isLoadingResumo } = useResumoFeiraPeriodo(periodo.inicio, periodo.fim);
+  const { historico, isLoading: isLoadingHistorico } = useHistoricoAgrupado(periodo.inicio, periodo.fim);
+  const { data: todasCargasAtivas } = useTodasCargasAtivas();
+
+  // Modais e estados
   const [showNovaCarga, setShowNovaCarga] = useState(false);
   const [showRetorno, setShowRetorno] = useState(false);
   const [cargaSelecionada, setCargaSelecionada] = useState<TransferenciaComItens | null>(null);
+  const [cargaDetalhes, setCargaDetalhes] = useState<TransferenciaComItensHistorico | null>(null);
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
   const [itensRetorno, setItensRetorno] = useState<{ itemId: string; quantidadeRetornada: number }[]>([]);
 
   const produtosAcabados = getProdutosAcabados();
+  const periodoEhHoje = periodo.tipo === 'hoje';
   
+  // Cargas ativas de HOJE (para mostrar na seção principal quando filtro = hoje)
+  const cargasAtivasHoje = useMemo(() => 
+    (todasCargasAtivas || []).filter(c => isToday(new Date(c.dataSaida))),
+    [todasCargasAtivas]
+  );
+
+  // Salvar período no localStorage quando mudar
+  useEffect(() => {
+    salvarFiltroPeriodo(periodo);
+  }, [periodo]);
+
   // Garantir que locais existem
   useEffect(() => {
     if (locais && locais.length === 0) {
@@ -59,11 +92,6 @@ export default function Feira() {
       sincronizarEstoque.mutate();
     }
   }, [locais?.length]);
-
-  const cargasAtivas = useMemo(() => 
-    cargas.filter(c => c.status === 'em_andamento'),
-    [cargas]
-  );
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -130,6 +158,28 @@ export default function Feira() {
     }
   };
 
+  // Converter TransferenciaComItensHistorico para TransferenciaComItens para o modal de retorno
+  const convertToTransferenciaComItens = (carga: TransferenciaComItensHistorico): TransferenciaComItens => ({
+    id: carga.id,
+    localOrigemId: carga.localOrigemId,
+    localDestinoId: carga.localDestinoId,
+    tipo: carga.tipo as 'transferencia' | 'carga_feira',
+    status: carga.status as 'em_andamento' | 'concluida' | 'cancelada',
+    dataSaida: carga.dataSaida,
+    dataRetorno: carga.dataRetorno,
+    observacoes: carga.observacoes,
+    createdAt: carga.createdAt,
+    itens: carga.itens.map(item => ({
+      id: item.id,
+      transferenciaId: carga.id,
+      itemId: item.itemId,
+      quantidadeEnviada: item.quantidadeEnviada,
+      quantidadeRetornada: item.quantidadeRetornada,
+      precoUnitario: item.precoUnitario ?? item.produtoPreco,
+      createdAt: carga.createdAt,
+    })),
+  });
+
   const handleOpenRetorno = (carga: TransferenciaComItens) => {
     setCargaSelecionada(carga);
     setItensRetorno(carga.itens.map(i => ({
@@ -137,6 +187,10 @@ export default function Feira() {
       quantidadeRetornada: 0,
     })));
     setShowRetorno(true);
+  };
+
+  const handleOpenRetornoFromHistorico = (carga: TransferenciaComItensHistorico) => {
+    handleOpenRetorno(convertToTransferenciaComItens(carga));
   };
 
   const handleUpdateRetorno = (itemId: string, quantidade: number) => {
@@ -171,7 +225,9 @@ export default function Feira() {
   const totalCarga = itensCarga.reduce((sum, i) => sum + i.quantidade, 0);
   const valorCarga = itensCarga.reduce((sum, i) => sum + (i.quantidade * i.precoUnitario), 0);
 
-  if (isLoadingLocais || isLoadingCargas) {
+  const isLoading = isLoadingLocais || isLoadingResumo;
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -218,7 +274,10 @@ export default function Feira() {
 
         <ScrollArea className="flex-1">
           <div className={cn("p-4 space-y-4", !isMobile && "p-6 space-y-6")}>
-            {/* Resumo do Dia */}
+            {/* Filtro de Período */}
+            <FiltroPeriodo periodo={periodo} onChange={setPeriodo} />
+
+            {/* Resumo do Período */}
             <div className={cn(
               "grid gap-3",
               isMobile ? "grid-cols-2" : "grid-cols-4"
@@ -282,14 +341,21 @@ export default function Feira() {
               </Card>
             </div>
 
-            {/* Cargas Ativas */}
-            {cargasAtivas.length > 0 && (
+            {/* Alerta de Cargas Ativas (quando período não é Hoje) */}
+            <CargasAtivasAlerta
+              cargasAtivas={todasCargasAtivas || []}
+              onVerCarga={(carga) => setCargaDetalhes(carga)}
+              periodoEhHoje={periodoEhHoje}
+            />
+
+            {/* Cargas Ativas de Hoje (apenas quando período = Hoje) */}
+            {periodoEhHoje && cargasAtivasHoje.length > 0 && (
               <div>
                 <h2 className="text-lg font-semibold mb-3">Cargas Ativas</h2>
                 <div className="grid gap-3">
-                  {cargasAtivas.map(carga => {
+                  {cargasAtivasHoje.map(carga => {
                     const totalPecas = carga.itens.reduce((s, i) => s + i.quantidadeEnviada, 0);
-                    const valorTotal = carga.itens.reduce((s, i) => s + (i.quantidadeEnviada * (i.precoUnitario || 0)), 0);
+                    const valorTotal = carga.itens.reduce((s, i) => s + (i.quantidadeEnviada * (i.precoUnitario || i.produtoPreco || 0)), 0);
 
                     return (
                       <Card key={carga.id} className="border-primary/30">
@@ -305,7 +371,7 @@ export default function Feira() {
                             </div>
                             <Button 
                               size="sm" 
-                              onClick={() => handleOpenRetorno(carga)}
+                              onClick={() => handleOpenRetornoFromHistorico(carga)}
                               className="gap-1"
                             >
                               <RotateCcw size={14} />
@@ -319,7 +385,7 @@ export default function Feira() {
                           <div className="mt-2 flex flex-wrap gap-1">
                             {carga.itens.slice(0, 3).map(item => (
                               <Badge key={item.id} variant="secondary" className="text-xs">
-                                {item.quantidadeEnviada}x
+                                {item.quantidadeEnviada}x {item.produtoNome?.slice(0, 15) || ''}
                               </Badge>
                             ))}
                             {carga.itens.length > 3 && (
@@ -336,60 +402,23 @@ export default function Feira() {
               </div>
             )}
 
-            {/* Histórico de Cargas Concluídas */}
-            {cargas.filter(c => c.status === 'concluida').length > 0 && (
-              <div>
-                <h2 className="text-lg font-semibold mb-3">Cargas Concluídas</h2>
-                <div className="grid gap-2">
-                  {cargas.filter(c => c.status === 'concluida').map(carga => {
-                    const totalEnviado = carga.itens.reduce((s, i) => s + i.quantidadeEnviada, 0);
-                    const totalRetorno = carga.itens.reduce((s, i) => s + (i.quantidadeRetornada || 0), 0);
-                    const totalVendido = totalEnviado - totalRetorno;
-                    const valorVendido = carga.itens.reduce((s, i) => {
-                      const vendido = i.quantidadeEnviada - (i.quantidadeRetornada || 0);
-                      return s + (vendido * (i.precoUnitario || 0));
-                    }, 0);
-
-                    return (
-                      <Card key={carga.id} className="bg-muted/30">
-                        <CardContent className="p-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Check size={16} className="text-emerald-600" />
-                              <span className="text-sm">{format(new Date(carga.dataSaida), "HH:mm")}</span>
-                            </div>
-                            <div className="text-right text-sm">
-                              <span className="text-muted-foreground">{totalVendido} vendas • </span>
-                              <span className="font-semibold text-emerald-600">{formatCurrency(valorVendido)}</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Empty State */}
-            {cargas.length === 0 && (
-              <Card className="p-8 text-center">
-                <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">Nenhuma carga hoje</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Crie uma nova carga para levar produtos à feira
-                </p>
-                <Button onClick={() => setShowNovaCarga(true)} variant="outline" className="gap-2">
-                  <Plus size={16} />
-                  Criar Primeira Carga
-                </Button>
-              </Card>
-            )}
+            {/* Histórico Agrupado */}
+            <HistoricoAgrupado
+              historico={historico}
+              onVerDetalhes={(carga) => setCargaDetalhes(carga)}
+              isLoading={isLoadingHistorico}
+            />
           </div>
         </ScrollArea>
       </main>
 
       {isMobile && <BottomNavigation />}
+
+      {/* Modal Detalhes da Carga */}
+      <DetalhesCargaModal
+        carga={cargaDetalhes}
+        onClose={() => setCargaDetalhes(null)}
+      />
 
       {/* Modal Nova Carga */}
       <Dialog open={showNovaCarga} onOpenChange={setShowNovaCarga}>
