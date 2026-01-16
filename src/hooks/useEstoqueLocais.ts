@@ -100,6 +100,8 @@ export function useEstoquePorLocal(localId?: string) {
       return (data as DbEstoquePorLocal[]).map(mapDbEstoquePorLocal);
     },
     enabled: !!user,
+    staleTime: 10 * 1000, // 10 seconds - data is fresh for this period
+    refetchOnWindowFocus: true, // Refetch when returning to the window
   });
 }
 
