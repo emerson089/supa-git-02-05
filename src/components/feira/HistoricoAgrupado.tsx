@@ -1,10 +1,17 @@
 import { useState } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronDown, ChevronRight, Eye, Check, Clock, Package } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ChevronDown, ChevronRight, Eye, Check, Clock, Package, MoreVertical, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CargaDiaAgrupada, TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hooks/useFeiraHistorico';
@@ -12,6 +19,7 @@ import { CargaDiaAgrupada, TransferenciaComItensHistorico, calcularTotaisCargaPu
 interface HistoricoAgrupadoProps {
   historico: CargaDiaAgrupada[];
   onVerDetalhes: (carga: TransferenciaComItensHistorico) => void;
+  onExcluirCarga: (carga: TransferenciaComItensHistorico) => void;
   isLoading: boolean;
 }
 
@@ -22,7 +30,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export function HistoricoAgrupado({ historico, onVerDetalhes, isLoading }: HistoricoAgrupadoProps) {
+export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, isLoading }: HistoricoAgrupadoProps) {
   const [openDays, setOpenDays] = useState<Set<string>>(new Set([historico[0]?.data]));
 
   const toggleDay = (data: string) => {
@@ -147,14 +155,27 @@ export function HistoricoAgrupado({ historico, onVerDetalhes, isLoading }: Histo
                           <span className="font-semibold text-emerald-600">
                             {formatCurrency(totais.valor)}
                           </span>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => onVerDetalhes(carga)}
-                          >
-                            <Eye size={16} />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8">
+                                <MoreVertical size={16} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => onVerDetalhes(carga)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                Ver detalhes
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => onExcluirCarga(carga)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Excluir carga
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     );

@@ -12,12 +12,14 @@ import {
   useResumoFeiraPeriodo, 
   useHistoricoAgrupado, 
   useTodasCargasAtivas,
+  useExcluirCargaFeira,
   TransferenciaComItensHistorico
 } from '@/hooks/useFeiraHistorico';
 import { FiltroPeriodo, salvarFiltroPeriodo, carregarFiltroPeriodo } from '@/components/feira/FiltroPeriodo';
 import { HistoricoAgrupado } from '@/components/feira/HistoricoAgrupado';
 import { DetalhesCargaModal } from '@/components/feira/DetalhesCargaModal';
 import { CargasAtivasAlerta } from '@/components/feira/CargasAtivasAlerta';
+import { ExcluirCargaModal } from '@/components/feira/ExcluirCargaModal';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +50,7 @@ export default function Feira() {
   const sincronizarEstoque = useSincronizarEstoqueInicial();
   const criarCarga = useCriarCargaFeira();
   const registrarRetorno = useRegistrarRetornoFeira();
+  const excluirCarga = useExcluirCargaFeira();
 
   // Estado do período - carregado do localStorage
   const [periodo, setPeriodo] = useState<PeriodoFeira>(() => carregarFiltroPeriodo());
@@ -62,6 +65,7 @@ export default function Feira() {
   const [showRetorno, setShowRetorno] = useState(false);
   const [cargaSelecionada, setCargaSelecionada] = useState<TransferenciaComItens | null>(null);
   const [cargaDetalhes, setCargaDetalhes] = useState<TransferenciaComItensHistorico | null>(null);
+  const [cargaExcluir, setCargaExcluir] = useState<TransferenciaComItensHistorico | null>(null);
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
   const [itensRetorno, setItensRetorno] = useState<{ itemId: string; quantidadeRetornada: number }[]>([]);
 
@@ -406,6 +410,7 @@ export default function Feira() {
             <HistoricoAgrupado
               historico={historico}
               onVerDetalhes={(carga) => setCargaDetalhes(carga)}
+              onExcluirCarga={(carga) => setCargaExcluir(carga)}
               isLoading={isLoadingHistorico}
             />
           </div>
@@ -418,6 +423,26 @@ export default function Feira() {
       <DetalhesCargaModal
         carga={cargaDetalhes}
         onClose={() => setCargaDetalhes(null)}
+      />
+
+      {/* Modal Excluir Carga */}
+      <ExcluirCargaModal
+        carga={cargaExcluir}
+        onClose={() => setCargaExcluir(null)}
+        onConfirm={async (motivo) => {
+          if (!cargaExcluir) return;
+          try {
+            await excluirCarga.mutateAsync({
+              transferenciaId: cargaExcluir.id,
+              motivo,
+            });
+            toast.success('Carga excluída e estoque revertido');
+            setCargaExcluir(null);
+          } catch (error: any) {
+            toast.error(error.message || 'Erro ao excluir carga');
+          }
+        }}
+        isLoading={excluirCarga.isPending}
       />
 
       {/* Modal Nova Carga */}

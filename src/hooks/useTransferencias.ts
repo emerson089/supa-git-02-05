@@ -141,6 +141,7 @@ export function useCargasHoje() {
         .from('transferencias')
         .select('*')
         .eq('tipo', 'carga_feira')
+        .is('deleted_at', null)
         .gte('data_saida', hoje.toISOString())
         .lt('data_saida', amanha.toISOString())
         .order('created_at', { ascending: false });

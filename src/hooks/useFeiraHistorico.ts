@@ -1,9 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format, startOfDay, endOfDay, subDays, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
 export type PeriodoTipo = 'hoje' | 'ontem' | '7dias' | '30dias' | 'custom';
 
 export interface PeriodoFeira {
@@ -163,6 +162,7 @@ export function useCargasPorPeriodo(inicio: Date, fim: Date) {
         `)
         .eq('tipo', 'carga_feira')
         .eq('user_id', user.id)
+        .is('deleted_at', null)
         .order('data_saida', { ascending: false });
 
       if (error) throw error;
@@ -202,6 +202,7 @@ export function useTodasCargasAtivas() {
         .eq('tipo', 'carga_feira')
         .eq('status', 'em_andamento')
         .eq('user_id', user.id)
+        .is('deleted_at', null)
         .order('data_saida', { ascending: false });
 
       if (error) throw error;
@@ -320,4 +321,164 @@ export function calcularTotaisCargaPublic(itens: TransferenciaItemComProduto[]) 
 // Helper: verificar se data é hoje
 export function isDataHoje(dataStr: string): boolean {
   return isToday(new Date(dataStr));
+}
+
+// Helper: sincronizar total geral do estoque_itens
+async function sincronizarTotalGeral(itemId: string, userId: string) {
+  // Buscar soma de quantidade em todos os locais
+  const { data: estoques } = await supabase
+    .from('estoque_por_local')
+    .select('quantidade')
+    .eq('item_id', itemId)
+    .eq('user_id', userId);
+
+  const total = (estoques || []).reduce((sum, e) => sum + (Number(e.quantidade) || 0), 0);
+
+  // Atualizar estoque_itens.quantidade (total geral)
+  await supabase
+    .from('estoque_itens')
+    .update({ quantidade: total, updated_at: new Date().toISOString() })
+    .eq('id', itemId);
+}
+
+// Hook: excluir carga da feira (soft delete) com reversão de estoque
+export function useExcluirCargaFeira() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      transferenciaId,
+      motivo,
+    }: {
+      transferenciaId: string;
+      motivo?: string;
+    }) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // 1. Buscar a carga com itens
+      const { data: carga, error: cargaError } = await supabase
+        .from('transferencias')
+        .select(`
+          *,
+          transferencia_itens (*)
+        `)
+        .eq('id', transferenciaId)
+        .single();
+
+      if (cargaError || !carga) throw new Error('Carga não encontrada');
+      if (carga.deleted_at) throw new Error('Esta carga já foi excluída');
+
+      // 2. Buscar locais Central e Banca
+      const { data: locais } = await supabase
+        .from('estoque_locais')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('tipo', ['central', 'banca']);
+
+      const central = locais?.find(l => l.tipo === 'central');
+      const banca = locais?.find(l => l.tipo === 'banca');
+
+      if (!central || !banca) throw new Error('Locais Central/Banca não configurados');
+
+      // 3. VALIDAR: Para cada item, verificar se Banca tem saldo suficiente
+      for (const item of carga.transferencia_itens) {
+        const enviado = Number(item.quantidade_enviada) || 0;
+        const retornado = Number(item.quantidade_retornada) || 0;
+        const delta = enviado - retornado; // Quantidade que precisa "voltar" da Banca
+
+        if (delta > 0) {
+          // Verificar se Banca tem saldo suficiente
+          const { data: estoqueBanca } = await supabase
+            .from('estoque_por_local')
+            .select('quantidade')
+            .eq('item_id', item.item_id)
+            .eq('local_id', banca.id)
+            .single();
+
+          const qtdBanca = Number(estoqueBanca?.quantidade) || 0;
+
+          if (qtdBanca < delta) {
+            // Buscar nome do item para mensagem de erro
+            const { data: itemInfo } = await supabase
+              .from('estoque_itens')
+              .select('nome')
+              .eq('id', item.item_id)
+              .single();
+
+            throw new Error(
+              `Não é possível excluir: "${itemInfo?.nome || 'Item'}" tem apenas ${qtdBanca} na Banca, mas precisa de ${delta} para reverter.`
+            );
+          }
+        }
+      }
+
+      // 4. REVERTER estoque de cada item
+      for (const item of carga.transferencia_itens) {
+        const enviado = Number(item.quantidade_enviada) || 0;
+        const retornado = Number(item.quantidade_retornada) || 0;
+        const delta = enviado - retornado;
+
+        // Central += delta (devolve o que saiu)
+        const { data: estoqueCentral } = await supabase
+          .from('estoque_por_local')
+          .select('*')
+          .eq('item_id', item.item_id)
+          .eq('local_id', central.id)
+          .single();
+
+        if (estoqueCentral) {
+          await supabase
+            .from('estoque_por_local')
+            .update({
+              quantidade: Number(estoqueCentral.quantidade) + delta,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', estoqueCentral.id);
+        }
+
+        // Banca -= delta (remove o que ficou)
+        const { data: estoqueBanca } = await supabase
+          .from('estoque_por_local')
+          .select('*')
+          .eq('item_id', item.item_id)
+          .eq('local_id', banca.id)
+          .single();
+
+        if (estoqueBanca) {
+          await supabase
+            .from('estoque_por_local')
+            .update({
+              quantidade: Math.max(0, Number(estoqueBanca.quantidade) - delta),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', estoqueBanca.id);
+        }
+
+        // Sincronizar estoque_itens.quantidade (total geral)
+        await sincronizarTotalGeral(item.item_id, user.id);
+      }
+
+      // 5. Marcar transferência como deletada (soft delete)
+      const { error: updateError } = await supabase
+        .from('transferencias')
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: user.id,
+          deleted_reason: motivo || null,
+        })
+        .eq('id', transferenciaId);
+
+      if (updateError) throw updateError;
+    },
+    onSuccess: () => {
+      // Invalidar todas as queries relevantes para atualizar a UI
+      queryClient.invalidateQueries({ queryKey: ['cargas-periodo'] });
+      queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
+      queryClient.invalidateQueries({ queryKey: ['cargas-hoje'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+      queryClient.invalidateQueries({ queryKey: ['transferencias'] });
+    },
+  });
 }
