@@ -7,6 +7,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { useDisponivelCentral, useLocais, useEnsureDefaultLocais, useSincronizarEstoqueInicial } from '@/hooks/useEstoqueLocais';
 import { useCriarCargaFeira, useRegistrarRetornoFeira, TransferenciaComItens } from '@/hooks/useTransferencias';
+import { useRecalcularEstoque } from '@/hooks/useRecalcularEstoque';
+import { useEstornarCarga } from '@/hooks/useEstornarCarga';
 import { 
   PeriodoFeira, 
   calcularPeriodo, 
@@ -21,14 +23,15 @@ import { HistoricoAgrupado } from '@/components/feira/HistoricoAgrupado';
 import { DetalhesCargaModal } from '@/components/feira/DetalhesCargaModal';
 import { CargasAtivasAlerta } from '@/components/feira/CargasAtivasAlerta';
 import { ExcluirCargaModal } from '@/components/feira/ExcluirCargaModal';
+import { EstornarCargaModal } from '@/components/feira/EstornarCargaModal';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2 } from 'lucide-react';
+import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format, isToday } from 'date-fns';
@@ -53,6 +56,8 @@ export default function Feira() {
   const criarCarga = useCriarCargaFeira();
   const registrarRetorno = useRegistrarRetornoFeira();
   const excluirCarga = useExcluirCargaFeira();
+  const recalcularEstoque = useRecalcularEstoque();
+  const estornarCarga = useEstornarCarga();
 
   // Estado do período - carregado do localStorage
   const [periodo, setPeriodo] = useState<PeriodoFeira>(() => carregarFiltroPeriodo());
@@ -65,9 +70,11 @@ export default function Feira() {
   // Modais e estados
   const [showNovaCarga, setShowNovaCarga] = useState(false);
   const [showRetorno, setShowRetorno] = useState(false);
+  const [showRecalcularConfirm, setShowRecalcularConfirm] = useState(false);
   const [cargaSelecionada, setCargaSelecionada] = useState<TransferenciaComItens | null>(null);
   const [cargaDetalhes, setCargaDetalhes] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaExcluir, setCargaExcluir] = useState<TransferenciaComItensHistorico | null>(null);
+  const [cargaEstornar, setCargaEstornar] = useState<TransferenciaComItensHistorico | null>(null);
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
   const [buscaProduto, setBuscaProduto] = useState('');
   const [itensRetorno, setItensRetorno] = useState<{ itemId: string; quantidadeRetornada: number }[]>([]);
@@ -287,6 +294,27 @@ export default function Feira() {
   const totalCarga = itensCarga.reduce((sum, i) => sum + i.quantidade, 0);
   const valorCarga = itensCarga.reduce((sum, i) => sum + (i.quantidade * i.precoUnitario), 0);
 
+  // Handler para ação de excluir/estornar baseado no status
+  const handleCargaAction = (carga: TransferenciaComItensHistorico) => {
+    if (carga.status === 'concluida') {
+      setCargaEstornar(carga);
+    } else {
+      setCargaExcluir(carga);
+    }
+  };
+
+  const handleRecalcularEstoque = async () => {
+    try {
+      const result = await recalcularEstoque.mutateAsync();
+      toast.success(
+        `Estoque recalculado! ${result.itensProcessados} itens, ${result.transferenciasProcessadas} transferências, ${result.movimentacoesCriadas} movimentações criadas.`
+      );
+      setShowRecalcularConfirm(false);
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao recalcular estoque');
+    }
+  };
+
   const isLoading = isLoadingLocais || isLoadingResumo;
 
   if (isLoading) {
@@ -316,10 +344,22 @@ export default function Feira() {
                   {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
                 </p>
               </div>
-              <Button onClick={handleOpenNovaCarga} className="gap-2">
-                <Plus size={18} />
-                Nova Carga
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowRecalcularConfirm(true)}
+                  disabled={recalcularEstoque.isPending}
+                  className="gap-2"
+                >
+                  <RefreshCw size={16} className={recalcularEstoque.isPending ? 'animate-spin' : ''} />
+                  Recalcular Estoque
+                </Button>
+                <Button onClick={handleOpenNovaCarga} className="gap-2">
+                  <Plus size={18} />
+                  Nova Carga
+                </Button>
+              </div>
             </div>
           </header>
         )}
@@ -468,7 +508,7 @@ export default function Feira() {
             <HistoricoAgrupado
               historico={historico}
               onVerDetalhes={(carga) => setCargaDetalhes(carga)}
-              onExcluirCarga={(carga) => setCargaExcluir(carga)}
+              onExcluirCarga={handleCargaAction}
               isLoading={isLoadingHistorico}
             />
           </div>
@@ -483,7 +523,7 @@ export default function Feira() {
         onClose={() => setCargaDetalhes(null)}
       />
 
-      {/* Modal Excluir Carga */}
+      {/* Modal Excluir Carga (apenas para em_andamento) */}
       <ExcluirCargaModal
         carga={cargaExcluir}
         onClose={() => setCargaExcluir(null)}
@@ -502,6 +542,73 @@ export default function Feira() {
         }}
         isLoading={excluirCarga.isPending}
       />
+
+      {/* Modal Estornar Carga (apenas para concluídas) */}
+      <EstornarCargaModal
+        carga={cargaEstornar}
+        onClose={() => setCargaEstornar(null)}
+        onConfirm={async (motivo) => {
+          if (!cargaEstornar) return;
+          try {
+            await estornarCarga.mutateAsync({
+              transferenciaId: cargaEstornar.id,
+              motivo,
+            });
+            toast.success('Carga estornada! Produtos devolvidos ao estoque Central.');
+            setCargaEstornar(null);
+          } catch (error: any) {
+            toast.error(error.message || 'Erro ao estornar carga');
+          }
+        }}
+        isLoading={estornarCarga.isPending}
+      />
+
+      {/* Modal Confirmar Recálculo de Estoque */}
+      <Dialog open={showRecalcularConfirm} onOpenChange={setShowRecalcularConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              Recalcular Estoque
+            </DialogTitle>
+            <DialogDescription>
+              Esta ação irá reconstruir todo o histórico de movimentações e recalcular os saldos de estoque do zero.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              O sistema irá:
+            </p>
+            <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground">
+              <li>Limpar movimentações existentes</li>
+              <li>Recalcular estoque Central e Banca</li>
+              <li>Recriar histórico de auditoria</li>
+            </ul>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowRecalcularConfirm(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleRecalcularEstoque}
+              disabled={recalcularEstoque.isPending}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {recalcularEstoque.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Recalculando...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Confirmar Recálculo
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Nova Carga */}
       <Dialog open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
