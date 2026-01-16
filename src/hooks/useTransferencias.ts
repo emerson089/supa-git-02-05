@@ -169,17 +169,35 @@ export function useCargasHoje() {
 }
 
 // Função auxiliar para sincronizar estoque_itens.quantidade com a soma de todos os locais
+// Sincroniza estoque_itens.quantidade apenas com o estoque do Central
 async function sincronizarEstoqueTotal(itemId: string, userId: string) {
-  const { data: estoques } = await supabase
+  // Buscar o local Central do usuário
+  const { data: central } = await supabase
+    .from('estoque_locais')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('tipo', 'central')
+    .single();
+
+  if (!central) {
+    console.warn('Local Central não encontrado para sincronização de estoque');
+    return;
+  }
+
+  // Buscar quantidade apenas do Central (estoque disponível para venda)
+  const { data: estoqueCentral } = await supabase
     .from('estoque_por_local')
     .select('quantidade')
-    .eq('item_id', itemId);
+    .eq('item_id', itemId)
+    .eq('local_id', central.id)
+    .single();
 
-  const total = estoques?.reduce((sum, e) => sum + Number(e.quantidade), 0) || 0;
+  const quantidadeCentral = estoqueCentral ? Number(estoqueCentral.quantidade) : 0;
 
+  // Atualizar estoque_itens com quantidade do Central apenas
   await supabase
     .from('estoque_itens')
-    .update({ quantidade: total, updated_at: new Date().toISOString() })
+    .update({ quantidade: quantidadeCentral, updated_at: new Date().toISOString() })
     .eq('id', itemId);
 }
 
