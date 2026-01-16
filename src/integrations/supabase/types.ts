@@ -642,6 +642,9 @@ export type Database = {
           created_at: string | null
           data_retorno: string | null
           data_saida: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           id: string
           local_destino_id: string
           local_origem_id: string
@@ -654,6 +657,9 @@ export type Database = {
           created_at?: string | null
           data_retorno?: string | null
           data_saida?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           id?: string
           local_destino_id: string
           local_origem_id: string
@@ -666,6 +672,9 @@ export type Database = {
           created_at?: string | null
           data_retorno?: string | null
           data_saida?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           id?: string
           local_destino_id?: string
           local_origem_id?: string
