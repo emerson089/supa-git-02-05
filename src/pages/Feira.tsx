@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check } from 'lucide-react';
+import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format, isToday } from 'date-fns';
@@ -67,16 +67,40 @@ export default function Feira() {
   const [cargaDetalhes, setCargaDetalhes] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaExcluir, setCargaExcluir] = useState<TransferenciaComItensHistorico | null>(null);
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
+  const [buscaProduto, setBuscaProduto] = useState('');
   const [itensRetorno, setItensRetorno] = useState<{ itemId: string; quantidadeRetornada: number }[]>([]);
 
   const produtosAcabados = getProdutosAcabados();
   const periodoEhHoje = periodo.tipo === 'hoje';
+
+  // Filtrar produtos em tempo real
+  const produtosFiltrados = useMemo(() => {
+    if (!buscaProduto.trim()) return produtosAcabados;
+    const termo = buscaProduto.toLowerCase().trim();
+    return produtosAcabados.filter(p => 
+      p.nome.toLowerCase().includes(termo)
+    );
+  }, [produtosAcabados, buscaProduto]);
   
   // Cargas ativas de HOJE (para mostrar na seção principal quando filtro = hoje)
   const cargasAtivasHoje = useMemo(() => 
     (todasCargasAtivas || []).filter(c => isToday(new Date(c.dataSaida))),
     [todasCargasAtivas]
   );
+
+  // Limpar estado ao fechar modal
+  const handleCloseNovaCarga = () => {
+    setShowNovaCarga(false);
+    setItensCarga([]);
+    setBuscaProduto('');
+  };
+
+  // Abrir modal com estado limpo
+  const handleOpenNovaCarga = () => {
+    setItensCarga([]);
+    setBuscaProduto('');
+    setShowNovaCarga(true);
+  };
 
   // Salvar período no localStorage quando mudar
   useEffect(() => {
@@ -129,8 +153,13 @@ export default function Feira() {
   const handleUpdateQuantidadeCarga = (itemId: string, delta: number) => {
     setItensCarga(prev => prev.map(item => {
       if (item.itemId === itemId) {
-        const novaQtd = Math.max(1, Math.min(item.disponivelCentral, item.quantidade + delta));
-        return { ...item, quantidade: novaQtd };
+        const novaQtd = item.quantidade + delta;
+        // Validar limite máximo
+        if (novaQtd > item.disponivelCentral) {
+          toast.warning('Quantidade máxima disponível atingida');
+          return item;
+        }
+        return { ...item, quantidade: Math.max(1, novaQtd) };
       }
       return item;
     }));
@@ -141,8 +170,8 @@ export default function Feira() {
   };
 
   const handleCriarCarga = async () => {
-    if (itensCarga.length === 0) {
-      toast.error('Adicione ao menos um item');
+    // Proteção contra clique duplo e lista vazia
+    if (itensCarga.length === 0 || criarCarga.isPending) {
       return;
     }
 
@@ -155,8 +184,7 @@ export default function Feira() {
         })),
       });
       toast.success('Carga criada com sucesso!');
-      setShowNovaCarga(false);
-      setItensCarga([]);
+      handleCloseNovaCarga();
     } catch (error: any) {
       toast.error(error.message || 'Erro ao criar carga');
     }
@@ -258,7 +286,7 @@ export default function Feira() {
                   {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
                 </p>
               </div>
-              <Button onClick={() => setShowNovaCarga(true)} className="gap-2">
+              <Button onClick={handleOpenNovaCarga} className="gap-2">
                 <Plus size={18} />
                 Nova Carga
               </Button>
@@ -269,7 +297,7 @@ export default function Feira() {
         {/* Mobile Action Button */}
         {isMobile && (
           <div className="px-4 py-3">
-            <Button onClick={() => setShowNovaCarga(true)} className="w-full gap-2">
+            <Button onClick={handleOpenNovaCarga} className="w-full gap-2">
               <Plus size={18} />
               Nova Carga
             </Button>
@@ -446,7 +474,7 @@ export default function Feira() {
       />
 
       {/* Modal Nova Carga */}
-      <Dialog open={showNovaCarga} onOpenChange={setShowNovaCarga}>
+      <Dialog open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Nova Carga para Feira</DialogTitle>
@@ -456,41 +484,86 @@ export default function Feira() {
             {/* Produtos Disponíveis */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Adicionar Produtos</Label>
+              
+              {/* Campo de Busca */}
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar produto (nome, código...)"
+                  value={buscaProduto}
+                  onChange={(e) => setBuscaProduto(e.target.value)}
+                  className="pl-9 pr-9"
+                />
+                {buscaProduto && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    onClick={() => setBuscaProduto('')}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+
               <ScrollArea className="h-48 border rounded-lg p-2">
-                <div className="space-y-2">
-                  {produtosAcabados.map(produto => {
-                    const disponivel = getDisponivelCentral(produto.id);
-                    const jaAdicionado = itensCarga.some(i => i.itemId === produto.id);
-                    
-                    return (
-                      <div 
-                        key={produto.id}
-                        className={cn(
-                          "flex items-center justify-between p-2 rounded-lg border transition-colors",
-                          jaAdicionado 
-                            ? "bg-muted/50 opacity-50" 
-                            : disponivel > 0 
-                              ? "hover:bg-muted/30 cursor-pointer"
-                              : "opacity-40"
-                        )}
-                        onClick={() => !jaAdicionado && disponivel > 0 && handleAddItemCarga(produto)}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{produto.nome}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Disponível: {disponivel} • {formatCurrency(produto.precoUnitario || 0)}
-                          </p>
+                {produtosFiltrados.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                    <Package className="h-10 w-10 mb-2 opacity-40" />
+                    <p className="text-sm">Nenhum produto encontrado</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {produtosFiltrados.map(produto => {
+                      const disponivel = getDisponivelCentral(produto.id);
+                      const jaAdicionado = itensCarga.some(i => i.itemId === produto.id);
+                      
+                      return (
+                        <div 
+                          key={produto.id}
+                          className={cn(
+                            "flex items-center justify-between p-3 rounded-lg border transition-all",
+                            jaAdicionado 
+                              ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800" 
+                              : disponivel > 0 
+                                ? "hover:bg-muted/30 cursor-pointer border-border"
+                                : "bg-muted/20 opacity-60 cursor-not-allowed border-border"
+                          )}
+                          onClick={() => !jaAdicionado && disponivel > 0 && handleAddItemCarga(produto)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{produto.nome}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Disponível: {disponivel} • {formatCurrency(produto.precoUnitario || 0)}
+                            </p>
+                          </div>
+                          
+                          {/* Badge "Na carga" para produtos adicionados */}
+                          {jaAdicionado && (
+                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 shrink-0">
+                              <Check size={12} className="mr-1" />
+                              Na carga
+                            </Badge>
+                          )}
+                          
+                          {/* Botão + para produtos disponíveis */}
+                          {!jaAdicionado && disponivel > 0 && (
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-primary shrink-0">
+                              <Plus size={16} />
+                            </Button>
+                          )}
+                          
+                          {/* Badge "Sem estoque" para produtos indisponíveis */}
+                          {!jaAdicionado && disponivel === 0 && (
+                            <Badge variant="outline" className="text-muted-foreground shrink-0">
+                              Sem estoque
+                            </Badge>
+                          )}
                         </div>
-                        {!jaAdicionado && disponivel > 0 && (
-                          <Plus size={16} className="text-primary shrink-0" />
-                        )}
-                        {jaAdicionado && (
-                          <Check size={16} className="text-emerald-600 shrink-0" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </ScrollArea>
             </div>
 
@@ -498,35 +571,44 @@ export default function Feira() {
             {itensCarga.length > 0 && (
               <div>
                 <Label className="text-sm font-medium mb-2 block">
-                  Itens na Carga ({totalCarga} peças)
+                  Itens na Carga ({itensCarga.length} {itensCarga.length === 1 ? 'item' : 'itens'})
                 </Label>
                 <div className="space-y-2">
                   {itensCarga.map(item => (
                     <div 
                       key={item.itemId}
-                      className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                      className="p-3 rounded-lg border bg-card"
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{item.nome}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatCurrency(item.precoUnitario)} × {item.quantidade} = {formatCurrency(item.precoUnitario * item.quantidade)}
-                        </p>
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{item.nome}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatCurrency(item.precoUnitario)} × {item.quantidade} = 
+                            <span className="text-foreground font-medium ml-1">
+                              {formatCurrency(item.precoUnitario * item.quantidade)}
+                            </span>
+                          </p>
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                          Disp: {item.disponivelCentral}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2">
+                      
+                      <div className="flex items-center justify-end gap-2">
                         <Button
                           size="icon"
                           variant="outline"
-                          className="h-8 w-8"
+                          className="h-7 w-7"
                           onClick={() => handleUpdateQuantidadeCarga(item.itemId, -1)}
                           disabled={item.quantidade <= 1}
                         >
                           <Minus size={14} />
                         </Button>
-                        <span className="w-8 text-center font-medium">{item.quantidade}</span>
+                        <span className="w-8 text-center font-medium text-sm">{item.quantidade}</span>
                         <Button
                           size="icon"
                           variant="outline"
-                          className="h-8 w-8"
+                          className="h-7 w-7"
                           onClick={() => handleUpdateQuantidadeCarga(item.itemId, 1)}
                           disabled={item.quantidade >= item.disponivelCentral}
                         >
@@ -535,10 +617,10 @@ export default function Feira() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8 text-destructive"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
                           onClick={() => handleRemoveItemCarga(item.itemId)}
                         >
-                          <X size={14} />
+                          <Trash2 size={14} />
                         </Button>
                       </div>
                     </div>
@@ -549,15 +631,19 @@ export default function Feira() {
           </div>
 
           <DialogFooter className="border-t pt-4">
-            <div className="flex items-center justify-between w-full">
-              <div className="text-sm">
-                <span className="text-muted-foreground">Total: </span>
-                <span className="font-bold">{totalCarga} peças</span>
-                <span className="mx-2">•</span>
-                <span className="font-bold text-primary">{formatCurrency(valorCarga)}</span>
+            <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3">
+              {/* Resumo */}
+              <div className="text-sm flex items-center gap-2 text-muted-foreground">
+                <span>Itens: <strong className="text-foreground">{itensCarga.length}</strong></span>
+                <span>•</span>
+                <span>Peças: <strong className="text-foreground">{totalCarga}</strong></span>
+                <span>•</span>
+                <span>Total: <strong className="text-primary">{formatCurrency(valorCarga)}</strong></span>
               </div>
+              
+              {/* Botões */}
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setShowNovaCarga(false)}>
+                <Button variant="outline" onClick={handleCloseNovaCarga}>
                   Cancelar
                 </Button>
                 <Button 
@@ -565,11 +651,18 @@ export default function Feira() {
                   disabled={itensCarga.length === 0 || criarCarga.isPending}
                 >
                   {criarCarga.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Criando carga...
+                    </>
+                  ) : itensCarga.length === 0 ? (
+                    'Selecione produtos'
                   ) : (
-                    <Truck className="h-4 w-4 mr-2" />
+                    <>
+                      <Truck className="h-4 w-4 mr-2" />
+                      Criar Carga ({totalCarga} pç • {formatCurrency(valorCarga)})
+                    </>
                   )}
-                  Criar Carga
                 </Button>
               </div>
             </div>
