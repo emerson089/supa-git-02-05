@@ -1,4 +1,4 @@
-import { Package, LayoutDashboard, Factory, Warehouse, Users, ShoppingCart, FileText, Settings, HelpCircle, LogOut } from 'lucide-react';
+import { Package, LayoutDashboard, Factory, Warehouse, Users, ShoppingCart, FileText, Settings, HelpCircle, LogOut, Store, ArrowLeftRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -14,6 +14,8 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/dashboard' },
   { label: 'Clientes', icon: <Users size={18} />, path: '/clientes' },
   { label: 'Estoque', icon: <Warehouse size={18} />, path: '/estoque' },
+  { label: 'Feira', icon: <Store size={18} />, path: '/feira' },
+  { label: 'Transferências', icon: <ArrowLeftRight size={18} />, path: '/transferencias' },
   { label: 'Novo Pedido', icon: <ShoppingCart size={18} />, path: '/pedidos/novo' },
   { label: 'Pedidos Criados', icon: <FileText size={18} />, path: '/pedidos/criados' },
   { label: 'Produção', icon: <Factory size={18} />, path: '/producao' },

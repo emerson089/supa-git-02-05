@@ -13,6 +13,8 @@ import NovoPedido from "./pages/NovoPedido";
 import PedidosCriados from "./pages/PedidosCriados";
 import Clientes from "./pages/Clientes";
 import Estoque from "./pages/Estoque";
+import Feira from "./pages/Feira";
+import Transferencias from "./pages/Transferencias";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -67,6 +69,22 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <Estoque />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/feira"
+                    element={
+                      <ProtectedRoute>
+                        <Feira />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/transferencias"
+                    element={
+                      <ProtectedRoute>
+                        <Transferencias />
                       </ProtectedRoute>
                     }
                   />

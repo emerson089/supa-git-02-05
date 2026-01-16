@@ -109,6 +109,33 @@ export type Database = {
           },
         ]
       }
+      estoque_locais: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          id: string
+          nome: string
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          nome: string
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          nome?: string
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       estoque_movimentacoes: {
         Row: {
           created_at: string
@@ -153,6 +180,51 @@ export type Database = {
             columns: ["producao_id"]
             isOneToOne: false
             referencedRelation: "producao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estoque_por_local: {
+        Row: {
+          id: string
+          item_id: string
+          local_id: string
+          quantidade: number
+          quantidade_reservada: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          item_id: string
+          local_id: string
+          quantidade?: number
+          quantidade_reservada?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          item_id?: string
+          local_id?: string
+          quantidade?: number
+          quantidade_reservada?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_por_local_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_itens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_por_local_local_id_fkey"
+            columns: ["local_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais"
             referencedColumns: ["id"]
           },
         ]
@@ -516,6 +588,108 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      transferencia_itens: {
+        Row: {
+          created_at: string | null
+          id: string
+          item_id: string
+          preco_unitario: number | null
+          quantidade_enviada: number
+          quantidade_retornada: number | null
+          transferencia_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          item_id: string
+          preco_unitario?: number | null
+          quantidade_enviada?: number
+          quantidade_retornada?: number | null
+          transferencia_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          item_id?: string
+          preco_unitario?: number | null
+          quantidade_enviada?: number
+          quantidade_retornada?: number | null
+          transferencia_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transferencia_itens_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_itens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencia_itens_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "transferencias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transferencias: {
+        Row: {
+          created_at: string | null
+          data_retorno: string | null
+          data_saida: string | null
+          id: string
+          local_destino_id: string
+          local_origem_id: string
+          observacoes: string | null
+          status: string
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          data_retorno?: string | null
+          data_saida?: string | null
+          id?: string
+          local_destino_id: string
+          local_origem_id: string
+          observacoes?: string | null
+          status?: string
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          data_retorno?: string | null
+          data_saida?: string | null
+          id?: string
+          local_destino_id?: string
+          local_origem_id?: string
+          observacoes?: string | null
+          status?: string
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transferencias_local_destino_id_fkey"
+            columns: ["local_destino_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencias_local_origem_id_fkey"
+            columns: ["local_origem_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
