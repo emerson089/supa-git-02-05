@@ -154,12 +154,14 @@ export function useAddItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
     },
   });
 }
 
 export function useUpdateItem() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ItemEstoque> & { id: string }) => {
@@ -182,9 +184,50 @@ export function useUpdateItem() {
         .eq('id', id);
       
       if (error) throw error;
+      
+      // Sync quantity with estoque_por_local for Central location
+      if (updates.quantidade !== undefined && user) {
+        const { data: localCentral } = await supabase
+          .from('estoque_locais')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('tipo', 'central')
+          .single();
+        
+        if (localCentral) {
+          const { data: estoqueLocal } = await supabase
+            .from('estoque_por_local')
+            .select('id')
+            .eq('item_id', id)
+            .eq('local_id', localCentral.id)
+            .single();
+          
+          if (estoqueLocal) {
+            await supabase
+              .from('estoque_por_local')
+              .update({ 
+                quantidade: updates.quantidade,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', estoqueLocal.id);
+          } else {
+            await supabase
+              .from('estoque_por_local')
+              .insert({
+                user_id: user.id,
+                item_id: id,
+                local_id: localCentral.id,
+                quantidade: updates.quantidade,
+                quantidade_reservada: 0,
+              });
+          }
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-locais'] });
     },
   });
 }
@@ -203,6 +246,7 @@ export function useRemoveItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
     },
   });
 }
