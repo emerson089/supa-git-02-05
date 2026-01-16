@@ -178,6 +178,23 @@ export default function Feira() {
     }));
   };
 
+  const handleSetQuantidadeCarga = (itemId: string, novaQuantidade: number) => {
+    setItensCarga(prev => prev.map(item => {
+      if (item.itemId === itemId) {
+        // Validar limites
+        if (novaQuantidade > item.disponivelCentral) {
+          toast.warning('Quantidade máxima disponível atingida');
+          return { ...item, quantidade: item.disponivelCentral };
+        }
+        if (novaQuantidade < 1 || isNaN(novaQuantidade)) {
+          return { ...item, quantidade: 1 };
+        }
+        return { ...item, quantidade: novaQuantidade };
+      }
+      return item;
+    }));
+  };
+
   const handleRemoveItemCarga = (itemId: string) => {
     setItensCarga(prev => prev.filter(i => i.itemId !== itemId));
   };
@@ -621,7 +638,14 @@ export default function Feira() {
                         >
                           <Minus size={14} />
                         </Button>
-                        <span className="w-8 text-center font-medium text-sm">{item.quantidade}</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={item.disponivelCentral}
+                          value={item.quantidade}
+                          onChange={(e) => handleSetQuantidadeCarga(item.itemId, parseInt(e.target.value) || 1)}
+                          className="w-14 h-7 text-center text-sm font-medium px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
                         <Button
                           size="icon"
                           variant="outline"
