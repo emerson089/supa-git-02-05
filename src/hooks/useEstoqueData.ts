@@ -21,13 +21,19 @@ export interface ItemEstoque {
   updatedAt: string;
 }
 
+export type TipoMovimentacao = 'entrada' | 'saida' | 'ENVIO_FEIRA' | 'RETORNO_FEIRA' | 'VENDA_FEIRA';
+
 export interface MovimentacaoEstoque {
   id: string;
   itemId: string;
-  tipo: 'entrada' | 'saida';
+  tipo: TipoMovimentacao;
   quantidade: number;
   motivo: string | null;
   producaoId: string | null;
+  transferenciaId?: string | null;
+  localId?: string | null;
+  estoqueAntes?: number;
+  estoqueDepois?: number;
   createdAt: string;
 }
 
@@ -54,6 +60,10 @@ interface DbMovimentacao {
   quantidade: number;
   motivo: string | null;
   producao_id: string | null;
+  transferencia_id: string | null;
+  local_id: string | null;
+  estoque_antes: number;
+  estoque_depois: number;
   created_at: string;
 }
 
@@ -76,10 +86,14 @@ const mapDbItemToItem = (dbItem: DbItem): ItemEstoque => ({
 const mapDbMovToMov = (dbMov: DbMovimentacao): MovimentacaoEstoque => ({
   id: dbMov.id,
   itemId: dbMov.item_id,
-  tipo: dbMov.tipo as 'entrada' | 'saida',
+  tipo: dbMov.tipo as TipoMovimentacao,
   quantidade: Number(dbMov.quantidade),
   motivo: dbMov.motivo,
   producaoId: dbMov.producao_id,
+  transferenciaId: dbMov.transferencia_id,
+  localId: dbMov.local_id,
+  estoqueAntes: Number(dbMov.estoque_antes || 0),
+  estoqueDepois: Number(dbMov.estoque_depois || 0),
   createdAt: dbMov.created_at,
 });
 

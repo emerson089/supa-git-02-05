@@ -168,6 +168,21 @@ export function useCargasHoje() {
   });
 }
 
+// Função auxiliar para sincronizar estoque_itens.quantidade com a soma de todos os locais
+async function sincronizarEstoqueTotal(itemId: string, userId: string) {
+  const { data: estoques } = await supabase
+    .from('estoque_por_local')
+    .select('quantidade')
+    .eq('item_id', itemId);
+
+  const total = estoques?.reduce((sum, e) => sum + Number(e.quantidade), 0) || 0;
+
+  await supabase
+    .from('estoque_itens')
+    .update({ quantidade: total, updated_at: new Date().toISOString() })
+    .eq('id', itemId);
+}
+
 // Hook para criar carga da feira
 export function useCriarCargaFeira() {
   const { user } = useAuth();
@@ -217,7 +232,7 @@ export function useCriarCargaFeira() {
             .single();
 
           throw new Error(
-            `${itemData?.nome || 'Item'}: apenas ${disponivel} disponível no Central`
+            `${itemData?.nome || 'Item'}: apenas ${disponivel} disponível no Central. Estoque insuficiente.`
           );
         }
       }
@@ -238,7 +253,7 @@ export function useCriarCargaFeira() {
 
       if (tErr) throw tErr;
 
-      // Criar itens da transferência e mover estoque
+      // Criar itens da transferência, mover estoque e registrar auditoria
       for (const item of itens) {
         // Inserir item da transferência
         await supabase.from('transferencia_itens').insert({
@@ -249,8 +264,7 @@ export function useCriarCargaFeira() {
           preco_unitario: item.precoUnitario || null,
         });
 
-        // Mover estoque: Central -> Banca
-        // Reduzir no Central
+        // Buscar estoque atual do Central
         const { data: estoqueCentral } = await supabase
           .from('estoque_por_local')
           .select('*')
@@ -258,11 +272,29 @@ export function useCriarCargaFeira() {
           .eq('local_id', central.id)
           .single();
 
+        const quantidadeAntesCentral = estoqueCentral ? Number(estoqueCentral.quantidade) : 0;
+        const quantidadeDepoisCentral = quantidadeAntesCentral - item.quantidade;
+
+        // Registrar movimentação de auditoria: ENVIO_FEIRA
+        await supabase.from('estoque_movimentacoes').insert({
+          user_id: user.id,
+          item_id: item.itemId,
+          tipo: 'ENVIO_FEIRA',
+          quantidade: item.quantidade,
+          motivo: `Envio para feira - Carga #${transferencia.id.slice(0, 8)}`,
+          transferencia_id: transferencia.id,
+          local_id: central.id,
+          estoque_antes: quantidadeAntesCentral,
+          estoque_depois: quantidadeDepoisCentral,
+        });
+
+        // Mover estoque: Central -> Banca
+        // Reduzir no Central
         if (estoqueCentral) {
           await supabase
             .from('estoque_por_local')
             .update({
-              quantidade: Number(estoqueCentral.quantidade) - item.quantidade,
+              quantidade: quantidadeDepoisCentral,
               updated_at: new Date().toISOString(),
             })
             .eq('id', estoqueCentral.id);
@@ -293,6 +325,9 @@ export function useCriarCargaFeira() {
             quantidade_reservada: 0,
           });
         }
+
+        // Sincronizar estoque_itens.quantidade
+        await sincronizarEstoqueTotal(item.itemId, user.id);
       }
 
       return mapDbToTransferencia(transferencia as DbTransferencia);
@@ -304,6 +339,7 @@ export function useCriarCargaFeira() {
       queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
     },
   });
 }
@@ -335,17 +371,51 @@ export function useRegistrarRetornoFeira() {
 
       if (!central || !banca) throw new Error('Locais não configurados');
 
-      // Atualizar itens e mover estoque
+      // Buscar itens originais da carga para validação
+      const { data: itensOriginais } = await supabase
+        .from('transferencia_itens')
+        .select('*')
+        .eq('transferencia_id', transferenciaId);
+
+      if (!itensOriginais) throw new Error('Itens da carga não encontrados');
+
+      // Validar cada item e processar
       for (const item of itensRetornados) {
-        // Atualizar quantidade_retornada
+        // Encontrar item original
+        const itemOriginal = itensOriginais.find(io => io.item_id === item.itemId);
+        if (!itemOriginal) {
+          throw new Error(`Item não encontrado na carga original`);
+        }
+
+        const enviado = Number(itemOriginal.quantidade_enviada);
+        const retornado = item.quantidadeRetornada;
+        const vendido = enviado - retornado;
+
+        // Validação: Retornado não pode exceder Enviado
+        if (retornado > enviado) {
+          const { data: itemData } = await supabase
+            .from('estoque_itens')
+            .select('nome')
+            .eq('id', item.itemId)
+            .single();
+          throw new Error(
+            `${itemData?.nome || 'Item'}: quantidade retornada (${retornado}) não pode exceder a quantidade enviada (${enviado})`
+          );
+        }
+
+        // Validação: Retornado não pode ser negativo
+        if (retornado < 0) {
+          throw new Error('Quantidade retornada não pode ser negativa');
+        }
+
+        // Atualizar quantidade_retornada na transferencia_itens
         await supabase
           .from('transferencia_itens')
-          .update({ quantidade_retornada: item.quantidadeRetornada })
+          .update({ quantidade_retornada: retornado })
           .eq('transferencia_id', transferenciaId)
           .eq('item_id', item.itemId);
 
-        // Mover estoque: Banca -> Central
-        // Reduzir na Banca
+        // Buscar estoque atual da Banca
         const { data: estoqueBanca } = await supabase
           .from('estoque_por_local')
           .select('*')
@@ -353,17 +423,9 @@ export function useRegistrarRetornoFeira() {
           .eq('local_id', banca.id)
           .single();
 
-        if (estoqueBanca) {
-          await supabase
-            .from('estoque_por_local')
-            .update({
-              quantidade: Math.max(0, Number(estoqueBanca.quantidade) - item.quantidadeRetornada),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', estoqueBanca.id);
-        }
+        const quantidadeAntesBanca = estoqueBanca ? Number(estoqueBanca.quantidade) : 0;
 
-        // Adicionar no Central
+        // Buscar estoque atual do Central
         const { data: estoqueCentral } = await supabase
           .from('estoque_por_local')
           .select('*')
@@ -371,15 +433,63 @@ export function useRegistrarRetornoFeira() {
           .eq('local_id', central.id)
           .single();
 
-        if (estoqueCentral) {
+        const quantidadeAntesCentral = estoqueCentral ? Number(estoqueCentral.quantidade) : 0;
+
+        // Registrar movimentação RETORNO_FEIRA se retornado > 0
+        if (retornado > 0) {
+          await supabase.from('estoque_movimentacoes').insert({
+            user_id: user.id,
+            item_id: item.itemId,
+            tipo: 'RETORNO_FEIRA',
+            quantidade: retornado,
+            motivo: `Retorno da feira - Carga #${transferenciaId.slice(0, 8)}`,
+            transferencia_id: transferenciaId,
+            local_id: central.id,
+            estoque_antes: quantidadeAntesCentral,
+            estoque_depois: quantidadeAntesCentral + retornado,
+          });
+        }
+
+        // Registrar movimentação VENDA_FEIRA se vendido > 0
+        if (vendido > 0) {
+          await supabase.from('estoque_movimentacoes').insert({
+            user_id: user.id,
+            item_id: item.itemId,
+            tipo: 'VENDA_FEIRA',
+            quantidade: vendido,
+            motivo: `Venda na feira - Carga #${transferenciaId.slice(0, 8)}`,
+            transferencia_id: transferenciaId,
+            local_id: banca.id,
+            estoque_antes: quantidadeAntesBanca,
+            estoque_depois: 0, // Banca fica zerada após fechamento
+          });
+        }
+
+        // Mover estoque: Banca -> Central (apenas o retornado)
+        // Zerar estoque da Banca para este item (Retornado + Vendido saem)
+        if (estoqueBanca) {
           await supabase
             .from('estoque_por_local')
             .update({
-              quantidade: Number(estoqueCentral.quantidade) + item.quantidadeRetornada,
+              quantidade: Math.max(0, quantidadeAntesBanca - enviado), // Zera ou reduz pelo total enviado
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', estoqueBanca.id);
+        }
+
+        // Adicionar no Central apenas o que retornou
+        if (estoqueCentral && retornado > 0) {
+          await supabase
+            .from('estoque_por_local')
+            .update({
+              quantidade: quantidadeAntesCentral + retornado,
               updated_at: new Date().toISOString(),
             })
             .eq('id', estoqueCentral.id);
         }
+
+        // Sincronizar estoque_itens.quantidade
+        await sincronizarEstoqueTotal(item.itemId, user.id);
       }
 
       // Marcar transferência como concluída
@@ -398,6 +508,7 @@ export function useRegistrarRetornoFeira() {
       queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
     },
   });
 }
