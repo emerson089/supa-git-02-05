@@ -139,32 +139,44 @@ export type Database = {
       estoque_movimentacoes: {
         Row: {
           created_at: string
+          estoque_antes: number | null
+          estoque_depois: number | null
           id: string
           item_id: string
+          local_id: string | null
           motivo: string | null
           producao_id: string | null
           quantidade: number
           tipo: string
+          transferencia_id: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
+          estoque_antes?: number | null
+          estoque_depois?: number | null
           id?: string
           item_id: string
+          local_id?: string | null
           motivo?: string | null
           producao_id?: string | null
           quantidade: number
           tipo: string
+          transferencia_id?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
+          estoque_antes?: number | null
+          estoque_depois?: number | null
           id?: string
           item_id?: string
+          local_id?: string | null
           motivo?: string | null
           producao_id?: string | null
           quantidade?: number
           tipo?: string
+          transferencia_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -176,10 +188,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "estoque_movimentacoes_local_id_fkey"
+            columns: ["local_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "estoque_movimentacoes_producao_id_fkey"
             columns: ["producao_id"]
             isOneToOne: false
             referencedRelation: "producao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "transferencias"
             referencedColumns: ["id"]
           },
         ]
