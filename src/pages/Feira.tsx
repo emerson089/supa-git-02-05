@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -43,6 +44,7 @@ interface ItemCarga {
 
 export default function Feira() {
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
   const { getProdutosAcabados } = useEstoque();
   const { getDisponivelCentral, isLoading: isLoadingLocais } = useDisponivelCentral();
   const { data: locais } = useLocais();
@@ -69,6 +71,7 @@ export default function Feira() {
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
   const [buscaProduto, setBuscaProduto] = useState('');
   const [itensRetorno, setItensRetorno] = useState<{ itemId: string; quantidadeRetornada: number }[]>([]);
+  const [isRefetchingEstoque, setIsRefetchingEstoque] = useState(false);
 
   const produtosAcabados = getProdutosAcabados();
   const periodoEhHoje = periodo.tipo === 'hoje';
@@ -95,11 +98,21 @@ export default function Feira() {
     setBuscaProduto('');
   };
 
-  // Abrir modal com estado limpo
-  const handleOpenNovaCarga = () => {
+  // Abrir modal com estado limpo e refetch de estoque
+  const handleOpenNovaCarga = async () => {
     setItensCarga([]);
     setBuscaProduto('');
     setShowNovaCarga(true);
+    setIsRefetchingEstoque(true);
+    
+    try {
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['estoque-por-local'] }),
+        queryClient.refetchQueries({ queryKey: ['estoque-locais'] }),
+      ]);
+    } finally {
+      setIsRefetchingEstoque(false);
+    }
   };
 
   // Salvar período no localStorage quando mudar
@@ -507,7 +520,11 @@ export default function Feira() {
               </div>
 
               <ScrollArea className="h-48 border rounded-lg p-2">
-                {produtosFiltrados.length === 0 ? (
+                {isRefetchingEstoque ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : produtosFiltrados.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                     <Package className="h-10 w-10 mb-2 opacity-40" />
                     <p className="text-sm">Nenhum produto encontrado</p>

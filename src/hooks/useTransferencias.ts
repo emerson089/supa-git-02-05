@@ -300,7 +300,10 @@ export function useCriarCargaFeira() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transferencias'] });
       queryClient.invalidateQueries({ queryKey: ['cargas-hoje'] });
+      queryClient.invalidateQueries({ queryKey: ['cargas-periodo'] });
+      queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
     },
   });
 }
@@ -391,7 +394,10 @@ export function useRegistrarRetornoFeira() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transferencias'] });
       queryClient.invalidateQueries({ queryKey: ['cargas-hoje'] });
+      queryClient.invalidateQueries({ queryKey: ['cargas-periodo'] });
+      queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
     },
   });
 }
