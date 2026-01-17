@@ -84,6 +84,7 @@ export default function Feira() {
   const [buscaProduto, setBuscaProduto] = useState('');
   const [itensRetorno, setItensRetorno] = useState<{ itemId: string; quantidadeRetornada: number }[]>([]);
   const [isRefetchingEstoque, setIsRefetchingEstoque] = useState(false);
+  const [inputRetornoValues, setInputRetornoValues] = useState<Record<string, string>>({});
 
   const produtosAcabados = getProdutosAcabados();
   const periodoEhHoje = periodo.tipo === 'hoje';
@@ -268,6 +269,10 @@ export default function Feira() {
       itemId: i.itemId,
       quantidadeRetornada: 0,
     })));
+    // Inicializar inputValues com "0" para cada item
+    setInputRetornoValues(
+      carga.itens.reduce((acc, i) => ({ ...acc, [i.itemId]: '0' }), {})
+    );
     setShowRetorno(true);
   };
 
@@ -919,24 +924,56 @@ export default function Feira() {
                               size="icon"
                               variant="outline"
                               className="h-6 w-6"
-                              onClick={() => handleUpdateRetorno(item.itemId, Math.max(0, retornado - 1))}
+                              onClick={() => {
+                                const newVal = Math.max(0, retornado - 1);
+                                handleUpdateRetorno(item.itemId, newVal);
+                                setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(newVal) }));
+                              }}
                               disabled={retornado <= 0}
                             >
                               <Minus size={12} />
                             </Button>
                             <Input
-                              type="number"
-                              min={0}
-                              max={item.quantidadeEnviada}
-                              value={retornado}
-                              onChange={(e) => handleUpdateRetorno(item.itemId, parseInt(e.target.value) || 0)}
-                              className="w-12 h-6 text-center text-xs font-medium px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={inputRetornoValues[item.itemId] ?? String(retornado)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                // Aceitar string vazia ou apenas números
+                                if (val === '' || /^\d+$/.test(val)) {
+                                  setInputRetornoValues(prev => ({ ...prev, [item.itemId]: val }));
+                                  // Se for número válido, atualizar o estado de retorno
+                                  if (val !== '') {
+                                    handleUpdateRetorno(item.itemId, parseInt(val, 10));
+                                  }
+                                }
+                              }}
+                              onBlur={() => {
+                                // Ao sair do campo, garantir valor válido
+                                const val = inputRetornoValues[item.itemId];
+                                if (val === '' || isNaN(parseInt(val, 10))) {
+                                  setInputRetornoValues(prev => ({ ...prev, [item.itemId]: '0' }));
+                                  handleUpdateRetorno(item.itemId, 0);
+                                } else {
+                                  // Normalizar e clampar
+                                  const numVal = parseInt(val, 10);
+                                  const clampedVal = Math.max(0, Math.min(item.quantidadeEnviada, numVal));
+                                  setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(clampedVal) }));
+                                  handleUpdateRetorno(item.itemId, clampedVal);
+                                }
+                              }}
+                              className="w-12 h-6 text-center text-xs font-medium px-1"
                             />
                             <Button
                               size="icon"
                               variant="outline"
                               className="h-6 w-6"
-                              onClick={() => handleUpdateRetorno(item.itemId, Math.min(item.quantidadeEnviada, retornado + 1))}
+                              onClick={() => {
+                                const newVal = Math.min(item.quantidadeEnviada, retornado + 1);
+                                handleUpdateRetorno(item.itemId, newVal);
+                                setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(newVal) }));
+                              }}
                               disabled={retornado >= item.quantidadeEnviada}
                             >
                               <Plus size={12} />
