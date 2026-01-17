@@ -525,39 +525,42 @@ export default function Feira() {
                     return (
                       <Card key={carga.id} className="border-primary/30">
                         <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                                Em andamento
-                              </Badge>
-                              <span className="text-sm text-muted-foreground">
-                                {format(new Date(carga.dataSaida), "HH:mm")}
-                              </span>
+                          <div className="space-y-2 mb-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                                  Em andamento
+                                </Badge>
+                                <span className="text-sm text-muted-foreground">
+                                  {format(new Date(carga.dataSaida), "HH:mm")}
+                                </span>
+                              </div>
+                              <span className="font-semibold text-sm">{formatCurrency(valorTotal)}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Button 
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleGerarPDF(carga)}
-                                disabled={isGeneratingPDF}
-                                className="gap-1"
-                              >
-                                <FileText size={14} />
-                                PDF
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleOpenRetornoFromHistorico(carga)}
-                                className="gap-1"
-                              >
-                                <RotateCcw size={14} />
-                                Registrar Retorno
-                              </Button>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">{totalPecas} peças</span>
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleGerarPDF(carga)}
+                                  disabled={isGeneratingPDF}
+                                  className="gap-1 h-8 px-2"
+                                >
+                                  <FileText size={14} />
+                                  <span className="hidden sm:inline">PDF</span>
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => handleOpenRetornoFromHistorico(carga)}
+                                  className="gap-1 h-8 px-2"
+                                >
+                                  <RotateCcw size={14} />
+                                  <span className="sm:hidden">Retorno</span>
+                                  <span className="hidden sm:inline">Registrar Retorno</span>
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span>{totalPecas} peças</span>
-                            <span className="font-semibold">{formatCurrency(valorTotal)}</span>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1">
                             {carga.itens.slice(0, 3).map(item => (

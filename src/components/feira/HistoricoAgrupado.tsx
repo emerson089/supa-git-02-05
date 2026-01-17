@@ -134,31 +134,31 @@ export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, on
           >
             <Card>
               <CollapsibleTrigger asChild>
-                <div className="p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                <div className="p-3 sm:p-4 cursor-pointer hover:bg-muted/50 transition-colors">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2 sm:gap-3">
                       {openDays.has(dia.data) ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       )}
-                      <div>
-                        <span className="font-semibold">{dia.dataFormatada}</span>
-                        <span className="text-muted-foreground ml-2 capitalize">({dia.diaSemana})</span>
+                      <div className="min-w-0">
+                        <span className="font-semibold text-sm sm:text-base">{dia.dataFormatada}</span>
+                        <span className="text-muted-foreground ml-1 sm:ml-2 capitalize text-xs sm:text-sm">({dia.diaSemana})</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 text-sm">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:gap-4 text-xs sm:text-sm pl-6 sm:pl-0 mt-1 sm:mt-0">
                       <span className="text-muted-foreground">
                         {dia.totalCargas} carga{dia.totalCargas !== 1 ? 's' : ''}
                       </span>
-                      <span className="text-muted-foreground">
+                      <span className="text-muted-foreground hidden sm:inline">
                         {dia.totalEnviado} env
                       </span>
-                      <span className="text-muted-foreground">
+                      <span className="text-muted-foreground hidden sm:inline">
                         {dia.totalRetornado} ret
                       </span>
-                      <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600">
-                        {dia.totalVendido} vendido{dia.totalVendido !== 1 ? 's' : ''}
+                      <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 text-xs">
+                        {dia.totalVendido} vend
                       </Badge>
                       <span className="font-semibold text-primary">
                         {formatCurrency(dia.valorVendido)}
@@ -181,85 +181,87 @@ export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, on
                     const canEstornar = carga.status === 'concluida' && onEstornarCarga;
                     const isFinalized = carga.status === 'estornada' || carga.status === 'cancelada';
 
-                    return (
+                      return (
                       <div
                         key={carga.id}
                         className={cn(
-                          'flex items-center justify-between p-3 rounded-lg border transition-colors',
+                          'flex flex-col gap-2 p-3 rounded-lg border transition-colors sm:flex-row sm:items-center sm:justify-between',
                           statusConfig.rowClass
                         )}
                       >
-                        <div className="flex items-center gap-3">
-                          <StatusIcon size={16} className={statusConfig.iconClass} />
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                          <StatusIcon size={16} className={cn(statusConfig.iconClass, 'flex-shrink-0')} />
                           <span className="text-sm font-medium">{horario}</span>
                           <Badge
                             variant={statusConfig.variant}
-                            className={cn('text-xs', statusConfig.badgeClass)}
+                            className={cn('text-xs flex-shrink-0', statusConfig.badgeClass)}
                           >
                             {statusConfig.label}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="text-muted-foreground">
+                        <div className="flex items-center justify-between gap-2 sm:gap-4 text-sm pl-6 sm:pl-0">
+                          <span className="text-muted-foreground text-xs sm:text-sm">
                             {totais.enviado}→{totais.retornado}={totais.vendido}
                           </span>
-                          <span className="font-semibold text-emerald-600">
-                            {formatCurrency(totais.valor)}
-                          </span>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-8 w-8">
-                                <MoreVertical size={16} />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => onVerDetalhes(carga)}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                Ver detalhes
-                              </DropdownMenuItem>
-                              
-                              {/* Ações disponíveis apenas para cargas não finalizadas */}
-                              {!isFinalized && (canExcluir || canEstornar) && (
-                                <DropdownMenuSeparator />
-                              )}
-                              
-                              {/* Excluir: apenas em_andamento */}
-                              {canExcluir && (
-                                <DropdownMenuItem
-                                  onClick={() => onExcluirCarga(carga)}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Excluir carga
+                          <div className="flex items-center gap-2 sm:gap-4">
+                            <span className="font-semibold text-emerald-600">
+                              {formatCurrency(totais.valor)}
+                            </span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="icon" variant="ghost" className="h-8 w-8 flex-shrink-0">
+                                  <MoreVertical size={16} />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => onVerDetalhes(carga)}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  Ver detalhes
                                 </DropdownMenuItem>
-                              )}
-                              
-                              {/* Excluir: apenas concluida */}
-                              {canEstornar && (
-                                <DropdownMenuItem
-                                  onClick={() => onEstornarCarga!(carga)}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Excluir
-                                </DropdownMenuItem>
-                              )}
-                              
-                              {/* Excluir do histórico: apenas estornada/cancelada */}
-                              {isFinalized && onExcluirHistorico && (
-                                <>
+                                
+                                {/* Ações disponíveis apenas para cargas não finalizadas */}
+                                {!isFinalized && (canExcluir || canEstornar) && (
                                   <DropdownMenuSeparator />
+                                )}
+                                
+                                {/* Excluir: apenas em_andamento */}
+                                {canExcluir && (
                                   <DropdownMenuItem
-                                    onClick={() => onExcluirHistorico(carga)}
+                                    onClick={() => onExcluirCarga(carga)}
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" />
-                                    Excluir do histórico
+                                    Excluir carga
                                   </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                )}
+                                
+                                {/* Excluir: apenas concluida */}
+                                {canEstornar && (
+                                  <DropdownMenuItem
+                                    onClick={() => onEstornarCarga!(carga)}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Excluir
+                                  </DropdownMenuItem>
+                                )}
+                                
+                                {/* Excluir do histórico: apenas estornada/cancelada */}
+                                {isFinalized && onExcluirHistorico && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => onExcluirHistorico(carga)}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Excluir do histórico
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                       </div>
                     );
