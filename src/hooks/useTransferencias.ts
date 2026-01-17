@@ -254,31 +254,57 @@ export function useCriarCargaFeira() {
         throw new Error('Locais não configurados. Recarregue a página para sincronizar a configuração inicial.');
       }
 
-      // Validar disponibilidade de cada item
-      for (const item of itens) {
-        const { data: estoque } = await supabase
-          .from('estoque_por_local')
-          .select('*')
-          .eq('item_id', item.itemId)
-          .eq('local_id', central.id)
-          .single();
+      // OTIMIZADO: Buscar todos os estoques de uma vez
+      const itemIds = itens.map(i => i.itemId);
+      
+      const { data: estoquesOriginais } = await supabase
+        .from('estoque_por_local')
+        .select('*')
+        .in('item_id', itemIds)
+        .in('local_id', [central.id, banca.id]);
 
+      // Mapear estoques por item e local
+      const mapEstoquesCentral = new Map<string, { id: string; quantidade: number; quantidade_reservada: number }>();
+      const mapEstoquesBanca = new Map<string, { id: string; quantidade: number }>();
+      
+      estoquesOriginais?.forEach(e => {
+        if (e.local_id === central.id) {
+          mapEstoquesCentral.set(e.item_id, { 
+            id: e.id, 
+            quantidade: Number(e.quantidade), 
+            quantidade_reservada: Number(e.quantidade_reservada) 
+          });
+        } else if (e.local_id === banca.id) {
+          mapEstoquesBanca.set(e.item_id, { id: e.id, quantidade: Number(e.quantidade) });
+        }
+      });
+
+      // Validar disponibilidade de todos os itens
+      const itensComProblema: string[] = [];
+      for (const item of itens) {
+        const estoque = mapEstoquesCentral.get(item.itemId);
         const disponivel = estoque
-          ? Number(estoque.quantidade) - Number(estoque.quantidade_reservada)
+          ? estoque.quantidade - estoque.quantidade_reservada
           : 0;
 
         if (disponivel < item.quantidade) {
-          // Buscar nome do item
-          const { data: itemData } = await supabase
-            .from('estoque_itens')
-            .select('nome')
-            .eq('id', item.itemId)
-            .single();
-
-          throw new Error(
-            `${itemData?.nome || 'Item'}: apenas ${disponivel} disponível no Central. Estoque insuficiente.`
-          );
+          itensComProblema.push(item.itemId);
         }
+      }
+
+      // Se há itens com problema, buscar nomes e lançar erro
+      if (itensComProblema.length > 0) {
+        const { data: itensNomes } = await supabase
+          .from('estoque_itens')
+          .select('id, nome')
+          .in('id', itensComProblema);
+        
+        const primeiroProblema = itensComProblema[0];
+        const estoque = mapEstoquesCentral.get(primeiroProblema);
+        const disponivel = estoque ? estoque.quantidade - estoque.quantidade_reservada : 0;
+        const nomeItem = itensNomes?.find(i => i.id === primeiroProblema)?.nome || 'Item';
+        
+        throw new Error(`${nomeItem}: apenas ${disponivel} disponível no Central. Estoque insuficiente.`);
       }
 
       // Criar transferência
@@ -297,30 +323,26 @@ export function useCriarCargaFeira() {
 
       if (tErr) throw tErr;
 
-      // Criar itens da transferência, mover estoque e registrar auditoria
-      for (const item of itens) {
-        // Inserir item da transferência
-        await supabase.from('transferencia_itens').insert({
-          user_id: user.id,
-          transferencia_id: transferencia.id,
-          item_id: item.itemId,
-          quantidade_enviada: item.quantidade,
-          preco_unitario: item.precoUnitario || null,
-        });
+      // OTIMIZADO: Inserir todos os itens da transferência em lote
+      const itensParaInserir = itens.map(item => ({
+        user_id: user.id,
+        transferencia_id: transferencia.id,
+        item_id: item.itemId,
+        quantidade_enviada: item.quantidade,
+        preco_unitario: item.precoUnitario || null,
+      }));
+      
+      const { error: itensError } = await supabase
+        .from('transferencia_itens')
+        .insert(itensParaInserir);
+      
+      if (itensError) throw itensError;
 
-        // Buscar estoque atual do Central
-        const { data: estoqueCentral } = await supabase
-          .from('estoque_por_local')
-          .select('*')
-          .eq('item_id', item.itemId)
-          .eq('local_id', central.id)
-          .single();
-
-        const quantidadeAntesCentral = estoqueCentral ? Number(estoqueCentral.quantidade) : 0;
-        const quantidadeDepoisCentral = quantidadeAntesCentral - item.quantidade;
-
-        // Registrar movimentação de auditoria: ENVIO_FEIRA (COM TRATAMENTO DE ERRO)
-        const { error: movEnvioError } = await supabase.from('estoque_movimentacoes').insert({
+      // OTIMIZADO: Registrar todas as movimentações em lote
+      const movimentacoes = itens.map(item => {
+        const estoqueCentral = mapEstoquesCentral.get(item.itemId);
+        const quantidadeAntes = estoqueCentral?.quantidade || 0;
+        return {
           user_id: user.id,
           item_id: item.itemId,
           tipo: 'ENVIO_FEIRA',
@@ -328,26 +350,34 @@ export function useCriarCargaFeira() {
           motivo: `Envio para feira - Carga #${transferencia.id.slice(0, 8)}`,
           transferencia_id: transferencia.id,
           local_id: central.id,
-          estoque_antes: quantidadeAntesCentral,
-          estoque_depois: quantidadeDepoisCentral,
-        });
+          estoque_antes: quantidadeAntes,
+          estoque_depois: quantidadeAntes - item.quantidade,
+        };
+      });
 
-        if (movEnvioError) {
-          console.error('[useCriarCargaFeira] ERRO ao registrar ENVIO_FEIRA:', movEnvioError);
-          // Detectar erro de RLS específico
-          if (movEnvioError.message.includes('row-level security policy')) {
-            throw new Error('Sessão expirada ou sem permissão. Por favor, recarregue a página e tente novamente.');
-          }
-          throw new Error(`Falha ao registrar movimentação de estoque: ${movEnvioError.message}`);
+      const { error: movError } = await supabase
+        .from('estoque_movimentacoes')
+        .insert(movimentacoes);
+
+      if (movError) {
+        console.error('[useCriarCargaFeira] ERRO ao registrar ENVIO_FEIRA:', movError);
+        if (movError.message.includes('row-level security policy')) {
+          throw new Error('Sessão expirada ou sem permissão. Por favor, recarregue a página e tente novamente.');
         }
+        throw new Error(`Falha ao registrar movimentação de estoque: ${movError.message}`);
+      }
 
-        // Mover estoque: Central -> Banca
+      // OTIMIZADO: Atualizar estoques em paralelo
+      const updatePromises = itens.map(async (item) => {
+        const estoqueCentral = mapEstoquesCentral.get(item.itemId);
+        const estoqueBanca = mapEstoquesBanca.get(item.itemId);
+        
         // Reduzir no Central
         if (estoqueCentral) {
           const { error: updateCentralError } = await supabase
             .from('estoque_por_local')
             .update({
-              quantidade: quantidadeDepoisCentral,
+              quantidade: estoqueCentral.quantidade - item.quantidade,
               updated_at: new Date().toISOString(),
             })
             .eq('id', estoqueCentral.id);
@@ -356,24 +386,14 @@ export function useCriarCargaFeira() {
             console.error('[useCriarCargaFeira] ERRO ao reduzir Central:', updateCentralError);
             throw new Error(`Falha ao atualizar estoque Central: ${updateCentralError.message}`);
           }
-        } else {
-          // Se não existe registro no Central, criar com quantidade negativa (erro crítico, mas logar)
-          console.error('[useCriarCargaFeira] ALERTA: Item não tem registro no Central:', item.itemId);
         }
 
         // Adicionar na Banca
-        const { data: estoqueBanca } = await supabase
-          .from('estoque_por_local')
-          .select('*')
-          .eq('item_id', item.itemId)
-          .eq('local_id', banca.id)
-          .single();
-
         if (estoqueBanca) {
           const { error: updateBancaError } = await supabase
             .from('estoque_por_local')
             .update({
-              quantidade: Number(estoqueBanca.quantidade) + item.quantidade,
+              quantidade: estoqueBanca.quantidade + item.quantidade,
               updated_at: new Date().toISOString(),
             })
             .eq('id', estoqueBanca.id);
@@ -396,10 +416,12 @@ export function useCriarCargaFeira() {
             throw new Error(`Falha ao criar registro na Banca: ${insertBancaError.message}`);
           }
         }
+      });
 
-        // Sincronizar estoque_itens.quantidade
-        await sincronizarEstoqueTotal(item.itemId, user.id);
-      }
+      await Promise.all(updatePromises);
+
+      // OTIMIZADO: Sincronizar todos os estoques em paralelo
+      await Promise.all(itens.map(item => sincronizarEstoqueTotal(item.itemId, user.id)));
 
       return mapDbToTransferencia(transferencia as DbTransferencia);
     },

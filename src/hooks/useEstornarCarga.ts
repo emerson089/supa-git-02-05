@@ -53,34 +53,69 @@ export function useEstornarCarga() {
 
       if (!central || !banca) throw new Error('Locais Central/Banca não configurados');
 
-      // 3. Para cada item, reverter a venda (adicionar vendido de volta ao Central)
-      for (const item of carga.transferencia_itens) {
-        const enviado = Number(item.quantidade_enviada) || 0;
-        const retornado = Number(item.quantidade_retornada) || 0;
-        const vendido = enviado - retornado;
+      // 3. OTIMIZADO: Calcular itens com venda para estornar
+      const itensComVenda = carga.transferencia_itens
+        .map(item => ({
+          item_id: item.item_id,
+          enviado: Number(item.quantidade_enviada) || 0,
+          retornado: Number(item.quantidade_retornada) || 0,
+          vendido: (Number(item.quantidade_enviada) || 0) - (Number(item.quantidade_retornada) || 0),
+        }))
+        .filter(item => item.vendido > 0);
 
-        // Só precisa estornar se houve venda
-        if (vendido > 0) {
-          // Buscar estoque atual do Central
-          const { data: estoqueCentral } = await supabase
-            .from('estoque_por_local')
-            .select('*')
-            .eq('item_id', item.item_id)
-            .eq('local_id', central.id)
-            .single();
+      if (itensComVenda.length > 0) {
+        const itemIds = itensComVenda.map(i => i.item_id);
 
-          const quantidadeAntes = estoqueCentral ? Number(estoqueCentral.quantidade) : 0;
-          const quantidadeDepois = quantidadeAntes + vendido;
+        // OTIMIZADO: Buscar todos os estoques do Central de uma vez
+        const { data: estoquesCentral } = await supabase
+          .from('estoque_por_local')
+          .select('*')
+          .in('item_id', itemIds)
+          .eq('local_id', central.id);
 
-          // Adicionar vendido de volta ao Central
-          if (estoqueCentral) {
+        const mapEstoques = new Map<string, { id: string; quantidade: number }>();
+        estoquesCentral?.forEach(e => {
+          mapEstoques.set(e.item_id, { id: e.id, quantidade: Number(e.quantidade) });
+        });
+
+        // OTIMIZADO: Registrar todas as movimentações em lote
+        const movimentacoes = itensComVenda.map(item => {
+          const estoque = mapEstoques.get(item.item_id);
+          const quantidadeAntes = estoque?.quantidade || 0;
+          return {
+            user_id: user.id,
+            item_id: item.item_id,
+            tipo: 'ESTORNO_FEIRA',
+            quantidade: item.vendido,
+            motivo: `Estorno de venda - Carga #${transferenciaId.slice(0, 8)} - ${motivo}`,
+            transferencia_id: transferenciaId,
+            local_id: central.id,
+            estoque_antes: quantidadeAntes,
+            estoque_depois: quantidadeAntes + item.vendido,
+          };
+        });
+
+        const { error: movError } = await supabase
+          .from('estoque_movimentacoes')
+          .insert(movimentacoes);
+
+        if (movError) {
+          console.error('[useEstornarCarga] Erro ao registrar ESTORNO_FEIRA:', movError);
+          throw new Error(`Falha ao registrar movimentação de estorno: ${movError.message}`);
+        }
+
+        // OTIMIZADO: Atualizar estoques em paralelo
+        const updatePromises = itensComVenda.map(async (item) => {
+          const estoque = mapEstoques.get(item.item_id);
+          
+          if (estoque) {
             const { error: updateError } = await supabase
               .from('estoque_por_local')
               .update({
-                quantidade: quantidadeDepois,
+                quantidade: estoque.quantidade + item.vendido,
                 updated_at: new Date().toISOString(),
               })
-              .eq('id', estoqueCentral.id);
+              .eq('id', estoque.id);
 
             if (updateError) {
               console.error('[useEstornarCarga] Erro ao atualizar estoque Central:', updateError);
@@ -92,32 +127,16 @@ export function useEstornarCarga() {
               user_id: user.id,
               item_id: item.item_id,
               local_id: central.id,
-              quantidade: vendido,
+              quantidade: item.vendido,
               quantidade_reservada: 0,
             });
           }
+        });
 
-          // Registrar movimentação ESTORNO_FEIRA
-          const { error: movError } = await supabase.from('estoque_movimentacoes').insert({
-            user_id: user.id,
-            item_id: item.item_id,
-            tipo: 'ESTORNO_FEIRA',
-            quantidade: vendido,
-            motivo: `Estorno de venda - Carga #${transferenciaId.slice(0, 8)} - ${motivo}`,
-            transferencia_id: transferenciaId,
-            local_id: central.id,
-            estoque_antes: quantidadeAntes,
-            estoque_depois: quantidadeDepois,
-          });
+        await Promise.all(updatePromises);
 
-          if (movError) {
-            console.error('[useEstornarCarga] Erro ao registrar ESTORNO_FEIRA:', movError);
-            throw new Error(`Falha ao registrar movimentação de estorno: ${movError.message}`);
-          }
-
-          // Sincronizar estoque_itens.quantidade
-          await sincronizarEstoqueTotal(item.item_id, user.id);
-        }
+        // OTIMIZADO: Sincronizar todos os estoques em paralelo
+        await Promise.all(itensComVenda.map(item => sincronizarEstoqueTotal(item.item_id, user.id)));
       }
 
       // 4. Marcar transferência como estornada
