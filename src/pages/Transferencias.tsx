@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Image as ImageIcon } from 'lucide-react';
+import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search } from 'lucide-react';
+import { LotImage } from '@/components/production/LotImage';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -441,18 +442,12 @@ export default function Transferencias() {
                           onClick={() => !jaAdicionado && disponivel > 0 && handleAddItemTransferencia(produto)}
                         >
                           {/* Foto do produto */}
-                          <div className="w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0">
-                            {produto.imagemUrl ? (
-                              <img 
-                                src={produto.imagemUrl} 
-                                alt={produto.nome} 
-                                className="w-full h-full object-cover" 
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                              </div>
-                            )}
+                          <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden shrink-0 border">
+                            <LotImage 
+                              src={produto.imagemUrl} 
+                              alt={produto.nome}
+                              className="w-full h-full object-cover"
+                            />
                           </div>
 
                           <div className="flex-1 min-w-0">
@@ -524,18 +519,12 @@ export default function Transferencias() {
                       className="flex items-center gap-3 p-3 rounded-lg border bg-background"
                     >
                       {/* Foto do produto */}
-                      <div className="w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0">
-                        {item.imagemUrl ? (
-                          <img 
-                            src={item.imagemUrl} 
-                            alt={item.nome} 
-                            className="w-full h-full object-cover" 
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                        )}
+                      <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden shrink-0 border">
+                        <LotImage 
+                          src={item.imagemUrl} 
+                          alt={item.nome}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
 
                       <div className="flex-1 min-w-0">
