@@ -347,17 +347,23 @@ export function useProdutosDisponiveis(localId: string | null) {
 
       if (itensError) throw itensError;
 
-      // 3. Buscar estoque no Central
-      let estoqueCentralMap = new Map<string, number>();
+      // 3. Buscar estoque no Central (incluindo quantidade_reservada para calcular disponível)
+      let estoqueCentralMap = new Map<string, { quantidade: number; reservada: number }>();
       if (localCentral) {
         const { data: estoqueCentral } = await supabase
           .from('estoque_por_local')
-          .select('item_id, quantidade')
+          .select('item_id, quantidade, quantidade_reservada')
           .eq('local_id', localCentral.id)
           .eq('user_id', user.id);
 
         estoqueCentralMap = new Map(
-          (estoqueCentral || []).map(item => [item.item_id, Number(item.quantidade)])
+          (estoqueCentral || []).map(item => [
+            item.item_id, 
+            { 
+              quantidade: Number(item.quantidade), 
+              reservada: Number(item.quantidade_reservada || 0) 
+            }
+          ])
         );
       }
 
@@ -374,16 +380,24 @@ export function useProdutosDisponiveis(localId: string | null) {
         (jaNoLocal || []).map(item => [item.item_id, Number(item.quantidade)])
       );
 
-      return (itens || []).map(item => ({
-        id: item.id,
-        nome: item.nome,
-        codigo: item.categoria,
-        imagemUrl: item.imagem_url,
-        precoUnitario: item.preco_unitario,
-        quantidadeCentral: estoqueCentralMap.get(item.id) || 0,
-        quantidadeNoLocal: itensNoLocal.get(item.id) || 0,
-        jaNoLocal: (itensNoLocal.get(item.id) || 0) > 0,
-      }));
+      return (itens || []).map(item => {
+        const centralData = estoqueCentralMap.get(item.id);
+        // Calcular disponível = quantidade - reservada (mesma regra do backend)
+        const quantidadeDisponivel = centralData 
+          ? Math.max(0, centralData.quantidade - centralData.reservada)
+          : 0;
+        
+        return {
+          id: item.id,
+          nome: item.nome,
+          codigo: item.categoria,
+          imagemUrl: item.imagem_url,
+          precoUnitario: item.preco_unitario,
+          quantidadeCentral: quantidadeDisponivel,
+          quantidadeNoLocal: itensNoLocal.get(item.id) || 0,
+          jaNoLocal: (itensNoLocal.get(item.id) || 0) > 0,
+        };
+      });
     },
     enabled: !!localId && !!user?.id,
   });

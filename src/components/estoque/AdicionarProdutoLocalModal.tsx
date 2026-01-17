@@ -47,7 +47,8 @@ export function AdicionarProdutoLocalModal({
   const [motivo, setMotivo] = useState('');
   const quantidadeRef = useRef<HTMLInputElement>(null);
 
-  const { data: produtos = [], isLoading } = useProdutosDisponiveis(localId);
+  // Condicionar ao open para forçar refetch quando o modal abrir
+  const { data: produtos = [], isLoading } = useProdutosDisponiveis(open ? localId : null);
   const transferirProduto = useAdicionarProdutoLocal();
 
   useEffect(() => {
