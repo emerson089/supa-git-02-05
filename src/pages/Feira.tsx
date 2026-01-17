@@ -800,7 +800,7 @@ export default function Feira() {
                     {totalCarga} pç • {formatCurrency(valorCarga)}
                   </span>
                 </div>
-                <ScrollArea className="max-h-[180px]">
+                <ScrollArea className="h-[200px]">
                   <div className="divide-y">
                     {itensCarga.map(item => (
                       <div 
