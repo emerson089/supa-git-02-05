@@ -251,7 +251,7 @@ export function useRemoveItem() {
   
   return useMutation({
     mutationFn: async (id: string) => {
-      // 1. Verificar se existe em transferencia_itens com transferências ATIVAS (não soft-deleted)
+      // 1. Verificar se existe em transferencia_itens com transferências ATIVAS (não soft-deleted E com status bloqueante)
       const { data: cargasAtivas, error: cargasError } = await supabase
         .from('transferencia_itens')
         .select(`
@@ -259,11 +259,13 @@ export function useRemoveItem() {
           transferencia_id,
           transferencias!inner(
             id,
+            status,
             deleted_at
           )
         `)
         .eq('item_id', id)
-        .is('transferencias.deleted_at', null);
+        .is('transferencias.deleted_at', null)
+        .in('transferencias.status', ['em_andamento', 'concluida']);
 
       if (cargasError) {
         console.error('[useRemoveItem] Erro ao verificar cargas:', cargasError);
@@ -271,7 +273,20 @@ export function useRemoveItem() {
       }
 
       if (cargasAtivas && cargasAtivas.length > 0) {
-        throw new Error(`Este modelo possui ${cargasAtivas.length} carga(s) de feira ativa(s). Exclua ou estorne as cargas na página Feira antes de remover o modelo.`);
+        // Contar por status para mensagem mais informativa
+        const emAndamento = cargasAtivas.filter((c: any) => c.transferencias?.status === 'em_andamento').length;
+        const concluidas = cargasAtivas.filter((c: any) => c.transferencias?.status === 'concluida').length;
+        
+        let mensagem = 'Este modelo possui cargas de feira que precisam ser tratadas:\n';
+        if (emAndamento > 0) {
+          mensagem += `• ${emAndamento} carga(s) em andamento (excluir na Feira)\n`;
+        }
+        if (concluidas > 0) {
+          mensagem += `• ${concluidas} carga(s) concluída(s) (estornar na Feira)\n`;
+        }
+        mensagem += '\nAltere o filtro de período para "Últimos 7 dias" ou "Últimos 30 dias" para visualizar todas as cargas.';
+        
+        throw new Error(mensagem);
       }
 
       // 2. Deletar registros dependentes primeiro
