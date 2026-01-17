@@ -430,9 +430,17 @@ export function useCriarCargaFeira() {
       queryClient.invalidateQueries({ queryKey: ['cargas-hoje'] });
       queryClient.invalidateQueries({ queryKey: ['cargas-periodo'] });
       queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
-      queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
-      queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+      // Invalidar TODAS as queries de estoque com predicate para garantir atualização
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] === 'estoque-por-local' || 
+           query.queryKey[0] === 'estoque-detalhado-por-local' ||
+           query.queryKey[0] === 'estoque-itens'),
+        refetchType: 'all'
+      });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['produtos-disponiveis-adicionar'] });
     },
   });
 }

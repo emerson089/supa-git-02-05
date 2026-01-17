@@ -101,8 +101,8 @@ export function useEstoquePorLocal(localId?: string) {
       return (data as DbEstoquePorLocal[]).map(mapDbEstoquePorLocal);
     },
     enabled: !!user,
-    staleTime: 10 * 1000, // 10 seconds - data is fresh for this period
-    refetchOnWindowFocus: true, // Refetch when returning to the window
+    staleTime: 0, // Sempre revalidar para dados críticos de estoque
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -449,7 +449,15 @@ export function useMoverEstoque() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+      // Invalidar TODAS as queries de estoque com predicate
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] === 'estoque-por-local' || 
+           query.queryKey[0] === 'estoque-detalhado-por-local' ||
+           query.queryKey[0] === 'estoque-itens'),
+        refetchType: 'all'
+      });
     },
   });
 }

@@ -150,9 +150,17 @@ export function useAjustarEstoqueLocal() {
       return { tipoMovimentacao, diferenca };
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['estoque-detalhado-por-local'] });
+      // Invalidar TODAS as queries de estoque com predicate para garantir atualização
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] === 'estoque-por-local' || 
+           query.queryKey[0] === 'estoque-detalhado-por-local' ||
+           query.queryKey[0] === 'estoque-itens'),
+        refetchType: 'all'
+      });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+      queryClient.invalidateQueries({ queryKey: ['produtos-disponiveis-adicionar'] });
       
       const tipoTexto = result.tipoMovimentacao === 'AJUSTE_ENTRADA' ? 'entrada' : 'saída';
       toast.success(`Ajuste de ${tipoTexto} registrado com sucesso!`);
@@ -296,10 +304,16 @@ export function useAdicionarProdutoLocal() {
       return { quantidade };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['estoque-detalhado-por-local'] });
+      // Invalidar TODAS as queries de estoque com predicate para garantir atualização imediata
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] === 'estoque-por-local' || 
+           query.queryKey[0] === 'estoque-detalhado-por-local' ||
+           query.queryKey[0] === 'estoque-itens'),
+        refetchType: 'all'
+      });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
-      queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
       queryClient.invalidateQueries({ queryKey: ['produtos-disponiveis-adicionar'] });
       toast.success('Produto transferido do Central para o local!');
     },
@@ -363,9 +377,16 @@ export function useZerarProdutoLocal() {
       return { quantidade: estoqueAntes };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['estoque-detalhado-por-local'] });
+      // Invalidar TODAS as queries de estoque com predicate para garantir atualização
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] === 'estoque-por-local' || 
+           query.queryKey[0] === 'estoque-detalhado-por-local' ||
+           query.queryKey[0] === 'estoque-itens'),
+        refetchType: 'all'
+      });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
       toast.success('Estoque zerado com sucesso!');
     },
     onError: (error: any) => {
