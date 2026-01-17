@@ -46,6 +46,7 @@ interface ItemCarga {
   quantidade: number;
   precoUnitario: number;
   disponivelCentral: number;
+  imagemUrl: string | null;
 }
 
 export default function Feira() {
@@ -160,7 +161,7 @@ export default function Feira() {
     }).format(value);
   };
 
-  const handleAddItemCarga = (produto: { id: string; nome: string; precoUnitario: number | null }) => {
+  const handleAddItemCarga = (produto: { id: string; nome: string; precoUnitario: number | null; imagemUrl?: string | null }) => {
     const disponivel = getDisponivelCentral(produto.id);
     if (disponivel <= 0) {
       toast.error('Produto sem estoque disponível no Central');
@@ -179,6 +180,7 @@ export default function Feira() {
       quantidade: 1,
       precoUnitario: produto.precoUnitario || 0,
       disponivelCentral: disponivel,
+      imagemUrl: produto.imagemUrl ?? null,
     }]);
   };
 
@@ -669,24 +671,24 @@ export default function Feira() {
 
       {/* Modal Nova Carga */}
       <Dialog open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Nova Carga para Feira</DialogTitle>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogHeader className="px-4 pt-4 pb-3 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" />
+              Nova Carga para Feira
+            </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto space-y-4">
-            {/* Produtos Disponíveis */}
-            <div>
-              <Label className="text-sm font-medium mb-2 block">Adicionar Produtos</Label>
-              
-              {/* Campo de Busca */}
-              <div className="relative mb-3">
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            {/* Campo de Busca */}
+            <div className="px-4 py-3 border-b bg-muted/30">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar produto (nome, código...)"
                   value={buscaProduto}
                   onChange={(e) => setBuscaProduto(e.target.value)}
-                  className="pl-9 pr-9"
+                  className="pl-9 pr-9 bg-background"
                 />
                 {buscaProduto && (
                   <Button
@@ -699,8 +701,14 @@ export default function Feira() {
                   </Button>
                 )}
               </div>
+            </div>
 
-              <ScrollArea className="h-48 border rounded-lg p-2">
+            {/* Produtos Disponíveis */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b bg-muted/20">
+                Produtos Disponíveis ({produtosFiltrados.length})
+              </div>
+              <ScrollArea className="h-[200px]">
                 {isRefetchingEstoque ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -711,52 +719,68 @@ export default function Feira() {
                     <p className="text-sm">Nenhum produto encontrado</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="divide-y">
                     {produtosFiltrados.map(produto => {
                       const disponivel = getDisponivelCentral(produto.id);
                       const jaAdicionado = itensCarga.some(i => i.itemId === produto.id);
+                      const semEstoque = disponivel <= 0;
                       
                       return (
                         <div 
                           key={produto.id}
                           className={cn(
-                            "flex items-center justify-between p-3 rounded-lg border transition-all",
-                            jaAdicionado 
-                              ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800" 
-                              : disponivel > 0 
-                                ? "hover:bg-muted/30 cursor-pointer border-border"
-                                : "bg-muted/20 opacity-60 cursor-not-allowed border-border"
+                            "flex items-center gap-3 px-4 py-3 transition-all",
+                            jaAdicionado && "bg-emerald-50 dark:bg-emerald-900/20",
+                            semEstoque && "opacity-50 cursor-not-allowed",
+                            !jaAdicionado && !semEstoque && "hover:bg-muted/30 cursor-pointer"
                           )}
-                          onClick={() => !jaAdicionado && disponivel > 0 && handleAddItemCarga(produto)}
+                          onClick={() => !jaAdicionado && !semEstoque && handleAddItemCarga(produto)}
                         >
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{produto.nome}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Disponível: {disponivel} • {formatCurrency(produto.precoUnitario || 0)}
-                            </p>
+                          {/* Thumbnail 56x56 */}
+                          <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0 border">
+                            <LotImage 
+                              src={produto.imagemUrl} 
+                              alt={produto.nome}
+                              className="w-full h-full object-cover"
+                            />
                           </div>
                           
-                          {/* Badge "Na carga" para produtos adicionados */}
-                          {jaAdicionado && (
-                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 shrink-0">
-                              <Check size={12} className="mr-1" />
-                              Na carga
-                            </Badge>
-                          )}
+                          {/* Info do Produto */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{produto.nome}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className={cn(
+                                "text-xs font-medium",
+                                disponivel > 0 ? "text-emerald-600" : "text-muted-foreground"
+                              )}>
+                                Disp: {disponivel}
+                              </span>
+                              <span className="text-xs text-muted-foreground">•</span>
+                              <span className="text-xs text-muted-foreground">
+                                {formatCurrency(produto.precoUnitario || 0)}
+                              </span>
+                            </div>
+                          </div>
                           
-                          {/* Botão + para produtos disponíveis */}
-                          {!jaAdicionado && disponivel > 0 && (
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-primary shrink-0">
-                              <Plus size={16} />
-                            </Button>
-                          )}
-                          
-                          {/* Badge "Sem estoque" para produtos indisponíveis */}
-                          {!jaAdicionado && disponivel === 0 && (
-                            <Badge variant="outline" className="text-muted-foreground shrink-0">
-                              Sem estoque
-                            </Badge>
-                          )}
+                          {/* Ação/Status */}
+                          <div className="flex-shrink-0">
+                            {jaAdicionado && (
+                              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+                                <Check size={12} className="mr-1" />
+                                Na carga
+                              </Badge>
+                            )}
+                            {!jaAdicionado && semEstoque && (
+                              <Badge variant="outline" className="text-muted-foreground">
+                                Sem estoque
+                              </Badge>
+                            )}
+                            {!jaAdicionado && !semEstoque && (
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-primary">
+                                <Plus size={18} />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -767,83 +791,113 @@ export default function Feira() {
 
             {/* Itens Selecionados */}
             {itensCarga.length > 0 && (
-              <div>
-                <Label className="text-sm font-medium mb-2 block">
-                  Itens na Carga ({itensCarga.length} {itensCarga.length === 1 ? 'item' : 'itens'})
-                </Label>
-                <div className="space-y-2">
-                  {itensCarga.map(item => (
-                    <div 
-                      key={item.itemId}
-                      className="p-3 rounded-lg border bg-card"
-                    >
-                      <div className="flex items-start justify-between mb-2">
+              <div className="border-t flex-shrink-0">
+                <div className="px-4 py-2 flex items-center justify-between border-b bg-primary/5">
+                  <span className="text-xs font-medium text-primary uppercase tracking-wide">
+                    Itens Selecionados ({itensCarga.length})
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {totalCarga} pç • {formatCurrency(valorCarga)}
+                  </span>
+                </div>
+                <ScrollArea className="max-h-[180px]">
+                  <div className="divide-y">
+                    {itensCarga.map(item => (
+                      <div 
+                        key={item.itemId}
+                        className="flex items-center gap-3 px-4 py-2.5 bg-card"
+                      >
+                        {/* Miniatura 40x40 */}
+                        <div className="w-10 h-10 rounded overflow-hidden bg-muted flex-shrink-0 border">
+                          <LotImage 
+                            src={item.imagemUrl} 
+                            alt={item.nome}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        
+                        {/* Nome + Subtotal */}
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{item.nome}</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatCurrency(item.precoUnitario)} × {item.quantidade} = 
-                            <span className="text-foreground font-medium ml-1">
-                              {formatCurrency(item.precoUnitario * item.quantidade)}
-                            </span>
+                            {formatCurrency(item.precoUnitario)} × {item.quantidade}
                           </p>
                         </div>
-                        <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                          Disp: {item.disponivelCentral}
+                        
+                        {/* Controles de Quantidade */}
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-7 w-7"
+                            onClick={(e) => { e.stopPropagation(); handleUpdateQuantidadeCarga(item.itemId, -1); }}
+                            disabled={item.quantidade <= 1}
+                          >
+                            <Minus size={14} />
+                          </Button>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={item.disponivelCentral}
+                            value={item.quantidade}
+                            onChange={(e) => handleSetQuantidadeCarga(item.itemId, parseInt(e.target.value) || 1)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-12 h-7 text-center text-sm font-medium px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-7 w-7"
+                            onClick={(e) => { e.stopPropagation(); handleUpdateQuantidadeCarga(item.itemId, 1); }}
+                            disabled={item.quantidade >= item.disponivelCentral}
+                          >
+                            <Plus size={14} />
+                          </Button>
+                        </div>
+                        
+                        {/* Subtotal */}
+                        <span className="text-sm font-semibold text-primary w-20 text-right hidden sm:block">
+                          {formatCurrency(item.precoUnitario * item.quantidade)}
                         </span>
-                      </div>
-                      
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          onClick={() => handleUpdateQuantidadeCarga(item.itemId, -1)}
-                          disabled={item.quantidade <= 1}
-                        >
-                          <Minus size={14} />
-                        </Button>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={item.disponivelCentral}
-                          value={item.quantidade}
-                          onChange={(e) => handleSetQuantidadeCarga(item.itemId, parseInt(e.target.value) || 1)}
-                          className="w-14 h-7 text-center text-sm font-medium px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        />
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          onClick={() => handleUpdateQuantidadeCarga(item.itemId, 1)}
-                          disabled={item.quantidade >= item.disponivelCentral}
-                        >
-                          <Plus size={14} />
-                        </Button>
+                        
+                        {/* Remover */}
                         <Button
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleRemoveItemCarga(item.itemId)}
+                          onClick={(e) => { e.stopPropagation(); handleRemoveItemCarga(item.itemId); }}
                         >
                           <Trash2 size={14} />
                         </Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               </div>
             )}
           </div>
 
-          <DialogFooter className="border-t pt-4">
+          <DialogFooter className="border-t px-4 py-3 bg-muted/30">
             <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3">
-              {/* Resumo */}
-              <div className="text-sm flex items-center gap-2 text-muted-foreground">
-                <span>Itens: <strong className="text-foreground">{itensCarga.length}</strong></span>
-                <span>•</span>
-                <span>Peças: <strong className="text-foreground">{totalCarga}</strong></span>
-                <span>•</span>
-                <span>Total: <strong className="text-primary">{formatCurrency(valorCarga)}</strong></span>
+              {/* Resumo detalhado */}
+              <div className="flex items-center gap-3 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <Package className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Itens:</span>
+                  <strong>{itensCarga.length}</strong>
+                </div>
+                <span className="text-muted-foreground">•</span>
+                <div className="flex items-center gap-1.5">
+                  <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Peças:</span>
+                  <strong>{totalCarga}</strong>
+                </div>
+                <span className="text-muted-foreground">•</span>
+                <div className="flex items-center gap-1.5">
+                  <DollarSign className="h-4 w-4 text-primary" />
+                  <span className="text-muted-foreground">Total:</span>
+                  <strong className="text-primary text-base">{formatCurrency(valorCarga)}</strong>
+                </div>
               </div>
               
               {/* Botões */}
@@ -854,18 +908,19 @@ export default function Feira() {
                 <Button 
                   onClick={handleCriarCarga}
                   disabled={itensCarga.length === 0 || criarCarga.isPending}
+                  className="min-w-[140px]"
                 >
                   {criarCarga.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Criando carga...
+                      Criando...
                     </>
                   ) : itensCarga.length === 0 ? (
                     'Selecione produtos'
                   ) : (
                     <>
                       <Truck className="h-4 w-4 mr-2" />
-                      Criar Carga ({totalCarga} pç • {formatCurrency(valorCarga)})
+                      Criar Carga
                     </>
                   )}
                 </Button>
