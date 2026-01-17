@@ -10,6 +10,7 @@ import {
   MovimentacaoEstoque,
   TipoEstoque,
 } from '@/hooks/useEstoqueData';
+import { useRealtimeEstoque } from '@/hooks/useRealtimeEstoque';
 
 export type StatusEstoque = 'disponivel' | 'em_producao' | 'reservado' | 'baixo_estoque';
 
@@ -75,6 +76,9 @@ interface EstoqueContextType {
 const EstoqueContext = createContext<EstoqueContextType | undefined>(undefined);
 
 export function EstoqueProvider({ children }: { children: ReactNode }) {
+  // Ativar realtime para sincronização automática
+  useRealtimeEstoque();
+  
   const { data: dbItens = [], isLoading: isLoadingItens } = useEstoqueItens();
   const { data: movimentacoes = [], isLoading: isLoadingMov } = useEstoqueMovimentacoes();
   const addItemMutation = useAddItem();
