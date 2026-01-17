@@ -883,10 +883,22 @@ export default function Feira() {
             <DialogDescription className="text-xs text-muted-foreground">
               Informe quantos itens retornaram da feira
             </DialogDescription>
+            <p className="text-[11px] text-muted-foreground/80 mt-1">
+              Vendido é calculado automaticamente: Enviado − Retorno
+            </p>
           </DialogHeader>
 
+          {/* Header de colunas fixo */}
+          <div className="grid grid-cols-[40px_1fr_50px_80px_70px] gap-2 px-4 py-2 border-b bg-muted/30 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+            <span></span>
+            <span>Produto</span>
+            <span className="text-center">Enviado</span>
+            <span className="text-center">Retorno</span>
+            <span className="text-center">Vendido</span>
+          </div>
+
           <ScrollArea className="flex-1 min-h-0">
-            <div className="px-4 py-3 space-y-2">
+            <div className="divide-y">
               {cargaSelecionada?.itens.map(item => {
                 const retorno = itensRetorno.find(i => i.itemId === item.itemId);
                 const retornado = retorno?.quantidadeRetornada || 0;
@@ -894,104 +906,88 @@ export default function Feira() {
                 const itemWithExtras = item as typeof item & { produtoNome?: string | null; produtoImagem?: string | null };
 
                 return (
-                  <div key={item.id} className="p-2.5 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
-                    <div className="flex gap-2.5">
-                      {/* Imagem compacta */}
-                      <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                        <LotImage 
-                          src={itemWithExtras.produtoImagem} 
-                          alt={itemWithExtras.produtoNome || 'Produto'} 
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        {/* Nome truncado */}
-                        <p className="text-sm font-medium truncate leading-tight mb-1.5">
-                          {itemWithExtras.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
-                        </p>
-                        
-                        {/* Controles em linha */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {/* Enviado */}
-                          <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-400 font-medium">
-                            {item.quantidadeEnviada} env
-                          </span>
-                          
-                          {/* Input retorno */}
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-6 w-6"
-                              onClick={() => {
-                                const newVal = Math.max(0, retornado - 1);
-                                handleUpdateRetorno(item.itemId, newVal);
-                                setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(newVal) }));
-                              }}
-                              disabled={retornado <= 0}
-                            >
-                              <Minus size={12} />
-                            </Button>
-                            <Input
-                              type="text"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              value={inputRetornoValues[item.itemId] ?? String(retornado)}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                // Aceitar string vazia ou apenas números
-                                if (val === '' || /^\d+$/.test(val)) {
-                                  setInputRetornoValues(prev => ({ ...prev, [item.itemId]: val }));
-                                  // Se for número válido, atualizar o estado de retorno
-                                  if (val !== '') {
-                                    handleUpdateRetorno(item.itemId, parseInt(val, 10));
-                                  }
-                                }
-                              }}
-                              onBlur={() => {
-                                // Ao sair do campo, garantir valor válido
-                                const val = inputRetornoValues[item.itemId];
-                                if (val === '' || isNaN(parseInt(val, 10))) {
-                                  setInputRetornoValues(prev => ({ ...prev, [item.itemId]: '0' }));
-                                  handleUpdateRetorno(item.itemId, 0);
-                                } else {
-                                  // Normalizar e clampar
-                                  const numVal = parseInt(val, 10);
-                                  const clampedVal = Math.max(0, Math.min(item.quantidadeEnviada, numVal));
-                                  setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(clampedVal) }));
-                                  handleUpdateRetorno(item.itemId, clampedVal);
-                                }
-                              }}
-                              className="w-12 h-6 text-center text-xs font-medium px-1"
-                            />
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-6 w-6"
-                              onClick={() => {
-                                const newVal = Math.min(item.quantidadeEnviada, retornado + 1);
-                                handleUpdateRetorno(item.itemId, newVal);
-                                setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(newVal) }));
-                              }}
-                              disabled={retornado >= item.quantidadeEnviada}
-                            >
-                              <Plus size={12} />
-                            </Button>
-                          </div>
-                          
-                          {/* Vendido - destaque visual */}
-                          <span className={cn(
-                            "inline-flex items-center text-[10px] px-1.5 py-0.5 rounded font-semibold ml-auto",
-                            vendido > 0 
-                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" 
-                              : "bg-muted text-muted-foreground"
-                          )}>
-                            {vendido} vend
-                          </span>
-                        </div>
-                      </div>
+                  <div key={item.id} className="grid grid-cols-[40px_1fr_50px_80px_70px] gap-2 items-center px-4 py-2.5 hover:bg-muted/20 transition-colors">
+                    {/* Coluna 1: Imagem */}
+                    <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                      <LotImage 
+                        src={itemWithExtras.produtoImagem} 
+                        alt={itemWithExtras.produtoNome || 'Produto'} 
+                        className="w-full h-full object-cover"
+                      />
                     </div>
+                    
+                    {/* Coluna 2: Nome do Produto */}
+                    <p className="text-sm font-medium truncate leading-tight">
+                      {itemWithExtras.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
+                    </p>
+                    
+                    {/* Coluna 3: Enviado */}
+                    <span className="text-center text-sm font-medium text-blue-600 dark:text-blue-400">
+                      {item.quantidadeEnviada}
+                    </span>
+                    
+                    {/* Coluna 4: Input Retorno */}
+                    <div className="flex items-center justify-center gap-0.5">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => {
+                          const newVal = Math.max(0, retornado - 1);
+                          handleUpdateRetorno(item.itemId, newVal);
+                          setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(newVal) }));
+                        }}
+                        disabled={retornado <= 0}
+                      >
+                        <Minus size={12} />
+                      </Button>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={inputRetornoValues[item.itemId] ?? String(retornado)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d+$/.test(val)) {
+                            setInputRetornoValues(prev => ({ ...prev, [item.itemId]: val }));
+                            if (val !== '') {
+                              handleUpdateRetorno(item.itemId, parseInt(val, 10));
+                            }
+                          }
+                        }}
+                        onBlur={() => {
+                          const val = inputRetornoValues[item.itemId];
+                          if (val === '' || isNaN(parseInt(val, 10))) {
+                            setInputRetornoValues(prev => ({ ...prev, [item.itemId]: '0' }));
+                            handleUpdateRetorno(item.itemId, 0);
+                          } else {
+                            const numVal = parseInt(val, 10);
+                            const clampedVal = Math.max(0, Math.min(item.quantidadeEnviada, numVal));
+                            setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(clampedVal) }));
+                            handleUpdateRetorno(item.itemId, clampedVal);
+                          }
+                        }}
+                        className="w-10 h-6 text-center text-xs font-medium px-0"
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => {
+                          const newVal = Math.min(item.quantidadeEnviada, retornado + 1);
+                          handleUpdateRetorno(item.itemId, newVal);
+                          setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(newVal) }));
+                        }}
+                        disabled={retornado >= item.quantidadeEnviada}
+                      >
+                        <Plus size={12} />
+                      </Button>
+                    </div>
+                    
+                    {/* Coluna 5: Vendido - sempre com estilo suave */}
+                    <span className="inline-flex items-center justify-center text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium">
+                      {vendido} vendido
+                    </span>
                   </div>
                 );
               })}
