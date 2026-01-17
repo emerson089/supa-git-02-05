@@ -234,14 +234,14 @@ export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, on
                                 </DropdownMenuItem>
                               )}
                               
-                              {/* Estornar: apenas concluida */}
+                              {/* Excluir: apenas concluida */}
                               {canEstornar && (
                                 <DropdownMenuItem
                                   onClick={() => onEstornarCarga!(carga)}
-                                  className="text-amber-600 focus:text-amber-600"
+                                  className="text-destructive focus:text-destructive"
                                 >
-                                  <RotateCcw className="mr-2 h-4 w-4" />
-                                  Estornar carga
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Excluir
                                 </DropdownMenuItem>
                               )}
                               
