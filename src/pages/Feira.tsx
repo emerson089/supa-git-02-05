@@ -31,10 +31,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/drawer';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { ChevronUp } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle, FileText } from 'lucide-react';
+import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle, FileText, ChevronDown } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -704,126 +706,144 @@ export default function Feira() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Nova Carga - Mobile uses Drawer, Desktop uses Dialog */}
+      {/* Modal Nova Carga - Mobile uses Full Screen Sheet, Desktop uses Dialog */}
       {isMobile ? (
-        <Drawer open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
-          <DrawerContent className="max-h-[85vh] w-[96vw] max-w-[720px] mx-auto flex flex-col overflow-hidden rounded-t-2xl">
-            <DrawerHeader className="px-4 pt-3 pb-3 border-b shrink-0 flex items-center justify-between">
-              <DrawerTitle className="flex items-center gap-2 text-base">
+        <Sheet open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
+          <SheetContent 
+            side="bottom" 
+            className="h-[92vh] flex flex-col p-0 rounded-t-2xl [&>button]:hidden"
+          >
+            {/* Header fixo */}
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-background shrink-0">
+              <div className="flex items-center gap-2">
                 <Truck className="h-5 w-5 text-primary" />
-                Nova Carga para Feira
-              </DrawerTitle>
-              <Button variant="ghost" size="icon" className="h-9 w-9 touch-manipulation" onClick={handleCloseNovaCarga}>
+                <span className="text-base font-semibold">Nova Carga para Feira</span>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-9 w-9 touch-manipulation"
+                onClick={handleCloseNovaCarga}
+              >
                 <X className="h-5 w-5" />
               </Button>
-            </DrawerHeader>
+            </div>
 
-            <div className="flex-1 overflow-hidden flex flex-col min-h-0 w-full max-w-full overflow-x-hidden">
-              {/* Campo de Busca */}
-              <div className="px-4 py-2 border-b bg-muted/30">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar produto..."
-                    value={buscaProduto}
-                    onChange={(e) => setBuscaProduto(e.target.value)}
-                    className="pl-9 pr-9 bg-background h-10"
-                  />
-                  {buscaProduto && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-                      onClick={() => setBuscaProduto('')}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+            {/* Campo de busca fixo */}
+            <div className="px-4 py-2 border-b bg-muted/30 shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar produto..."
+                  value={buscaProduto}
+                  onChange={(e) => setBuscaProduto(e.target.value)}
+                  className="pl-9 pr-9 bg-background h-10"
+                />
+                {buscaProduto && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
+                    onClick={() => setBuscaProduto('')}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
+            </div>
 
-              {/* Produtos Disponíveis */}
-              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                <div className="px-4 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b bg-muted/20">
-                  Produtos ({produtosFiltrados.length})
-                </div>
-                <ScrollArea className="flex-1 min-h-[120px] max-h-[30vh]">
-                  {isRefetchingEstoque ? (
-                    <div className="flex items-center justify-center py-6">
-                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : produtosFiltrados.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
-                      <Package className="h-8 w-8 mb-2 opacity-40" />
-                      <p className="text-sm">Nenhum produto</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y">
-                      {produtosFiltrados.map(produto => {
-                        const disponivel = getDisponivelCentral(produto.id);
-                        const jaAdicionado = itensCarga.some(i => i.itemId === produto.id);
-                        const semEstoque = disponivel <= 0;
-                        
-                        return (
-                          <div 
-                            key={produto.id}
-                            className={cn(
-                              "flex items-center gap-2 px-4 py-2 transition-all min-h-[56px]",
-                              jaAdicionado && "bg-emerald-50 dark:bg-emerald-900/20",
-                              semEstoque && "opacity-50",
-                              !jaAdicionado && !semEstoque && "active:bg-muted/50"
-                            )}
-                            onClick={() => !jaAdicionado && !semEstoque && handleAddItemCarga(produto)}
-                          >
-                            <div className="w-11 h-11 rounded-lg overflow-hidden bg-muted flex-shrink-0 border">
-                              <LotImage src={produto.imagemUrl} alt={produto.nome} className="w-full h-full object-cover" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{produto.nome}</p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className={cn("text-xs font-medium", disponivel > 0 ? "text-emerald-600" : "text-muted-foreground")}>
-                                  Disp: {disponivel}
-                                </span>
-                                <span className="text-xs text-muted-foreground">•</span>
-                                <span className="text-xs text-muted-foreground">{formatCurrency(produto.precoUnitario || 0)}</span>
-                              </div>
-                            </div>
-                            <div className="flex-shrink-0">
-                              {jaAdicionado ? (
-                                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-xs px-2">
-                                  <Check size={10} className="mr-1" /> OK
-                                </Badge>
-                              ) : semEstoque ? (
-                                <Badge variant="outline" className="text-muted-foreground text-xs">Sem</Badge>
-                              ) : (
-                                <Button size="icon" variant="ghost" className="h-9 w-9 text-primary">
-                                  <Plus size={20} />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </ScrollArea>
+            {/* Conteúdo central rolável - flex-1 pega todo espaço disponível */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <div className="px-4 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b bg-muted/20 sticky top-0 z-10">
+                Produtos ({produtosFiltrados.length})
               </div>
+              {isRefetchingEstoque ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : produtosFiltrados.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                  <Package className="h-10 w-10 mb-2 opacity-40" />
+                  <p className="text-sm">Nenhum produto encontrado</p>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {produtosFiltrados.map(produto => {
+                    const disponivel = getDisponivelCentral(produto.id);
+                    const jaAdicionado = itensCarga.some(i => i.itemId === produto.id);
+                    const semEstoque = disponivel <= 0;
+                    
+                    return (
+                      <div 
+                        key={produto.id}
+                        className={cn(
+                          "flex items-center gap-3 px-4 py-3 transition-all min-h-[60px]",
+                          jaAdicionado && "bg-emerald-50/80 dark:bg-emerald-900/20",
+                          semEstoque && "opacity-40 pointer-events-none",
+                          !jaAdicionado && !semEstoque && "active:bg-muted/50"
+                        )}
+                        onClick={() => !jaAdicionado && !semEstoque && handleAddItemCarga(produto)}
+                      >
+                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0 border">
+                          <LotImage src={produto.imagemUrl} alt={produto.nome} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate leading-tight">{produto.nome}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            <span className={cn("font-medium", disponivel > 0 ? "text-emerald-600" : "text-muted-foreground")}>
+                              Disp: {disponivel}
+                            </span>
+                            <span className="mx-1.5">•</span>
+                            <span>{formatCurrency(produto.precoUnitario || 0)}</span>
+                          </p>
+                        </div>
+                        <div className="flex-shrink-0">
+                          {jaAdicionado ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-xs px-2">
+                              <Check size={10} className="mr-1" /> OK
+                            </Badge>
+                          ) : semEstoque ? (
+                            <Badge variant="outline" className="text-muted-foreground text-xs">Sem</Badge>
+                          ) : (
+                            <Button size="icon" variant="ghost" className="h-10 w-10 text-primary touch-manipulation">
+                              <Plus size={20} />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
-              {/* Itens Selecionados - Mobile Layout */}
-              {itensCarga.length > 0 && (
-                <div className="border-t flex-shrink-0">
-                  <div className="px-4 py-1.5 flex items-center justify-between border-b bg-primary/5">
-                    <span className="text-xs font-medium text-primary uppercase tracking-wide">
-                      Selecionados ({itensCarga.length})
-                    </span>
+            {/* Itens Selecionados - Collapsible / Mini Carrinho */}
+            {itensCarga.length > 0 && (
+              <Collapsible className="border-t bg-card shrink-0">
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center justify-between px-4 py-2.5 cursor-pointer active:bg-muted/50">
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-semibold">
+                        Itens Selecionados ({itensCarga.length})
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {totalCarga} pç • {formatCurrency(valorCarga)}
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
+                    </div>
                   </div>
-                  <ScrollArea className="max-h-[25vh]">
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <ScrollArea className="max-h-[30vh] border-t">
                     <div className="divide-y">
                       {itensCarga.map(item => (
-                        <div key={item.itemId} className="px-3 py-2 bg-card space-y-1.5">
+                        <div key={item.itemId} className="px-3 py-2.5 bg-card space-y-2">
                           {/* Linha 1: Imagem, Nome, Lixeira */}
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded overflow-hidden bg-muted flex-shrink-0 border">
+                            <div className="w-9 h-9 rounded overflow-hidden bg-muted flex-shrink-0 border">
                               <LotImage src={item.imagemUrl} alt={item.nome} className="w-full h-full object-cover" />
                             </div>
                             <div className="flex-1 min-w-0">
@@ -832,15 +852,15 @@ export default function Feira() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive touch-manipulation"
                               onClick={() => handleRemoveItemCarga(item.itemId)}
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={16} />
                             </Button>
                           </div>
                           {/* Linha 2: Controles de quantidade */}
-                          <div className="flex items-center gap-2 pl-10">
-                            <div className="flex items-center gap-1 flex-shrink-0">
+                          <div className="flex items-center gap-2 pl-11">
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
                               <Button 
                                 size="icon" 
                                 variant="outline" 
@@ -864,7 +884,7 @@ export default function Feira() {
                                   const val = parseInt(e.target.value) || 1;
                                   if (val < 1) handleSetQuantidadeCarga(item.itemId, 1);
                                 }}
-                                className="w-12 h-9 text-center text-sm font-medium px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                className="w-14 h-9 text-center text-sm font-medium px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               />
                               <Button 
                                 size="icon" 
@@ -876,8 +896,8 @@ export default function Feira() {
                                 <Plus size={16} />
                               </Button>
                             </div>
-                            <span className="text-[11px] text-muted-foreground whitespace-nowrap">× {formatCurrency(item.precoUnitario)}</span>
-                            <span className="text-xs font-semibold text-primary ml-auto whitespace-nowrap tabular-nums">
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">× {formatCurrency(item.precoUnitario)}</span>
+                            <span className="text-sm font-semibold text-primary ml-auto whitespace-nowrap tabular-nums">
                               = {formatCurrency(item.precoUnitario * item.quantidade)}
                             </span>
                           </div>
@@ -885,13 +905,14 @@ export default function Feira() {
                       ))}
                     </div>
                   </ScrollArea>
-                </div>
-              )}
-            </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
 
-            <DrawerFooter className="border-t px-4 py-3 bg-muted/30 sticky bottom-0 pb-[calc(env(safe-area-inset-bottom,0px)+12px)]">
+            {/* Rodapé fixo com safe-area */}
+            <div className="border-t px-4 py-3 bg-muted/30 shrink-0 pb-[calc(env(safe-area-inset-bottom,0px)+12px)]">
               {/* Resumo compacto */}
-              <div className="flex items-center justify-between px-2 py-2 mb-2 bg-primary/5 rounded-lg">
+              <div className="flex items-center justify-between px-3 py-2.5 mb-3 bg-primary/5 rounded-lg">
                 <div className="flex items-center gap-4 text-sm">
                   <span className="text-muted-foreground">
                     <strong className="text-foreground">{itensCarga.length}</strong> itens
@@ -900,17 +921,17 @@ export default function Feira() {
                     <strong className="text-foreground">{totalCarga}</strong> pç
                   </span>
                 </div>
-                <span className="text-sm font-semibold text-primary">{formatCurrency(valorCarga)}</span>
+                <span className="text-sm font-bold text-primary">{formatCurrency(valorCarga)}</span>
               </div>
               {/* Botões full width */}
               <div className="flex gap-3 w-full">
-                <Button variant="outline" onClick={handleCloseNovaCarga} className="flex-1 h-11 text-sm touch-manipulation">
+                <Button variant="outline" onClick={handleCloseNovaCarga} className="flex-1 h-12 text-sm touch-manipulation">
                   Cancelar
                 </Button>
                 <Button 
                   onClick={handleCriarCarga}
                   disabled={itensCarga.length === 0 || criarCarga.isPending}
-                  className={cn("flex-1 h-11 text-sm touch-manipulation", criarCarga.isPending && "opacity-80")}
+                  className={cn("flex-1 h-12 text-sm touch-manipulation", criarCarga.isPending && "opacity-80")}
                 >
                   {criarCarga.isPending ? (
                     <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Criando...</>
@@ -921,9 +942,9 @@ export default function Feira() {
                   )}
                 </Button>
               </div>
-            </DrawerFooter>
-          </DrawerContent>
-        </Drawer>
+            </div>
+          </SheetContent>
+        </Sheet>
       ) : (
         <Dialog open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
