@@ -31,15 +31,22 @@ export function useRecalcularEstoque() {
       const { data: locais, error: locaisError } = await supabase
         .from('estoque_locais')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('ativo', true);
 
       if (locaisError) throw new Error(`Erro ao buscar locais: ${locaisError.message}`);
+
+      console.log('[useRecalcularEstoque] Locais encontrados:', locais);
 
       const central = locais?.find(l => l.tipo === 'central');
       const banca = locais?.find(l => l.tipo === 'banca');
 
       if (!central || !banca) {
-        throw new Error('Locais Central e Banca não encontrados. Configure os locais primeiro.');
+        console.error('[useRecalcularEstoque] Locais necessários não encontrados:', { central, banca, locais });
+        throw new Error(
+          'Locais Central e Banca não encontrados. ' +
+          'Recarregue a página e tente novamente. Se o problema persistir, entre em contato com o suporte.'
+        );
       }
 
       // 2. Buscar todos os itens de estoque do usuário
