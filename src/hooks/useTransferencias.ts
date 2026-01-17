@@ -221,17 +221,38 @@ export function useCriarCargaFeira() {
     }) => {
       if (!user) throw new Error('Usuário não autenticado');
 
+      // Verificar sessão ativa antes de qualquer operação
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Sessão expirada. Por favor, recarregue a página e faça login novamente.');
+      }
+
       // Buscar locais Central e Banca
-      const { data: locais } = await supabase
+      const { data: locais, error: locaisError } = await supabase
         .from('estoque_locais')
         .select('*')
         .eq('user_id', user.id)
         .in('tipo', ['central', 'banca']);
 
+      if (locaisError) {
+        console.error('[useCriarCargaFeira] Erro ao buscar locais:', locaisError);
+        throw new Error('Erro ao buscar configuração de locais. Tente novamente.');
+      }
+
+      console.log('[useCriarCargaFeira] Locais encontrados:', locais);
+
       const central = locais?.find(l => l.tipo === 'central');
       const banca = locais?.find(l => l.tipo === 'banca');
 
-      if (!central || !banca) throw new Error('Locais não configurados');
+      if (!central || !banca) {
+        console.error('[useCriarCargaFeira] Locais não configurados:', { 
+          central: !!central, 
+          banca: !!banca,
+          userId: user.id,
+          locaisRetornados: locais 
+        });
+        throw new Error('Locais não configurados. Recarregue a página para sincronizar a configuração inicial.');
+      }
 
       // Validar disponibilidade de cada item
       for (const item of itens) {
@@ -313,6 +334,10 @@ export function useCriarCargaFeira() {
 
         if (movEnvioError) {
           console.error('[useCriarCargaFeira] ERRO ao registrar ENVIO_FEIRA:', movEnvioError);
+          // Detectar erro de RLS específico
+          if (movEnvioError.message.includes('row-level security policy')) {
+            throw new Error('Sessão expirada ou sem permissão. Por favor, recarregue a página e tente novamente.');
+          }
           throw new Error(`Falha ao registrar movimentação de estoque: ${movEnvioError.message}`);
         }
 
@@ -405,17 +430,38 @@ export function useRegistrarRetornoFeira() {
     }) => {
       if (!user) throw new Error('Usuário não autenticado');
 
+      // Verificar sessão ativa antes de qualquer operação
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Sessão expirada. Por favor, recarregue a página e faça login novamente.');
+      }
+
       // Buscar locais
-      const { data: locais } = await supabase
+      const { data: locais, error: locaisError } = await supabase
         .from('estoque_locais')
         .select('*')
         .eq('user_id', user.id)
         .in('tipo', ['central', 'banca']);
 
+      if (locaisError) {
+        console.error('[useRegistrarRetornoFeira] Erro ao buscar locais:', locaisError);
+        throw new Error('Erro ao buscar configuração de locais. Tente novamente.');
+      }
+
+      console.log('[useRegistrarRetornoFeira] Locais encontrados:', locais);
+
       const central = locais?.find(l => l.tipo === 'central');
       const banca = locais?.find(l => l.tipo === 'banca');
 
-      if (!central || !banca) throw new Error('Locais não configurados');
+      if (!central || !banca) {
+        console.error('[useRegistrarRetornoFeira] Locais não configurados:', { 
+          central: !!central, 
+          banca: !!banca,
+          userId: user.id,
+          locaisRetornados: locais 
+        });
+        throw new Error('Locais não configurados. Recarregue a página para sincronizar a configuração inicial.');
+      }
 
       // Buscar itens originais da carga para validação
       const { data: itensOriginais } = await supabase
@@ -497,6 +543,10 @@ export function useRegistrarRetornoFeira() {
 
           if (movRetornoError) {
             console.error('[useRegistrarRetornoFeira] ERRO ao registrar RETORNO_FEIRA:', movRetornoError);
+            // Detectar erro de RLS específico
+            if (movRetornoError.message.includes('row-level security policy')) {
+              throw new Error('Sessão expirada ou sem permissão. Por favor, recarregue a página e tente novamente.');
+            }
             throw new Error(`Falha ao registrar movimentação de retorno: ${movRetornoError.message}`);
           }
         }
@@ -517,6 +567,10 @@ export function useRegistrarRetornoFeira() {
 
           if (movVendaError) {
             console.error('[useRegistrarRetornoFeira] ERRO ao registrar VENDA_FEIRA:', movVendaError);
+            // Detectar erro de RLS específico
+            if (movVendaError.message.includes('row-level security policy')) {
+              throw new Error('Sessão expirada ou sem permissão. Por favor, recarregue a página e tente novamente.');
+            }
             throw new Error(`Falha ao registrar movimentação de venda: ${movVendaError.message}`);
           }
         }
