@@ -706,15 +706,18 @@ export default function Feira() {
       {/* Modal Nova Carga - Mobile uses Drawer, Desktop uses Dialog */}
       {isMobile ? (
         <Drawer open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
-          <DrawerContent className="max-h-[95vh] flex flex-col">
-            <DrawerHeader className="px-4 pt-2 pb-3 border-b shrink-0">
+          <DrawerContent className="max-h-[95vh] flex flex-col w-full max-w-[100vw] overflow-x-hidden">
+            <DrawerHeader className="px-4 pt-2 pb-3 border-b shrink-0 flex items-center justify-between">
               <DrawerTitle className="flex items-center gap-2 text-base">
                 <Truck className="h-5 w-5 text-primary" />
                 Nova Carga para Feira
               </DrawerTitle>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCloseNovaCarga}>
+                <X className="h-4 w-4" />
+              </Button>
             </DrawerHeader>
 
-            <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            <div className="flex-1 overflow-hidden flex flex-col min-h-0 w-full max-w-full overflow-x-hidden">
               {/* Campo de Busca */}
               <div className="px-4 py-2 border-b bg-muted/30">
                 <div className="relative">
@@ -816,28 +819,29 @@ export default function Feira() {
                   <ScrollArea className="max-h-[25vh]">
                     <div className="divide-y">
                       {itensCarga.map(item => (
-                        <div key={item.itemId} className="px-4 py-2 bg-card space-y-2">
+                        <div key={item.itemId} className="px-3 py-2 bg-card space-y-1.5">
                           {/* Linha 1: Imagem, Nome, Lixeira */}
                           <div className="flex items-center gap-2">
-                            <div className="w-9 h-9 rounded overflow-hidden bg-muted flex-shrink-0 border">
+                            <div className="w-8 h-8 rounded overflow-hidden bg-muted flex-shrink-0 border">
                               <LotImage src={item.imagemUrl} alt={item.nome} className="w-full h-full object-cover" />
                             </div>
-                            <p className="text-sm font-medium truncate flex-1">{item.nome}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{item.nome}</p>
+                            </div>
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
                               onClick={() => handleRemoveItemCarga(item.itemId)}
                             >
-                              <Trash2 size={16} />
+                              <Trash2 size={14} />
                             </Button>
                           </div>
-                          {/* Linha 2: Preço, Controles, Subtotal */}
-                          <div className="flex items-center justify-between pl-11">
-                            <span className="text-xs text-muted-foreground">{formatCurrency(item.precoUnitario)}</span>
-                            <div className="flex items-center gap-1">
-                              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleUpdateQuantidadeCarga(item.itemId, -1)} disabled={item.quantidade <= 1}>
-                                <Minus size={14} />
+                          {/* Linha 2: Controles de quantidade */}
+                          <div className="flex items-center gap-2 pl-10">
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                              <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleUpdateQuantidadeCarga(item.itemId, -1)} disabled={item.quantidade <= 1}>
+                                <Minus size={12} />
                               </Button>
                               <Input
                                 type="number"
@@ -845,14 +849,15 @@ export default function Feira() {
                                 max={item.disponivelCentral}
                                 value={item.quantidade}
                                 onChange={(e) => handleSetQuantidadeCarga(item.itemId, parseInt(e.target.value) || 1)}
-                                className="w-12 h-8 text-center text-sm font-medium px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                className="w-10 h-7 text-center text-sm font-medium px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               />
-                              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleUpdateQuantidadeCarga(item.itemId, 1)} disabled={item.quantidade >= item.disponivelCentral}>
-                                <Plus size={14} />
+                              <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleUpdateQuantidadeCarga(item.itemId, 1)} disabled={item.quantidade >= item.disponivelCentral}>
+                                <Plus size={12} />
                               </Button>
                             </div>
-                            <span className="text-sm font-semibold text-primary min-w-[70px] text-right">
-                              {formatCurrency(item.precoUnitario * item.quantidade)}
+                            <span className="text-[11px] text-muted-foreground whitespace-nowrap">× {formatCurrency(item.precoUnitario)}</span>
+                            <span className="text-xs font-semibold text-primary ml-auto whitespace-nowrap tabular-nums">
+                              = {formatCurrency(item.precoUnitario * item.quantidade)}
                             </span>
                           </div>
                         </div>
@@ -863,41 +868,41 @@ export default function Feira() {
               )}
             </div>
 
-            <DrawerFooter className="border-t px-4 py-3 bg-muted/30 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]">
+            <DrawerFooter className="border-t px-3 py-2.5 bg-muted/30 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)]">
               {/* Resumo em Grid */}
-              <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                <div className="flex flex-col items-center">
-                  <Package className="h-4 w-4 text-muted-foreground mb-0.5" />
-                  <span className="text-[10px] text-muted-foreground">Itens</span>
-                  <strong className="text-sm">{itensCarga.length}</strong>
+              <div className="grid grid-cols-3 gap-1 text-center mb-2">
+                <div className="flex flex-col items-center py-1">
+                  <Package className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
+                  <span className="text-[9px] text-muted-foreground leading-tight">Itens</span>
+                  <strong className="text-xs tabular-nums">{itensCarga.length}</strong>
                 </div>
-                <div className="flex flex-col items-center">
-                  <ShoppingBag className="h-4 w-4 text-muted-foreground mb-0.5" />
-                  <span className="text-[10px] text-muted-foreground">Peças</span>
-                  <strong className="text-sm">{totalCarga}</strong>
+                <div className="flex flex-col items-center py-1">
+                  <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
+                  <span className="text-[9px] text-muted-foreground leading-tight">Peças</span>
+                  <strong className="text-xs tabular-nums">{totalCarga}</strong>
                 </div>
-                <div className="flex flex-col items-center">
-                  <DollarSign className="h-4 w-4 text-primary mb-0.5" />
-                  <span className="text-[10px] text-muted-foreground">Total</span>
-                  <strong className="text-sm text-primary">{formatCurrency(valorCarga)}</strong>
+                <div className="flex flex-col items-center py-1">
+                  <DollarSign className="h-3.5 w-3.5 text-primary mb-0.5" />
+                  <span className="text-[9px] text-muted-foreground leading-tight">Total</span>
+                  <strong className="text-xs text-primary tabular-nums whitespace-nowrap">{formatCurrency(valorCarga)}</strong>
                 </div>
               </div>
               {/* Botões full width */}
               <div className="flex gap-2 w-full">
-                <Button variant="outline" onClick={handleCloseNovaCarga} className="flex-1 h-11">
+                <Button variant="outline" onClick={handleCloseNovaCarga} className="flex-1 h-10 text-sm">
                   Cancelar
                 </Button>
                 <Button 
                   onClick={handleCriarCarga}
                   disabled={itensCarga.length === 0 || criarCarga.isPending}
-                  className="flex-1 h-11"
+                  className="flex-1 h-10 text-sm"
                 >
                   {criarCarga.isPending ? (
-                    <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Criando...</>
+                    <><Loader2 className="h-4 w-4 animate-spin mr-1.5" /> Criando...</>
                   ) : itensCarga.length === 0 ? (
                     'Selecione'
                   ) : (
-                    <><Truck className="h-4 w-4 mr-2" /> Criar Carga</>
+                    <><Truck className="h-4 w-4 mr-1.5" /> Criar Carga</>
                   )}
                 </Button>
               </div>
