@@ -528,7 +528,18 @@ export function useExcluirHistoricoCarga() {
         );
       }
 
-      // 2. Deletar transferencia_itens primeiro (FK)
+      // 2. Deletar estoque_movimentacoes primeiro (FK para transferencias)
+      const { error: deleteMovError } = await supabase
+        .from('estoque_movimentacoes')
+        .delete()
+        .eq('transferencia_id', transferenciaId);
+
+      if (deleteMovError) {
+        console.error('[useExcluirHistoricoCarga] Erro ao deletar movimentações:', deleteMovError);
+        throw new Error('Erro ao excluir movimentações de estoque');
+      }
+
+      // 3. Deletar transferencia_itens (FK para transferencias)
       const { error: deleteItensError } = await supabase
         .from('transferencia_itens')
         .delete()
@@ -539,7 +550,7 @@ export function useExcluirHistoricoCarga() {
         throw new Error('Erro ao excluir itens da carga');
       }
 
-      // 3. Deletar a transferência (hard delete)
+      // 4. Deletar a transferência (hard delete)
       const { error: deleteError } = await supabase
         .from('transferencias')
         .delete()
