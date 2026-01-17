@@ -872,27 +872,27 @@ export default function Feira() {
 
       {/* Modal Retorno */}
       <Dialog open={showRetorno} onOpenChange={setShowRetorno}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Registrar Retorno da Feira</DialogTitle>
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-4 pt-4 pb-3 border-b shrink-0">
+            <DialogTitle className="text-lg">Registrar Retorno</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Informe quantos itens retornaram da feira
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Informe a quantidade de cada item que retornou da feira:
-            </p>
-
-            <div className="space-y-3">
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="px-4 py-3 space-y-2">
               {cargaSelecionada?.itens.map(item => {
                 const retorno = itensRetorno.find(i => i.itemId === item.itemId);
-                const vendido = item.quantidadeEnviada - (retorno?.quantidadeRetornada || 0);
+                const retornado = retorno?.quantidadeRetornada || 0;
+                const vendido = item.quantidadeEnviada - retornado;
                 const itemWithExtras = item as typeof item & { produtoNome?: string | null; produtoImagem?: string | null };
 
                 return (
-                  <div key={item.id} className="p-3 rounded-lg border">
-                    <div className="flex gap-3">
-                      {/* Imagem do produto */}
-                      <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                  <div key={item.id} className="p-2.5 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
+                    <div className="flex gap-2.5">
+                      {/* Imagem compacta */}
+                      <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
                         <LotImage 
                           src={itemWithExtras.produtoImagem} 
                           alt={itemWithExtras.produtoNome || 'Produto'} 
@@ -901,31 +901,57 @@ export default function Feira() {
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        {/* Nome e quantidade enviada */}
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium truncate">
-                            {itemWithExtras.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
-                          </span>
-                          <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                            Enviado: {item.quantidadeEnviada}
-                          </span>
-                        </div>
+                        {/* Nome truncado */}
+                        <p className="text-sm font-medium truncate leading-tight mb-1.5">
+                          {itemWithExtras.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
+                        </p>
                         
-                        {/* Controles de retorno */}
-                        <div className="flex items-center gap-3">
-                          <Label className="text-xs text-muted-foreground shrink-0">Retornou:</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={item.quantidadeEnviada}
-                            value={retorno?.quantidadeRetornada || 0}
-                            onChange={(e) => handleUpdateRetorno(item.itemId, parseInt(e.target.value) || 0)}
-                            className="w-20 h-8"
-                          />
-                          <span className="text-xs text-muted-foreground">→</span>
-                          <Badge variant={vendido > 0 ? "default" : "secondary"} className="text-xs">
-                            {vendido} vendido{vendido !== 1 ? 's' : ''}
-                          </Badge>
+                        {/* Controles em linha */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Enviado */}
+                          <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-400 font-medium">
+                            {item.quantidadeEnviada} env
+                          </span>
+                          
+                          {/* Input retorno */}
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-6 w-6"
+                              onClick={() => handleUpdateRetorno(item.itemId, Math.max(0, retornado - 1))}
+                              disabled={retornado <= 0}
+                            >
+                              <Minus size={12} />
+                            </Button>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={item.quantidadeEnviada}
+                              value={retornado}
+                              onChange={(e) => handleUpdateRetorno(item.itemId, parseInt(e.target.value) || 0)}
+                              className="w-12 h-6 text-center text-xs font-medium px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-6 w-6"
+                              onClick={() => handleUpdateRetorno(item.itemId, Math.min(item.quantidadeEnviada, retornado + 1))}
+                              disabled={retornado >= item.quantidadeEnviada}
+                            >
+                              <Plus size={12} />
+                            </Button>
+                          </div>
+                          
+                          {/* Vendido - destaque visual */}
+                          <span className={cn(
+                            "inline-flex items-center text-[10px] px-1.5 py-0.5 rounded font-semibold ml-auto",
+                            vendido > 0 
+                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" 
+                              : "bg-muted text-muted-foreground"
+                          )}>
+                            {vendido} vend
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -933,24 +959,41 @@ export default function Feira() {
                 );
               })}
             </div>
-          </div>
+          </ScrollArea>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRetorno(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleRegistrarRetorno}
-              disabled={registrarRetorno.isPending}
-            >
-              {registrarRetorno.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Check className="h-4 w-4 mr-2" />
-              )}
-              Confirmar Retorno
-            </Button>
-          </DialogFooter>
+          {/* Footer fixo com resumo */}
+          <div className="border-t px-4 py-3 shrink-0 bg-muted/30">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex gap-3 text-xs">
+                <span className="text-muted-foreground">
+                  Total enviado: <strong className="text-foreground">{cargaSelecionada?.itens.reduce((sum, i) => sum + i.quantidadeEnviada, 0) || 0}</strong>
+                </span>
+                <span className="text-muted-foreground">
+                  Retorno: <strong className="text-amber-600">{itensRetorno.reduce((sum, i) => sum + i.quantidadeRetornada, 0)}</strong>
+                </span>
+                <span className="text-muted-foreground">
+                  Vendido: <strong className="text-emerald-600">{(cargaSelecionada?.itens.reduce((sum, i) => sum + i.quantidadeEnviada, 0) || 0) - itensRetorno.reduce((sum, i) => sum + i.quantidadeRetornada, 0)}</strong>
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowRetorno(false)} className="flex-1">
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleRegistrarRetorno}
+                disabled={registrarRetorno.isPending}
+                className="flex-1"
+              >
+                {registrarRetorno.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                Confirmar
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
