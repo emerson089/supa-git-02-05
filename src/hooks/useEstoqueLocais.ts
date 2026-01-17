@@ -67,6 +67,7 @@ export function useLocais() {
       const { data, error } = await supabase
         .from('estoque_locais')
         .select('*')
+        .eq('user_id', user.id)
         .eq('ativo', true)
         .order('created_at', { ascending: true });
 

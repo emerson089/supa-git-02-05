@@ -127,19 +127,25 @@ export default function Feira() {
     salvarFiltroPeriodo(periodo);
   }, [periodo]);
 
-  // Garantir que locais existem
+  // Garantir que locais existem - esperar dados estarem prontos
   useEffect(() => {
-    if (locais && locais.length === 0) {
+    // Só tenta criar se temos certeza que não há locais (data loaded, array vazio)
+    if (locais !== undefined && locais.length === 0 && !ensureLocais.isPending) {
+      console.log('[Feira] Criando locais padrão...');
       ensureLocais.mutate();
     }
-  }, [locais]);
+  }, [locais, ensureLocais.isPending]);
 
-  // Sincronizar estoque inicial
+  // Sincronizar estoque inicial - aguardar locais existirem
   useEffect(() => {
-    if (locais && locais.length > 0) {
+    const hasRequiredLocais = locais && locais.length > 0 && 
+      locais.some(l => l.tipo === 'central') && 
+      locais.some(l => l.tipo === 'banca');
+    
+    if (hasRequiredLocais && !sincronizarEstoque.isPending) {
       sincronizarEstoque.mutate();
     }
-  }, [locais?.length]);
+  }, [locais]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
