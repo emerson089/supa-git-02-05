@@ -6,16 +6,23 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { useDisponivelCentral, useLocais } from '@/hooks/useEstoqueLocais';
 import { useTransferencias, useCriarTransferencia } from '@/hooks/useTransferencias';
+import { useEstoqueDetalhadoPorLocal, EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
+import { ProdutoEstoqueLocalCard } from '@/components/estoque/ProdutoEstoqueLocalCard';
+import { AjusteEstoqueModal } from '@/components/estoque/AjusteEstoqueModal';
+import { AdicionarProdutoLocalModal } from '@/components/estoque/AdicionarProdutoLocalModal';
+import { HistoricoMovimentacoesModal } from '@/components/estoque/HistoricoMovimentacoesModal';
+import { ZerarEstoqueModal } from '@/components/estoque/ZerarEstoqueModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -36,6 +43,16 @@ export default function Transferencias() {
   const { data: transferencias, isLoading: isLoadingTransferencias } = useTransferencias('transferencia');
   const criarTransferencia = useCriarTransferencia();
 
+  // Estados para gestão de estoque local
+  const [activeTab, setActiveTab] = useState('estoque');
+  const [searchEstoque, setSearchEstoque] = useState('');
+  const [showAjusteModal, setShowAjusteModal] = useState(false);
+  const [showAdicionarModal, setShowAdicionarModal] = useState(false);
+  const [showHistoricoModal, setShowHistoricoModal] = useState(false);
+  const [showZerarModal, setShowZerarModal] = useState(false);
+  const [itemSelecionado, setItemSelecionado] = useState<EstoqueLocalDetalhado | null>(null);
+
+  // Estados para modal de nova transferência
   const [showNovaTransferencia, setShowNovaTransferencia] = useState(false);
   const [origemId, setOrigemId] = useState<string>('');
   const [destinoId, setDestinoId] = useState<string>('');
@@ -44,8 +61,36 @@ export default function Transferencias() {
   const [lastAddedItemId, setLastAddedItemId] = useState<string | null>(null);
 
   const quantidadeInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
-
   const produtosAcabados = getProdutosAcabados();
+
+  // Encontrar local da loja
+  const lojaLocal = useMemo(() => 
+    locais.find(l => l.tipo === 'loja'),
+    [locais]
+  );
+  
+  const lojaId = lojaLocal?.id || null;
+  const lojaNome = lojaLocal?.nome || 'Loja';
+
+  // Buscar estoque detalhado da loja
+  const { data: estoqueDetalhado = [], isLoading: isLoadingEstoqueDetalhado } = useEstoqueDetalhadoPorLocal(lojaId);
+
+  // Filtrar produtos do estoque local
+  const estoqueFiltrado = useMemo(() => {
+    if (!searchEstoque.trim()) return estoqueDetalhado;
+    const termo = searchEstoque.toLowerCase();
+    return estoqueDetalhado.filter(item =>
+      item.itemNome.toLowerCase().includes(termo) ||
+      item.itemCodigo.toLowerCase().includes(termo)
+    );
+  }, [estoqueDetalhado, searchEstoque]);
+
+  // Totais do estoque local
+  const totalPecasLocal = useMemo(() => 
+    estoqueDetalhado.reduce((sum, item) => sum + item.quantidade, 0),
+    [estoqueDetalhado]
+  );
+  const totalModelosLocal = estoqueDetalhado.length;
 
   // Locais disponíveis (apenas Central e Loja para transferências)
   const locaisDisponiveis = useMemo(() => 
@@ -59,18 +104,15 @@ export default function Transferencias() {
     return Math.max(0, estoque.quantidade - estoque.quantidadeReservada);
   };
 
-  // Produtos filtrados e ordenados
+  // Produtos filtrados e ordenados para modal de transferência
   const produtosFiltrados = useMemo(() => {
     let filtered = produtosAcabados.filter(p => {
-      // Filtrar por busca
       if (searchProdutos.trim()) {
         const search = searchProdutos.toLowerCase();
         if (!p.nome.toLowerCase().includes(search)) return false;
       }
       return true;
     });
-    
-    // Ordenar: maior estoque primeiro
     return filtered.sort((a, b) => {
       const dispA = origemId ? getDisponivelNoLocal(a.id, origemId) : 0;
       const dispB = origemId ? getDisponivelNoLocal(b.id, origemId) : 0;
@@ -78,10 +120,8 @@ export default function Transferencias() {
     });
   }, [produtosAcabados, origemId, searchProdutos, estoquePorLocal]);
 
-  // Auto-focus no input de quantidade do item recém adicionado
   useEffect(() => {
     if (lastAddedItemId) {
-      // Pequeno delay para garantir que o DOM atualizou
       setTimeout(() => {
         const input = quantidadeInputRefs.current.get(lastAddedItemId);
         if (input) {
@@ -93,6 +133,23 @@ export default function Transferencias() {
     }
   }, [lastAddedItemId, itensTransferencia]);
 
+  // Handlers de estoque local
+  const handleAjustar = (item: EstoqueLocalDetalhado) => {
+    setItemSelecionado(item);
+    setShowAjusteModal(true);
+  };
+
+  const handleHistorico = (item: EstoqueLocalDetalhado) => {
+    setItemSelecionado(item);
+    setShowHistoricoModal(true);
+  };
+
+  const handleZerar = (item: EstoqueLocalDetalhado) => {
+    setItemSelecionado(item);
+    setShowZerarModal(true);
+  };
+
+  // Handlers de transferência
   const handleAddItemTransferencia = (produto: { id: string; nome: string; imagemUrl?: string | null }) => {
     if (!origemId) {
       toast.error('Selecione o local de origem primeiro');
@@ -118,21 +175,16 @@ export default function Transferencias() {
       quantidade: 1,
       disponivelOrigem: disponivel,
     }]);
-
-    // Marcar para auto-focus
     setLastAddedItemId(produto.id);
   };
 
   const handleQuantidadeChange = (itemId: string, value: string) => {
     const numValue = parseInt(value, 10);
-    
     setItensTransferencia(prev => prev.map(item => {
       if (item.itemId === itemId) {
-        // Se vazio ou NaN, deixar como está para permitir digitação
         if (value === '' || isNaN(numValue)) {
           return { ...item, quantidade: 0 };
         }
-        // Validar: mínimo 1, máximo disponível
         const novaQtd = Math.max(1, Math.min(item.disponivelOrigem, numValue));
         return { ...item, quantidade: novaQtd };
       }
@@ -143,7 +195,6 @@ export default function Transferencias() {
   const handleQuantidadeBlur = (itemId: string) => {
     setItensTransferencia(prev => prev.map(item => {
       if (item.itemId === itemId) {
-        // Garantir valor válido no blur
         const qtd = Math.max(1, Math.min(item.disponivelOrigem, item.quantidade || 1));
         return { ...item, quantidade: qtd };
       }
@@ -170,12 +221,10 @@ export default function Transferencias() {
       toast.error('Selecione origem e destino');
       return;
     }
-
     if (origemId === destinoId) {
       toast.error('Origem e destino devem ser diferentes');
       return;
     }
-
     if (itensTransferencia.length === 0) {
       toast.error('Adicione ao menos um item');
       return;
@@ -209,10 +258,8 @@ export default function Transferencias() {
     setShowNovaTransferencia(true);
   };
 
-  // Atualizar disponível quando mudar origem
   const handleOrigemChange = (newOrigemId: string) => {
     setOrigemId(newOrigemId);
-    // Atualizar disponível dos itens já adicionados
     setItensTransferencia(prev => prev.map(item => ({
       ...item,
       disponivelOrigem: getDisponivelNoLocal(item.itemId, newOrigemId),
@@ -234,9 +281,175 @@ export default function Transferencias() {
     );
   }
 
+  // Seção: Estoque do Local
+  const EstoqueLocalSection = () => (
+    <div className="flex flex-col h-full">
+      {/* Header do Estoque */}
+      <div className={cn("shrink-0", isMobile ? "px-4 pt-2 pb-3" : "pb-4")}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Store className="h-5 w-5 text-primary" />
+            <h2 className="font-semibold">{lojaNome}</h2>
+          </div>
+          <Button 
+            size="sm" 
+            onClick={() => setShowAdicionarModal(true)}
+            disabled={!lojaId}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Adicionar</span>
+          </Button>
+        </div>
+
+        {/* Cards de totais */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">Total Peças</p>
+              <p className="text-2xl font-bold">{totalPecasLocal}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">Total Modelos</p>
+              <p className="text-2xl font-bold">{totalModelosLocal}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Busca */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome ou código..."
+            value={searchEstoque}
+            onChange={(e) => setSearchEstoque(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
+
+      {/* Lista de produtos */}
+      <ScrollArea className="flex-1">
+        <div className={cn("space-y-2", isMobile ? "px-4 pb-4" : "pb-4")}>
+          {isLoadingEstoqueDetalhado ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : estoqueFiltrado.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Package className="h-12 w-12 mb-3 opacity-50" />
+              <p className="font-medium">Nenhum produto no estoque</p>
+              <p className="text-sm mt-1">
+                {searchEstoque ? 'Tente outra busca' : 'Adicione produtos para começar'}
+              </p>
+            </div>
+          ) : (
+            estoqueFiltrado.map((item) => (
+              <ProdutoEstoqueLocalCard
+                key={item.id}
+                item={item}
+                onAjustar={handleAjustar}
+                onHistorico={handleHistorico}
+                onZerar={handleZerar}
+              />
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+
+  // Seção: Histórico de Transferências
+  const HistoricoTransferenciasSection = () => (
+    <div className="flex flex-col h-full">
+      {/* Header do Histórico */}
+      <div className={cn("shrink-0", isMobile ? "px-4 pt-2 pb-3" : "pb-4")}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <ArrowLeftRight className="h-5 w-5 text-primary" />
+            <h2 className="font-semibold">Histórico de Transferências</h2>
+          </div>
+          <Button size="sm" onClick={handleOpenModal}>
+            <Plus className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Nova</span>
+          </Button>
+        </div>
+
+        {/* Cards de resumo */}
+        <div className="grid grid-cols-2 gap-2">
+          {locaisDisponiveis.map(local => {
+            const total = estoquePorLocal
+              .filter(e => e.localId === local.id)
+              .reduce((sum, e) => sum + e.quantidade, 0);
+            return (
+              <Card key={local.id}>
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "p-1.5 rounded-md",
+                      local.tipo === 'central' ? "bg-blue-500/10" : "bg-emerald-500/10"
+                    )}>
+                      {local.tipo === 'central' ? (
+                        <Box className="h-4 w-4 text-blue-600" />
+                      ) : (
+                        <Store className="h-4 w-4 text-emerald-600" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground truncate">{local.nome}</p>
+                      <p className="text-lg font-bold">{total}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Lista de transferências */}
+      <ScrollArea className="flex-1">
+        <div className={cn("space-y-2", isMobile ? "px-4 pb-4" : "pb-4")}>
+          {(!transferencias || transferencias.length === 0) ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <ArrowLeftRight className="h-12 w-12 mb-3 opacity-50" />
+              <p className="font-medium">Nenhuma transferência</p>
+              <p className="text-sm mt-1">Transferências entre locais aparecerão aqui</p>
+            </div>
+          ) : (
+            transferencias.map(t => (
+              <Card key={t.id}>
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge variant="outline" className={cn(
+                      "text-xs",
+                      t.status === 'concluida' && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                      t.status === 'cancelada' && "bg-red-50 text-red-700 border-red-200"
+                    )}>
+                      {t.status === 'concluida' ? 'Concluída' : 'Cancelada'}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(t.dataSaida), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-medium truncate">{getLocalNome(t.localOrigemId)}</span>
+                    <ArrowRight size={14} className="text-muted-foreground shrink-0" />
+                    <span className="font-medium truncate">{getLocalNome(t.localDestinoId)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background flex overflow-hidden">
-      {isMobile && <MobileHeader title="Transferências" />}
+      {isMobile && <MobileHeader title="Estoque por Local" />}
       {!isMobile && <AppSidebar />}
 
       <main className={cn(
@@ -245,12 +458,12 @@ export default function Transferencias() {
       )}>
         {/* Header - Desktop */}
         {!isMobile && (
-          <header className="px-6 py-4 border-b border-border bg-card/50">
+          <header className="px-6 py-4 border-b border-border bg-card/50 shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Transferências</h1>
+                <h1 className="text-2xl font-bold text-foreground">Estoque por Local</h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Movimentação entre locais de estoque
+                  Gestão de estoque por local de armazenamento
                 </p>
               </div>
               <Button onClick={handleOpenModal} className="gap-2">
@@ -261,105 +474,77 @@ export default function Transferencias() {
           </header>
         )}
 
-        {/* Mobile Action Button */}
-        {isMobile && (
-          <div className="px-4 py-3">
-            <Button onClick={handleOpenModal} className="w-full gap-2">
-              <Plus size={18} />
-              Nova Transferência
-            </Button>
+        {/* Conteúdo - Mobile: Tabs, Desktop: Layout dividido */}
+        {isMobile ? (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+            <TabsList className="mx-4 mt-2 grid w-auto grid-cols-2 shrink-0">
+              <TabsTrigger value="estoque" className="gap-1.5">
+                <Store className="h-4 w-4" />
+                Estoque
+              </TabsTrigger>
+              <TabsTrigger value="historico" className="gap-1.5">
+                <ArrowLeftRight className="h-4 w-4" />
+                Transferências
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="estoque" className="flex-1 overflow-hidden mt-0">
+              <EstoqueLocalSection />
+            </TabsContent>
+            
+            <TabsContent value="historico" className="flex-1 overflow-hidden mt-0">
+              <HistoricoTransferenciasSection />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <div className="flex-1 grid grid-cols-2 gap-6 p-6 overflow-hidden">
+            <div className="border rounded-xl p-4 overflow-hidden flex flex-col bg-card">
+              <EstoqueLocalSection />
+            </div>
+            <div className="border rounded-xl p-4 overflow-hidden flex flex-col bg-card">
+              <HistoricoTransferenciasSection />
+            </div>
           </div>
         )}
-
-        <ScrollArea className="flex-1">
-          <div className={cn("p-4 space-y-4", !isMobile && "p-6 space-y-6")}>
-            {/* Resumo por Local */}
-            <div className={cn("grid gap-3", isMobile ? "grid-cols-2" : "grid-cols-3")}>
-              {locaisDisponiveis.map(local => {
-                const total = estoquePorLocal
-                  .filter(e => e.localId === local.id)
-                  .reduce((sum, e) => sum + e.quantidade, 0);
-                const reservado = estoquePorLocal
-                  .filter(e => e.localId === local.id)
-                  .reduce((sum, e) => sum + e.quantidadeReservada, 0);
-
-                return (
-                  <Card key={local.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "p-2 rounded-lg",
-                          local.tipo === 'central' ? "bg-blue-500/10" : "bg-emerald-500/10"
-                        )}>
-                          <Package className={cn(
-                            "h-5 w-5",
-                            local.tipo === 'central' ? "text-blue-600" : "text-emerald-600"
-                          )} />
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground truncate">{local.nome}</p>
-                          <p className="text-xl font-bold">{total}</p>
-                          {reservado > 0 && (
-                            <p className="text-xs text-amber-600">({reservado} reservado)</p>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-
-            {/* Histórico */}
-            <div>
-              <h2 className="text-lg font-semibold mb-3">Histórico de Transferências</h2>
-              {(!transferencias || transferencias.length === 0) ? (
-                <Card className="p-8 text-center">
-                  <ArrowLeftRight className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">Nenhuma transferência</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Transferências entre locais aparecerão aqui
-                  </p>
-                </Card>
-              ) : (
-                <div className="space-y-2">
-                  {transferencias.map(t => (
-                    <Card key={t.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={cn(
-                              t.status === 'concluida' && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                              t.status === 'cancelada' && "bg-red-50 text-red-700 border-red-200"
-                            )}>
-                              {t.status === 'concluida' ? 'Concluída' : 'Cancelada'}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">
-                              {format(new Date(t.dataSaida), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2 text-sm">
-                          <span className="font-medium">{getLocalNome(t.localOrigemId)}</span>
-                          <ArrowRight size={14} className="text-muted-foreground" />
-                          <span className="font-medium">{getLocalNome(t.localDestinoId)}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </ScrollArea>
       </main>
 
       {isMobile && <BottomNavigation />}
 
+      {/* Modal de Ajuste de Estoque */}
+      <AjusteEstoqueModal
+        open={showAjusteModal}
+        onOpenChange={setShowAjusteModal}
+        item={itemSelecionado}
+      />
+
+      {/* Modal de Adicionar Produto */}
+      {lojaId && (
+        <AdicionarProdutoLocalModal
+          open={showAdicionarModal}
+          onOpenChange={setShowAdicionarModal}
+          localId={lojaId}
+          localNome={lojaNome}
+        />
+      )}
+
+      {/* Modal de Histórico de Movimentações */}
+      <HistoricoMovimentacoesModal
+        open={showHistoricoModal}
+        onOpenChange={setShowHistoricoModal}
+        item={itemSelecionado}
+      />
+
+      {/* Modal de Zerar Estoque */}
+      <ZerarEstoqueModal
+        open={showZerarModal}
+        onOpenChange={setShowZerarModal}
+        item={itemSelecionado}
+      />
+
       {/* Modal Nova Transferência */}
       <Dialog open={showNovaTransferencia} onOpenChange={setShowNovaTransferencia}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-4 border-b">
+        <DialogContent className="w-[96vw] max-w-[720px] max-h-[85vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
             <DialogTitle>Nova Transferência</DialogTitle>
           </DialogHeader>
 
@@ -411,7 +596,6 @@ export default function Transferencias() {
                   </Badge>
                 </div>
 
-                {/* Campo de busca */}
                 <div className="relative mb-3">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -441,8 +625,7 @@ export default function Transferencias() {
                           )}
                           onClick={() => !jaAdicionado && disponivel > 0 && handleAddItemTransferencia(produto)}
                         >
-                          {/* Foto do produto */}
-                          <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden shrink-0 border">
+                          <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0 border">
                             <LotImage 
                               src={produto.imagemUrl} 
                               alt={produto.nome}
@@ -518,8 +701,7 @@ export default function Transferencias() {
                       key={item.itemId}
                       className="flex items-center gap-3 p-3 rounded-lg border bg-background"
                     >
-                      {/* Foto do produto */}
-                      <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden shrink-0 border">
+                      <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0 border">
                         <LotImage 
                           src={item.imagemUrl} 
                           alt={item.nome}
@@ -553,18 +735,19 @@ export default function Transferencias() {
                               quantidadeInputRefs.current.delete(item.itemId);
                             }
                           }}
-                          type="number"
-                          min={1}
-                          max={item.disponivelOrigem}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={item.quantidade || ''}
-                          onChange={e => handleQuantidadeChange(item.itemId, e.target.value)}
+                          onChange={e => handleQuantidadeChange(item.itemId, e.target.value.replace(/\D/g, ''))}
                           onBlur={() => handleQuantidadeBlur(item.itemId)}
+                          onFocus={(e) => e.target.select()}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.currentTarget.blur();
                             }
                           }}
-                          className="w-14 h-8 text-center font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          className="w-14 h-8 text-center font-medium"
                         />
                         
                         <Button
@@ -594,7 +777,7 @@ export default function Transferencias() {
           </div>
 
           {/* Rodapé Fixo */}
-          <div className="sticky bottom-0 px-6 py-4 border-t bg-background flex items-center justify-between">
+          <div className="sticky bottom-0 px-6 py-4 border-t bg-background flex items-center justify-between shrink-0">
             <div className="text-sm">
               <span className="text-muted-foreground">Total: </span>
               <span className="font-bold">{itensTransferencia.length} itens</span>
