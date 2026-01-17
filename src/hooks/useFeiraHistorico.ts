@@ -37,6 +37,8 @@ export interface TransferenciaComItensHistorico {
   id: string;
   localOrigemId: string;
   localDestinoId: string;
+  localOrigemNome: string | null;
+  localDestinoNome: string | null;
   tipo: string;
   status: string;
   dataSaida: string;
@@ -123,6 +125,8 @@ function mapDbToTransferenciaHistorico(db: any): TransferenciaComItensHistorico 
     id: db.id,
     localOrigemId: db.local_origem_id,
     localDestinoId: db.local_destino_id,
+    localOrigemNome: db.local_origem?.nome || null,
+    localDestinoNome: db.local_destino?.nome || null,
     tipo: db.tipo,
     status: db.status,
     dataSaida: db.data_saida,
@@ -158,6 +162,8 @@ export function useCargasPorPeriodo(inicio: Date, fim: Date) {
         .from('transferencias')
         .select(`
           *,
+          local_origem:estoque_locais!local_origem_id(nome),
+          local_destino:estoque_locais!local_destino_id(nome),
           transferencia_itens (
             *,
             estoque_itens (nome, preco_unitario, imagem_url)
@@ -197,6 +203,8 @@ export function useTodasCargasAtivas() {
         .from('transferencias')
         .select(`
           *,
+          local_origem:estoque_locais!local_origem_id(nome),
+          local_destino:estoque_locais!local_destino_id(nome),
           transferencia_itens (
             *,
             estoque_itens (nome, preco_unitario, imagem_url)
