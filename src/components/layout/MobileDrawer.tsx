@@ -1,5 +1,19 @@
 import { useState } from 'react';
-import { Menu, X, Users, ShoppingCart, Settings, HelpCircle, LogOut, Package } from 'lucide-react';
+import { 
+  Menu, 
+  Users, 
+  ShoppingCart, 
+  Settings, 
+  HelpCircle, 
+  LogOut, 
+  Package,
+  LayoutDashboard,
+  Warehouse,
+  Store,
+  ArrowLeftRight,
+  Factory,
+  FileText
+} from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -9,8 +23,17 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
 const drawerNavItems = [
-  { label: 'Clientes', icon: Users, path: '/clientes' },
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+  { label: 'Pedidos Criados', icon: FileText, path: '/pedidos/criados' },
   { label: 'Novo Pedido', icon: ShoppingCart, path: '/pedidos/novo' },
+  { label: 'Clientes', icon: Users, path: '/clientes' },
+];
+
+const drawerOperationsItems = [
+  { label: 'Estoque', icon: Warehouse, path: '/estoque' },
+  { label: 'Feira', icon: Store, path: '/feira' },
+  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias' },
+  { label: 'Produção', icon: Factory, path: '/producao' },
 ];
 
 const drawerBottomItems = [
@@ -86,9 +109,35 @@ export function MobileDrawer() {
         <Separator className="my-2" />
 
         {/* Main Navigation */}
-        <nav className="p-4 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Menu</p>
+        <nav className="p-4 pt-2 pb-1 space-y-1">
+          <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Principal</p>
           {drawerNavItems.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <button
+                key={item.label}
+                onClick={() => handleNavigate(item.path)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 min-h-[44px]",
+                  active
+                    ? 'neu-button-pressed bg-background text-primary font-semibold shadow-neu-inset'
+                    : 'hover:bg-muted/30 text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <item.icon size={18} />
+                <span className="text-sm">{item.label}</span>
+                {active && (
+                  <div className="ml-auto w-2 h-2 rounded-full bg-primary" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Operations Navigation */}
+        <nav className="p-4 pt-1 pb-1 space-y-1">
+          <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Operações</p>
+          {drawerOperationsItems.map((item) => {
             const active = isActive(item.path);
             return (
               <button
@@ -114,7 +163,7 @@ export function MobileDrawer() {
         <Separator className="my-2" />
 
         {/* Bottom Navigation */}
-        <nav className="p-4 space-y-1">
+        <nav className="p-4 pt-2 space-y-1">
           <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Configurações</p>
           {drawerBottomItems.map((item) => {
             const active = isActive(item.path);
