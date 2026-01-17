@@ -13,8 +13,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { LotImage } from '@/components/production/LotImage';
 import { useAdicionarProdutoLocal, useProdutosDisponiveis } from '@/hooks/useEstoquePorLocalGerenciamento';
-import { Loader2, Search, Check, Package, Box, Store, Info, AlertCircle } from 'lucide-react';
+import { Loader2, Search, Check, Package, Box, Store, Info, AlertCircle, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface AdicionarProdutoLocalModalProps {
   open: boolean;
@@ -47,7 +48,7 @@ export function AdicionarProdutoLocalModal({
   const quantidadeRef = useRef<HTMLInputElement>(null);
 
   const { data: produtos = [], isLoading } = useProdutosDisponiveis(localId);
-  const adicionarProduto = useAdicionarProdutoLocal();
+  const transferirProduto = useAdicionarProdutoLocal();
 
   useEffect(() => {
     if (open) {
@@ -77,15 +78,15 @@ export function AdicionarProdutoLocalModal({
   const excedeDisponivel = qtd > maxQuantidade;
   const isValid = produtoSelecionado && qtd > 0 && !excedeDisponivel;
 
-  const handleAdicionar = async () => {
+  const handleTransferir = async () => {
     if (!isValid || !produtoSelecionado) return;
 
     try {
-      await adicionarProduto.mutateAsync({
+      await transferirProduto.mutateAsync({
         itemId: produtoSelecionado.id,
         localId: localId,
         quantidade: qtd,
-        motivo: motivo.trim() || `Adição ao ${localNome}`,
+        motivo: motivo.trim() || `Transferência para ${localNome}`,
       });
       onOpenChange(false);
     } catch (error) {
@@ -102,8 +103,14 @@ export function AdicionarProdutoLocalModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[720px] max-h-[85vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-          <DialogTitle>Adicionar Produto ao Estoque</DialogTitle>
-          <p className="text-sm text-muted-foreground">{localNome}</p>
+          <DialogTitle className="flex items-center gap-2">
+            <Box className="h-5 w-5 text-blue-600" />
+            <span>Central</span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            <Store className="h-5 w-5 text-emerald-600" />
+            <span>{localNome}</span>
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">Transferir produtos do Estoque Central</p>
         </DialogHeader>
 
         <ScrollArea className="flex-1 px-6 py-4">
@@ -276,7 +283,7 @@ export function AdicionarProdutoLocalModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="quantidade-inicial">
-                      Quantidade a Adicionar <span className="text-destructive">*</span>
+                      Quantidade a Transferir <span className="text-destructive">*</span>
                     </Label>
                     <div className="relative">
                       <Input
@@ -317,16 +324,16 @@ export function AdicionarProdutoLocalModal({
                   </div>
                 </div>
 
-                {/* Mensagem informativa */}
-                {produtoSelecionado.jaNoLocal && (
-                  <div className="flex items-start gap-2.5 p-3 rounded-lg bg-muted/50 border">
-                    <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <p className="text-sm text-muted-foreground">
-                      Este produto já possui <strong className="text-foreground">{produtoSelecionado.quantidadeNoLocal}</strong> unidades no local.
-                      A quantidade informada será <strong className="text-foreground">somada</strong> ao estoque existente.
-                    </p>
-                  </div>
-                )}
+                {/* Mensagem informativa sobre a transferência */}
+                <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
+                  <Info className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="text-blue-800 dark:text-blue-300">
+                    A quantidade será <strong>transferida do Estoque Central</strong> para {localNome}.
+                    {produtoSelecionado.jaNoLocal && (
+                      <> Este produto já possui <strong>{produtoSelecionado.quantidadeNoLocal}</strong> unidades no local, que serão somadas.</>
+                    )}
+                  </AlertDescription>
+                </Alert>
               </div>
             )}
           </div>
@@ -337,11 +344,13 @@ export function AdicionarProdutoLocalModal({
             Cancelar
           </Button>
           <Button
-            onClick={handleAdicionar}
-            disabled={!isValid || adicionarProduto.isPending}
+            onClick={handleTransferir}
+            disabled={!isValid || transferirProduto.isPending}
+            className="bg-blue-600 hover:bg-blue-700"
           >
-            {adicionarProduto.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Adicionar
+            {transferirProduto.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            <ArrowRight className="h-4 w-4 mr-2" />
+            Transferir
           </Button>
         </DialogFooter>
       </DialogContent>

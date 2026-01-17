@@ -163,7 +163,7 @@ export function useAjustarEstoqueLocal() {
   });
 }
 
-// Hook para adicionar produto a um local
+// Hook para transferir produto do Central para um local (subtrai do Central e adiciona no destino)
 export function useAdicionarProdutoLocal() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -172,8 +172,59 @@ export function useAdicionarProdutoLocal() {
     mutationFn: async ({ itemId, localId, quantidade, motivo }: AdicionarProdutoParams) => {
       if (!user?.id) throw new Error('Usuário não autenticado');
 
-      // Verificar se já existe registro
-      const { data: existente } = await supabase
+      // 1. Buscar local "central"
+      const { data: localCentral, error: centralError } = await supabase
+        .from('estoque_locais')
+        .select('id, nome')
+        .eq('user_id', user.id)
+        .eq('tipo', 'central')
+        .maybeSingle();
+
+      if (centralError) throw centralError;
+      if (!localCentral) throw new Error('Local central não encontrado');
+
+      // 2. Buscar estoque atual no Central
+      const { data: estoqueCentral, error: estoqueCentralError } = await supabase
+        .from('estoque_por_local')
+        .select('id, quantidade')
+        .eq('item_id', itemId)
+        .eq('local_id', localCentral.id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (estoqueCentralError) throw estoqueCentralError;
+
+      const qtdCentral = Number(estoqueCentral?.quantidade || 0);
+
+      // 3. Validar disponibilidade
+      if (qtdCentral < quantidade) {
+        throw new Error(`Quantidade insuficiente no Central. Disponível: ${qtdCentral}`);
+      }
+
+      // 4. Buscar nome do local destino para o motivo
+      const { data: localDestino } = await supabase
+        .from('estoque_locais')
+        .select('nome')
+        .eq('id', localId)
+        .maybeSingle();
+
+      const nomeLocalDestino = localDestino?.nome || 'Local';
+
+      // 5. Subtrair do Central
+      if (estoqueCentral) {
+        const { error: updateCentralError } = await supabase
+          .from('estoque_por_local')
+          .update({ 
+            quantidade: qtdCentral - quantidade,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', estoqueCentral.id);
+
+        if (updateCentralError) throw updateCentralError;
+      }
+
+      // 6. Adicionar na Loja destino
+      const { data: existenteLoja } = await supabase
         .from('estoque_por_local')
         .select('id, quantidade')
         .eq('item_id', itemId)
@@ -181,26 +232,21 @@ export function useAdicionarProdutoLocal() {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      let estoqueAntes = 0;
-      let estoqueLocalId: string;
+      let estoqueAntesLoja = 0;
 
-      if (existente) {
-        // Atualizar existente
-        estoqueAntes = Number(existente.quantidade);
-        estoqueLocalId = existente.id;
-
-        const { error: updateError } = await supabase
+      if (existenteLoja) {
+        estoqueAntesLoja = Number(existenteLoja.quantidade);
+        const { error: updateLojaError } = await supabase
           .from('estoque_por_local')
-          .update({
-            quantidade: estoqueAntes + quantidade,
-            updated_at: new Date().toISOString(),
+          .update({ 
+            quantidade: estoqueAntesLoja + quantidade,
+            updated_at: new Date().toISOString()
           })
-          .eq('id', existente.id);
+          .eq('id', existenteLoja.id);
 
-        if (updateError) throw updateError;
+        if (updateLojaError) throw updateLojaError;
       } else {
-        // Criar novo
-        const { data: inserted, error: insertError } = await supabase
+        const { error: insertLojaError } = await supabase
           .from('estoque_por_local')
           .insert({
             user_id: user.id,
@@ -208,41 +254,57 @@ export function useAdicionarProdutoLocal() {
             local_id: localId,
             quantidade: quantidade,
             quantidade_reservada: 0,
-          })
-          .select('id')
-          .single();
+          });
 
-        if (insertError) throw insertError;
-        estoqueLocalId = inserted.id;
+        if (insertLojaError) throw insertLojaError;
       }
 
-      // Registrar movimentação
-      const { error: movError } = await supabase
+      // 7. Registrar movimentação de SAÍDA do Central
+      const motivoTransferencia = motivo || `Transferência para ${nomeLocalDestino}`;
+      
+      const { error: movSaidaError } = await supabase
+        .from('estoque_movimentacoes')
+        .insert({
+          user_id: user.id,
+          item_id: itemId,
+          local_id: localCentral.id,
+          tipo: 'TRANSFERENCIA',
+          quantidade: quantidade,
+          motivo: motivoTransferencia,
+          estoque_antes: qtdCentral,
+          estoque_depois: qtdCentral - quantidade,
+        });
+
+      if (movSaidaError) throw movSaidaError;
+
+      // 8. Registrar movimentação de ENTRADA na Loja
+      const { error: movEntradaError } = await supabase
         .from('estoque_movimentacoes')
         .insert({
           user_id: user.id,
           item_id: itemId,
           local_id: localId,
-          tipo: 'AJUSTE_ENTRADA',
+          tipo: 'TRANSFERENCIA',
           quantidade: quantidade,
-          motivo: motivo || 'Adição de produto ao local',
-          estoque_antes: estoqueAntes,
-          estoque_depois: estoqueAntes + quantidade,
+          motivo: `Transferência do Central`,
+          estoque_antes: estoqueAntesLoja,
+          estoque_depois: estoqueAntesLoja + quantidade,
         });
 
-      if (movError) throw movError;
+      if (movEntradaError) throw movEntradaError;
 
-      return { estoqueLocalId, quantidade };
+      return { quantidade };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['estoque-detalhado-por-local'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
-      toast.success('Produto adicionado ao estoque local!');
+      queryClient.invalidateQueries({ queryKey: ['produtos-disponiveis-adicionar'] });
+      toast.success('Produto transferido do Central para o local!');
     },
     onError: (error: any) => {
-      toast.error(`Erro ao adicionar produto: ${error.message}`);
+      toast.error(`Erro na transferência: ${error.message}`);
     },
   });
 }
@@ -346,7 +408,7 @@ export function useHistoricoMovimentacoesItem(itemId: string | null, localId: st
   });
 }
 
-// Hook para buscar todos os produtos disponíveis para adicionar
+// Hook para buscar todos os produtos disponíveis para transferir do Central
 export function useProdutosDisponiveis(localId: string | null) {
   const { user } = useAuth();
 
@@ -355,16 +417,38 @@ export function useProdutosDisponiveis(localId: string | null) {
     queryFn: async () => {
       if (!localId || !user?.id) return [];
 
-      // Buscar todos os itens do usuário
+      // 1. Buscar local "central"
+      const { data: localCentral } = await supabase
+        .from('estoque_locais')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('tipo', 'central')
+        .maybeSingle();
+
+      // 2. Buscar todos os itens do usuário
       const { data: itens, error: itensError } = await supabase
         .from('estoque_itens')
-        .select('id, nome, categoria, imagem_url, preco_unitario, quantidade')
+        .select('id, nome, categoria, imagem_url, preco_unitario')
         .eq('user_id', user.id)
         .order('nome');
 
       if (itensError) throw itensError;
 
-      // Buscar quais já estão no local com quantidade > 0
+      // 3. Buscar estoque no Central
+      let estoqueCentralMap = new Map<string, number>();
+      if (localCentral) {
+        const { data: estoqueCentral } = await supabase
+          .from('estoque_por_local')
+          .select('item_id, quantidade')
+          .eq('local_id', localCentral.id)
+          .eq('user_id', user.id);
+
+        estoqueCentralMap = new Map(
+          (estoqueCentral || []).map(item => [item.item_id, Number(item.quantidade)])
+        );
+      }
+
+      // 4. Buscar quais já estão no local destino
       const { data: jaNoLocal, error: localError } = await supabase
         .from('estoque_por_local')
         .select('item_id, quantidade')
@@ -383,7 +467,7 @@ export function useProdutosDisponiveis(localId: string | null) {
         codigo: item.categoria,
         imagemUrl: item.imagem_url,
         precoUnitario: item.preco_unitario,
-        quantidadeCentral: Number(item.quantidade),
+        quantidadeCentral: estoqueCentralMap.get(item.id) || 0,
         quantidadeNoLocal: itensNoLocal.get(item.id) || 0,
         jaNoLocal: (itensNoLocal.get(item.id) || 0) > 0,
       }));
