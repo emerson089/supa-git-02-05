@@ -289,7 +289,42 @@ export function useRemoveItem() {
         throw new Error(mensagem);
       }
 
-      // 2. Deletar registros dependentes primeiro
+      // 2. Limpar transferencia_itens de cargas já soft-deleted (para liberar FK)
+      // Buscar IDs de transferencias soft-deleted que possuem itens deste item
+      const { data: itensCargasExcluidas, error: itensError } = await supabase
+        .from('transferencia_itens')
+        .select(`
+          id,
+          transferencia_id,
+          transferencias!inner(
+            id,
+            deleted_at
+          )
+        `)
+        .eq('item_id', id)
+        .not('transferencias.deleted_at', 'is', null);
+
+      if (itensError) {
+        console.error('[useRemoveItem] Erro ao buscar itens de cargas excluídas:', itensError);
+      }
+
+      // Deletar esses transferencia_itens (cargas já foram soft-deleted, então podemos limpar)
+      if (itensCargasExcluidas && itensCargasExcluidas.length > 0) {
+        const idsParaDeletar = itensCargasExcluidas.map(i => i.id);
+        console.log(`[useRemoveItem] Limpando ${idsParaDeletar.length} transferencia_itens de cargas já excluídas`);
+        
+        const { error: deleteTransItensError } = await supabase
+          .from('transferencia_itens')
+          .delete()
+          .in('id', idsParaDeletar);
+        
+        if (deleteTransItensError) {
+          console.error('[useRemoveItem] Erro ao deletar transferencia_itens:', deleteTransItensError);
+          throw new Error('Erro ao limpar histórico de cargas excluídas');
+        }
+      }
+
+      // 3. Deletar registros dependentes
       // Deletar estoque_por_local
       const { error: deleteEstoqueLocalError } = await supabase
         .from('estoque_por_local')

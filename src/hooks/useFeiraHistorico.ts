@@ -462,6 +462,17 @@ export function useExcluirCargaFeira() {
         .eq('id', transferenciaId);
 
       if (updateError) throw updateError;
+
+      // 6. Deletar transferencia_itens para liberar FK do estoque_itens
+      const { error: deleteItensError } = await supabase
+        .from('transferencia_itens')
+        .delete()
+        .eq('transferencia_id', transferenciaId);
+
+      if (deleteItensError) {
+        console.error('[useExcluirCargaFeira] Erro ao deletar transferencia_itens:', deleteItensError);
+        // Não lançar erro aqui, pois a carga já foi soft-deleted com sucesso
+      }
     },
     onSuccess: () => {
       // Invalidar todas as queries relevantes para atualizar a UI
