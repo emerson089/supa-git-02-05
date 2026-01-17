@@ -1,9 +1,32 @@
-import { forwardRef } from 'react';
-import { LayoutDashboard, ShoppingCart, Warehouse, Factory, Plus, LucideIcon } from 'lucide-react';
+import { forwardRef, useState } from 'react';
+import { 
+  LayoutDashboard, 
+  ShoppingCart, 
+  Warehouse, 
+  Plus, 
+  MoreHorizontal,
+  Store,
+  ArrowLeftRight,
+  Users,
+  Factory,
+  FileText,
+  Settings,
+  HelpCircle,
+  UserPlus,
+  LucideIcon 
+} from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Separator } from '@/components/ui/separator';
 
 interface NavItemType {
+  label: string;
+  icon: LucideIcon;
+  path: string;
+}
+
+interface QuickActionType {
   label: string;
   icon: LucideIcon;
   path: string;
@@ -16,7 +39,23 @@ const leftNavItems: NavItemType[] = [
 
 const rightNavItems: NavItemType[] = [
   { label: 'Estoque', icon: Warehouse, path: '/estoque' },
+  { label: 'Feira', icon: Store, path: '/feira' },
+];
+
+const moreMenuItems: NavItemType[] = [
+  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias' },
+  { label: 'Clientes', icon: Users, path: '/clientes' },
   { label: 'Produção', icon: Factory, path: '/producao' },
+  { label: 'Pedidos Criados', icon: FileText, path: '/pedidos/criados' },
+  { label: 'Configurações', icon: Settings, path: '/configuracoes' },
+  { label: 'Ajuda', icon: HelpCircle, path: '/ajuda' },
+];
+
+const quickActions: QuickActionType[] = [
+  { label: 'Novo Pedido', icon: ShoppingCart, path: '/pedidos/novo' },
+  { label: 'Nova Transferência', icon: ArrowLeftRight, path: '/transferencias' },
+  { label: 'Nova Carga (Feira)', icon: Store, path: '/feira' },
+  { label: 'Novo Cliente', icon: UserPlus, path: '/clientes' },
 ];
 
 interface NavItemProps {
@@ -55,45 +94,125 @@ NavItem.displayName = 'NavItem';
 export function BottomNavigation() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
   const isActive = (path: string) => {
     if (path === '/producao') return location.pathname === '/producao';
+    if (path === '/feira') return location.pathname === '/feira';
     return location.pathname.startsWith(path);
   };
 
+  const handleNavigate = (path: string) => {
+    navigate(path);
+    setMoreMenuOpen(false);
+    setQuickActionsOpen(false);
+  };
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border z-50 md:hidden safe-area-pb">
-      <div className="relative flex justify-around items-center h-16 px-2">
-        {/* Left items */}
-        {leftNavItems.map((item) => (
-          <NavItem 
-            key={item.path} 
-            item={item} 
-            isActive={isActive(item.path)}
-            onClick={() => navigate(item.path)}
-          />
-        ))}
-        
-        {/* FAB Central - Novo Pedido */}
-        <div className="flex-1 flex items-center justify-center">
+    <>
+      <nav className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border z-50 md:hidden safe-area-pb">
+        <div className="relative flex justify-around items-center h-16 px-2">
+          {/* Left items */}
+          {leftNavItems.map((item) => (
+            <NavItem 
+              key={item.path} 
+              item={item} 
+              isActive={isActive(item.path)}
+              onClick={() => navigate(item.path)}
+            />
+          ))}
+          
+          {/* FAB Central - Quick Actions */}
+          <div className="flex-1 flex items-center justify-center">
+            <button
+              onClick={() => setQuickActionsOpen(true)}
+              className="absolute -top-5 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all"
+            >
+              <Plus size={28} strokeWidth={2.5} />
+            </button>
+          </div>
+          
+          {/* Right items */}
+          {rightNavItems.map((item) => (
+            <NavItem 
+              key={item.path} 
+              item={item} 
+              isActive={isActive(item.path)}
+              onClick={() => navigate(item.path)}
+            />
+          ))}
+
+          {/* More Menu Button */}
           <button
-            onClick={() => navigate('/pedidos/novo')}
-            className="absolute -top-5 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all"
+            onClick={() => setMoreMenuOpen(true)}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 h-full min-w-[60px] min-h-[44px] gap-1 transition-colors rounded-lg",
+              moreMenuOpen 
+                ? "text-primary" 
+                : "text-muted-foreground active:text-foreground"
+            )}
           >
-            <Plus size={28} strokeWidth={2.5} />
+            <MoreHorizontal size={22} strokeWidth={2} />
+            <span className="text-[10px] font-medium">Mais</span>
           </button>
         </div>
-        
-        {/* Right items */}
-        {rightNavItems.map((item) => (
-          <NavItem 
-            key={item.path} 
-            item={item} 
-            isActive={isActive(item.path)}
-            onClick={() => navigate(item.path)}
-          />
-        ))}
-      </div>
-    </nav>
+      </nav>
+
+      {/* Quick Actions Sheet */}
+      <Sheet open={quickActionsOpen} onOpenChange={setQuickActionsOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
+          <SheetHeader className="pb-2">
+            <SheetTitle className="text-left">Ações Rápidas</SheetTitle>
+          </SheetHeader>
+          <div className="grid grid-cols-2 gap-3 py-4">
+            {quickActions.map((action) => (
+              <button
+                key={action.label}
+                onClick={() => handleNavigate(action.path)}
+                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors min-h-[90px]"
+              >
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                  <action.icon size={24} />
+                </div>
+                <span className="text-sm font-medium text-center">{action.label}</span>
+              </button>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* More Menu Sheet */}
+      <Sheet open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-safe max-h-[70vh]">
+          <SheetHeader className="pb-2">
+            <SheetTitle className="text-left">Mais opções</SheetTitle>
+          </SheetHeader>
+          <div className="py-2 space-y-1 overflow-y-auto">
+            {moreMenuItems.map((item) => {
+              const active = isActive(item.path);
+              return (
+                <button
+                  key={item.label}
+                  onClick={() => handleNavigate(item.path)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all min-h-[48px]",
+                    active
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "hover:bg-muted/50 text-foreground"
+                  )}
+                >
+                  <item.icon size={20} />
+                  <span className="text-sm">{item.label}</span>
+                  {active && (
+                    <div className="ml-auto w-2 h-2 rounded-full bg-primary" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
