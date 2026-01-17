@@ -93,7 +93,7 @@ export function useEstoqueDetalhadoPorLocal(localId: string | null) {
   });
 }
 
-// Hook para ajustar estoque (aumentar ou diminuir)
+// Hook para ajustar estoque (aumentar ou diminuir) - USANDO RPC ATÔMICA
 export function useAjustarEstoqueLocal() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -102,50 +102,29 @@ export function useAjustarEstoqueLocal() {
     mutationFn: async ({ estoqueLocalId, itemId, localId, novaQuantidade, motivo }: AjusteEstoqueParams) => {
       if (!user?.id) throw new Error('Usuário não autenticado');
 
-      // 1. Buscar estoque atual
-      const { data: estoqueAtual, error: fetchError } = await supabase
+      // Chamar RPC atômica - tudo ou nada
+      const { error } = await supabase.rpc('rpc_ajustar_estoque_local', {
+        p_local_id: localId,
+        p_item_id: itemId,
+        p_nova_quantidade: novaQuantidade,
+        p_user_id: user.id,
+        p_motivo: motivo
+      });
+
+      if (error) {
+        console.error('[useAjustarEstoqueLocal] Erro RPC:', error);
+        throw new Error(error.message || 'Erro ao ajustar estoque');
+      }
+
+      // Buscar estoque anterior para determinar tipo (para mensagem)
+      const { data: estoqueAtual } = await supabase
         .from('estoque_por_local')
         .select('quantidade')
         .eq('id', estoqueLocalId)
         .single();
 
-      if (fetchError) throw fetchError;
-
-      const estoqueAntes = Number(estoqueAtual.quantidade);
-      const diferenca = novaQuantidade - estoqueAntes;
-
-      if (diferenca === 0) {
-        throw new Error('A quantidade não foi alterada');
-      }
-
+      const diferenca = novaQuantidade - Number(estoqueAtual?.quantidade || 0);
       const tipoMovimentacao = diferenca > 0 ? 'AJUSTE_ENTRADA' : 'AJUSTE_SAIDA';
-
-      // 2. Atualizar estoque_por_local
-      const { error: updateError } = await supabase
-        .from('estoque_por_local')
-        .update({
-          quantidade: novaQuantidade,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', estoqueLocalId);
-
-      if (updateError) throw updateError;
-
-      // 3. Registrar movimentação
-      const { error: insertError } = await supabase
-        .from('estoque_movimentacoes')
-        .insert({
-          user_id: user.id,
-          item_id: itemId,
-          local_id: localId,
-          tipo: tipoMovimentacao,
-          quantidade: Math.abs(diferenca),
-          motivo: motivo,
-          estoque_antes: estoqueAntes,
-          estoque_depois: novaQuantidade,
-        });
-
-      if (insertError) throw insertError;
 
       return { tipoMovimentacao, diferenca };
     },
@@ -171,7 +150,7 @@ export function useAjustarEstoqueLocal() {
   });
 }
 
-// Hook para transferir produto do Central para um local (subtrai do Central e adiciona no destino)
+// Hook para transferir produto do Central para um local - USANDO RPC ATÔMICA
 export function useAdicionarProdutoLocal() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -183,7 +162,7 @@ export function useAdicionarProdutoLocal() {
       // 1. Buscar local "central"
       const { data: localCentral, error: centralError } = await supabase
         .from('estoque_locais')
-        .select('id, nome')
+        .select('id')
         .eq('user_id', user.id)
         .eq('tipo', 'central')
         .maybeSingle();
@@ -191,117 +170,29 @@ export function useAdicionarProdutoLocal() {
       if (centralError) throw centralError;
       if (!localCentral) throw new Error('Local central não encontrado');
 
-      // 2. Buscar estoque atual no Central
-      const { data: estoqueCentral, error: estoqueCentralError } = await supabase
-        .from('estoque_por_local')
-        .select('id, quantidade')
-        .eq('item_id', itemId)
-        .eq('local_id', localCentral.id)
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // 2. Preparar itens no formato esperado pela RPC
+      const itensJson = [{
+        item_id: itemId,
+        quantidade: quantidade
+      }];
 
-      if (estoqueCentralError) throw estoqueCentralError;
+      // 3. Chamar RPC atômica - tudo ou nada
+      const { data, error } = await supabase.rpc('rpc_criar_transferencia', {
+        p_origem_local_id: localCentral.id,
+        p_destino_local_id: localId,
+        p_itens: itensJson,
+        p_user_id: user.id,
+        p_motivo: motivo || 'Transferência do Central'
+      });
 
-      const qtdCentral = Number(estoqueCentral?.quantidade || 0);
-
-      // 3. Validar disponibilidade
-      if (qtdCentral < quantidade) {
-        throw new Error(`Quantidade insuficiente no Central. Disponível: ${qtdCentral}`);
+      if (error) {
+        console.error('[useAdicionarProdutoLocal] Erro RPC:', error);
+        // Extrair mensagem amigável do erro
+        const errorMsg = error.message || 'Erro na transferência';
+        throw new Error(errorMsg);
       }
 
-      // 4. Buscar nome do local destino para o motivo
-      const { data: localDestino } = await supabase
-        .from('estoque_locais')
-        .select('nome')
-        .eq('id', localId)
-        .maybeSingle();
-
-      const nomeLocalDestino = localDestino?.nome || 'Local';
-
-      // 5. Subtrair do Central
-      if (estoqueCentral) {
-        const { error: updateCentralError } = await supabase
-          .from('estoque_por_local')
-          .update({ 
-            quantidade: qtdCentral - quantidade,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', estoqueCentral.id);
-
-        if (updateCentralError) throw updateCentralError;
-      }
-
-      // 6. Adicionar na Loja destino
-      const { data: existenteLoja } = await supabase
-        .from('estoque_por_local')
-        .select('id, quantidade')
-        .eq('item_id', itemId)
-        .eq('local_id', localId)
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      let estoqueAntesLoja = 0;
-
-      if (existenteLoja) {
-        estoqueAntesLoja = Number(existenteLoja.quantidade);
-        const { error: updateLojaError } = await supabase
-          .from('estoque_por_local')
-          .update({ 
-            quantidade: estoqueAntesLoja + quantidade,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existenteLoja.id);
-
-        if (updateLojaError) throw updateLojaError;
-      } else {
-        const { error: insertLojaError } = await supabase
-          .from('estoque_por_local')
-          .insert({
-            user_id: user.id,
-            item_id: itemId,
-            local_id: localId,
-            quantidade: quantidade,
-            quantidade_reservada: 0,
-          });
-
-        if (insertLojaError) throw insertLojaError;
-      }
-
-      // 7. Registrar movimentação de SAÍDA do Central
-      const motivoTransferencia = motivo || `Transferência para ${nomeLocalDestino}`;
-      
-      const { error: movSaidaError } = await supabase
-        .from('estoque_movimentacoes')
-        .insert({
-          user_id: user.id,
-          item_id: itemId,
-          local_id: localCentral.id,
-          tipo: 'TRANSFERENCIA',
-          quantidade: quantidade,
-          motivo: motivoTransferencia,
-          estoque_antes: qtdCentral,
-          estoque_depois: qtdCentral - quantidade,
-        });
-
-      if (movSaidaError) throw movSaidaError;
-
-      // 8. Registrar movimentação de ENTRADA na Loja
-      const { error: movEntradaError } = await supabase
-        .from('estoque_movimentacoes')
-        .insert({
-          user_id: user.id,
-          item_id: itemId,
-          local_id: localId,
-          tipo: 'TRANSFERENCIA',
-          quantidade: quantidade,
-          motivo: `Transferência do Central`,
-          estoque_antes: estoqueAntesLoja,
-          estoque_depois: estoqueAntesLoja + quantidade,
-        });
-
-      if (movEntradaError) throw movEntradaError;
-
-      return { quantidade };
+      return { quantidade, transferenciaId: data };
     },
     onSuccess: () => {
       // Invalidar TODAS as queries de estoque com predicate para garantir atualização imediata
@@ -313,6 +204,7 @@ export function useAdicionarProdutoLocal() {
            query.queryKey[0] === 'estoque-itens'),
         refetchType: 'all'
       });
+      queryClient.invalidateQueries({ queryKey: ['transferencias'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
       queryClient.invalidateQueries({ queryKey: ['produtos-disponiveis-adicionar'] });
       toast.success('Produto transferido do Central para o local!');

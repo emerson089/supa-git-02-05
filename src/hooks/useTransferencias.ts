@@ -653,7 +653,7 @@ export function useRegistrarRetornoFeira() {
   });
 }
 
-// Hook para criar transferência comum (Central <-> Loja)
+// Hook para criar transferência comum (Central <-> Loja) - USANDO RPC ATÔMICA
 export function useCriarTransferencia() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -672,106 +672,44 @@ export function useCriarTransferencia() {
     }) => {
       if (!user) throw new Error('Usuário não autenticado');
 
-      // Validar disponibilidade
-      for (const item of itens) {
-        const { data: estoque } = await supabase
-          .from('estoque_por_local')
-          .select('*')
-          .eq('item_id', item.itemId)
-          .eq('local_id', origemId)
-          .single();
+      // Preparar itens no formato esperado pela RPC
+      const itensJson = itens.map(i => ({
+        item_id: i.itemId,
+        quantidade: i.quantidade
+      }));
 
-        const disponivel = estoque
-          ? Number(estoque.quantidade) - Number(estoque.quantidade_reservada || 0)
-          : 0;
+      // Chamar RPC atômica - tudo ou nada
+      const { data, error } = await supabase.rpc('rpc_criar_transferencia', {
+        p_origem_local_id: origemId,
+        p_destino_local_id: destinoId,
+        p_itens: itensJson,
+        p_user_id: user.id,
+        p_motivo: observacoes || null
+      });
 
-        if (disponivel < item.quantidade) {
-          const { data: itemData } = await supabase
-            .from('estoque_itens')
-            .select('nome')
-            .eq('id', item.itemId)
-            .single();
-
-          throw new Error(
-            `${itemData?.nome || 'Item'}: apenas ${disponivel} disponível`
-          );
-        }
+      if (error) {
+        console.error('[useCriarTransferencia] Erro RPC:', error);
+        // Extrair mensagem amigável do erro
+        const errorMsg = error.message || 'Erro ao criar transferência';
+        throw new Error(errorMsg);
       }
 
-      // Criar transferência
-      const { data: transferencia, error: tErr } = await supabase
-        .from('transferencias')
-        .insert({
-          user_id: user.id,
-          local_origem_id: origemId,
-          local_destino_id: destinoId,
-          tipo: 'transferencia',
-          status: 'concluida',
-        })
-        .select()
-        .single();
-
-      if (tErr) throw tErr;
-
-      // Criar itens e mover estoque
-      for (const item of itens) {
-        await supabase.from('transferencia_itens').insert({
-          user_id: user.id,
-          transferencia_id: transferencia.id,
-          item_id: item.itemId,
-          quantidade_enviada: item.quantidade,
-        });
-
-        // Reduzir na origem
-        const { data: estoqueOrigem } = await supabase
-          .from('estoque_por_local')
-          .select('*')
-          .eq('item_id', item.itemId)
-          .eq('local_id', origemId)
-          .single();
-
-        if (estoqueOrigem) {
-          await supabase
-            .from('estoque_por_local')
-            .update({
-              quantidade: Number(estoqueOrigem.quantidade) - item.quantidade,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', estoqueOrigem.id);
-        }
-
-        // Adicionar no destino
-        const { data: estoqueDestino } = await supabase
-          .from('estoque_por_local')
-          .select('*')
-          .eq('item_id', item.itemId)
-          .eq('local_id', destinoId)
-          .single();
-
-        if (estoqueDestino) {
-          await supabase
-            .from('estoque_por_local')
-            .update({
-              quantidade: Number(estoqueDestino.quantidade) + item.quantidade,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', estoqueDestino.id);
-        } else {
-          await supabase.from('estoque_por_local').insert({
-            user_id: user.id,
-            item_id: item.itemId,
-            local_id: destinoId,
-            quantidade: item.quantidade,
-            quantidade_reservada: 0,
-          });
-        }
-      }
-
-      return mapDbToTransferencia(transferencia as DbTransferencia);
+      // Retornar o ID da transferência criada
+      return { id: data as string };
     },
     onSuccess: () => {
+      // Invalidar TODAS as queries de estoque com predicate para garantir atualização
       queryClient.invalidateQueries({ queryKey: ['transferencias'] });
-      queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] === 'estoque-por-local' || 
+           query.queryKey[0] === 'estoque-detalhado-por-local' ||
+           query.queryKey[0] === 'estoque-itens'),
+        refetchType: 'all'
+      });
+      queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['produtos-disponiveis-adicionar'] });
     },
   });
 }
