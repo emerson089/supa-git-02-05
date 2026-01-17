@@ -494,3 +494,69 @@ export function useExcluirCargaFeira() {
     },
   });
 }
+
+// Hook: excluir carga DEFINITIVAMENTE do histórico (hard delete)
+// REGRA: Apenas cargas estornadas ou canceladas podem ser excluídas do histórico
+// (não afeta estoque, pois já foi tratado)
+export function useExcluirHistoricoCarga() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      transferenciaId,
+    }: {
+      transferenciaId: string;
+    }) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // 1. Buscar a carga
+      const { data: carga, error: cargaError } = await supabase
+        .from('transferencias')
+        .select('*')
+        .eq('id', transferenciaId)
+        .single();
+
+      if (cargaError || !carga) throw new Error('Carga não encontrada');
+
+      // VALIDAÇÃO DE STATUS: Apenas cargas finalizadas podem ser excluídas do histórico
+      const statusPermitidos = ['estornada', 'cancelada'];
+      if (!statusPermitidos.includes(carga.status)) {
+        throw new Error(
+          `Apenas cargas estornadas ou canceladas podem ser excluídas do histórico. ` +
+          `Status atual: "${carga.status}".`
+        );
+      }
+
+      // 2. Deletar transferencia_itens primeiro (FK)
+      const { error: deleteItensError } = await supabase
+        .from('transferencia_itens')
+        .delete()
+        .eq('transferencia_id', transferenciaId);
+
+      if (deleteItensError) {
+        console.error('[useExcluirHistoricoCarga] Erro ao deletar itens:', deleteItensError);
+        throw new Error('Erro ao excluir itens da carga');
+      }
+
+      // 3. Deletar a transferência (hard delete)
+      const { error: deleteError } = await supabase
+        .from('transferencias')
+        .delete()
+        .eq('id', transferenciaId);
+
+      if (deleteError) {
+        console.error('[useExcluirHistoricoCarga] Erro ao deletar transferência:', deleteError);
+        throw new Error('Erro ao excluir carga do histórico');
+      }
+
+      return { transferenciaId };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cargas-periodo'] });
+      queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
+      queryClient.invalidateQueries({ queryKey: ['cargas-hoje'] });
+      queryClient.invalidateQueries({ queryKey: ['transferencias'] });
+    },
+  });
+}

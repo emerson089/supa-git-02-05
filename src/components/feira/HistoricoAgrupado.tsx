@@ -21,6 +21,7 @@ interface HistoricoAgrupadoProps {
   onVerDetalhes: (carga: TransferenciaComItensHistorico) => void;
   onExcluirCarga: (carga: TransferenciaComItensHistorico) => void;
   onEstornarCarga?: (carga: TransferenciaComItensHistorico) => void;
+  onExcluirHistorico?: (carga: TransferenciaComItensHistorico) => void;
   isLoading: boolean;
 }
 
@@ -82,7 +83,7 @@ function getStatusConfig(status: string) {
   }
 }
 
-export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, onEstornarCarga, isLoading }: HistoricoAgrupadoProps) {
+export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, onEstornarCarga, onExcluirHistorico, isLoading }: HistoricoAgrupadoProps) {
   const [openDays, setOpenDays] = useState<Set<string>>(new Set([historico[0]?.data]));
 
   const toggleDay = (data: string) => {
@@ -236,12 +237,26 @@ export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, on
                               {/* Estornar: apenas concluida */}
                               {canEstornar && (
                                 <DropdownMenuItem
-                                  onClick={() => onEstornarCarga(carga)}
+                                  onClick={() => onEstornarCarga!(carga)}
                                   className="text-amber-600 focus:text-amber-600"
                                 >
                                   <RotateCcw className="mr-2 h-4 w-4" />
                                   Estornar carga
                                 </DropdownMenuItem>
+                              )}
+                              
+                              {/* Excluir do histórico: apenas estornada/cancelada */}
+                              {isFinalized && onExcluirHistorico && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => onExcluirHistorico(carga)}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Excluir do histórico
+                                  </DropdownMenuItem>
+                                </>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>

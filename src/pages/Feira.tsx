@@ -16,6 +16,7 @@ import {
   useHistoricoAgrupado, 
   useTodasCargasAtivas,
   useExcluirCargaFeira,
+  useExcluirHistoricoCarga,
   TransferenciaComItensHistorico
 } from '@/hooks/useFeiraHistorico';
 import { FiltroPeriodo, salvarFiltroPeriodo, carregarFiltroPeriodo } from '@/components/feira/FiltroPeriodo';
@@ -23,6 +24,7 @@ import { HistoricoAgrupado } from '@/components/feira/HistoricoAgrupado';
 import { DetalhesCargaModal } from '@/components/feira/DetalhesCargaModal';
 import { CargasAtivasAlerta } from '@/components/feira/CargasAtivasAlerta';
 import { ExcluirCargaModal } from '@/components/feira/ExcluirCargaModal';
+import { ExcluirHistoricoModal } from '@/components/feira/ExcluirHistoricoModal';
 import { EstornarCargaModal } from '@/components/feira/EstornarCargaModal';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,6 +58,7 @@ export default function Feira() {
   const criarCarga = useCriarCargaFeira();
   const registrarRetorno = useRegistrarRetornoFeira();
   const excluirCarga = useExcluirCargaFeira();
+  const excluirHistorico = useExcluirHistoricoCarga();
   const recalcularEstoque = useRecalcularEstoque();
   const estornarCarga = useEstornarCarga();
 
@@ -74,6 +77,7 @@ export default function Feira() {
   const [cargaSelecionada, setCargaSelecionada] = useState<TransferenciaComItens | null>(null);
   const [cargaDetalhes, setCargaDetalhes] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaExcluir, setCargaExcluir] = useState<TransferenciaComItensHistorico | null>(null);
+  const [cargaExcluirHistorico, setCargaExcluirHistorico] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaEstornar, setCargaEstornar] = useState<TransferenciaComItensHistorico | null>(null);
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
   const [buscaProduto, setBuscaProduto] = useState('');
@@ -318,6 +322,15 @@ export default function Feira() {
     setCargaEstornar(carga);
   };
 
+  // Handler para excluir carga do histórico (apenas estornada/cancelada)
+  const handleExcluirHistorico = (carga: TransferenciaComItensHistorico) => {
+    if (carga.status !== 'estornada' && carga.status !== 'cancelada') {
+      toast.error('Apenas cargas estornadas ou canceladas podem ser removidas do histórico');
+      return;
+    }
+    setCargaExcluirHistorico(carga);
+  };
+
   const handleRecalcularEstoque = async () => {
     try {
       const result = await recalcularEstoque.mutateAsync();
@@ -525,6 +538,7 @@ export default function Feira() {
               onVerDetalhes={(carga) => setCargaDetalhes(carga)}
               onExcluirCarga={handleExcluirCarga}
               onEstornarCarga={handleEstornarCarga}
+              onExcluirHistorico={handleExcluirHistorico}
               isLoading={isLoadingHistorico}
             />
           </div>
@@ -577,6 +591,25 @@ export default function Feira() {
           }
         }}
         isLoading={estornarCarga.isPending}
+      />
+
+      {/* Modal Excluir do Histórico (apenas para estornadas/canceladas) */}
+      <ExcluirHistoricoModal
+        carga={cargaExcluirHistorico}
+        onClose={() => setCargaExcluirHistorico(null)}
+        onConfirm={async () => {
+          if (!cargaExcluirHistorico) return;
+          try {
+            await excluirHistorico.mutateAsync({
+              transferenciaId: cargaExcluirHistorico.id,
+            });
+            toast.success('Carga removida do histórico');
+            setCargaExcluirHistorico(null);
+          } catch (error: any) {
+            toast.error(error.message || 'Erro ao excluir do histórico');
+          }
+        }}
+        isLoading={excluirHistorico.isPending}
       />
 
       {/* Modal Confirmar Recálculo de Estoque */}
