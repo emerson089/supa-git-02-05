@@ -251,20 +251,27 @@ export function useRemoveItem() {
   
   return useMutation({
     mutationFn: async (id: string) => {
-      // 1. Verificar se existe em transferencia_itens (cargas de feira)
-      const { data: cargas, error: cargasError } = await supabase
+      // 1. Verificar se existe em transferencia_itens com transferências ATIVAS (não soft-deleted)
+      const { data: cargasAtivas, error: cargasError } = await supabase
         .from('transferencia_itens')
-        .select('id, transferencia_id')
+        .select(`
+          id,
+          transferencia_id,
+          transferencias!inner(
+            id,
+            deleted_at
+          )
+        `)
         .eq('item_id', id)
-        .limit(1);
+        .is('transferencias.deleted_at', null);
 
       if (cargasError) {
         console.error('[useRemoveItem] Erro ao verificar cargas:', cargasError);
         throw new Error('Erro ao verificar dependências do item');
       }
 
-      if (cargas && cargas.length > 0) {
-        throw new Error('Este modelo possui cargas de feira associadas e não pode ser excluído. Exclua as cargas primeiro ou use outro modelo.');
+      if (cargasAtivas && cargasAtivas.length > 0) {
+        throw new Error(`Este modelo possui ${cargasAtivas.length} carga(s) de feira ativa(s). Exclua ou estorne as cargas na página Feira antes de remover o modelo.`);
       }
 
       // 2. Deletar registros dependentes primeiro
