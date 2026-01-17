@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
+import { LotImage } from '@/components/production/LotImage';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format, isToday } from 'date-fns';
@@ -248,15 +249,17 @@ export default function Feira() {
     dataRetorno: carga.dataRetorno,
     observacoes: carga.observacoes,
     createdAt: carga.createdAt,
-    itens: carga.itens.map(item => ({
-      id: item.id,
-      transferenciaId: carga.id,
-      itemId: item.itemId,
-      quantidadeEnviada: item.quantidadeEnviada,
-      quantidadeRetornada: item.quantidadeRetornada,
-      precoUnitario: item.precoUnitario ?? item.produtoPreco,
-      createdAt: carga.createdAt,
-    })),
+      itens: carga.itens.map(item => ({
+        id: item.id,
+        transferenciaId: carga.id,
+        itemId: item.itemId,
+        quantidadeEnviada: item.quantidadeEnviada,
+        quantidadeRetornada: item.quantidadeRetornada,
+        precoUnitario: item.precoUnitario ?? item.produtoPreco,
+        createdAt: carga.createdAt,
+        produtoNome: item.produtoNome,
+        produtoImagem: item.produtoImagem,
+      })),
   });
 
   const handleOpenRetorno = (carga: TransferenciaComItens) => {
@@ -883,29 +886,48 @@ export default function Feira() {
               {cargaSelecionada?.itens.map(item => {
                 const retorno = itensRetorno.find(i => i.itemId === item.itemId);
                 const vendido = item.quantidadeEnviada - (retorno?.quantidadeRetornada || 0);
+                const itemWithExtras = item as typeof item & { produtoNome?: string | null; produtoImagem?: string | null };
 
                 return (
                   <div key={item.id} className="p-3 rounded-lg border">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Item #{item.itemId.slice(0, 8)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        Enviado: {item.quantidadeEnviada}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Label className="text-xs text-muted-foreground shrink-0">Retornou:</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={item.quantidadeEnviada}
-                        value={retorno?.quantidadeRetornada || 0}
-                        onChange={(e) => handleUpdateRetorno(item.itemId, parseInt(e.target.value) || 0)}
-                        className="w-20 h-8"
-                      />
-                      <span className="text-xs text-muted-foreground">→</span>
-                      <Badge variant={vendido > 0 ? "default" : "secondary"} className="text-xs">
-                        {vendido} vendido{vendido !== 1 ? 's' : ''}
-                      </Badge>
+                    <div className="flex gap-3">
+                      {/* Imagem do produto */}
+                      <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                        <LotImage 
+                          src={itemWithExtras.produtoImagem} 
+                          alt={itemWithExtras.produtoNome || 'Produto'} 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        {/* Nome e quantidade enviada */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium truncate">
+                            {itemWithExtras.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
+                          </span>
+                          <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                            Enviado: {item.quantidadeEnviada}
+                          </span>
+                        </div>
+                        
+                        {/* Controles de retorno */}
+                        <div className="flex items-center gap-3">
+                          <Label className="text-xs text-muted-foreground shrink-0">Retornou:</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={item.quantidadeEnviada}
+                            value={retorno?.quantidadeRetornada || 0}
+                            onChange={(e) => handleUpdateRetorno(item.itemId, parseInt(e.target.value) || 0)}
+                            className="w-20 h-8"
+                          />
+                          <span className="text-xs text-muted-foreground">→</span>
+                          <Badge variant={vendido > 0 ? "default" : "secondary"} className="text-xs">
+                            {vendido} vendido{vendido !== 1 ? 's' : ''}
+                          </Badge>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
