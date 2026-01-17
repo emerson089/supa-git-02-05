@@ -319,13 +319,21 @@ export function useCriarCargaFeira() {
         // Mover estoque: Central -> Banca
         // Reduzir no Central
         if (estoqueCentral) {
-          await supabase
+          const { error: updateCentralError } = await supabase
             .from('estoque_por_local')
             .update({
               quantidade: quantidadeDepoisCentral,
               updated_at: new Date().toISOString(),
             })
             .eq('id', estoqueCentral.id);
+
+          if (updateCentralError) {
+            console.error('[useCriarCargaFeira] ERRO ao reduzir Central:', updateCentralError);
+            throw new Error(`Falha ao atualizar estoque Central: ${updateCentralError.message}`);
+          }
+        } else {
+          // Se não existe registro no Central, criar com quantidade negativa (erro crítico, mas logar)
+          console.error('[useCriarCargaFeira] ALERTA: Item não tem registro no Central:', item.itemId);
         }
 
         // Adicionar na Banca
@@ -337,21 +345,31 @@ export function useCriarCargaFeira() {
           .single();
 
         if (estoqueBanca) {
-          await supabase
+          const { error: updateBancaError } = await supabase
             .from('estoque_por_local')
             .update({
               quantidade: Number(estoqueBanca.quantidade) + item.quantidade,
               updated_at: new Date().toISOString(),
             })
             .eq('id', estoqueBanca.id);
+
+          if (updateBancaError) {
+            console.error('[useCriarCargaFeira] ERRO ao aumentar Banca:', updateBancaError);
+            throw new Error(`Falha ao atualizar estoque Banca: ${updateBancaError.message}`);
+          }
         } else {
-          await supabase.from('estoque_por_local').insert({
+          const { error: insertBancaError } = await supabase.from('estoque_por_local').insert({
             user_id: user.id,
             item_id: item.itemId,
             local_id: banca.id,
             quantidade: item.quantidade,
             quantidade_reservada: 0,
           });
+
+          if (insertBancaError) {
+            console.error('[useCriarCargaFeira] ERRO ao inserir na Banca:', insertBancaError);
+            throw new Error(`Falha ao criar registro na Banca: ${insertBancaError.message}`);
+          }
         }
 
         // Sincronizar estoque_itens.quantidade
