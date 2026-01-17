@@ -71,36 +71,38 @@ export function FiltroPeriodo({ periodo, onChange }: FiltroPeriodoProps) {
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 bg-card rounded-lg border">
-      <div className="flex items-center gap-2">
-        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium text-muted-foreground">Período:</span>
+    <div className="flex flex-col gap-3 p-3 sm:p-4 bg-card rounded-lg border overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex items-center gap-2">
+          <CalendarIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <span className="text-sm font-medium text-muted-foreground">Período:</span>
+        </div>
+
+        <Select value={periodo.tipo} onValueChange={(v) => handleTipoChange(v as PeriodoTipo)}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
+          <SelectContent>
+            {opcoes.map((opcao) => (
+              <SelectItem key={opcao.value} value={opcao.value}>
+                {opcao.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      <Select value={periodo.tipo} onValueChange={(v) => handleTipoChange(v as PeriodoTipo)}>
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="Selecione" />
-        </SelectTrigger>
-        <SelectContent>
-          {opcoes.map((opcao) => (
-            <SelectItem key={opcao.value} value={opcao.value}>
-              {opcao.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
       {showCustomPicker && (
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className={cn('w-[130px] justify-start text-left font-normal', !customInicio && 'text-muted-foreground')}
+                className={cn('w-[120px] sm:w-[130px] justify-start text-left font-normal', !customInicio && 'text-muted-foreground')}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {customInicio ? format(customInicio, 'dd/MM/yyyy') : 'De'}
+                <CalendarIcon className="mr-1 sm:mr-2 h-4 w-4 flex-shrink-0" />
+                {customInicio ? format(customInicio, 'dd/MM/yy') : 'De'}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -114,17 +116,17 @@ export function FiltroPeriodo({ periodo, onChange }: FiltroPeriodoProps) {
             </PopoverContent>
           </Popover>
 
-          <span className="text-muted-foreground">até</span>
+          <span className="text-muted-foreground text-sm">até</span>
 
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className={cn('w-[130px] justify-start text-left font-normal', !customFim && 'text-muted-foreground')}
+                className={cn('w-[120px] sm:w-[130px] justify-start text-left font-normal', !customFim && 'text-muted-foreground')}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {customFim ? format(customFim, 'dd/MM/yyyy') : 'Até'}
+                <CalendarIcon className="mr-1 sm:mr-2 h-4 w-4 flex-shrink-0" />
+                {customFim ? format(customFim, 'dd/MM/yy') : 'Até'}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -139,13 +141,13 @@ export function FiltroPeriodo({ periodo, onChange }: FiltroPeriodoProps) {
           </Popover>
 
           <Button size="sm" onClick={handleAplicarCustom} disabled={!customInicio || !customFim}>
-            <Check className="h-4 w-4 mr-1" />
-            Aplicar
+            <Check className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Aplicar</span>
           </Button>
         </div>
       )}
 
-      <div className="ml-auto text-sm text-muted-foreground">
+      <div className="text-sm text-muted-foreground">
         Exibindo: <span className="font-medium text-foreground">{formatarPeriodoExibicao()}</span>
       </div>
     </div>
