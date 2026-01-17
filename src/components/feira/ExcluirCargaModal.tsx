@@ -31,10 +31,17 @@ const formatCurrency = (value: number) => {
 export function ExcluirCargaModal({ carga, onClose, onConfirm, isLoading }: ExcluirCargaModalProps) {
   const [motivo, setMotivo] = useState('');
 
+  // Não renderizar se não há carga ou se não é em_andamento
   if (!carga) return null;
+  
+  // Proteção extra: este modal só deve aparecer para cargas em_andamento
+  if (carga.status !== 'em_andamento') {
+    console.warn('[ExcluirCargaModal] Tentativa de excluir carga com status:', carga.status);
+    return null;
+  }
 
   const totais = calcularTotaisCargaPublic(carga.itens);
-  const delta = totais.enviado - totais.retornado; // Quantidade que "saiu" do sistema (vendida)
+  const delta = totais.enviado - totais.retornado; // Quantidade que precisa voltar da Banca para Central
   const dataSaida = format(new Date(carga.dataSaida), 'dd/MM/yyyy HH:mm');
 
   const handleConfirm = async () => {

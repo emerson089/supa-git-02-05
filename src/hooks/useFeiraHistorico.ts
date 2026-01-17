@@ -356,9 +356,18 @@ export function useExcluirCargaFeira() {
       if (cargaError || !carga) throw new Error('Carga não encontrada');
       if (carga.deleted_at) throw new Error('Esta carga já foi excluída');
       
-      // NOVA VALIDAÇÃO: Cargas concluídas não podem ser excluídas
+      // VALIDAÇÃO DE STATUS: Apenas cargas em_andamento podem ser excluídas
       if (carga.status === 'concluida') {
         throw new Error('Cargas concluídas não podem ser excluídas. Use a opção "Estornar" para reverter a venda.');
+      }
+      if (carga.status === 'estornada') {
+        throw new Error('Esta carga já foi estornada anteriormente.');
+      }
+      if (carga.status === 'cancelada') {
+        throw new Error('Esta carga já foi cancelada anteriormente.');
+      }
+      if (carga.status !== 'em_andamento') {
+        throw new Error(`Não é possível excluir carga com status "${carga.status}".`);
       }
 
       // 2. Buscar locais Central e Banca
