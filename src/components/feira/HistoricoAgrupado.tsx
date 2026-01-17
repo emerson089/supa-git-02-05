@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, ChevronRight, Eye, Check, Clock, Package, MoreVertical, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye, Check, Clock, Package, MoreVertical, Trash2, RotateCcw, Ban } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CargaDiaAgrupada, TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hooks/useFeiraHistorico';
@@ -20,6 +20,7 @@ interface HistoricoAgrupadoProps {
   historico: CargaDiaAgrupada[];
   onVerDetalhes: (carga: TransferenciaComItensHistorico) => void;
   onExcluirCarga: (carga: TransferenciaComItensHistorico) => void;
+  onEstornarCarga?: (carga: TransferenciaComItensHistorico) => void;
   isLoading: boolean;
 }
 
@@ -30,7 +31,58 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, isLoading }: HistoricoAgrupadoProps) {
+// Helper para obter configurações visuais baseadas no status
+function getStatusConfig(status: string) {
+  switch (status) {
+    case 'em_andamento':
+      return {
+        label: 'Em andamento',
+        variant: 'default' as const,
+        icon: Clock,
+        iconClass: 'text-primary animate-pulse',
+        badgeClass: 'bg-primary',
+        rowClass: 'border-primary/30 bg-primary/5',
+      };
+    case 'concluida':
+      return {
+        label: 'Concluída',
+        variant: 'secondary' as const,
+        icon: Check,
+        iconClass: 'text-emerald-600',
+        badgeClass: '',
+        rowClass: 'bg-muted/30',
+      };
+    case 'estornada':
+      return {
+        label: 'Estornada',
+        variant: 'outline' as const,
+        icon: RotateCcw,
+        iconClass: 'text-amber-600',
+        badgeClass: 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:bg-amber-950/30',
+        rowClass: 'bg-amber-50/30 border-amber-200 dark:bg-amber-950/10 dark:border-amber-900',
+      };
+    case 'cancelada':
+      return {
+        label: 'Cancelada',
+        variant: 'outline' as const,
+        icon: Ban,
+        iconClass: 'text-muted-foreground',
+        badgeClass: 'border-muted text-muted-foreground',
+        rowClass: 'bg-muted/20 opacity-60',
+      };
+    default:
+      return {
+        label: status,
+        variant: 'secondary' as const,
+        icon: Package,
+        iconClass: 'text-muted-foreground',
+        badgeClass: '',
+        rowClass: 'bg-muted/30',
+      };
+  }
+}
+
+export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, onEstornarCarga, isLoading }: HistoricoAgrupadoProps) {
   const [openDays, setOpenDays] = useState<Set<string>>(new Set([historico[0]?.data]));
 
   const toggleDay = (data: string) => {
@@ -120,32 +172,30 @@ export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, is
                   {dia.cargas.map((carga) => {
                     const totais = calcularTotaisCargaPublic(carga.itens);
                     const horario = format(new Date(carga.dataSaida), 'HH:mm');
+                    const statusConfig = getStatusConfig(carga.status);
+                    const StatusIcon = statusConfig.icon;
+
+                    // Determinar quais ações mostrar baseado no status
+                    const canExcluir = carga.status === 'em_andamento';
+                    const canEstornar = carga.status === 'concluida' && onEstornarCarga;
+                    const isFinalized = carga.status === 'estornada' || carga.status === 'cancelada';
 
                     return (
                       <div
                         key={carga.id}
                         className={cn(
                           'flex items-center justify-between p-3 rounded-lg border transition-colors',
-                          carga.status === 'em_andamento'
-                            ? 'border-primary/30 bg-primary/5'
-                            : 'bg-muted/30'
+                          statusConfig.rowClass
                         )}
                       >
                         <div className="flex items-center gap-3">
-                          {carga.status === 'concluida' ? (
-                            <Check size={16} className="text-emerald-600" />
-                          ) : (
-                            <Clock size={16} className="text-primary animate-pulse" />
-                          )}
+                          <StatusIcon size={16} className={statusConfig.iconClass} />
                           <span className="text-sm font-medium">{horario}</span>
                           <Badge
-                            variant={carga.status === 'em_andamento' ? 'default' : 'secondary'}
-                            className={cn(
-                              'text-xs',
-                              carga.status === 'em_andamento' && 'bg-primary'
-                            )}
+                            variant={statusConfig.variant}
+                            className={cn('text-xs', statusConfig.badgeClass)}
                           >
-                            {carga.status === 'em_andamento' ? 'Em andamento' : 'Concluída'}
+                            {statusConfig.label}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-4 text-sm">
@@ -166,14 +216,33 @@ export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, is
                                 <Eye className="mr-2 h-4 w-4" />
                                 Ver detalhes
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => onExcluirCarga(carga)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Excluir carga
-                              </DropdownMenuItem>
+                              
+                              {/* Ações disponíveis apenas para cargas não finalizadas */}
+                              {!isFinalized && (canExcluir || canEstornar) && (
+                                <DropdownMenuSeparator />
+                              )}
+                              
+                              {/* Excluir: apenas em_andamento */}
+                              {canExcluir && (
+                                <DropdownMenuItem
+                                  onClick={() => onExcluirCarga(carga)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Excluir carga
+                                </DropdownMenuItem>
+                              )}
+                              
+                              {/* Estornar: apenas concluida */}
+                              {canEstornar && (
+                                <DropdownMenuItem
+                                  onClick={() => onEstornarCarga(carga)}
+                                  className="text-amber-600 focus:text-amber-600"
+                                >
+                                  <RotateCcw className="mr-2 h-4 w-4" />
+                                  Estornar carga
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>

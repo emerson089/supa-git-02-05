@@ -294,13 +294,22 @@ export default function Feira() {
   const totalCarga = itensCarga.reduce((sum, i) => sum + i.quantidade, 0);
   const valorCarga = itensCarga.reduce((sum, i) => sum + (i.quantidade * i.precoUnitario), 0);
 
-  // Handler para ação de excluir/estornar baseado no status
-  const handleCargaAction = (carga: TransferenciaComItensHistorico) => {
-    if (carga.status === 'concluida') {
-      setCargaEstornar(carga);
-    } else {
-      setCargaExcluir(carga);
+  // Handler para excluir carga (apenas em_andamento)
+  const handleExcluirCarga = (carga: TransferenciaComItensHistorico) => {
+    if (carga.status !== 'em_andamento') {
+      toast.error('Apenas cargas em andamento podem ser excluídas');
+      return;
     }
+    setCargaExcluir(carga);
+  };
+
+  // Handler para estornar carga (apenas concluida)
+  const handleEstornarCarga = (carga: TransferenciaComItensHistorico) => {
+    if (carga.status !== 'concluida') {
+      toast.error('Apenas cargas concluídas podem ser estornadas');
+      return;
+    }
+    setCargaEstornar(carga);
   };
 
   const handleRecalcularEstoque = async () => {
@@ -508,7 +517,8 @@ export default function Feira() {
             <HistoricoAgrupado
               historico={historico}
               onVerDetalhes={(carga) => setCargaDetalhes(carga)}
-              onExcluirCarga={handleCargaAction}
+              onExcluirCarga={handleExcluirCarga}
+              onEstornarCarga={handleEstornarCarga}
               isLoading={isLoadingHistorico}
             />
           </div>
