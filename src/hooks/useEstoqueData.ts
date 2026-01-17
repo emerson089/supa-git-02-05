@@ -251,16 +251,58 @@ export function useRemoveItem() {
   
   return useMutation({
     mutationFn: async (id: string) => {
+      // 1. Verificar se existe em transferencia_itens (cargas de feira)
+      const { data: cargas, error: cargasError } = await supabase
+        .from('transferencia_itens')
+        .select('id, transferencia_id')
+        .eq('item_id', id)
+        .limit(1);
+
+      if (cargasError) {
+        console.error('[useRemoveItem] Erro ao verificar cargas:', cargasError);
+        throw new Error('Erro ao verificar dependências do item');
+      }
+
+      if (cargas && cargas.length > 0) {
+        throw new Error('Este modelo possui cargas de feira associadas e não pode ser excluído. Exclua as cargas primeiro ou use outro modelo.');
+      }
+
+      // 2. Deletar registros dependentes primeiro
+      // Deletar estoque_por_local
+      const { error: deleteEstoqueLocalError } = await supabase
+        .from('estoque_por_local')
+        .delete()
+        .eq('item_id', id);
+
+      if (deleteEstoqueLocalError) {
+        console.error('[useRemoveItem] Erro ao deletar estoque_por_local:', deleteEstoqueLocalError);
+      }
+
+      // Deletar estoque_movimentacoes
+      const { error: deleteMovError } = await supabase
+        .from('estoque_movimentacoes')
+        .delete()
+        .eq('item_id', id);
+
+      if (deleteMovError) {
+        console.error('[useRemoveItem] Erro ao deletar movimentações:', deleteMovError);
+      }
+
+      // 3. Deletar o item principal
       const { error } = await supabase
         .from('estoque_itens')
         .delete()
         .eq('id', id);
       
-      if (error) throw error;
+      if (error) {
+        console.error('[useRemoveItem] Erro ao deletar item:', error);
+        throw new Error(`Erro ao excluir item: ${error.message}`);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
     },
   });
 }

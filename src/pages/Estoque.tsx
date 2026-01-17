@@ -351,12 +351,16 @@ export default function Estoque() {
     setShowDeleteModal(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (itemToDelete) {
-      removeItem(itemToDelete.id);
-      toast.success('Item removido do estoque');
-      setShowDeleteModal(false);
-      setItemToDelete(null);
+      try {
+        await removeItem(itemToDelete.id);
+        toast.success('Item removido do estoque');
+        setShowDeleteModal(false);
+        setItemToDelete(null);
+      } catch (error: any) {
+        toast.error(error.message || 'Erro ao excluir item');
+      }
     }
   };
 
