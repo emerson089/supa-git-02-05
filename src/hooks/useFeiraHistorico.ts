@@ -30,6 +30,7 @@ export interface TransferenciaItemComProduto {
   precoUnitario: number | null;
   produtoNome: string | null;
   produtoPreco: number | null;
+  produtoImagem: string | null;
 }
 
 export interface TransferenciaComItensHistorico {
@@ -136,6 +137,7 @@ function mapDbToTransferenciaHistorico(db: any): TransferenciaComItensHistorico 
       precoUnitario: item.preco_unitario !== null ? Number(item.preco_unitario) : null,
       produtoNome: item.estoque_itens?.nome || null,
       produtoPreco: item.estoque_itens?.preco_unitario !== null ? Number(item.estoque_itens?.preco_unitario) : null,
+      produtoImagem: item.estoque_itens?.imagem_url || null,
     })),
   };
 }
@@ -158,7 +160,7 @@ export function useCargasPorPeriodo(inicio: Date, fim: Date) {
           *,
           transferencia_itens (
             *,
-            estoque_itens (nome, preco_unitario)
+            estoque_itens (nome, preco_unitario, imagem_url)
           )
         `)
         .eq('tipo', 'carga_feira')
@@ -197,7 +199,7 @@ export function useTodasCargasAtivas() {
           *,
           transferencia_itens (
             *,
-            estoque_itens (nome, preco_unitario)
+            estoque_itens (nome, preco_unitario, imagem_url)
           )
         `)
         .eq('tipo', 'carga_feira')
