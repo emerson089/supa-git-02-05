@@ -105,13 +105,48 @@ export function useEstoqueItens() {
     queryFn: async () => {
       if (!user) return [];
       
-      const { data, error } = await supabase
+      // 1. Buscar o local Central do usuário
+      const { data: localCentral } = await supabase
+        .from('estoque_locais')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('tipo', 'central')
+        .maybeSingle();
+
+      // 2. Buscar todos os itens
+      const { data: itens, error } = await supabase
         .from('estoque_itens')
         .select('*')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return (data as DbItem[]).map(mapDbItemToItem);
+      if (!itens) return [];
+
+      // 3. Se temos Central, buscar quantidades de estoque_por_local
+      if (localCentral) {
+        const { data: estoquePorLocal } = await supabase
+          .from('estoque_por_local')
+          .select('item_id, quantidade')
+          .eq('local_id', localCentral.id);
+
+        // Criar mapa de quantidades do Central
+        const quantidadeCentralMap = new Map<string, number>();
+        if (estoquePorLocal) {
+          estoquePorLocal.forEach(epl => {
+            quantidadeCentralMap.set(epl.item_id, Number(epl.quantidade));
+          });
+        }
+
+        // Mapear itens usando quantidade do Central quando disponível
+        return (itens as DbItem[]).map(dbItem => ({
+          ...mapDbItemToItem(dbItem),
+          quantidade: quantidadeCentralMap.has(dbItem.id) 
+            ? quantidadeCentralMap.get(dbItem.id)! 
+            : Number(dbItem.quantidade),
+        }));
+      }
+
+      return (itens as DbItem[]).map(mapDbItemToItem);
     },
     enabled: !!user,
   });
