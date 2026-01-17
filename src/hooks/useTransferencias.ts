@@ -430,6 +430,7 @@ export function useCriarCargaFeira() {
       queryClient.invalidateQueries({ queryKey: ['cargas-hoje'] });
       queryClient.invalidateQueries({ queryKey: ['cargas-periodo'] });
       queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
+      queryClient.invalidateQueries({ queryKey: ['resumo-feira'] });
       // Invalidar TODAS as queries de estoque com predicate para garantir atualização
       queryClient.invalidateQueries({ 
         predicate: (query) => 

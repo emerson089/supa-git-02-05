@@ -265,3 +265,8 @@ body[data-scroll-locked] {
     padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0));
   }
 }
+
+/* Touch manipulation for better mobile UX */
+.touch-manipulation {
+  touch-action: manipulation;
+}

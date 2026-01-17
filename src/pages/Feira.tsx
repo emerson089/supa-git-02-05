@@ -204,13 +204,14 @@ export default function Feira() {
   const handleSetQuantidadeCarga = (itemId: string, novaQuantidade: number) => {
     setItensCarga(prev => prev.map(item => {
       if (item.itemId === itemId) {
-        // Validar limites
-        if (novaQuantidade > item.disponivelCentral) {
-          toast.warning('Quantidade máxima disponível atingida');
-          return { ...item, quantidade: item.disponivelCentral };
+        // Permitir 0 temporariamente para digitação
+        if (isNaN(novaQuantidade) || novaQuantidade < 0) {
+          return { ...item, quantidade: 0 };
         }
-        if (novaQuantidade < 1 || isNaN(novaQuantidade)) {
-          return { ...item, quantidade: 1 };
+        // Validar limite máximo
+        if (novaQuantidade > item.disponivelCentral) {
+          toast.warning(`Máximo disponível: ${item.disponivelCentral}`);
+          return { ...item, quantidade: item.disponivelCentral };
         }
         return { ...item, quantidade: novaQuantidade };
       }
@@ -392,7 +393,7 @@ export default function Feira() {
 
       <main className={cn(
         "flex-1 flex flex-col h-screen overflow-hidden",
-        isMobile && "pt-14 pb-20"
+        isMobile && "pt-14 pb-[calc(80px+env(safe-area-inset-bottom,0px))]"
       )}>
         {/* Header - Desktop */}
         {!isMobile && (
@@ -434,64 +435,64 @@ export default function Feira() {
           </div>
         )}
 
-        <ScrollArea className="flex-1">
-          <div className={cn("p-4 space-y-4", !isMobile && "p-6 space-y-6")}>
+        <ScrollArea className="flex-1 overflow-hidden">
+          <div className={cn("p-4 space-y-4", !isMobile && "p-6 space-y-6", isMobile && "pb-6")}>
             {/* Filtro de Período */}
             <FiltroPeriodo periodo={periodo} onChange={setPeriodo} />
 
             {/* Resumo do Período */}
             <div className={cn(
-              "grid gap-3",
+              "grid gap-3 overflow-hidden",
               isMobile ? "grid-cols-2" : "grid-cols-4"
             )}>
-              <Card>
-                <CardContent className="p-4">
+              <Card className="overflow-hidden">
+                <CardContent className={cn("p-4", isMobile && "p-3")}>
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-blue-500/10">
-                      <Truck className="h-5 w-5 text-blue-600" />
+                    <div className={cn("p-2 rounded-lg bg-blue-500/10", isMobile && "p-1.5")}>
+                      <Truck className={cn("h-5 w-5 text-blue-600", isMobile && "h-4 w-4")} />
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Carga</p>
-                      <p className="text-xl font-bold">{resumo.totalCarga}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground truncate">Carga</p>
+                      <p className={cn("font-bold", isMobile ? "text-lg" : "text-xl")}>{resumo.totalCarga}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardContent className="p-4">
+              <Card className="overflow-hidden">
+                <CardContent className={cn("p-4", isMobile && "p-3")}>
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-amber-500/10">
-                      <RotateCcw className="h-5 w-5 text-amber-600" />
+                    <div className={cn("p-2 rounded-lg bg-amber-500/10", isMobile && "p-1.5")}>
+                      <RotateCcw className={cn("h-5 w-5 text-amber-600", isMobile && "h-4 w-4")} />
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Retorno</p>
-                      <p className="text-xl font-bold">{resumo.totalRetorno}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground truncate">Retorno</p>
+                      <p className={cn("font-bold", isMobile ? "text-lg" : "text-xl")}>{resumo.totalRetorno}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardContent className="p-4">
+              <Card className="overflow-hidden">
+                <CardContent className={cn("p-4", isMobile && "p-3")}>
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-emerald-500/10">
-                      <ShoppingBag className="h-5 w-5 text-emerald-600" />
+                    <div className={cn("p-2 rounded-lg bg-emerald-500/10", isMobile && "p-1.5")}>
+                      <ShoppingBag className={cn("h-5 w-5 text-emerald-600", isMobile && "h-4 w-4")} />
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Vendido</p>
-                      <p className="text-xl font-bold text-emerald-600">{resumo.totalVendido}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground truncate">Vendido</p>
+                      <p className={cn("font-bold text-emerald-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalVendido}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardContent className="p-4">
+              <Card className="overflow-hidden">
+                <CardContent className={cn("p-4", isMobile && "p-3")}>
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <DollarSign className="h-5 w-5 text-primary" />
+                    <div className={cn("p-2 rounded-lg bg-primary/10", isMobile && "p-1.5")}>
+                      <DollarSign className={cn("h-5 w-5 text-primary", isMobile && "h-4 w-4")} />
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Valor</p>
-                      <p className="text-xl font-bold text-primary">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground truncate">Valor</p>
+                      <p className={cn("font-bold text-primary", isMobile ? "text-lg" : "text-xl")}>
                         {isMobile 
                           ? `${(resumo.valorVendido / 1000).toFixed(1)}k`
                           : formatCurrency(resumo.valorVendido)
@@ -706,14 +707,14 @@ export default function Feira() {
       {/* Modal Nova Carga - Mobile uses Drawer, Desktop uses Dialog */}
       {isMobile ? (
         <Drawer open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
-          <DrawerContent className="max-h-[95vh] flex flex-col w-full max-w-[100vw] overflow-x-hidden">
-            <DrawerHeader className="px-4 pt-2 pb-3 border-b shrink-0 flex items-center justify-between">
+          <DrawerContent className="max-h-[85vh] w-[96vw] max-w-[720px] mx-auto flex flex-col overflow-hidden rounded-t-2xl">
+            <DrawerHeader className="px-4 pt-3 pb-3 border-b shrink-0 flex items-center justify-between">
               <DrawerTitle className="flex items-center gap-2 text-base">
                 <Truck className="h-5 w-5 text-primary" />
                 Nova Carga para Feira
               </DrawerTitle>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCloseNovaCarga}>
-                <X className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-9 w-9 touch-manipulation" onClick={handleCloseNovaCarga}>
+                <X className="h-5 w-5" />
               </Button>
             </DrawerHeader>
 
@@ -839,20 +840,40 @@ export default function Feira() {
                           </div>
                           {/* Linha 2: Controles de quantidade */}
                           <div className="flex items-center gap-2 pl-10">
-                            <div className="flex items-center gap-0.5 flex-shrink-0">
-                              <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleUpdateQuantidadeCarga(item.itemId, -1)} disabled={item.quantidade <= 1}>
-                                <Minus size={12} />
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Button 
+                                size="icon" 
+                                variant="outline" 
+                                className="h-9 w-9 touch-manipulation" 
+                                onClick={() => handleUpdateQuantidadeCarga(item.itemId, -1)} 
+                                disabled={item.quantidade <= 1}
+                              >
+                                <Minus size={16} />
                               </Button>
                               <Input
-                                type="number"
-                                min={1}
-                                max={item.disponivelCentral}
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 value={item.quantidade}
-                                onChange={(e) => handleSetQuantidadeCarga(item.itemId, parseInt(e.target.value) || 1)}
-                                className="w-10 h-7 text-center text-sm font-medium px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, '');
+                                  handleSetQuantidadeCarga(item.itemId, parseInt(val) || 0);
+                                }}
+                                onFocus={(e) => e.target.select()}
+                                onBlur={(e) => {
+                                  const val = parseInt(e.target.value) || 1;
+                                  if (val < 1) handleSetQuantidadeCarga(item.itemId, 1);
+                                }}
+                                className="w-12 h-9 text-center text-sm font-medium px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               />
-                              <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleUpdateQuantidadeCarga(item.itemId, 1)} disabled={item.quantidade >= item.disponivelCentral}>
-                                <Plus size={12} />
+                              <Button 
+                                size="icon" 
+                                variant="outline" 
+                                className="h-9 w-9 touch-manipulation" 
+                                onClick={() => handleUpdateQuantidadeCarga(item.itemId, 1)} 
+                                disabled={item.quantidade >= item.disponivelCentral}
+                              >
+                                <Plus size={16} />
                               </Button>
                             </div>
                             <span className="text-[11px] text-muted-foreground whitespace-nowrap">× {formatCurrency(item.precoUnitario)}</span>
@@ -868,41 +889,35 @@ export default function Feira() {
               )}
             </div>
 
-            <DrawerFooter className="border-t px-3 py-2.5 bg-muted/30 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)]">
-              {/* Resumo em Grid */}
-              <div className="grid grid-cols-3 gap-1 text-center mb-2">
-                <div className="flex flex-col items-center py-1">
-                  <Package className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
-                  <span className="text-[9px] text-muted-foreground leading-tight">Itens</span>
-                  <strong className="text-xs tabular-nums">{itensCarga.length}</strong>
+            <DrawerFooter className="border-t px-4 py-3 bg-muted/30 sticky bottom-0 pb-[calc(env(safe-area-inset-bottom,0px)+12px)]">
+              {/* Resumo compacto */}
+              <div className="flex items-center justify-between px-2 py-2 mb-2 bg-primary/5 rounded-lg">
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="text-muted-foreground">
+                    <strong className="text-foreground">{itensCarga.length}</strong> itens
+                  </span>
+                  <span className="text-muted-foreground">
+                    <strong className="text-foreground">{totalCarga}</strong> pç
+                  </span>
                 </div>
-                <div className="flex flex-col items-center py-1">
-                  <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
-                  <span className="text-[9px] text-muted-foreground leading-tight">Peças</span>
-                  <strong className="text-xs tabular-nums">{totalCarga}</strong>
-                </div>
-                <div className="flex flex-col items-center py-1">
-                  <DollarSign className="h-3.5 w-3.5 text-primary mb-0.5" />
-                  <span className="text-[9px] text-muted-foreground leading-tight">Total</span>
-                  <strong className="text-xs text-primary tabular-nums whitespace-nowrap">{formatCurrency(valorCarga)}</strong>
-                </div>
+                <span className="text-sm font-semibold text-primary">{formatCurrency(valorCarga)}</span>
               </div>
               {/* Botões full width */}
-              <div className="flex gap-2 w-full">
-                <Button variant="outline" onClick={handleCloseNovaCarga} className="flex-1 h-10 text-sm">
+              <div className="flex gap-3 w-full">
+                <Button variant="outline" onClick={handleCloseNovaCarga} className="flex-1 h-11 text-sm touch-manipulation">
                   Cancelar
                 </Button>
                 <Button 
                   onClick={handleCriarCarga}
                   disabled={itensCarga.length === 0 || criarCarga.isPending}
-                  className="flex-1 h-10 text-sm"
+                  className={cn("flex-1 h-11 text-sm touch-manipulation", criarCarga.isPending && "opacity-80")}
                 >
                   {criarCarga.isPending ? (
-                    <><Loader2 className="h-4 w-4 animate-spin mr-1.5" /> Criando...</>
+                    <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Criando...</>
                   ) : itensCarga.length === 0 ? (
-                    'Selecione'
+                    'Selecione produtos'
                   ) : (
-                    <><Truck className="h-4 w-4 mr-1.5" /> Criar Carga</>
+                    <><Truck className="h-4 w-4 mr-2" /> Criar Carga</>
                   )}
                 </Button>
               </div>
