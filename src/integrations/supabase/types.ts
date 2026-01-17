@@ -731,7 +731,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      rpc_ajustar_estoque_local: {
+        Args: {
+          p_item_id: string
+          p_local_id: string
+          p_motivo: string
+          p_nova_quantidade: number
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      rpc_criar_transferencia: {
+        Args: {
+          p_destino_local_id: string
+          p_itens: Json
+          p_motivo?: string
+          p_origem_local_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
