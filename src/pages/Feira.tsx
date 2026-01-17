@@ -33,12 +33,13 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle, FileText } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { generateCargaPDF } from '@/utils/generateCargaPDF';
 
 interface ItemCarga {
   itemId: string;
@@ -353,6 +354,26 @@ export default function Feira() {
     }
   };
 
+  // Handler para gerar PDF da carga
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  
+  const handleGerarPDF = async (carga: TransferenciaComItensHistorico) => {
+    if (isGeneratingPDF) return;
+    
+    setIsGeneratingPDF(true);
+    toast.info('Gerando PDF...');
+    
+    try {
+      await generateCargaPDF(carga);
+      toast.success('PDF gerado com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   const isLoading = isLoadingLocais || isLoadingResumo;
 
   if (isLoading) {
@@ -509,14 +530,26 @@ export default function Feira() {
                                 {format(new Date(carga.dataSaida), "HH:mm")}
                               </span>
                             </div>
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleOpenRetornoFromHistorico(carga)}
-                              className="gap-1"
-                            >
-                              <RotateCcw size={14} />
-                              Registrar Retorno
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleGerarPDF(carga)}
+                                disabled={isGeneratingPDF}
+                                className="gap-1"
+                              >
+                                <FileText size={14} />
+                                PDF
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleOpenRetornoFromHistorico(carga)}
+                                className="gap-1"
+                              >
+                                <RotateCcw size={14} />
+                                Registrar Retorno
+                              </Button>
+                            </div>
                           </div>
                           <div className="flex items-center justify-between text-sm">
                             <span>{totalPecas} peças</span>
