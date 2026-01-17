@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import { LotImage } from '@/components/production/LotImage';
 import { useAdicionarProdutoLocal, useProdutosDisponiveis } from '@/hooks/useEstoquePorLocalGerenciamento';
-import { Loader2, Search, Check, Package } from 'lucide-react';
+import { Loader2, Search, Check, Package, Box, Store, Info, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AdicionarProdutoLocalModalProps {
@@ -72,7 +73,9 @@ export function AdicionarProdutoLocalModal({
   });
 
   const qtd = parseInt(quantidade) || 0;
-  const isValid = produtoSelecionado && qtd > 0;
+  const maxQuantidade = produtoSelecionado?.quantidadeCentral || 0;
+  const excedeDisponivel = qtd > maxQuantidade;
+  const isValid = produtoSelecionado && qtd > 0 && !excedeDisponivel;
 
   const handleAdicionar = async () => {
     if (!isValid || !produtoSelecionado) return;
@@ -82,7 +85,7 @@ export function AdicionarProdutoLocalModal({
         itemId: produtoSelecionado.id,
         localId: localId,
         quantidade: qtd,
-        motivo: motivo.trim() || `Adição inicial ao ${localNome}`,
+        motivo: motivo.trim() || `Adição ao ${localNome}`,
       });
       onOpenChange(false);
     } catch (error) {
@@ -104,7 +107,7 @@ export function AdicionarProdutoLocalModal({
         </DialogHeader>
 
         <ScrollArea className="flex-1 px-6 py-4">
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Busca */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -119,51 +122,88 @@ export function AdicionarProdutoLocalModal({
             {/* Lista de produtos */}
             {!produtoSelecionado && (
               <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Selecione um produto
+                </Label>
+                
                 {isLoading ? (
-                  <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : produtosFiltrados.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                    <Package className="h-10 w-10 mb-2 opacity-50" />
-                    <p>Nenhum produto encontrado</p>
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Package className="h-12 w-12 mb-3 opacity-50" />
+                    <p className="font-medium">Nenhum produto encontrado</p>
+                    <p className="text-sm mt-1">Tente buscar por outro termo</p>
                   </div>
                 ) : (
-                  <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-2">
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
                     {produtosFiltrados.map((produto) => (
                       <button
                         key={produto.id}
                         onClick={() => handleSelecionarProduto(produto)}
                         className={cn(
-                          "flex items-center gap-3 p-3 rounded-lg border text-left transition-colors",
-                          "hover:bg-accent hover:border-accent-foreground/20",
-                          produto.jaNoLocal && "opacity-60"
+                          "w-full flex items-start gap-4 p-4 rounded-xl border text-left transition-all",
+                          "hover:bg-accent hover:border-primary/30 hover:shadow-sm",
+                          produto.jaNoLocal && "bg-muted/30"
                         )}
                       >
-                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted border shrink-0">
+                        {/* Foto */}
+                        <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted border shrink-0">
                           <LotImage
                             src={produto.imagemUrl}
                             alt={produto.nome}
                             className="w-full h-full object-cover"
                           />
                         </div>
+
+                        {/* Informações */}
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{produto.nome}</p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="font-medium leading-tight">{produto.nome}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
                             Cód: {produto.codigo}
                             {produto.precoUnitario && (
                               <> • R$ {produto.precoUnitario.toFixed(2)}</>
                             )}
                           </p>
+                          
+                          {/* Badges de disponibilidade */}
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            <Badge 
+                              variant="secondary" 
+                              className={cn(
+                                "text-xs font-medium",
+                                produto.quantidadeCentral > 0 
+                                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                  : "bg-muted text-muted-foreground"
+                              )}
+                            >
+                              <Box className="h-3 w-3 mr-1" />
+                              Central: {produto.quantidadeCentral} pçs
+                            </Badge>
+                            {produto.jaNoLocal && (
+                              <Badge 
+                                variant="secondary" 
+                                className="text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              >
+                                <Store className="h-3 w-3 mr-1" />
+                                Local: {produto.quantidadeNoLocal} pçs
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right shrink-0">
+
+                        {/* Ação */}
+                        <div className="text-right shrink-0 pt-1">
                           {produto.jaNoLocal ? (
                             <span className="text-xs text-muted-foreground flex items-center gap-1">
                               <Check className="h-3 w-3" />
-                              Já no local ({produto.quantidadeNoLocal})
+                              Adicionar mais
                             </span>
+                          ) : produto.quantidadeCentral > 0 ? (
+                            <span className="text-xs text-primary font-medium">Selecionar</span>
                           ) : (
-                            <span className="text-xs text-primary">Selecionar</span>
+                            <span className="text-xs text-muted-foreground">Sem estoque</span>
                           )}
                         </div>
                       </button>
@@ -176,46 +216,94 @@ export function AdicionarProdutoLocalModal({
             {/* Produto selecionado */}
             {produtoSelecionado && (
               <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
-                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted border shrink-0">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Produto Selecionado
+                </Label>
+                
+                <div className="flex items-start gap-4 p-4 rounded-xl bg-primary/5 border border-primary/20">
+                  {/* Foto maior */}
+                  <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted border shrink-0">
                     <LotImage
                       src={produtoSelecionado.imagemUrl}
                       alt={produtoSelecionado.nome}
                       className="w-full h-full object-cover"
                     />
                   </div>
+                  
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{produtoSelecionado.nome}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="font-semibold leading-tight">{produtoSelecionado.nome}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
                       Cód: {produtoSelecionado.codigo}
                     </p>
+                    
+                    {/* Badges de disponibilidade */}
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <Badge 
+                        variant="secondary" 
+                        className={cn(
+                          "text-xs font-medium",
+                          produtoSelecionado.quantidadeCentral > 0 
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                            : "bg-muted text-muted-foreground"
+                        )}
+                      >
+                        <Box className="h-3 w-3 mr-1" />
+                        Central: {produtoSelecionado.quantidadeCentral} disponíveis
+                      </Badge>
+                      {produtoSelecionado.jaNoLocal && (
+                        <Badge 
+                          variant="secondary" 
+                          className="text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                        >
+                          <Store className="h-3 w-3 mr-1" />
+                          Já no local: {produtoSelecionado.quantidadeNoLocal}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
+                  
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setProdutoSelecionado(null)}
+                    className="shrink-0"
                   >
                     Trocar
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                {/* Campos de entrada */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="quantidade-inicial">
-                      Quantidade Inicial <span className="text-destructive">*</span>
+                      Quantidade a Adicionar <span className="text-destructive">*</span>
                     </Label>
-                    <Input
-                      ref={quantidadeRef}
-                      id="quantidade-inicial"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={quantidade}
-                      onChange={(e) => setQuantidade(e.target.value.replace(/\D/g, ''))}
-                      onFocus={(e) => e.target.select()}
-                      className="text-lg font-semibold"
-                      placeholder="0"
-                    />
+                    <div className="relative">
+                      <Input
+                        ref={quantidadeRef}
+                        id="quantidade-inicial"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={quantidade}
+                        onChange={(e) => setQuantidade(e.target.value.replace(/\D/g, ''))}
+                        onFocus={(e) => e.target.select()}
+                        className={cn(
+                          "text-lg font-semibold pr-24",
+                          excedeDisponivel && "border-destructive focus-visible:ring-destructive"
+                        )}
+                        placeholder="0"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                        / {maxQuantidade} disp.
+                      </span>
+                    </div>
+                    {excedeDisponivel && (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        Quantidade excede o disponível no Central
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -229,11 +317,15 @@ export function AdicionarProdutoLocalModal({
                   </div>
                 </div>
 
+                {/* Mensagem informativa */}
                 {produtoSelecionado.jaNoLocal && (
-                  <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
-                    Este produto já possui {produtoSelecionado.quantidadeNoLocal} unidades no local.
-                    A quantidade informada será somada ao estoque existente.
-                  </p>
+                  <div className="flex items-start gap-2.5 p-3 rounded-lg bg-muted/50 border">
+                    <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-sm text-muted-foreground">
+                      Este produto já possui <strong className="text-foreground">{produtoSelecionado.quantidadeNoLocal}</strong> unidades no local.
+                      A quantidade informada será <strong className="text-foreground">somada</strong> ao estoque existente.
+                    </p>
+                  </div>
                 )}
               </div>
             )}

@@ -459,17 +459,11 @@ export default function Transferencias() {
         {/* Header - Desktop */}
         {!isMobile && (
           <header className="px-6 py-4 border-b border-border bg-card/50 shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">Estoque por Local</h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Gestão de estoque por local de armazenamento
-                </p>
-              </div>
-              <Button onClick={handleOpenModal} className="gap-2">
-                <Plus size={18} />
-                Nova Transferência
-              </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Estoque por Local</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Gestão de estoque por local de armazenamento
+              </p>
             </div>
           </header>
         )}
