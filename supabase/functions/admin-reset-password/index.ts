@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const ALLOWED_ORIGINS = [
   'https://denim-flow-master.lovable.app',
   'https://id-preview--daf59025-1007-41d6-9df6-d2c77da6cb3c.lovable.app',
+  'https://daf59025-1007-41d6-9df6-d2c77da6cb3c.lovableproject.com',
 ];
 
 function getCorsHeaders(req: Request): Record<string, string> {
