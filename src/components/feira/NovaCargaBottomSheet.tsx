@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +35,8 @@ export function NovaCargaBottomSheet({
   isPending,
   formatCurrency,
 }: NovaCargaBottomSheetProps) {
+  const [open, setOpen] = useState(false);
+  
   const qtdItens = itensCarga.length;
   const totalPecas = itensCarga.reduce((sum, i) => sum + i.quantidade, 0);
   const valorTotal = itensCarga.reduce((sum, i) => sum + (i.quantidade * i.precoUnitario), 0);
@@ -59,12 +62,19 @@ export function NovaCargaBottomSheet({
     }
   };
 
+  const handleCriar = () => {
+    setOpen(false); // Fechar drawer primeiro
+    // Dar um pequeno delay para a animação
+    setTimeout(() => {
+      onCriarCarga();
+    }, 150);
+  };
+
   return (
-    <Drawer>
+    <Drawer open={open} onOpenChange={setOpen}>
       <DrawerTrigger asChild>
         <Button
-          className="fixed bottom-[88px] right-4 h-14 w-14 rounded-full shadow-xl z-40 touch-manipulation"
-          style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          className="absolute bottom-[100px] right-4 h-14 w-14 rounded-full shadow-xl z-40 touch-manipulation"
         >
           <ShoppingBag className="h-6 w-6" />
           <Badge 
@@ -143,7 +153,7 @@ export function NovaCargaBottomSheet({
                       onChange={(e) => handleQuantityChange(item, e.target.value)}
                       onFocus={(e) => e.target.select()}
                       onBlur={(e) => handleQuantityBlur(item, e.target.value)}
-                      className="w-16 h-10 text-center text-lg font-semibold px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      className="w-16 h-10 text-center text-base font-semibold px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                     
                     <Button 
@@ -196,7 +206,7 @@ export function NovaCargaBottomSheet({
           </div>
           
           <Button 
-            onClick={onCriarCarga}
+            onClick={handleCriar}
             disabled={isPending}
             className={cn(
               "w-full h-12 text-base font-semibold touch-manipulation gap-2",

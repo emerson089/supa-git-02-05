@@ -132,7 +132,7 @@ export function NovaCargaStepProdutos({
       </div>
 
       {/* Lista de produtos - scroll principal */}
-      <div className="flex-1 overflow-y-auto pb-36">
+      <div className="flex-1 overflow-y-auto pb-48">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
