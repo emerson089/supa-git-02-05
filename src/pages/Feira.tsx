@@ -169,17 +169,17 @@ export default function Feira() {
   const handleAddItemCarga = (
     produto: { id: string; nome: string; precoUnitario: number | null; imagemUrl?: string | null },
     quantidade: number = 1
-  ) => {
+  ): boolean => {
     const disponivel = getDisponivelCentral(produto.id);
     if (disponivel <= 0) {
       toast.error('Produto sem estoque disponível no Central');
-      return;
+      return false;
     }
 
     const existing = itensCarga.find(i => i.itemId === produto.id);
     if (existing) {
       toast.error('Produto já adicionado');
-      return;
+      return false;
     }
 
     // Usar quantidade passada, limitada ao disponível
@@ -193,6 +193,8 @@ export default function Feira() {
       disponivelCentral: disponivel,
       imagemUrl: produto.imagemUrl ?? null,
     }]);
+    
+    return true;
   };
 
   const handleUpdateQuantidadeCarga = (itemId: string, delta: number) => {
