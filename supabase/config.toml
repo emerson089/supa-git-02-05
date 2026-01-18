@@ -1,1 +1,13 @@
 project_id = "xoyyhtxakbrlzykthdca"
+
+[functions.invite-user]
+verify_jwt = false
+
+[functions.admin-reset-password]
+verify_jwt = false
+
+[functions.update-user-role]
+verify_jwt = false
+
+[functions.toggle-user-status]
+verify_jwt = false

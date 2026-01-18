@@ -1,0 +1,150 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface UpdateRoleRequest {
+  userId: string;
+  newRole: 'admin' | 'gerente' | 'vendedor';
+}
+
+serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    // Get authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('Missing authorization header');
+      return new Response(
+        JSON.stringify({ error: 'Não autorizado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    // Client with user token to verify identity
+    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Get current user
+    const { data: { user: caller }, error: userError } = await supabaseUser.auth.getUser();
+    if (userError || !caller) {
+      console.error('Failed to get user:', userError);
+      return new Response(
+        JSON.stringify({ error: 'Usuário não autenticado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check if caller is admin
+    const { data: isAdmin, error: roleError } = await supabaseAdmin.rpc('has_role', {
+      _user_id: caller.id,
+      _role: 'admin'
+    });
+
+    if (roleError || !isAdmin) {
+      console.error('User is not admin:', caller.id);
+      return new Response(
+        JSON.stringify({ error: 'Acesso negado. Apenas administradores podem alterar roles.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse request body
+    const { userId, newRole }: UpdateRoleRequest = await req.json();
+
+    if (!userId || !newRole) {
+      return new Response(
+        JSON.stringify({ error: 'userId e newRole são obrigatórios' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!['admin', 'gerente', 'vendedor'].includes(newRole)) {
+      return new Response(
+        JSON.stringify({ error: 'Role inválido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Prevent changing own role
+    if (userId === caller.id) {
+      return new Response(
+        JSON.stringify({ error: 'Você não pode alterar seu próprio role' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Updating role for user ${userId} to ${newRole}`);
+
+    // Check if user exists and get current role
+    const { data: currentRole, error: checkError } = await supabaseAdmin
+      .from('user_roles')
+      .select('id, role')
+      .eq('user_id', userId)
+      .single();
+
+    if (checkError || !currentRole) {
+      console.error('User role not found:', checkError);
+      return new Response(
+        JSON.stringify({ error: 'Usuário não encontrado' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Update role
+    const { error: updateError } = await supabaseAdmin
+      .from('user_roles')
+      .update({ role: newRole, updated_at: new Date().toISOString() })
+      .eq('user_id', userId);
+
+    if (updateError) {
+      console.error('Failed to update role:', updateError);
+      return new Response(
+        JSON.stringify({ error: 'Erro ao atualizar role' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Invalidate user's sessions to force re-login (they'll get new permissions)
+    // This is done by signing out all sessions for the user
+    try {
+      await supabaseAdmin.auth.admin.signOut(userId, 'global');
+      console.log(`Sessions invalidated for user ${userId}`);
+    } catch (signOutError) {
+      // Non-fatal, log and continue
+      console.warn('Failed to invalidate sessions:', signOutError);
+    }
+
+    console.log(`Role updated successfully for user ${userId}: ${currentRole.role} -> ${newRole}`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Role atualizado com sucesso. O usuário precisará fazer login novamente.',
+        previousRole: currentRole.role,
+        newRole
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return new Response(
+      JSON.stringify({ error: 'Erro interno do servidor' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
