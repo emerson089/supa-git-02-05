@@ -720,28 +720,24 @@ export default function Feira() {
 
       {/* Modal Nova Carga - Mobile uses new components, Desktop uses Dialog */}
       {isMobile ? (
-        <>
-          <Sheet open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
-            <SheetContent 
-              side="bottom" 
-              className="h-[95vh] flex flex-col p-0 rounded-t-2xl [&>button]:hidden"
-            >
-              <NovaCargaStepProdutos
-                produtos={produtosFiltrados}
-                itensCarga={itensCarga}
-                isLoading={isRefetchingEstoque}
-                buscaProduto={buscaProduto}
-                onBuscaChange={setBuscaProduto}
-                onAddItem={handleAddItemCarga}
-                onClose={handleCloseNovaCarga}
-                getDisponivelCentral={getDisponivelCentral}
-                formatCurrency={formatCurrency}
-              />
-            </SheetContent>
-          </Sheet>
-          
-          {/* Bottom Sheet do Carrinho - FAB flutuante */}
-          {showNovaCarga && (
+        <Sheet open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
+          <SheetContent 
+            side="bottom" 
+            className="h-[95vh] flex flex-col p-0 rounded-t-2xl [&>button]:hidden relative"
+          >
+            <NovaCargaStepProdutos
+              produtos={produtosFiltrados}
+              itensCarga={itensCarga}
+              isLoading={isRefetchingEstoque}
+              buscaProduto={buscaProduto}
+              onBuscaChange={setBuscaProduto}
+              onAddItem={handleAddItemCarga}
+              onClose={handleCloseNovaCarga}
+              getDisponivelCentral={getDisponivelCentral}
+              formatCurrency={formatCurrency}
+            />
+            
+            {/* FAB do carrinho - agora dentro do Sheet */}
             <NovaCargaBottomSheet
               itensCarga={itensCarga}
               onUpdateQtd={handleSetQuantidadeCarga}
@@ -750,10 +746,8 @@ export default function Feira() {
               isPending={criarCarga.isPending}
               formatCurrency={formatCurrency}
             />
-          )}
-          
-          {/* Bottom Bar fixa - sempre visível */}
-          {showNovaCarga && (
+            
+            {/* Bottom Bar fixa - agora dentro do Sheet */}
             <NovaCargaBottomBar
               qtdItens={itensCarga.length}
               totalPecas={totalCarga}
@@ -762,8 +756,8 @@ export default function Feira() {
               isPending={criarCarga.isPending}
               disabled={itensCarga.length === 0}
             />
-          )}
-        </>
+          </SheetContent>
+        </Sheet>
       ) : (
         <Dialog open={showNovaCarga} onOpenChange={(open) => !open && handleCloseNovaCarga()}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
