@@ -29,7 +29,7 @@ interface NovaCargaStepProdutosProps {
   isLoading: boolean;
   buscaProduto: string;
   onBuscaChange: (value: string) => void;
-  onAddItem: (produto: Produto, quantidade: number) => void;
+  onAddItem: (produto: Produto, quantidade: number) => boolean;
   onClose: () => void;
   getDisponivelCentral: (itemId: string) => number;
   formatCurrency: (value: number) => string;
@@ -61,10 +61,14 @@ export function NovaCargaStepProdutos({
 
   const handleConfirmarAdicao = (produto: Produto, disponivel: number) => {
     const qtdFinal = Math.min(quantidadeSelecionada, disponivel);
-    onAddItem(produto, qtdFinal);
-    toast.success(
-      `${produto.nome.length > 25 ? produto.nome.slice(0, 25) + '...' : produto.nome} (${qtdFinal}x) adicionado`
-    );
+    const sucesso = onAddItem(produto, qtdFinal);
+    
+    if (sucesso) {
+      toast.success(
+        `${produto.nome.length > 25 ? produto.nome.slice(0, 25) + '...' : produto.nome} (${qtdFinal}x) adicionado`
+      );
+    }
+    
     setProdutoSelecionado(null);
     setQuantidadeSelecionada(1);
   };
