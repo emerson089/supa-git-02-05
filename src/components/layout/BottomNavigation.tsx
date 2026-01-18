@@ -19,7 +19,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Separator } from '@/components/ui/separator';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -195,11 +195,13 @@ export function BottomNavigation() {
 
       {/* More Menu Sheet */}
       <Sheet open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-safe max-h-[70vh]">
-          <SheetHeader className="pb-2">
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[80vh] flex flex-col">
+          <SheetHeader className="pb-2 flex-shrink-0">
             <SheetTitle className="text-left">Mais opções</SheetTitle>
           </SheetHeader>
-          <div className="py-2 space-y-1 overflow-y-auto">
+          
+          {/* Scrollable menu items */}
+          <div className="flex-1 overflow-y-auto py-2 space-y-1">
             {moreMenuItems.map((item) => {
               const active = isActive(item.path);
               return (
@@ -221,9 +223,10 @@ export function BottomNavigation() {
                 </button>
               );
             })}
+          </div>
 
-            <Separator className="my-2" />
-
+          {/* Logout button - always visible at bottom */}
+          <div className="flex-shrink-0 pt-2 border-t border-border pb-safe">
             <button
               onClick={handleSignOut}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all min-h-[48px] hover:bg-destructive/10 text-destructive"
