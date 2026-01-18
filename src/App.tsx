@@ -19,6 +19,7 @@ import Transferencias from "./pages/Transferencias";
 import Auth from "./pages/Auth";
 import AlterarSenha from "./pages/AlterarSenha";
 import ConfigUsuarios from "./pages/ConfigUsuarios";
+import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -129,6 +130,14 @@ function App() {
                       element={
                         <ProtectedRoute allowedRoles={['admin', 'gerente']}>
                           <PedidosCriados />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/ajuda"
+                      element={
+                        <ProtectedRoute>
+                          <Ajuda />
                         </ProtectedRoute>
                       }
                     />
