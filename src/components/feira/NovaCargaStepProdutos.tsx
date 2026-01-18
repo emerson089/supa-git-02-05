@@ -224,7 +224,7 @@ export function NovaCargaStepProdutos({
                           value={quantidadeSelecionada}
                           onChange={(e) => handleQuantidadeChange(e.target.value, disponivel)}
                           onFocus={(e) => e.target.select()}
-                          className="w-12 h-8 text-center text-sm font-semibold px-1"
+                          className="w-12 h-8 text-center text-base font-semibold px-1"
                         />
                         
                         <Button 

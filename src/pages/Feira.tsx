@@ -1011,7 +1011,7 @@ export default function Feira() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-6 w-6"
+                        className="h-8 w-8"
                         onClick={() => {
                           const newVal = Math.max(0, retornado - 1);
                           handleUpdateRetorno(item.itemId, newVal);
@@ -1019,7 +1019,7 @@ export default function Feira() {
                         }}
                         disabled={retornado <= 0}
                       >
-                        <Minus size={12} />
+                        <Minus size={14} />
                       </Button>
                       <Input
                         type="text"
@@ -1047,12 +1047,12 @@ export default function Feira() {
                             handleUpdateRetorno(item.itemId, clampedVal);
                           }
                         }}
-                        className="w-10 h-6 text-center text-xs font-medium px-0"
+                        className="w-12 h-8 text-center text-base font-medium px-0"
                       />
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-6 w-6"
+                        className="h-8 w-8"
                         onClick={() => {
                           const newVal = Math.min(item.quantidadeEnviada, retornado + 1);
                           handleUpdateRetorno(item.itemId, newVal);
@@ -1060,7 +1060,7 @@ export default function Feira() {
                         }}
                         disabled={retornado >= item.quantidadeEnviada}
                       >
-                        <Plus size={12} />
+                        <Plus size={14} />
                       </Button>
                     </div>
                     
