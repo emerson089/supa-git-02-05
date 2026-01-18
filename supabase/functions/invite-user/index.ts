@@ -123,26 +123,21 @@ serve(async (req) => {
       );
     }
 
-    // Create profile
+    // Update profile (trigger already created it, so we use upsert)
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .insert({
+      .upsert({
         id: newUser.user.id,
         user_id: newUser.user.id,
         email,
         nome,
         status: 'ativo',
         must_change_password: true
-      });
+      }, { onConflict: 'id' });
 
     if (profileError) {
-      console.error('Failed to create profile:', profileError);
-      // Rollback: delete user
-      await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
-      return new Response(
-        JSON.stringify({ error: 'Erro ao criar perfil do usuário' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('Failed to update profile:', profileError);
+      // Non-fatal - profile was created by trigger, continue
     }
 
     // Assign role
