@@ -13,12 +13,15 @@ import {
   Settings,
   HelpCircle,
   UserPlus,
+  LogOut,
   LucideIcon 
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface NavItemType {
   label: string;
@@ -94,6 +97,7 @@ NavItem.displayName = 'NavItem';
 export function BottomNavigation() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
@@ -107,6 +111,13 @@ export function BottomNavigation() {
     navigate(path);
     setMoreMenuOpen(false);
     setQuickActionsOpen(false);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success('Sessão encerrada');
+    navigate('/auth');
+    setMoreMenuOpen(false);
   };
 
   return (
@@ -210,6 +221,16 @@ export function BottomNavigation() {
                 </button>
               );
             })}
+
+            <Separator className="my-2" />
+
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all min-h-[48px] hover:bg-destructive/10 text-destructive"
+            >
+              <LogOut size={20} />
+              <span className="text-sm">Sair</span>
+            </button>
           </div>
         </SheetContent>
       </Sheet>
