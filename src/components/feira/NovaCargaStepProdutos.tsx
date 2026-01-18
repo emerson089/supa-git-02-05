@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Truck, X, Search, Package, Loader2, Plus, Check } from 'lucide-react';
+import { Truck, X, Search, Package, Loader2, Plus, Check, Minus } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -28,7 +29,7 @@ interface NovaCargaStepProdutosProps {
   isLoading: boolean;
   buscaProduto: string;
   onBuscaChange: (value: string) => void;
-  onAddItem: (produto: Produto) => void;
+  onAddItem: (produto: Produto, quantidade: number) => void;
   onClose: () => void;
   getDisponivelCentral: (itemId: string) => number;
   formatCurrency: (value: number) => string;
@@ -45,17 +46,37 @@ export function NovaCargaStepProdutos({
   getDisponivelCentral,
   formatCurrency,
 }: NovaCargaStepProdutosProps) {
-  const handleAddItem = (produto: Produto) => {
-    onAddItem(produto);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<string | null>(null);
+  const [quantidadeSelecionada, setQuantidadeSelecionada] = useState(1);
+
+  const handleIniciarSelecao = (produtoId: string) => {
+    setProdutoSelecionado(produtoId);
+    setQuantidadeSelecionada(1);
+  };
+
+  const handleCancelarSelecao = () => {
+    setProdutoSelecionado(null);
+    setQuantidadeSelecionada(1);
+  };
+
+  const handleConfirmarAdicao = (produto: Produto, disponivel: number) => {
+    const qtdFinal = Math.min(quantidadeSelecionada, disponivel);
+    onAddItem(produto, qtdFinal);
     toast.success(
-      <div className="flex items-center gap-2">
-        <Check className="h-4 w-4 text-emerald-500" />
-        <span>
-          <strong>{produto.nome.slice(0, 25)}</strong> adicionado
-        </span>
-      </div>,
-      { duration: 2000 }
+      `${produto.nome.length > 25 ? produto.nome.slice(0, 25) + '...' : produto.nome} (${qtdFinal}x) adicionado`
     );
+    setProdutoSelecionado(null);
+    setQuantidadeSelecionada(1);
+  };
+
+  const handleQuantidadeChange = (value: string, disponivel: number) => {
+    const val = parseInt(value.replace(/\D/g, '')) || 1;
+    if (val > disponivel) {
+      toast.error(`Máximo: ${disponivel} unidades`);
+      setQuantidadeSelecionada(disponivel);
+    } else {
+      setQuantidadeSelecionada(Math.max(1, val));
+    }
   };
 
   return (
@@ -125,7 +146,9 @@ export function NovaCargaStepProdutos({
             {produtos.map(produto => {
               const disponivel = getDisponivelCentral(produto.id);
               const jaAdicionado = itensCarga.some(i => i.itemId === produto.id);
+              const itemNoCarrinho = itensCarga.find(i => i.itemId === produto.id);
               const semEstoque = disponivel <= 0;
+              const estaSelecionado = produtoSelecionado === produto.id;
               
               return (
                 <div 
@@ -133,8 +156,9 @@ export function NovaCargaStepProdutos({
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 transition-colors min-h-[72px]",
                     jaAdicionado && "bg-emerald-50/80 dark:bg-emerald-900/20",
+                    estaSelecionado && "bg-primary/5",
                     semEstoque && "opacity-50",
-                    !jaAdicionado && !semEstoque && "active:bg-muted/50"
+                    !jaAdicionado && !semEstoque && !estaSelecionado && "active:bg-muted/50"
                   )}
                 >
                   {/* Imagem */}
@@ -170,18 +194,70 @@ export function NovaCargaStepProdutos({
                     {jaAdicionado ? (
                       <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-xs px-2.5 py-1">
                         <Check size={12} className="mr-1" />
-                        No carrinho
+                        {itemNoCarrinho?.quantidade}x
                       </Badge>
                     ) : semEstoque ? (
                       <Badge variant="outline" className="text-muted-foreground text-xs">
                         Sem estoque
                       </Badge>
+                    ) : estaSelecionado ? (
+                      /* Seletor de Quantidade Inline */
+                      <div className="flex items-center gap-1 bg-muted/60 rounded-lg p-1">
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => setQuantidadeSelecionada(q => Math.max(1, q - 1))}
+                          disabled={quantidadeSelecionada <= 1}
+                        >
+                          <Minus size={14} />
+                        </Button>
+                        
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={quantidadeSelecionada}
+                          onChange={(e) => handleQuantidadeChange(e.target.value, disponivel)}
+                          onFocus={(e) => e.target.select()}
+                          className="w-12 h-8 text-center text-sm font-semibold px-1"
+                        />
+                        
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => setQuantidadeSelecionada(q => Math.min(q + 1, disponivel))}
+                          disabled={quantidadeSelecionada >= disponivel}
+                        >
+                          <Plus size={14} />
+                        </Button>
+                        
+                        {/* Confirmar */}
+                        <Button 
+                          size="icon" 
+                          className="h-8 w-8 shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white"
+                          onClick={() => handleConfirmarAdicao(produto, disponivel)}
+                        >
+                          <Check size={14} />
+                        </Button>
+                        
+                        {/* Cancelar */}
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-8 w-8 shrink-0 text-muted-foreground"
+                          onClick={handleCancelarSelecao}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
                     ) : (
                       <Button 
                         size="sm" 
                         variant="outline"
                         className="h-10 px-3 gap-1.5 touch-manipulation font-medium"
-                        onClick={() => handleAddItem(produto)}
+                        onClick={() => handleIniciarSelecao(produto.id)}
                       >
                         <Plus size={16} />
                         Adicionar
