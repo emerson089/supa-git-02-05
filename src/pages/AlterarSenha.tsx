@@ -13,7 +13,11 @@ import { z } from 'zod';
 import { ROLE_LANDING_PAGES } from '@/types/roles';
 
 const passwordSchema = z.object({
-  newPassword: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+  newPassword: z.string()
+    .min(8, 'Senha deve ter pelo menos 8 caracteres')
+    .regex(/[A-Z]/, 'Deve conter pelo menos uma letra maiúscula')
+    .regex(/[a-z]/, 'Deve conter pelo menos uma letra minúscula')
+    .regex(/[0-9]/, 'Deve conter pelo menos um número'),
   confirmPassword: z.string(),
 }).refine(data => data.newPassword === data.confirmPassword, {
   message: 'As senhas não coincidem',
