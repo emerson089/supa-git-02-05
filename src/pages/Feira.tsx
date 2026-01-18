@@ -166,7 +166,10 @@ export default function Feira() {
     }).format(value);
   };
 
-  const handleAddItemCarga = (produto: { id: string; nome: string; precoUnitario: number | null; imagemUrl?: string | null }) => {
+  const handleAddItemCarga = (
+    produto: { id: string; nome: string; precoUnitario: number | null; imagemUrl?: string | null },
+    quantidade: number = 1
+  ) => {
     const disponivel = getDisponivelCentral(produto.id);
     if (disponivel <= 0) {
       toast.error('Produto sem estoque disponível no Central');
@@ -179,10 +182,13 @@ export default function Feira() {
       return;
     }
 
+    // Usar quantidade passada, limitada ao disponível
+    const qtdFinal = Math.min(quantidade, disponivel);
+
     setItensCarga(prev => [...prev, {
       itemId: produto.id,
       nome: produto.nome,
-      quantidade: 1,
+      quantidade: qtdFinal,
       precoUnitario: produto.precoUnitario || 0,
       disponivelCentral: disponivel,
       imagemUrl: produto.imagemUrl ?? null,
