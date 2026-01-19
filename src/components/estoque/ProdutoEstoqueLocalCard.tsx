@@ -2,8 +2,15 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { LotImage } from '@/components/production/LotImage';
 import { EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
-import { Settings, History, Trash2 } from 'lucide-react';
+import { Settings, History, Trash2, MoreVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ProdutoEstoqueLocalCardProps {
   item: EstoqueLocalDetalhado;
@@ -18,6 +25,8 @@ export function ProdutoEstoqueLocalCard({
   onHistorico,
   onZerar,
 }: ProdutoEstoqueLocalCardProps) {
+  const isMobile = useIsMobile();
+
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow">
       {/* Foto */}
@@ -44,7 +53,7 @@ export function ProdutoEstoqueLocalCard({
       </div>
 
       {/* Quantidade */}
-      <div className="text-right shrink-0 mr-2">
+      <div className="text-right shrink-0 mr-1">
         <p className={cn(
           "text-lg font-bold",
           item.quantidade <= 0 && "text-destructive",
@@ -56,37 +65,66 @@ export function ProdutoEstoqueLocalCard({
       </div>
 
       {/* Ações */}
-      <div className="flex items-center gap-1 shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => onHistorico(item)}
-          title="Ver histórico"
-        >
-          <History className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => onAjustar(item)}
-          title="Ajustar estoque"
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-        {onZerar && (
+      {isMobile ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="z-50">
+            <DropdownMenuItem onClick={() => onHistorico(item)}>
+              <History className="h-4 w-4 mr-2" />
+              Ver histórico
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAjustar(item)}>
+              <Settings className="h-4 w-4 mr-2" />
+              Ajustar estoque
+            </DropdownMenuItem>
+            {onZerar && (
+              <DropdownMenuItem 
+                onClick={() => onZerar(item)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Zerar estoque
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <div className="flex items-center gap-1 shrink-0">
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            onClick={() => onZerar(item)}
-            title="Zerar estoque"
+            className="h-8 w-8"
+            onClick={() => onHistorico(item)}
+            title="Ver histórico"
           >
-            <Trash2 className="h-4 w-4" />
+            <History className="h-4 w-4" />
           </Button>
-        )}
-      </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onAjustar(item)}
+            title="Ajustar estoque"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+          {onZerar && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              onClick={() => onZerar(item)}
+              title="Zerar estoque"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
