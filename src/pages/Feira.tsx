@@ -624,18 +624,26 @@ export default function Feira() {
       <ExcluirCargaModal
         carga={cargaExcluir}
         onClose={() => setCargaExcluir(null)}
-        onConfirm={async (motivo) => {
+        onConfirm={(motivo) => {
           if (!cargaExcluir) return;
-          try {
-            await excluirCarga.mutateAsync({
-              transferenciaId: cargaExcluir.id,
-              motivo,
-            });
-            toast.success('Carga excluída e estoque revertido');
-            setCargaExcluir(null);
-          } catch (error: any) {
-            toast.error(error.message || 'Erro ao excluir carga');
-          }
+          
+          const transferenciaId = cargaExcluir.id;
+          
+          // Fechar modal IMEDIATAMENTE para feedback instantâneo
+          setCargaExcluir(null);
+          
+          // Executar exclusão em background
+          excluirCarga.mutate(
+            { transferenciaId, motivo },
+            {
+              onSuccess: () => {
+                toast.success('Carga excluída e estoque revertido');
+              },
+              onError: (error: any) => {
+                toast.error(error.message || 'Erro ao excluir carga');
+              },
+            }
+          );
         }}
         isLoading={excluirCarga.isPending}
       />
