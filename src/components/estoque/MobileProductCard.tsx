@@ -71,9 +71,10 @@ function ProductImage({
       onClick={onImageClick}
     >
       <img
+        key={signedUrl}
         src={signedUrl}
         alt={nome}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-cover object-center block"
       />
       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
         <Camera className="h-4 w-4 text-white" />

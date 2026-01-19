@@ -50,9 +50,10 @@ function ProductImage({
         <div className="w-full h-full bg-muted/50 animate-pulse" />
       ) : imagemUrl && signedUrl ? (
         <img 
+          key={signedUrl}
           src={signedUrl} 
           alt={nome}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover object-center block"
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted/40 to-muted/20">
