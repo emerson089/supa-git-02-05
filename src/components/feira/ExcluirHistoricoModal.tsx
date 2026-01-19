@@ -14,7 +14,7 @@ import { TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hoo
 interface ExcluirHistoricoModalProps {
   carga: TransferenciaComItensHistorico | null;
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: () => void;
   isLoading: boolean;
 }
 

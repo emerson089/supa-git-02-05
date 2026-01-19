@@ -11,8 +11,8 @@ interface CargasAtivasAlertaProps {
 }
 
 export function CargasAtivasAlerta({ cargasAtivas, onVerCarga, periodoEhHoje }: CargasAtivasAlertaProps) {
-  // Não mostrar se não houver cargas ativas ou se o período for "Hoje" (as cargas serão mostradas na seção principal)
-  if (cargasAtivas.length === 0 || periodoEhHoje) {
+  // Não mostrar se não houver cargas ativas - SEMPRE exibir para garantir visibilidade de cargas pendentes de outros dias
+  if (cargasAtivas.length === 0) {
     return null;
   }
 
