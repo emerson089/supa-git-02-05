@@ -17,7 +17,7 @@ import { TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hoo
 interface EstornarCargaModalProps {
   carga: TransferenciaComItensHistorico | null;
   onClose: () => void;
-  onConfirm: (motivo: string) => Promise<void>;
+  onConfirm: (motivo: string) => void;
   isLoading: boolean;
 }
 
@@ -39,9 +39,9 @@ export function EstornarCargaModal({ carga, onClose, onConfirm, isLoading }: Est
     ? format(new Date(carga.dataRetorno), 'dd/MM/yyyy HH:mm')
     : null;
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     if (!motivo.trim()) return;
-    await onConfirm(motivo.trim());
+    onConfirm(motivo.trim());
     setMotivo('');
   };
 

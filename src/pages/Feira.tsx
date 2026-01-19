@@ -652,39 +652,56 @@ export default function Feira() {
       <EstornarCargaModal
         carga={cargaEstornar}
         onClose={() => setCargaEstornar(null)}
-        onConfirm={async (motivo) => {
+        onConfirm={(motivo) => {
           if (!cargaEstornar) return;
-          try {
-            await estornarCarga.mutateAsync({
-              transferenciaId: cargaEstornar.id,
-              motivo,
-            });
-            toast.success('Carga estornada! Produtos devolvidos ao estoque Central.');
-            setCargaEstornar(null);
-          } catch (error: any) {
-            toast.error(error.message || 'Erro ao estornar carga');
-          }
+          
+          const transferenciaId = cargaEstornar.id;
+          
+          // Fechar modal IMEDIATAMENTE
+          setCargaEstornar(null);
+          
+          // Executar estorno em background
+          estornarCarga.mutate(
+            { transferenciaId, motivo },
+            {
+              onSuccess: () => {
+                toast.success('Carga estornada! Produtos devolvidos ao estoque Central.');
+              },
+              onError: (error: any) => {
+                toast.error(error.message || 'Erro ao estornar carga');
+              },
+            }
+          );
         }}
-        isLoading={estornarCarga.isPending}
+        isLoading={false}
       />
 
       {/* Modal Excluir do Histórico (apenas para estornadas/canceladas) */}
       <ExcluirHistoricoModal
         carga={cargaExcluirHistorico}
         onClose={() => setCargaExcluirHistorico(null)}
-        onConfirm={async () => {
+        onConfirm={() => {
           if (!cargaExcluirHistorico) return;
-          try {
-            await excluirHistorico.mutateAsync({
-              transferenciaId: cargaExcluirHistorico.id,
-            });
-            toast.success('Carga removida do histórico');
-            setCargaExcluirHistorico(null);
-          } catch (error: any) {
-            toast.error(error.message || 'Erro ao excluir do histórico');
-          }
+          
+          const transferenciaId = cargaExcluirHistorico.id;
+          
+          // Fechar modal IMEDIATAMENTE
+          setCargaExcluirHistorico(null);
+          
+          // Executar exclusão em background
+          excluirHistorico.mutate(
+            { transferenciaId },
+            {
+              onSuccess: () => {
+                toast.success('Carga removida do histórico');
+              },
+              onError: (error: any) => {
+                toast.error(error.message || 'Erro ao excluir do histórico');
+              },
+            }
+          );
         }}
-        isLoading={excluirHistorico.isPending}
+        isLoading={false}
       />
 
       {/* Modal Confirmar Recálculo de Estoque */}
