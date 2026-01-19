@@ -1,5 +1,6 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,7 +17,8 @@ import {
   AlertTriangle,
   Clock,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -26,6 +28,8 @@ import { LotImage } from '@/components/production/LotImage';
 interface DetalhesCargaModalProps {
   carga: TransferenciaComItensHistorico | null;
   onClose: () => void;
+  onExcluirCarga?: (carga: TransferenciaComItensHistorico) => void;
+  onRegistrarRetorno?: (carga: TransferenciaComItensHistorico) => void;
 }
 
 const formatCurrency = (value: number) => {
@@ -68,8 +72,10 @@ const getStatusConfig = (status: string) => {
   }
 };
 
-export function DetalhesCargaModal({ carga, onClose }: DetalhesCargaModalProps) {
+export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrarRetorno }: DetalhesCargaModalProps) {
   if (!carga) return null;
+  
+  const isEmAndamento = carga.status === 'em_andamento';
 
   const totais = calcularTotaisCargaPublic(carga.itens);
   const statusConfig = getStatusConfig(carga.status);
@@ -261,6 +267,31 @@ export function DetalhesCargaModal({ carga, onClose }: DetalhesCargaModalProps) 
             )}
           </div>
         </ScrollArea>
+
+        {/* Footer com ações para cargas em andamento */}
+        {isEmAndamento && (onExcluirCarga || onRegistrarRetorno) && (
+          <DialogFooter className="px-6 py-4 border-t bg-muted/30 gap-2 sm:gap-2">
+            {onExcluirCarga && (
+              <Button
+                variant="destructive"
+                onClick={() => onExcluirCarga(carga)}
+                className="gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Excluir Carga
+              </Button>
+            )}
+            {onRegistrarRetorno && (
+              <Button
+                onClick={() => onRegistrarRetorno(carga)}
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Registrar Retorno
+              </Button>
+            )}
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -527,6 +527,7 @@ export default function Feira() {
             <CargasAtivasAlerta
               cargasAtivas={todasCargasAtivas || []}
               onVerCarga={(carga) => setCargaDetalhes(carga)}
+              onExcluirCarga={(carga) => setCargaExcluir(carga)}
               periodoEhHoje={periodoEhHoje}
             />
 
@@ -618,6 +619,40 @@ export default function Feira() {
       <DetalhesCargaModal
         carga={cargaDetalhes}
         onClose={() => setCargaDetalhes(null)}
+        onExcluirCarga={(carga) => {
+          setCargaDetalhes(null);
+          setCargaExcluir(carga);
+        }}
+        onRegistrarRetorno={(carga) => {
+          setCargaDetalhes(null);
+          // Preparar itens para o modal de retorno
+          const itensParaRetorno = carga.itens.map(item => ({
+            id: item.id,
+            itemId: item.itemId,
+            nome: item.produtoNome || '',
+            quantidadeEnviada: item.quantidadeEnviada,
+            quantidadeRetornada: item.quantidadeRetornada ?? item.quantidadeEnviada,
+            preco: item.precoUnitario ?? item.produtoPreco ?? 0,
+            imagem: item.produtoImagem,
+          }));
+          setItensRetorno(itensParaRetorno);
+          setCargaSelecionada({
+            id: carga.id,
+            itens: carga.itens.map(i => ({
+              id: i.id,
+              itemId: i.itemId,
+              quantidadeEnviada: i.quantidadeEnviada,
+              quantidadeRetornada: i.quantidadeRetornada,
+              item: {
+                id: i.itemId,
+                nome: i.produtoNome || '',
+                imagem_url: i.produtoImagem,
+                preco_unitario: i.precoUnitario ?? i.produtoPreco ?? 0,
+              }
+            }))
+          } as any);
+          setShowRetorno(true);
+        }}
       />
 
       {/* Modal Excluir Carga (apenas para em_andamento) */}
