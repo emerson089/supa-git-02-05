@@ -63,11 +63,8 @@ export function NovaCargaBottomSheet({
   };
 
   const handleCriar = () => {
-    setOpen(false); // Fechar drawer primeiro
-    // Dar um pequeno delay para a animação
-    setTimeout(() => {
-      onCriarCarga();
-    }, 150);
+    setOpen(false);
+    onCriarCarga();
   };
 
   return (

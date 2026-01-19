@@ -234,25 +234,33 @@ export default function Feira() {
     setItensCarga(prev => prev.filter(i => i.itemId !== itemId));
   };
 
-  const handleCriarCarga = async () => {
+  const handleCriarCarga = () => {
     // Proteção contra clique duplo e lista vazia
     if (itensCarga.length === 0 || criarCarga.isPending) {
       return;
     }
 
-    try {
-      await criarCarga.mutateAsync({
-        itens: itensCarga.map(i => ({
-          itemId: i.itemId,
-          quantidade: i.quantidade,
-          precoUnitario: i.precoUnitario,
-        })),
-      });
-      toast.success('Carga criada com sucesso!');
-      handleCloseNovaCarga();
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao criar carga');
-    }
+    const itensParaCriar = itensCarga.map(i => ({
+      itemId: i.itemId,
+      quantidade: i.quantidade,
+      precoUnitario: i.precoUnitario,
+    }));
+
+    // Fechar modal IMEDIATAMENTE para feedback instantâneo
+    handleCloseNovaCarga();
+
+    // Executar criação em background
+    criarCarga.mutate(
+      { itens: itensParaCriar },
+      {
+        onSuccess: () => {
+          toast.success('Carga criada com sucesso!');
+        },
+        onError: (error: any) => {
+          toast.error(error.message || 'Erro ao criar carga');
+        },
+      }
+    );
   };
 
   // Converter TransferenciaComItensHistorico para TransferenciaComItens para o modal de retorno
