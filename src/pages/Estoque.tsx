@@ -1258,13 +1258,16 @@ export default function Estoque() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Referência (automática)</Label>
+                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Referência</Label>
                 <Input
                   value={novoModeloForm.referencia}
-                  readOnly
-                  disabled
-                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0 bg-muted/50 cursor-not-allowed"
+                  onChange={e => setNovoModeloForm({ ...novoModeloForm, referencia: e.target.value })}
+                  placeholder="Ex: 164"
+                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
                 />
+                <span className="text-[10px] text-muted-foreground">
+                  Sugestão automática. Edite para usar referência existente.
+                </span>
               </div>
             </div>
 
