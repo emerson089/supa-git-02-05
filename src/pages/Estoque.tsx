@@ -1278,8 +1278,8 @@ export default function Estoque() {
                 <Input
                   type="number"
                   min={1}
-                  value={novoModeloForm.quantidade}
-                  onChange={e => setNovoModeloForm({ ...novoModeloForm, quantidade: Number(e.target.value) })}
+                  value={novoModeloForm.quantidade === 0 ? '' : novoModeloForm.quantidade}
+                  onChange={e => setNovoModeloForm({ ...novoModeloForm, quantidade: e.target.value === '' ? 0 : Number(e.target.value) })}
                   placeholder="0"
                   className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
                 />
@@ -1290,8 +1290,8 @@ export default function Estoque() {
                   type="number"
                   step="0.01"
                   min={0}
-                  value={novoModeloForm.precoVenda}
-                  onChange={e => setNovoModeloForm({ ...novoModeloForm, precoVenda: Number(e.target.value) })}
+                  value={novoModeloForm.precoVenda === 0 ? '' : novoModeloForm.precoVenda}
+                  onChange={e => setNovoModeloForm({ ...novoModeloForm, precoVenda: e.target.value === '' ? 0 : Number(e.target.value) })}
                   placeholder="0.00"
                   className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
                 />
