@@ -416,10 +416,26 @@ export default function Estoque() {
   };
 
   // Handlers para Novo Modelo Acabado
-  const handleOpenNovoModelo = () => {
+  const handleOpenNovoModelo = async () => {
+    // Buscar a maior referência numérica existente
+    let maxRef = 0;
+    const produtosAcabadosExistentes = itens.filter(item => item.tipo === 'acabado');
+    
+    produtosAcabadosExistentes.forEach(item => {
+      // Procura padrão " - NNN" no final do nome
+      const match = item.nome.match(/ - (\d{3})$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxRef) maxRef = num;
+      }
+    });
+    
+    // Próxima referência: max + 1, formatada com 3 dígitos
+    const nextRef = String(maxRef + 1).padStart(3, '0');
+    
     setNovoModeloForm({
       nome: '',
-      referencia: '',
+      referencia: nextRef,
       quantidade: 0,
       precoVenda: 0,
       imagemUrl: '',
@@ -1219,12 +1235,12 @@ export default function Estoque() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Referência</Label>
+                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Referência (automática)</Label>
                 <Input
                   value={novoModeloForm.referencia}
-                  onChange={e => setNovoModeloForm({ ...novoModeloForm, referencia: e.target.value })}
-                  placeholder="Ex: SJ-001"
-                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                  readOnly
+                  disabled
+                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0 bg-muted/50 cursor-not-allowed"
                 />
               </div>
             </div>
