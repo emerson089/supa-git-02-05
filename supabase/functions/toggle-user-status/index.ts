@@ -45,31 +45,34 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
-    // Client with user token to verify identity
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+    // Validate JWT using getClaims
+    const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } }
     });
 
-    // Get current user
-    const { data: { user: caller }, error: userError } = await supabaseUser.auth.getUser();
-    if (userError || !caller) {
-      console.error('Failed to get user:', userError);
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      console.error('Failed to validate token:', claimsError);
       return new Response(
         JSON.stringify({ error: 'Usuário não autenticado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    const callerId = claimsData.claims.sub as string;
+
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Check if caller is admin
     const { data: isAdmin, error: roleError } = await supabaseAdmin.rpc('has_role', {
-      _user_id: caller.id,
+      _user_id: callerId,
       _role: 'admin'
     });
 
     if (roleError || !isAdmin) {
-      console.error('User is not admin:', caller.id);
+      console.error('User is not admin:', callerId);
       return new Response(
         JSON.stringify({ error: 'Acesso negado. Apenas administradores podem alterar status.' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -94,7 +97,7 @@ serve(async (req) => {
     }
 
     // Prevent deactivating own account
-    if (userId === caller.id && status === 'inativo') {
+    if (userId === callerId && status === 'inativo') {
       return new Response(
         JSON.stringify({ error: 'Você não pode desativar sua própria conta' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
