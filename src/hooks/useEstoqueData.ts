@@ -201,8 +201,12 @@ export function useAddItem() {
       if (error) throw error;
       return mapDbItemToItem(data as DbItem);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+    onSuccess: (newItem) => {
+      // Optimistic: adiciona imediatamente ao cache
+      queryClient.setQueryData(['estoque-itens', user?.id], (old: ItemEstoque[] | undefined) => {
+        if (!old) return [newItem];
+        return [newItem, ...old];
+      });
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
     },
   });
@@ -272,8 +276,33 @@ export function useUpdateItem() {
           }
         }
       }
+      
+      return { id, ...updates };
     },
-    onSuccess: () => {
+    onMutate: async ({ id, ...updates }) => {
+      // Cancelar queries em andamento
+      await queryClient.cancelQueries({ queryKey: ['estoque-itens', user?.id] });
+      
+      // Salvar estado anterior
+      const previousItens = queryClient.getQueryData<ItemEstoque[]>(['estoque-itens', user?.id]);
+      
+      // Atualizar cache otimisticamente
+      queryClient.setQueryData(['estoque-itens', user?.id], (old: ItemEstoque[] | undefined) => {
+        if (!old) return old;
+        return old.map(item => 
+          item.id === id ? { ...item, ...updates } : item
+        );
+      });
+      
+      return { previousItens };
+    },
+    onError: (err, variables, context) => {
+      // Rollback em caso de erro
+      if (context?.previousItens) {
+        queryClient.setQueryData(['estoque-itens', user?.id], context.previousItens);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-locais'] });
@@ -283,6 +312,7 @@ export function useUpdateItem() {
 
 export function useRemoveItem() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   
   return useMutation({
     mutationFn: async (id: string) => {
@@ -388,7 +418,7 @@ export function useRemoveItem() {
         console.error('[useRemoveItem] Erro ao deletar movimentações:', deleteMovError);
       }
 
-      // 3. Deletar o item principal
+      // 4. Deletar o item principal
       const { error } = await supabase
         .from('estoque_itens')
         .delete()
@@ -398,8 +428,31 @@ export function useRemoveItem() {
         console.error('[useRemoveItem] Erro ao deletar item:', error);
         throw new Error(`Erro ao excluir item: ${error.message}`);
       }
+      
+      return id;
     },
-    onSuccess: () => {
+    onMutate: async (id) => {
+      // Cancelar queries em andamento
+      await queryClient.cancelQueries({ queryKey: ['estoque-itens', user?.id] });
+      
+      // Salvar estado anterior
+      const previousItens = queryClient.getQueryData<ItemEstoque[]>(['estoque-itens', user?.id]);
+      
+      // Remover do cache imediatamente (optimistic)
+      queryClient.setQueryData(['estoque-itens', user?.id], (old: ItemEstoque[] | undefined) => {
+        if (!old) return old;
+        return old.filter(item => item.id !== id);
+      });
+      
+      return { previousItens };
+    },
+    onError: (err, id, context) => {
+      // Rollback em caso de erro
+      if (context?.previousItens) {
+        queryClient.setQueryData(['estoque-itens', user?.id], context.previousItens);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });

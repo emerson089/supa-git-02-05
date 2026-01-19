@@ -16,8 +16,22 @@ export function useRealtimeEstoque() {
   useEffect(() => {
     if (!user?.id) return;
 
+    const handleEstoqueChange = (payload: any) => {
+      console.log('[Realtime] Estoque changed:', payload.table, payload.eventType);
+      
+      // Invalidar todas as queries de estoque para garantir dados atualizados
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          ['estoque-por-local', 'estoque-detalhado-por-local', 
+           'estoque-itens', 'produtos-disponiveis-adicionar'].includes(query.queryKey[0] as string),
+        refetchType: 'all'
+      });
+    };
+
     const channel = supabase
       .channel('estoque-realtime')
+      // Escutar estoque_por_local
       .on(
         'postgres_changes',
         {
@@ -25,20 +39,17 @@ export function useRealtimeEstoque() {
           schema: 'public',
           table: 'estoque_por_local',
         },
-        (payload) => {
-          console.log('[Realtime] estoque_por_local changed:', payload.eventType);
-          
-          // Invalidar todas as queries de estoque para garantir dados atualizados
-          queryClient.invalidateQueries({ 
-            predicate: (query) => 
-              Array.isArray(query.queryKey) && 
-              (query.queryKey[0] === 'estoque-por-local' || 
-               query.queryKey[0] === 'estoque-detalhado-por-local' ||
-               query.queryKey[0] === 'estoque-itens' ||
-               query.queryKey[0] === 'produtos-disponiveis-adicionar'),
-            refetchType: 'all'
-          });
-        }
+        handleEstoqueChange
+      )
+      // Escutar estoque_itens (para exclusões, adições e edições)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'estoque_itens',
+        },
+        handleEstoqueChange
       )
       .subscribe((status) => {
         console.log('[Realtime] Subscription status:', status);
