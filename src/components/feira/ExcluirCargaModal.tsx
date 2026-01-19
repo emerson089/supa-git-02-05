@@ -17,7 +17,7 @@ import { TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hoo
 interface ExcluirCargaModalProps {
   carga: TransferenciaComItensHistorico | null;
   onClose: () => void;
-  onConfirm: (motivo?: string) => Promise<void>;
+  onConfirm: (motivo?: string) => void;
   isLoading: boolean;
 }
 
@@ -44,8 +44,8 @@ export function ExcluirCargaModal({ carga, onClose, onConfirm, isLoading }: Excl
   const delta = totais.enviado - totais.retornado; // Quantidade que precisa voltar da Banca para Central
   const dataSaida = format(new Date(carga.dataSaida), 'dd/MM/yyyy HH:mm');
 
-  const handleConfirm = async () => {
-    await onConfirm(motivo.trim() || undefined);
+  const handleConfirm = () => {
+    onConfirm(motivo.trim() || undefined);
     setMotivo('');
   };
 
