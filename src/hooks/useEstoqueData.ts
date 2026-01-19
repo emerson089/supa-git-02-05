@@ -286,8 +286,51 @@ export function useRemoveItem() {
   
   return useMutation({
     mutationFn: async (id: string) => {
-      // 1. Verificar se existe em transferencia_itens com transferências ATIVAS (não soft-deleted E com status bloqueante)
-      const { data: cargasAtivas, error: cargasError } = await supabase
+      // 1. Verificar APENAS transferências EM ANDAMENTO (concluídas não bloqueiam exclusão)
+      const { data: transferenciasAtivas, error: cargasError } = await supabase
+        .from('transferencia_itens')
+        .select(`
+          id,
+          transferencia_id,
+          transferencias!inner(
+            id,
+            tipo,
+            status,
+            deleted_at
+          )
+        `)
+        .eq('item_id', id)
+        .is('transferencias.deleted_at', null)
+        .eq('transferencias.status', 'em_andamento');
+
+      if (cargasError) {
+        console.error('[useRemoveItem] Erro ao verificar transferências:', cargasError);
+        throw new Error('Erro ao verificar dependências do item');
+      }
+
+      if (transferenciasAtivas && transferenciasAtivas.length > 0) {
+        // Separar por tipo para mensagem mais clara
+        const cargasFeira = transferenciasAtivas.filter(
+          (c: any) => c.transferencias?.tipo === 'carga_feira'
+        ).length;
+        const transferencias = transferenciasAtivas.filter(
+          (c: any) => c.transferencias?.tipo === 'transferencia'
+        ).length;
+        
+        let mensagem = 'Este modelo possui movimentações em andamento:\n';
+        if (cargasFeira > 0) {
+          mensagem += `• ${cargasFeira} carga(s) de feira (excluir/estornar em Feira)\n`;
+        }
+        if (transferencias > 0) {
+          mensagem += `• ${transferencias} transferência(s) entre locais (finalizar em Transferências)\n`;
+        }
+        mensagem += '\nFinalize ou cancele as movimentações antes de excluir o modelo.';
+        
+        throw new Error(mensagem);
+      }
+
+      // 2. Limpar transferencia_itens de transferências CONCLUÍDAS ou SOFT-DELETED
+      const { data: itensParaLimpar, error: itensLimparError } = await supabase
         .from('transferencia_itens')
         .select(`
           id,
@@ -298,55 +341,20 @@ export function useRemoveItem() {
             deleted_at
           )
         `)
-        .eq('item_id', id)
-        .is('transferencias.deleted_at', null)
-        .in('transferencias.status', ['em_andamento', 'concluida']);
+        .eq('item_id', id);
 
-      if (cargasError) {
-        console.error('[useRemoveItem] Erro ao verificar cargas:', cargasError);
-        throw new Error('Erro ao verificar dependências do item');
+      if (itensLimparError) {
+        console.error('[useRemoveItem] Erro ao buscar itens para limpeza:', itensLimparError);
       }
 
-      if (cargasAtivas && cargasAtivas.length > 0) {
-        // Contar por status para mensagem mais informativa
-        const emAndamento = cargasAtivas.filter((c: any) => c.transferencias?.status === 'em_andamento').length;
-        const concluidas = cargasAtivas.filter((c: any) => c.transferencias?.status === 'concluida').length;
-        
-        let mensagem = 'Este modelo possui cargas de feira que precisam ser tratadas:\n';
-        if (emAndamento > 0) {
-          mensagem += `• ${emAndamento} carga(s) em andamento (excluir na Feira)\n`;
-        }
-        if (concluidas > 0) {
-          mensagem += `• ${concluidas} carga(s) concluída(s) (estornar na Feira)\n`;
-        }
-        mensagem += '\nAltere o filtro de período para "Últimos 7 dias" ou "Últimos 30 dias" para visualizar todas as cargas.';
-        
-        throw new Error(mensagem);
-      }
+      // Filtrar itens que podem ser deletados (concluídas ou soft-deleted)
+      const itensParaDeletar = itensParaLimpar?.filter((i: any) => 
+        i.transferencias?.deleted_at !== null || i.transferencias?.status === 'concluida'
+      ) || [];
 
-      // 2. Limpar transferencia_itens de cargas já soft-deleted (para liberar FK)
-      // Buscar IDs de transferencias soft-deleted que possuem itens deste item
-      const { data: itensCargasExcluidas, error: itensError } = await supabase
-        .from('transferencia_itens')
-        .select(`
-          id,
-          transferencia_id,
-          transferencias!inner(
-            id,
-            deleted_at
-          )
-        `)
-        .eq('item_id', id)
-        .not('transferencias.deleted_at', 'is', null);
-
-      if (itensError) {
-        console.error('[useRemoveItem] Erro ao buscar itens de cargas excluídas:', itensError);
-      }
-
-      // Deletar esses transferencia_itens (cargas já foram soft-deleted, então podemos limpar)
-      if (itensCargasExcluidas && itensCargasExcluidas.length > 0) {
-        const idsParaDeletar = itensCargasExcluidas.map(i => i.id);
-        console.log(`[useRemoveItem] Limpando ${idsParaDeletar.length} transferencia_itens de cargas já excluídas`);
+      if (itensParaDeletar.length > 0) {
+        const idsParaDeletar = itensParaDeletar.map((i: any) => i.id);
+        console.log(`[useRemoveItem] Limpando ${idsParaDeletar.length} transferencia_itens de transferências concluídas/excluídas`);
         
         const { error: deleteTransItensError } = await supabase
           .from('transferencia_itens')
@@ -355,7 +363,7 @@ export function useRemoveItem() {
         
         if (deleteTransItensError) {
           console.error('[useRemoveItem] Erro ao deletar transferencia_itens:', deleteTransItensError);
-          throw new Error('Erro ao limpar histórico de cargas excluídas');
+          throw new Error('Erro ao limpar histórico de transferências');
         }
       }
 
