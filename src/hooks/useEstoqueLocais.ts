@@ -101,8 +101,7 @@ export function useEstoquePorLocal(localId?: string) {
       return (data as DbEstoquePorLocal[]).map(mapDbEstoquePorLocal);
     },
     enabled: !!user,
-    staleTime: 0, // Sempre revalidar para dados críticos de estoque
-    refetchOnWindowFocus: true,
+    staleTime: 10000, // 10 segundos - Realtime cuida das atualizações críticas
   });
 }
 

@@ -149,6 +149,7 @@ export function useEstoqueItens() {
       return (itens as DbItem[]).map(mapDbItemToItem);
     },
     enabled: !!user,
+    staleTime: 15000, // 15 segundos - Realtime cuida das atualizações críticas
   });
 }
 

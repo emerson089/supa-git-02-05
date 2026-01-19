@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -68,7 +69,8 @@ import {
   X,
   Download,
   Upload,
-  Loader2
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay, parse } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -185,9 +187,11 @@ const savePersistedFilters = (filters: PersistedFilters): void => {
 export default function PedidosCriados() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const { removePedido, updatePedido, getPedidoById } = usePedidos();
   const { itens: estoqueItens, updateItem: updateEstoqueItem } = useEstoque();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Carregar filtros persistidos uma única vez
   const [persistedFilters] = useState(() => loadPersistedFilters());
@@ -475,6 +479,15 @@ export default function PedidosCriados() {
     localStorage.removeItem(FILTERS_STORAGE_KEY);
   };
 
+  // Função de refresh manual
+  const handleRefreshData = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
+    await queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
+    setIsRefreshing(false);
+    toast.success('Dados atualizados');
+  };
+
   const hasAnyFilter = searchTerm || startDate || endDate || 
     filterStatusPagamento !== 'all' || filterStatusPedido !== 'all' || 
     filterStatusEntrega !== 'all' || filterModelo;
@@ -735,10 +748,23 @@ const formatNumber = (value: number) => {
         {/* Desktop Header */}
         {!isMobile && (
           <header className="px-8 py-6 flex-shrink-0">
-            <h1 className="text-2xl font-bold text-foreground">Pedidos Criados</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Centro operacional de gestão de pedidos
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">Pedidos Criados</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Centro operacional de gestão de pedidos
+                </p>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleRefreshData}
+                disabled={isRefreshing}
+                title="Atualizar dados"
+              >
+                <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+              </Button>
+            </div>
           </header>
         )}
 

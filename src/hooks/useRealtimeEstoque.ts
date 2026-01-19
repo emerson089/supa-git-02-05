@@ -19,14 +19,26 @@ export function useRealtimeEstoque() {
     const handleEstoqueChange = (payload: any) => {
       console.log('[Realtime] Estoque changed:', payload.table, payload.eventType);
       
-      // Invalidar todas as queries de estoque para garantir dados atualizados
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
-          ['estoque-por-local', 'estoque-detalhado-por-local', 
-           'estoque-itens', 'produtos-disponiveis-adicionar'].includes(query.queryKey[0] as string),
-        refetchType: 'all'
-      });
+      // Invalidação granular para economizar queries
+      if (payload.eventType === 'UPDATE') {
+        // Para UPDATE, apenas refetch queries atualmente ativas/montadas
+        queryClient.invalidateQueries({ 
+          queryKey: ['estoque-itens'],
+          refetchType: 'active' // Apenas queries montadas
+        });
+        queryClient.invalidateQueries({ 
+          queryKey: ['estoque-por-local'],
+          refetchType: 'active'
+        });
+      } else {
+        // INSERT/DELETE: invalidar tudo para garantir consistência
+        queryClient.invalidateQueries({ 
+          predicate: (query) => 
+            Array.isArray(query.queryKey) && 
+            ['estoque-por-local', 'estoque-detalhado-por-local', 
+             'estoque-itens', 'produtos-disponiveis-adicionar'].includes(query.queryKey[0] as string)
+        });
+      }
     };
 
     const channel = supabase
