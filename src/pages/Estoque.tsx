@@ -291,9 +291,9 @@ export default function Estoque() {
         categoria: item.categoria,
         quantidade: item.quantidade,
         unidade: item.unidade,
-        quantidadeMinima: item.quantidadeMinima,
-        precoUnitario: item.precoUnitario,
-        localizacao: item.localizacao,
+        quantidadeMinima: item.quantidadeMinima ?? 0,
+        precoUnitario: item.precoUnitario ?? 0,
+        localizacao: item.localizacao ?? '',
       });
     } else {
       setEditingItem(null);
