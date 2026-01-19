@@ -241,31 +241,43 @@ export function useUpdateItem() {
       
       // Sync quantity with estoque_por_local for Central location
       if (updates.quantidade !== undefined && user) {
-        const { data: localCentral } = await supabase
+        const { data: localCentral, error: localError } = await supabase
           .from('estoque_locais')
           .select('id')
           .eq('user_id', user.id)
           .eq('tipo', 'central')
-          .single();
+          .maybeSingle();
+        
+        if (localError) {
+          console.error('[useUpdateItem] Erro ao buscar local central:', localError);
+        }
         
         if (localCentral) {
-          const { data: estoqueLocal } = await supabase
+          const { data: estoqueLocal, error: estoqueLocalError } = await supabase
             .from('estoque_por_local')
             .select('id')
             .eq('item_id', id)
             .eq('local_id', localCentral.id)
-            .single();
+            .maybeSingle();
+          
+          if (estoqueLocalError) {
+            console.error('[useUpdateItem] Erro ao buscar estoque local:', estoqueLocalError);
+          }
           
           if (estoqueLocal) {
-            await supabase
+            const { error: updateError } = await supabase
               .from('estoque_por_local')
               .update({ 
                 quantidade: updates.quantidade,
                 updated_at: new Date().toISOString()
               })
               .eq('id', estoqueLocal.id);
+            
+            if (updateError) {
+              console.error('[useUpdateItem] Erro ao atualizar estoque_por_local:', updateError);
+            }
           } else {
-            await supabase
+            const { error: insertError } = await supabase
               .from('estoque_por_local')
               .insert({
                 user_id: user.id,
@@ -274,6 +286,10 @@ export function useUpdateItem() {
                 quantidade: updates.quantidade,
                 quantidade_reservada: 0,
               });
+            
+            if (insertError) {
+              console.error('[useUpdateItem] Erro ao inserir estoque_por_local:', insertError);
+            }
           }
         }
       }
