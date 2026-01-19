@@ -124,6 +124,7 @@ export function usePedidos() {
       return pedidosWithItens as PedidoDB[];
     },
     enabled: !!user,
+    staleTime: 30000, // 30 segundos - listagem pode ter cache maior
   });
 }
 

@@ -187,6 +187,7 @@ export function useCargasPorPeriodo(inicio: Date, fim: Date) {
       return cargas;
     },
     enabled: !!user,
+    staleTime: 30000, // 30 segundos - histórico pode ter cache maior
   });
 }
 

@@ -22,7 +22,15 @@ import ConfigUsuarios from "./pages/ConfigUsuarios";
 import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 15000, // 15 segundos padrão - dados ficam "frescos" por 15s
+      refetchOnWindowFocus: false, // Não refetch automático ao focar janela
+      retry: 1, // Apenas 1 retry em caso de erro
+    },
+  },
+});
 
 function App() {
   return (

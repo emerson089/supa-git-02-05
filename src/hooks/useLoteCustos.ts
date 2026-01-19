@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 interface LoteCustosConfig {
@@ -8,44 +9,36 @@ interface LoteCustosConfig {
 }
 
 export function useLoteCustos(producaoId: string | null) {
-  const [config, setConfig] = useState<LoteCustosConfig | null>(null);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!producaoId) {
-      setConfig(null);
-      return;
-    }
+  const { data: config, isLoading: loading } = useQuery({
+    queryKey: ['lote-custos', producaoId],
+    queryFn: async () => {
+      if (!producaoId) return null;
 
-    const fetchConfig = async () => {
-      setLoading(true);
-      try {
-        const { data } = await supabase
-          .from('lote_custos_config')
-          .select('metros_corte, valor_metro, preco_venda')
-          .eq('producao_id', producaoId)
-          .maybeSingle();
+      const { data } = await supabase
+        .from('lote_custos_config')
+        .select('metros_corte, valor_metro, preco_venda')
+        .eq('producao_id', producaoId)
+        .maybeSingle();
 
-        if (data) {
-          setConfig({
-            metros_corte: Number(data.metros_corte) || 0,
-            valor_metro: Number(data.valor_metro) || 0,
-            preco_venda: Number(data.preco_venda) || 0
-          });
-        } else {
-          setConfig(null);
-        }
-      } catch (error) {
-        console.error('Erro ao buscar custos:', error);
-        setConfig(null);
-      } finally {
-        setLoading(false);
+      if (data) {
+        return {
+          metros_corte: Number(data.metros_corte) || 0,
+          valor_metro: Number(data.valor_metro) || 0,
+          preco_venda: Number(data.preco_venda) || 0
+        } as LoteCustosConfig;
       }
-    };
+      return null;
+    },
+    enabled: !!producaoId,
+    staleTime: 30000, // 30 segundos - dados de custos não mudam frequentemente
+  });
 
-    fetchConfig();
+  // Subscribe to realtime changes - apenas para invalidar cache
+  useEffect(() => {
+    if (!producaoId) return;
 
-    // Subscribe to realtime changes
     const channel = supabase
       .channel(`lote_custos_${producaoId}`)
       .on('postgres_changes', {
@@ -54,14 +47,15 @@ export function useLoteCustos(producaoId: string | null) {
         table: 'lote_custos_config',
         filter: `producao_id=eq.${producaoId}`
       }, () => {
-        fetchConfig();
+        // Apenas invalidar o cache, não buscar direto
+        queryClient.invalidateQueries({ queryKey: ['lote-custos', producaoId] });
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [producaoId]);
+  }, [producaoId, queryClient]);
 
-  return { config, loading };
+  return { config: config ?? null, loading };
 }

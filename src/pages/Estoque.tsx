@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -13,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download, FileText, Image, ChevronDown } from 'lucide-react';
+import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download, FileText, Image, ChevronDown, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { supabase } from '@/integrations/supabase/client';
@@ -67,7 +68,9 @@ function ProductImage({ imagemUrl, nome }: { imagemUrl?: string; nome: string })
 
 export default function Estoque() {
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
   const { itens, addItem, updateItem, removeItem, getMateriasPrimas, getProdutosAcabados } = useEstoque();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'materia_prima' | 'produto_acabado'>('produto_acabado');
   const [showModal, setShowModal] = useState(false);
@@ -114,6 +117,15 @@ export default function Estoque() {
 
   // Filtro rápido
   const [filtroRapido, setFiltroRapido] = useState<FiltroRapido>('todos');
+
+  // Função de refresh manual
+  const handleRefreshData = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+    await queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+    setIsRefreshing(false);
+    toast.success('Dados atualizados');
+  };
 
   // Export CSV function
   const handleExportModelos = () => {
@@ -567,6 +579,17 @@ export default function Estoque() {
               </div>
 
               <div className="flex items-center gap-4">
+                {/* Botão de Refresh */}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleRefreshData}
+                  disabled={isRefreshing}
+                  title="Atualizar dados"
+                >
+                  <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+                </Button>
+
                 {/* Alerta de baixo estoque */}
                 {itensComBaixoEstoque.length > 0 && (
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
