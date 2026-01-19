@@ -351,16 +351,23 @@ export default function Estoque() {
     setShowDeleteModal(true);
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = () => {
     if (itemToDelete) {
-      try {
-        await removeItem(itemToDelete.id);
-        toast.success('Item removido do estoque');
-        setShowDeleteModal(false);
-        setItemToDelete(null);
-      } catch (error: any) {
-        toast.error(error.message || 'Erro ao excluir item');
-      }
+      const itemId = itemToDelete.id;
+      
+      // Fechar modal IMEDIATAMENTE para feedback instantâneo
+      setShowDeleteModal(false);
+      setItemToDelete(null);
+      
+      // Executar exclusão em background (optimistic update já remove da lista)
+      removeItem(itemId)
+        .then(() => {
+          toast.success('Item removido do estoque');
+        })
+        .catch((error: any) => {
+          toast.error(error.message || 'Erro ao excluir item');
+          // Rollback automático no onError do mutation
+        });
     }
   };
 
