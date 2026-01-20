@@ -5,6 +5,7 @@ import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useEstoque, ItemEstoque, TipoEstoque, StatusEstoque } from '@/contexts/EstoqueContext';
+import { useEstoqueItensPaginated, useEstoqueMetrics, FiltroRapido } from '@/hooks/useEstoqueItensPaginated';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download, FileText, Image, ChevronDown, RefreshCw } from 'lucide-react';
+import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download, FileText, Image, ChevronDown, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,7 +28,8 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { getSignedUrl, getImageAsBase64 } from '@/utils/imageUtils';
 import jsPDF from 'jspdf';
 
-type FiltroRapido = 'todos' | 'esgotado' | 'baixo';
+const PAGE_SIZE = 24;
+
 const statusConfig: Record<StatusEstoque, { label: string; color: string }> = {
   disponivel: { label: 'Disponível', color: 'bg-emerald-100 text-emerald-700' },
   em_producao: { label: 'Em Produção', color: 'bg-blue-100 text-blue-700' },
@@ -115,13 +117,51 @@ export default function Estoque() {
   // Modal para importação CSV
   const [showImportModal, setShowImportModal] = useState(false);
 
-  // Filtro rápido
+  // Filtro rápido e paginação
   const [filtroRapido, setFiltroRapido] = useState<FiltroRapido>('todos');
+  const [currentPage, setCurrentPage] = useState(0);
+
+  // Mapear tipo de tab para tipo de estoque
+  const tipoEstoque = activeTab === 'materia_prima' ? 'materia-prima' : 'acabado';
+
+  // Hook paginado para buscar itens
+  const { 
+    data: paginatedData, 
+    isLoading: isPaginatedLoading,
+    isFetching: isPaginatedFetching,
+  } = useEstoqueItensPaginated({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    search,
+    tipo: tipoEstoque,
+    filtroRapido,
+  });
+
+  // Métricas agregadas para os cards de resumo
+  const { data: metrics } = useEstoqueMetrics(tipoEstoque);
+
+  // Reset página quando mudar filtros
+  const handleFilterChange = (newFiltro: FiltroRapido) => {
+    setFiltroRapido(newFiltro);
+    setCurrentPage(0);
+  };
+
+  const handleTabChange = (tab: 'materia_prima' | 'produto_acabado') => {
+    setActiveTab(tab);
+    setCurrentPage(0);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setCurrentPage(0);
+  };
 
   // Função de refresh manual
   const handleRefreshData = async () => {
     setIsRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+    await queryClient.invalidateQueries({ queryKey: ['estoque-itens-paginated'] });
+    await queryClient.invalidateQueries({ queryKey: ['estoque-metrics'] });
     await queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
     setIsRefreshing(false);
     toast.success('Dados atualizados');
@@ -259,42 +299,50 @@ export default function Estoque() {
   const materiasPrimas = getMateriasPrimas();
   const produtosAcabados = getProdutosAcabados();
 
-  const itensExibidos = activeTab === 'materia_prima' ? materiasPrimas : produtosAcabados;
-  
-  // Apply search filter
-  let itensFiltrados = itensExibidos.filter(
-    item =>
-      item.nome.toLowerCase().includes(search.toLowerCase()) ||
-      item.categoria.toLowerCase().includes(search.toLowerCase())
-  );
+  // Usar dados paginados para renderização
+  const itensFiltrados = paginatedData?.data || [];
+  const totalCount = paginatedData?.totalCount || 0;
+  const totalPages = paginatedData?.totalPages || 0;
 
-  // Apply quick filter
-  if (filtroRapido === 'esgotado') {
-    itensFiltrados = itensFiltrados.filter(item => item.quantidade === 0);
-  } else if (filtroRapido === 'baixo') {
-    itensFiltrados = itensFiltrados.filter(item => item.quantidade > 0 && item.quantidade <= 20);
-  }
+  // Usar métricas do hook para os cards de resumo
+  const totalPecas = metrics?.totalPecas || 0;
+  const valorTotal = metrics?.valorTotal || 0;
+  const itensAlerta = metrics?.itensAlerta || 0;
+  const itensEsgotados = metrics?.itensEsgotados || 0;
+  const totalItens = metrics?.totalItens || 0;
 
-  const itensComBaixoEstoque = itens.filter(item => item.status === 'baixo_estoque');
+  // Calcular range de paginação
+  const fromItem = totalCount > 0 ? currentPage * PAGE_SIZE + 1 : 0;
+  const toItem = Math.min((currentPage + 1) * PAGE_SIZE, totalCount);
 
-  // Metrics calculations
-  const totalPecas = itensExibidos.reduce((sum, item) => sum + item.quantidade, 0);
-  const valorTotal = itensExibidos.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0);
-  const itensAlerta = itensExibidos.filter(item => item.quantidade > 0 && item.quantidade <= 20).length;
-  const itensEsgotados = itensExibidos.filter(item => item.quantidade === 0).length;
-
-  const handleOpenModal = (item?: ItemEstoque) => {
+  const handleOpenModal = (item?: any) => {
     if (item) {
-      setEditingItem(item);
-      setFormData({
-        nome: item.nome,
-        categoria: item.categoria,
-        quantidade: item.quantidade,
-        unidade: item.unidade,
-        quantidadeMinima: item.quantidadeMinima ?? 0,
-        precoUnitario: item.precoUnitario ?? 0,
-        localizacao: item.localizacao ?? '',
-      });
+      // Find the full item from context for proper editing
+      const fullItem = itens.find(i => i.id === item.id);
+      if (fullItem) {
+        setEditingItem(fullItem);
+        setFormData({
+          nome: fullItem.nome,
+          categoria: fullItem.categoria,
+          quantidade: fullItem.quantidade,
+          unidade: fullItem.unidade,
+          quantidadeMinima: fullItem.quantidadeMinima ?? 0,
+          precoUnitario: fullItem.precoUnitario ?? 0,
+          localizacao: fullItem.localizacao ?? '',
+        });
+      } else {
+        // Use the passed item data (for paginated items)
+        setEditingItem(null);
+        setFormData({
+          nome: item.nome,
+          categoria: item.categoria,
+          quantidade: item.quantidade,
+          unidade: item.unidade,
+          quantidadeMinima: item.quantidadeMinima ?? 0,
+          precoUnitario: item.precoUnitario ?? 0,
+          localizacao: item.localizacao ?? '',
+        });
+      }
     } else {
       setEditingItem(null);
       setFormData({
@@ -308,6 +356,13 @@ export default function Estoque() {
       });
     }
     setShowModal(true);
+  };
+
+  const handleDeleteClick = (item: any) => {
+    // Find the full item from context for proper deletion
+    const fullItem = itens.find(i => i.id === item.id);
+    setItemToDelete(fullItem || item);
+    setShowDeleteModal(true);
   };
 
   const handleSave = () => {
@@ -358,10 +413,6 @@ export default function Estoque() {
     setShowModal(false);
   };
 
-  const handleDeleteClick = (item: ItemEstoque) => {
-    setItemToDelete(item);
-    setShowDeleteModal(true);
-  };
 
   const handleConfirmDelete = () => {
     if (itemToDelete) {
@@ -591,11 +642,11 @@ export default function Estoque() {
                 </Button>
 
                 {/* Alerta de baixo estoque */}
-                {itensComBaixoEstoque.length > 0 && (
+                {itensAlerta > 0 && (
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
                     <AlertTriangle size={16} className="text-amber-600" />
                     <span className="text-sm text-amber-700 font-medium">
-                      {itensComBaixoEstoque.length} itens com estoque baixo
+                      {itensAlerta} itens com estoque baixo
                     </span>
                   </div>
                 )}
@@ -910,9 +961,19 @@ export default function Estoque() {
                             <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mt-1">{item.categoria}</p>
                           </div>
                           
-                          <Badge className={statusConfig[item.status].color + " h-fit shrink-0"}>
-                            {statusConfig[item.status].label}
-                          </Badge>
+                          {/* Calculate status based on quantity */}
+                          {(() => {
+                            const status: StatusEstoque = item.quantidade === 0 
+                              ? 'baixo_estoque' 
+                              : item.quantidade <= 20 
+                                ? 'baixo_estoque' 
+                                : 'disponivel';
+                            return (
+                              <Badge className={statusConfig[status].color + " h-fit shrink-0"}>
+                                {statusConfig[status].label}
+                              </Badge>
+                            );
+                          })()}
                         </div>
 
                         {/* Technical data - clean aligned layout */}
@@ -961,7 +1022,7 @@ export default function Estoque() {
                   )
                 ))}
 
-                {itensFiltrados.length === 0 && (
+                {itensFiltrados.length === 0 && !isPaginatedLoading && (
                   <div className="col-span-full text-center py-12 text-muted-foreground">
                     {search
                       ? 'Nenhum item encontrado para a busca.'
@@ -970,7 +1031,47 @@ export default function Estoque() {
                       : 'Nenhum produto acabado no estoque.'}
                   </div>
                 )}
+
+                {isPaginatedLoading && (
+                  <div className="col-span-full text-center py-12 text-muted-foreground">
+                    Carregando...
+                  </div>
+                )}
               </div>
+
+              {/* Paginação */}
+              {totalCount > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t">
+                  <span className="text-sm text-muted-foreground">
+                    Mostrando {fromItem}-{toItem} de {totalCount} itens
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                      disabled={currentPage === 0 || isPaginatedFetching}
+                      className="gap-1"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Anterior
+                    </Button>
+                    <span className="text-sm text-muted-foreground px-2">
+                      Página {currentPage + 1} de {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                      disabled={currentPage >= totalPages - 1 || isPaginatedFetching}
+                      className="gap-1"
+                    >
+                      Próxima
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </div>

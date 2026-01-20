@@ -1,7 +1,8 @@
 import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, Camera, Pencil, Check, X } from 'lucide-react';
+import { Edit, Trash2, Camera, Pencil, Check, X, Package } from 'lucide-react';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
+import { LazyImage } from '@/components/ui/lazy-image';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
@@ -47,13 +48,15 @@ function ProductImage({
       onClick={onImageClick}
     >
       {loading ? (
-        <div className="w-full h-full bg-muted/50 animate-pulse" />
+        <div className="w-full h-full bg-muted/50 animate-pulse flex items-center justify-center">
+          <Package className="h-8 w-8 text-muted-foreground/30" />
+        </div>
       ) : imagemUrl && signedUrl ? (
-        <img 
-          key={signedUrl}
-          src={signedUrl} 
+        <LazyImage 
+          src={signedUrl}
           alt={nome}
           className="w-full h-full object-cover object-center block"
+          containerClassName="w-full h-full"
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted/40 to-muted/20">

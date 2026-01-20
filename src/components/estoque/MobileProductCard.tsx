@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Pencil, Trash2, DollarSign, Camera, MapPin, Package } from 'lucide-react';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
+import { LazyImage } from '@/components/ui/lazy-image';
 import { useRef } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -70,11 +71,12 @@ function ProductImage({
       className="w-14 h-14 rounded-lg overflow-hidden bg-muted cursor-pointer relative group"
       onClick={onImageClick}
     >
-      <img
-        key={signedUrl}
+      <LazyImage
         src={signedUrl}
         alt={nome}
         className="w-full h-full object-cover object-center block"
+        containerClassName="w-full h-full"
+        showPlaceholderIcon={false}
       />
       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
         <Camera className="h-4 w-4 text-white" />
