@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw } from 'lucide-react';
+import { useState, useMemo, useCallback, memo } from 'react';
+import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -11,15 +11,19 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useClientesContext, Cliente } from '@/contexts/ClientesContext';
-import { useClientesCRM, getClienteStatus, hasRiskAlert, ClienteCRMStats } from '@/hooks/useClientesCRM';
-import { useClientes as useClientesRaw } from '@/hooks/useClientesData';
+import { useClientesCRM } from '@/hooks/useClientesCRM';
+import { useClientesPaginated, ClientePaginatedDB } from '@/hooks/useClientesPaginated';
+import { useClientesCRMBatch, useClientesCRMFilter, getClienteStatusFromStats, hasRiskAlertFromStats, ClienteCRMBatchStats } from '@/hooks/useClientesCRMBatch';
 import { ImportCSVModal } from '@/components/clientes/ImportCSVModal';
 import { ClearDataModal } from '@/components/clientes/ClearDataModal';
 import { WhatsAppButton } from '@/components/clientes/WhatsAppButton';
+import { ClienteGridSkeleton } from '@/components/clientes/ClienteCardSkeleton';
 import { ClienteSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,
   DialogContent,
@@ -52,110 +56,259 @@ const emptyCliente = {
   excursao: '',
 };
 
-type Ordenacao = 'nome' | 'comprador' | 'ultima' | 'recente';
+type Ordenacao = 'nome' | 'recente';
 type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'inativo' | 'risco' | 'pendente';
+
+const PAGE_SIZE = 24;
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+// Memoized client card component for performance
+const ClienteCard = memo(function ClienteCard({
+  cliente,
+  stats,
+  isMobile,
+  onEdit,
+  onDelete,
+}: {
+  cliente: ClientePaginatedDB;
+  stats: ClienteCRMBatchStats | undefined;
+  isMobile: boolean;
+  onEdit: (cliente: ClientePaginatedDB) => void;
+  onDelete: (cliente: ClientePaginatedDB) => void;
+}) {
+  const status = getClienteStatusFromStats(stats);
+  const isRisk = hasRiskAlertFromStats(stats);
+  const dataCadastro = format(new Date(cliente.created_at), "dd/MM/yyyy");
+
+  // Convert to Cliente format for WhatsAppButton
+  const clienteForWhatsApp: Cliente = {
+    id: cliente.id,
+    nome: cliente.nome,
+    telefone: cliente.telefone,
+    cidade: cliente.cidade,
+    estado: cliente.estado,
+    excursao: cliente.excursao,
+    dataCadastro,
+  };
+
+  // Convert stats for WhatsAppButton
+  const statsForWhatsApp = stats ? {
+    ...stats,
+    clienteId: stats.clienteId,
+  } : undefined;
+
+  return (
+    <div className="neu-card p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group relative">
+      {/* Status Badge and Risk Alert */}
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        {isRisk && (
+          <div className="w-7 h-7 rounded-full bg-destructive/10 flex items-center justify-center" title="Histórico de cancelamentos">
+            <AlertTriangle size={14} className="text-destructive" />
+          </div>
+        )}
+        {status && (
+          <Badge className={cn("text-xs px-2 py-0.5", status.color)}>
+            {status.label}
+          </Badge>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div className={cn(
+        "absolute top-12 right-4 flex gap-2 transition-opacity z-50",
+        isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+      )}>
+        <WhatsAppButton cliente={clienteForWhatsApp} stats={statsForWhatsApp} />
+        <button
+          onClick={() => onEdit(cliente)}
+          className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors"
+        >
+          <Pencil size={14} className="text-muted-foreground hover:text-primary" />
+        </button>
+        <button
+          onClick={() => onDelete(cliente)}
+          className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors"
+        >
+          <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
+        </button>
+      </div>
+
+      {/* Header do Card */}
+      <div className="flex items-start gap-4 mb-4">
+        <div className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
+          <User size={24} className="text-muted-foreground" />
+        </div>
+        <div className="flex-1 min-w-0 pr-20">
+          <h3 className="font-semibold text-foreground text-lg truncate group-hover:text-primary transition-colors">
+            {cliente.nome}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Cadastrado em {dataCadastro}
+          </p>
+        </div>
+      </div>
+
+      {/* Info do Card */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 text-sm">
+          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+            <Phone size={14} className="text-muted-foreground" />
+          </div>
+          <span className="text-foreground">{cliente.telefone}</span>
+        </div>
+        
+        <div className="flex items-center gap-3 text-sm">
+          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+            <MapPin size={14} className="text-muted-foreground" />
+          </div>
+          <span className="text-foreground">
+            {cliente.cidade}, {cliente.estado}
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-3 text-sm">
+          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+            <Tag size={14} className="text-muted-foreground" />
+          </div>
+          <span className="text-foreground">
+            Excursão: <span className="font-medium text-primary">{cliente.excursao}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* CRM Stats Section */}
+      <div className="mt-4 pt-4 border-t border-border">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-muted-foreground">Total Comprado:</span>
+          <span className="font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded-md">
+            {formatCurrency(stats?.totalComprado || 0)}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+          <Calendar size={14} />
+          {stats?.ultimaCompra ? (
+            <>
+              <span>Última Compra ({format(stats.ultimaCompra, "dd/MM/yy")}):</span>
+              <span className="font-semibold text-foreground">
+                {formatCurrency(stats.ultimoPedidoValor || 0)}
+              </span>
+              {stats.ultimoPedidoStatus && (
+                <Badge 
+                  className={cn(
+                    "text-xs border-0",
+                    stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' 
+                      ? "bg-green-100 text-green-700" 
+                      : stats.ultimoPedidoStatus.toUpperCase() === 'PENDENTE'
+                      ? "bg-yellow-100 text-yellow-700"
+                      : stats.ultimoPedidoStatus.toUpperCase() === 'CANCELADO'
+                      ? "bg-red-100 text-red-700"
+                      : "bg-secondary text-secondary-foreground"
+                  )}
+                >
+                  {stats.ultimoPedidoStatus}
+                </Badge>
+              )}
+            </>
+          ) : (
+            <span>Nenhuma compra registrada</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function Clientes() {
   const isMobile = useIsMobile();
-  const { clientes, isLoading, addCliente, updateCliente, removeCliente } = useClientesContext();
-  const { data: clientesDB } = useClientesRaw();
-  const { data: crmData, isLoading: crmLoading } = useClientesCRM();
+  const { user } = useAuth();
+  const { addCliente, updateCliente, removeCliente } = useClientesContext();
+  const { data: crmData } = useClientesCRM();
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0);
   const [busca, setBusca] = useState('');
   const [ordenacao, setOrdenacao] = useState<Ordenacao>('nome');
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('todos');
+  
+  // Modal states
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
-  const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  const [editingCliente, setEditingCliente] = useState<ClientePaginatedDB | null>(null);
   const [formData, setFormData] = useState(emptyCliente);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [clienteToDelete, setClienteToDelete] = useState<Cliente | null>(null);
+  const [clienteToDelete, setClienteToDelete] = useState<ClientePaginatedDB | null>(null);
 
-  // Calculate CRM metrics
+  // CRM filter for VIP/Frequente/Inativo/Risco/Pendente
+  const crmFilterStatus = filtroStatus !== 'todos' ? filtroStatus : null;
+  const { data: crmFilterIds, isLoading: crmFilterLoading } = useClientesCRMFilter(crmFilterStatus);
+
+  // Paginated query
+  const { data: paginatedData, isLoading: paginatedLoading, isFetching } = useClientesPaginated({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    search: busca,
+    ordenacao,
+  });
+
+  // Filter clients by CRM status if needed
+  const filteredClientes = useMemo(() => {
+    if (!paginatedData?.data) return [];
+    if (filtroStatus === 'todos' || !crmFilterIds) return paginatedData.data;
+    
+    // Filter by matching CRM IDs
+    return paginatedData.data.filter(c => crmFilterIds.includes(c.id));
+  }, [paginatedData?.data, filtroStatus, crmFilterIds]);
+
+  // Get IDs of visible clients for batch CRM stats
+  const visibleClienteIds = useMemo(() => {
+    return filteredClientes.map(c => c.id);
+  }, [filteredClientes]);
+
+  // Fetch CRM stats only for visible clients
+  const { data: crmBatchStats, isLoading: crmBatchLoading } = useClientesCRMBatch(visibleClienteIds);
+
+  // Calculate CRM metrics from global data
   const crmMetrics = useMemo(() => {
     return {
-      totalClientes: clientes.length,
+      totalClientes: paginatedData?.count || 0,
       ticketMedio: crmData?.metrics.ticketMedio || 0,
       ltvMedio: crmData?.metrics.ltvMedio || 0,
       taxaRetencao: crmData?.metrics.taxaRetencao || 0,
     };
-  }, [clientes.length, crmData?.metrics]);
+  }, [paginatedData?.count, crmData?.metrics]);
 
   // Get stats for a specific client
-  const getClienteStats = (clienteId: string): ClienteCRMStats | undefined => {
-    return crmData?.statsMap.get(clienteId);
-  };
+  const getClienteStats = useCallback((clienteId: string): ClienteCRMBatchStats | undefined => {
+    return crmBatchStats?.get(clienteId);
+  }, [crmBatchStats]);
 
-  // Filter and sort clients
-  const clientesFiltrados = useMemo(() => {
-    let filtered = clientes.filter(cliente =>
-      cliente.nome.toLowerCase().includes(busca.toLowerCase()) ||
-      cliente.telefone.includes(busca) ||
-      cliente.cidade.toLowerCase().includes(busca.toLowerCase()) ||
-      cliente.excursao.toLowerCase().includes(busca.toLowerCase())
-    );
+  // Reset to page 0 when filters change
+  const handleSearchChange = useCallback((value: string) => {
+    setBusca(value);
+    setCurrentPage(0);
+  }, []);
 
-    // Apply status filter
-    if (filtroStatus !== 'todos') {
-      filtered = filtered.filter(cliente => {
-        const stats = getClienteStats(cliente.id);
-        const status = getClienteStatus(stats);
-        const isRisk = hasRiskAlert(stats);
+  const handleFiltroChange = useCallback((filtro: FiltroStatus) => {
+    setFiltroStatus(filtro);
+    setCurrentPage(0);
+  }, []);
 
-        switch (filtroStatus) {
-          case 'vip':
-            return status?.label === 'VIP';
-          case 'frequente':
-            return status?.label === 'Frequente';
-          case 'inativo':
-            return status?.label === 'Inativo';
-          case 'risco':
-            return isRisk;
-          case 'pendente':
-            return stats?.ultimoPedidoStatus?.toUpperCase() === 'PENDENTE';
-          default:
-            return true;
-        }
-      });
-    }
+  const handleOrdenacaoChange = useCallback((ord: Ordenacao) => {
+    setOrdenacao(ord);
+    setCurrentPage(0);
+  }, []);
 
-    // Apply sorting
-    return filtered.sort((a, b) => {
-      const statsA = getClienteStats(a.id);
-      const statsB = getClienteStats(b.id);
-
-      switch (ordenacao) {
-        case 'comprador':
-          return (statsB?.totalComprado || 0) - (statsA?.totalComprado || 0);
-        case 'ultima':
-          const dateA = statsA?.ultimaCompra?.getTime() || 0;
-          const dateB = statsB?.ultimaCompra?.getTime() || 0;
-          return dateB - dateA;
-        case 'recente':
-          // Get created_at from raw DB data
-          const clienteDbA = clientesDB?.find(c => c.id === a.id);
-          const clienteDbB = clientesDB?.find(c => c.id === b.id);
-          const createdA = clienteDbA ? new Date(clienteDbA.created_at).getTime() : 0;
-          const createdB = clienteDbB ? new Date(clienteDbB.created_at).getTime() : 0;
-          return createdB - createdA; // Most recent first
-        case 'nome':
-        default:
-          return a.nome.localeCompare(b.nome);
-      }
-    });
-  }, [clientes, busca, filtroStatus, ordenacao, crmData, clientesDB]);
-
-  const handleOpenNew = () => {
+  const handleOpenNew = useCallback(() => {
     setEditingCliente(null);
     setFormData(emptyCliente);
     setModalOpen(true);
-  };
+  }, []);
 
-  const handleOpenEdit = (cliente: Cliente) => {
+  const handleOpenEdit = useCallback((cliente: ClientePaginatedDB) => {
     setEditingCliente(cliente);
     setFormData({
       nome: cliente.nome,
@@ -165,7 +318,7 @@ export default function Clientes() {
       excursao: cliente.excursao,
     });
     setModalOpen(true);
-  };
+  }, []);
 
   const handleSave = async () => {
     const result = ClienteSchema.safeParse(formData);
@@ -199,10 +352,10 @@ export default function Clientes() {
     }
   };
 
-  const handleDeleteClick = (cliente: Cliente) => {
+  const handleDeleteClick = useCallback((cliente: ClientePaginatedDB) => {
     setClienteToDelete(cliente);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
   const handleConfirmDelete = async () => {
     if (clienteToDelete) {
@@ -217,47 +370,87 @@ export default function Clientes() {
     }
   };
 
-  const handleExportCSV = () => {
-    if (clientes.length === 0) {
-      toast.error('Não há clientes para exportar.');
+  const handleExportCSV = async () => {
+    if (!user?.id) {
+      toast.error('Usuário não autenticado.');
       return;
     }
 
-    const headers = ['Nome', 'Telefone', 'Cidade', 'Estado', 'Excursão', 'Data Cadastro', 'Hora Cadastro'];
-    const csvRows = [
-      headers.join(','),
-      ...clientes.map(c => {
-        // Get the raw created_at from DB data
-        const clienteDb = clientesDB?.find(db => db.id === c.id);
-        const createdAt = clienteDb ? new Date(clienteDb.created_at) : new Date();
-        
-        return [
-          c.nome, 
-          c.telefone, 
-          c.cidade, 
-          c.estado, 
-          c.excursao,
-          format(createdAt, 'dd/MM/yyyy'),
-          format(createdAt, 'HH:mm:ss')
-        ]
-          .map(field => `"${(field || '').replace(/"/g, '""')}"`)
-          .join(',');
-      })
-    ];
+    try {
+      // Fetch all clients for export (paginated internally)
+      let allClientes: ClientePaginatedDB[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      let hasMore = true;
 
-    const csvContent = csvRows.join('\n');
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `clientes_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('clientes')
+          .select('id, nome, telefone, cidade, estado, excursao, created_at, user_id')
+          .eq('user_id', user.id)
+          .order('nome')
+          .range(from, from + batchSize - 1);
 
-    toast.success('Lista de clientes exportada com sucesso!');
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allClientes = [...allClientes, ...data];
+          from += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (allClientes.length === 0) {
+        toast.error('Não há clientes para exportar.');
+        return;
+      }
+
+      const headers = ['Nome', 'Telefone', 'Cidade', 'Estado', 'Excursão', 'Data Cadastro', 'Hora Cadastro'];
+      const csvRows = [
+        headers.join(','),
+        ...allClientes.map(c => {
+          const createdAt = new Date(c.created_at);
+          return [
+            c.nome, 
+            c.telefone, 
+            c.cidade, 
+            c.estado, 
+            c.excursao,
+            format(createdAt, 'dd/MM/yyyy'),
+            format(createdAt, 'HH:mm:ss')
+          ]
+            .map(field => `"${(field || '').replace(/"/g, '""')}"`)
+            .join(',');
+        })
+      ];
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `clientes_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success('Lista de clientes exportada com sucesso!');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Erro ao exportar clientes.');
+    }
   };
+
+  // Pagination info
+  const totalCount = paginatedData?.count || 0;
+  const totalPages = paginatedData?.totalPages || 1;
+  const fromItem = totalCount === 0 ? 0 : currentPage * PAGE_SIZE + 1;
+  const toItem = Math.min((currentPage + 1) * PAGE_SIZE, totalCount);
+
+  const isLoading = paginatedLoading || (filtroStatus !== 'todos' && crmFilterLoading);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -374,23 +567,26 @@ export default function Clientes() {
             <Input
               placeholder="Buscar por nome, telefone, cidade ou excursão..."
               value={busca}
-              onChange={(e) => setBusca(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="h-12 pl-12 rounded-xl neu-input border-0 bg-background text-base"
             />
+            {isFetching && (
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            )}
           </div>
         </div>
 
         {/* Filters and Sorting */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <Select value={ordenacao} onValueChange={(v) => setOrdenacao(v as Ordenacao)}>
+          <Select value={ordenacao} onValueChange={(v) => handleOrdenacaoChange(v as Ordenacao)}>
             <SelectTrigger className="w-full sm:w-[200px] h-10 rounded-xl">
               <SelectValue placeholder="Ordenar por" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="nome">Nome (A-Z)</SelectItem>
               <SelectItem value="recente">Cadastro (Mais Recente)</SelectItem>
-              <SelectItem value="comprador">Maior Comprador</SelectItem>
-              <SelectItem value="ultima">Última Compra</SelectItem>
             </SelectContent>
           </Select>
           
@@ -400,7 +596,7 @@ export default function Clientes() {
                 key={filtro}
                 size="sm"
                 variant={filtroStatus === filtro ? 'default' : 'outline'}
-                onClick={() => setFiltroStatus(filtro)}
+                onClick={() => handleFiltroChange(filtro)}
                 className={cn(
                   "rounded-xl h-10 px-4",
                   filtroStatus === filtro && "bg-primary text-primary-foreground",
@@ -418,140 +614,62 @@ export default function Clientes() {
           </div>
         </div>
 
-        {/* Clients Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {clientesFiltrados.map((cliente) => {
-            const stats = getClienteStats(cliente.id);
-            const status = getClienteStatus(stats);
-            const isRisk = hasRiskAlert(stats);
-            
-            return (
-              <div
-                key={cliente.id}
-                className="neu-card p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group relative"
+        {/* Pagination Info */}
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm text-muted-foreground">
+            {totalCount > 0 ? (
+              <>Mostrando <span className="font-medium text-foreground">{fromItem}-{toItem}</span> de <span className="font-medium text-foreground">{totalCount.toLocaleString()}</span> clientes</>
+            ) : (
+              'Nenhum cliente encontrado'
+            )}
+          </span>
+          
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                disabled={currentPage === 0 || isLoading}
+                className="h-9 px-3 rounded-xl"
               >
-                {/* Status Badge and Risk Alert */}
-                <div className="absolute top-4 right-4 flex items-center gap-2">
-                  {isRisk && (
-                    <div className="w-7 h-7 rounded-full bg-destructive/10 flex items-center justify-center" title="Histórico de cancelamentos">
-                      <AlertTriangle size={14} className="text-destructive" />
-                    </div>
-                  )}
-                  {status && (
-                    <Badge className={cn("text-xs px-2 py-0.5", status.color)}>
-                      {status.label}
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Action Buttons - Desktop: hover, Mobile: always visible */}
-                <div className={cn(
-                  "absolute top-12 right-4 flex gap-2 transition-opacity z-50",
-                  isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                )}>
-                  <WhatsAppButton cliente={cliente} stats={stats} />
-                  <button
-                    onClick={() => handleOpenEdit(cliente)}
-                    className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors"
-                  >
-                    <Pencil size={14} className="text-muted-foreground hover:text-primary" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteClick(cliente)}
-                    className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors"
-                  >
-                    <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
-                  </button>
-                </div>
-
-                {/* Header do Card */}
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
-                    <User size={24} className="text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0 pr-20">
-                    <h3 className="font-semibold text-foreground text-lg truncate group-hover:text-primary transition-colors">
-                      {cliente.nome}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      Cadastrado em {cliente.dataCadastro}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Info do Card */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 text-sm">
-                    <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                      <Phone size={14} className="text-muted-foreground" />
-                    </div>
-                    <span className="text-foreground">{cliente.telefone}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 text-sm">
-                    <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                      <MapPin size={14} className="text-muted-foreground" />
-                    </div>
-                    <span className="text-foreground">
-                      {cliente.cidade}, {cliente.estado}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 text-sm">
-                    <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                      <Tag size={14} className="text-muted-foreground" />
-                    </div>
-                    <span className="text-foreground">
-                      Excursão: <span className="font-medium text-primary">{cliente.excursao}</span>
-                    </span>
-                  </div>
-                </div>
-
-                {/* CRM Stats Section */}
-                <div className="mt-4 pt-4 border-t border-border">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Total Comprado:</span>
-                    <span className="font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded-md">
-                      {formatCurrency(stats?.totalComprado || 0)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                    <Calendar size={14} />
-                    {stats?.ultimaCompra ? (
-                      <>
-                        <span>Última Compra ({format(stats.ultimaCompra, "dd/MM/yy")}):</span>
-                        <span className="font-semibold text-foreground">
-                          {formatCurrency(stats.ultimoPedidoValor || 0)}
-                        </span>
-                        {stats.ultimoPedidoStatus && (
-                          <Badge 
-                            className={cn(
-                              "text-xs border-0",
-                              stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' 
-                                ? "bg-green-100 text-green-700" 
-                                : stats.ultimoPedidoStatus.toUpperCase() === 'PENDENTE'
-                                ? "bg-yellow-100 text-yellow-700"
-                                : stats.ultimoPedidoStatus.toUpperCase() === 'CANCELADO'
-                                ? "bg-red-100 text-red-700"
-                                : "bg-secondary text-secondary-foreground"
-                            )}
-                          >
-                            {stats.ultimoPedidoStatus}
-                          </Badge>
-                        )}
-                      </>
-                    ) : (
-                      <span>Nenhuma compra registrada</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                <ChevronLeft size={16} className="mr-1" />
+                Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground px-2">
+                {currentPage + 1} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={currentPage >= totalPages - 1 || isLoading}
+                className="h-9 px-3 rounded-xl"
+              >
+                Próxima
+                <ChevronRight size={16} className="ml-1" />
+              </Button>
+            </div>
+          )}
         </div>
 
-        {/* Empty State */}
-        {clientesFiltrados.length === 0 && (
+        {/* Clients Grid */}
+        {isLoading ? (
+          <ClienteGridSkeleton count={PAGE_SIZE} />
+        ) : filteredClientes.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {filteredClientes.map((cliente) => (
+              <ClienteCard
+                key={cliente.id}
+                cliente={cliente}
+                stats={getClienteStats(cliente.id)}
+                isMobile={isMobile}
+                onEdit={handleOpenEdit}
+                onDelete={handleDeleteClick}
+              />
+            ))}
+          </div>
+        ) : (
           <div className="neu-card p-12 rounded-2xl text-center">
             <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-4">
               <User size={32} className="text-muted-foreground" />
@@ -562,6 +680,35 @@ export default function Clientes() {
             <p className="text-muted-foreground">
               Tente ajustar os termos da busca ou os filtros.
             </p>
+          </div>
+        )}
+
+        {/* Bottom Pagination */}
+        {totalPages > 1 && !isLoading && (
+          <div className="flex items-center justify-center gap-2 mt-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+              className="h-9 px-3 rounded-xl"
+            >
+              <ChevronLeft size={16} className="mr-1" />
+              Anterior
+            </Button>
+            <span className="text-sm text-muted-foreground px-4">
+              Página {currentPage + 1} de {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1}
+              className="h-9 px-3 rounded-xl"
+            >
+              Próxima
+              <ChevronRight size={16} className="ml-1" />
+            </Button>
           </div>
         )}
       </main>
