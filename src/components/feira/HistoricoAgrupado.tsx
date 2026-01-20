@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, ChevronRight, Eye, Check, Clock, Package, MoreVertical, Trash2, RotateCcw, Ban } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye, Check, Clock, Package, MoreVertical, Trash2, RotateCcw, Ban, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CargaDiaAgrupada, TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hooks/useFeiraHistorico';
@@ -22,6 +22,7 @@ interface HistoricoAgrupadoProps {
   onExcluirCarga: (carga: TransferenciaComItensHistorico) => void;
   onEstornarCarga?: (carga: TransferenciaComItensHistorico) => void;
   onExcluirHistorico?: (carga: TransferenciaComItensHistorico) => void;
+  onGerarPDF?: (carga: TransferenciaComItensHistorico) => void;
   isLoading: boolean;
 }
 
@@ -83,7 +84,7 @@ function getStatusConfig(status: string) {
   }
 }
 
-export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, onEstornarCarga, onExcluirHistorico, isLoading }: HistoricoAgrupadoProps) {
+export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, onEstornarCarga, onExcluirHistorico, onGerarPDF, isLoading }: HistoricoAgrupadoProps) {
   const [openDays, setOpenDays] = useState<Set<string>>(new Set([historico[0]?.data]));
 
   const toggleDay = (data: string) => {
@@ -218,6 +219,13 @@ export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, on
                                   <Eye className="mr-2 h-4 w-4" />
                                   Ver detalhes
                                 </DropdownMenuItem>
+                                
+                                {onGerarPDF && (
+                                  <DropdownMenuItem onClick={() => onGerarPDF(carga)}>
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    Gerar PDF
+                                  </DropdownMenuItem>
+                                )}
                                 
                                 {/* Ações disponíveis apenas para cargas não finalizadas */}
                                 {!isFinalized && (canExcluir || canEstornar) && (

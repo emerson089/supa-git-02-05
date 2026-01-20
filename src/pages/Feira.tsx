@@ -544,7 +544,9 @@ export default function Feira() {
             <CargasAtivasAlerta
               cargasAtivas={todasCargasAtivas || []}
               onRegistrarRetorno={handleOpenRetornoFromHistorico}
+              onGerarPDF={handleGerarPDF}
               periodoEhHoje={periodoEhHoje}
+              isGeneratingPDF={isGeneratingPDF}
             />
 
             {/* Histórico Agrupado */}
@@ -554,6 +556,7 @@ export default function Feira() {
               onExcluirCarga={handleExcluirCarga}
               onEstornarCarga={handleEstornarCarga}
               onExcluirHistorico={handleExcluirHistorico}
+              onGerarPDF={handleGerarPDF}
               isLoading={isLoadingHistorico}
             />
           </div>

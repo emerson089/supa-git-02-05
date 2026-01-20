@@ -1,21 +1,29 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Clock, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Clock, RotateCcw, FileText, Loader2 } from 'lucide-react';
 import { TransferenciaComItensHistorico } from '@/hooks/useFeiraHistorico';
 import { format } from 'date-fns';
 
 interface CargasAtivasAlertaProps {
   cargasAtivas: TransferenciaComItensHistorico[];
   onRegistrarRetorno: (carga: TransferenciaComItensHistorico) => void;
+  onGerarPDF?: (carga: TransferenciaComItensHistorico) => void;
   periodoEhHoje: boolean;
+  isGeneratingPDF?: boolean;
 }
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
-export function CargasAtivasAlerta({ cargasAtivas, onRegistrarRetorno, periodoEhHoje }: CargasAtivasAlertaProps) {
+export function CargasAtivasAlerta({ 
+  cargasAtivas, 
+  onRegistrarRetorno, 
+  onGerarPDF,
+  periodoEhHoje,
+  isGeneratingPDF 
+}: CargasAtivasAlertaProps) {
   // Não mostrar se não houver cargas ativas
   if (cargasAtivas.length === 0) {
     return null;
@@ -62,14 +70,33 @@ export function CargasAtivasAlerta({ cargasAtivas, onRegistrarRetorno, periodoEh
                     {formatCurrency(valorTotal)}
                   </span>
                 </div>
-                <Button 
-                  size="sm" 
-                  onClick={() => onRegistrarRetorno(carga)}
-                  className="gap-1 shrink-0"
-                >
-                  <RotateCcw size={14} />
-                  <span className="hidden sm:inline">Retorno</span>
-                </Button>
+                <div className="flex items-center gap-2">
+                  {onGerarPDF && (
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => onGerarPDF(carga)}
+                      disabled={isGeneratingPDF}
+                      className="gap-1 shrink-0"
+                      title="Gerar PDF para compartilhar"
+                    >
+                      {isGeneratingPDF ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <FileText size={14} />
+                      )}
+                      <span className="hidden sm:inline">PDF</span>
+                    </Button>
+                  )}
+                  <Button 
+                    size="sm" 
+                    onClick={() => onRegistrarRetorno(carga)}
+                    className="gap-1 shrink-0"
+                  >
+                    <RotateCcw size={14} />
+                    <span className="hidden sm:inline">Retorno</span>
+                  </Button>
+                </div>
               </div>
             );
           })}
