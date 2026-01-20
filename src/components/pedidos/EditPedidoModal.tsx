@@ -263,7 +263,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="w-full max-w-[100vw] sm:w-[95vw] sm:max-w-3xl h-[100dvh] sm:h-auto sm:max-h-[85vh] flex flex-col p-0 gap-0 rounded-none sm:rounded-xl overflow-hidden [&>button]:hidden">
+      <DialogContent className="w-full max-w-[100vw] sm:w-[95vw] sm:max-w-3xl h-[100dvh] sm:h-[85vh] min-h-0 flex flex-col p-0 gap-0 rounded-none sm:rounded-xl overflow-hidden [&>button]:hidden">
         {/* Header */}
         <DialogHeader className="px-4 sm:px-6 py-4 sm:py-5 border-b border-border/50 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -326,7 +326,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         </div>
 
         {/* Items List - Native scroll for better flexbox compatibility */}
-        <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
+        <div className="flex-1 overflow-y-auto flex flex-col min-h-0 overscroll-contain touch-pan-y">
           <div className="px-3 sm:px-6 py-2 sm:py-3 flex-shrink-0 sticky top-0 bg-background z-10 border-b border-border/30">
             <div className="flex items-center justify-between">
               <h3 className="text-sm sm:text-base font-semibold text-foreground">Itens do Pedido</h3>
