@@ -1,18 +1,22 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Eye, Trash2 } from 'lucide-react';
+import { AlertTriangle, Clock, RotateCcw } from 'lucide-react';
 import { TransferenciaComItensHistorico } from '@/hooks/useFeiraHistorico';
+import { format } from 'date-fns';
 
 interface CargasAtivasAlertaProps {
   cargasAtivas: TransferenciaComItensHistorico[];
-  onVerCarga: (carga: TransferenciaComItensHistorico) => void;
-  onExcluirCarga?: (carga: TransferenciaComItensHistorico) => void;
+  onRegistrarRetorno: (carga: TransferenciaComItensHistorico) => void;
   periodoEhHoje: boolean;
 }
 
-export function CargasAtivasAlerta({ cargasAtivas, onVerCarga, onExcluirCarga, periodoEhHoje }: CargasAtivasAlertaProps) {
-  // Não mostrar se não houver cargas ativas - SEMPRE exibir para garantir visibilidade de cargas pendentes de outros dias
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
+
+export function CargasAtivasAlerta({ cargasAtivas, onRegistrarRetorno, periodoEhHoje }: CargasAtivasAlertaProps) {
+  // Não mostrar se não houver cargas ativas
   if (cargasAtivas.length === 0) {
     return null;
   }
@@ -26,42 +30,49 @@ export function CargasAtivasAlerta({ cargasAtivas, onVerCarga, onExcluirCarga, p
           {cargasAtivas.length}
         </Badge>
       </AlertTitle>
-      <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between mt-2 gap-3">
-        <span className="text-sm text-muted-foreground">
+      <AlertDescription className="mt-3">
+        <p className="text-sm text-muted-foreground mb-3">
           {cargasAtivas.length === 1
             ? 'Há 1 carga aguardando registro de retorno.'
             : `Há ${cargasAtivas.length} cargas aguardando registro de retorno.`}
-        </span>
-        <div className="flex flex-wrap gap-2">
-          {cargasAtivas.slice(0, 2).map((carga) => (
-            <div key={carga.id} className="flex gap-1">
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1"
-                onClick={() => onVerCarga(carga)}
+        </p>
+        
+        {/* Lista compacta das cargas */}
+        <div className="space-y-2">
+          {cargasAtivas.map((carga) => {
+            const totalPecas = carga.itens.reduce((s, i) => s + i.quantidadeEnviada, 0);
+            const valorTotal = carga.itens.reduce((s, i) => s + (i.quantidadeEnviada * (i.precoUnitario || i.produtoPreco || 0)), 0);
+            
+            return (
+              <div 
+                key={carga.id} 
+                className="flex items-center justify-between p-3 rounded-lg bg-background border gap-2"
               >
-                <Eye size={14} />
-                Ver
-              </Button>
-              {onExcluirCarga && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="gap-1"
-                  onClick={() => onExcluirCarga(carga)}
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <Clock size={14} className="text-primary shrink-0" />
+                    <span className="text-sm font-medium">
+                      {format(new Date(carga.dataSaida), "HH:mm")}
+                    </span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {totalPecas} peças
+                  </span>
+                  <span className="text-sm font-semibold">
+                    {formatCurrency(valorTotal)}
+                  </span>
+                </div>
+                <Button 
+                  size="sm" 
+                  onClick={() => onRegistrarRetorno(carga)}
+                  className="gap-1 shrink-0"
                 >
-                  <Trash2 size={14} />
-                  Excluir
+                  <RotateCcw size={14} />
+                  <span className="hidden sm:inline">Retorno</span>
                 </Button>
-              )}
-            </div>
-          ))}
-          {cargasAtivas.length > 2 && (
-            <Badge variant="secondary" className="self-center">
-              +{cargasAtivas.length - 2}
-            </Badge>
-          )}
+              </div>
+            );
+          })}
         </div>
       </AlertDescription>
     </Alert>
