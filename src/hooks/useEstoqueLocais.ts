@@ -115,10 +115,16 @@ export function useEnsureDefaultLocais() {
       if (!user) throw new Error('Usuário não autenticado');
 
       // Verificar se já existem locais
-      const { data: existingLocais } = await supabase
+      const { data: existingLocais, error: fetchError } = await supabase
         .from('estoque_locais')
         .select('tipo')
         .eq('user_id', user.id);
+
+      // Se houve erro na leitura, não tentar criar
+      if (fetchError) {
+        console.error('[useEnsureDefaultLocais] Erro ao buscar locais:', fetchError);
+        throw new Error('Erro ao verificar locais existentes');
+      }
 
       const existingTypes = new Set(existingLocais?.map(l => l.tipo) || []);
       const defaultLocais = [
@@ -138,11 +144,18 @@ export function useEnsureDefaultLocais() {
             tipo: l.tipo,
           })));
 
-        if (error) throw error;
+        if (error) {
+          console.error('[useEnsureDefaultLocais] Erro ao criar locais:', error);
+          throw error;
+        }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['estoque-locais'] });
+    },
+    onError: (error) => {
+      console.error('[useEnsureDefaultLocais] Mutation failed:', error);
+      // Não invalidar queries em caso de erro para evitar loops
     },
   });
 }
