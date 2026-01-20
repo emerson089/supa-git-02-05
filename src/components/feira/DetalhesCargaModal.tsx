@@ -135,42 +135,100 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
 
         {/* Scrollable Content */}
         <ScrollArea className="flex-1 overflow-auto">
-          <div className="p-6 space-y-5">
-            {/* Cards de Métricas */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="p-4 md:p-6 space-y-4 md:space-y-5">
+            {/* Cards de Métricas - Mobile: 2x2 grid + valor full width */}
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
               <Card className="p-3 text-center bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
-                <Package className="h-5 w-5 mx-auto text-blue-500" />
+                <Package className="h-4 w-4 md:h-5 md:w-5 mx-auto text-blue-500" />
                 <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wide">Enviado</p>
-                <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{totais.enviado}</p>
+                <p className="text-lg md:text-xl font-bold text-blue-600 dark:text-blue-400">{totais.enviado}</p>
               </Card>
               
               <Card className="p-3 text-center bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
-                <RotateCcw className="h-5 w-5 mx-auto text-amber-500" />
+                <RotateCcw className="h-4 w-4 md:h-5 md:w-5 mx-auto text-amber-500" />
                 <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wide">Retorno</p>
-                <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{totais.retornado}</p>
+                <p className="text-lg md:text-xl font-bold text-amber-600 dark:text-amber-400">{totais.retornado}</p>
               </Card>
               
               <Card className="p-3 text-center bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800">
-                <ShoppingBag className="h-5 w-5 mx-auto text-emerald-500" />
+                <ShoppingBag className="h-4 w-4 md:h-5 md:w-5 mx-auto text-emerald-500" />
                 <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wide">Vendido</p>
-                <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{totais.vendido}</p>
+                <p className="text-lg md:text-xl font-bold text-emerald-600 dark:text-emerald-400">{totais.vendido}</p>
               </Card>
               
               <Card className="p-3 text-center bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800">
-                <TrendingUp className="h-5 w-5 mx-auto text-purple-500" />
+                <TrendingUp className="h-4 w-4 md:h-5 md:w-5 mx-auto text-purple-500" />
                 <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wide">% Vendido</p>
-                <p className="text-xl font-bold text-purple-600 dark:text-purple-400">{percentualVendido}%</p>
+                <p className="text-lg md:text-xl font-bold text-purple-600 dark:text-purple-400">{percentualVendido}%</p>
               </Card>
               
               <Card className="p-3 text-center bg-primary/5 border-primary/20 col-span-2 md:col-span-1">
-                <DollarSign className="h-5 w-5 mx-auto text-primary" />
+                <DollarSign className="h-4 w-4 md:h-5 md:w-5 mx-auto text-primary" />
                 <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wide">Valor Total</p>
-                <p className="text-xl font-bold text-primary">{formatCurrency(totais.valor)}</p>
+                <p className="text-lg md:text-xl font-bold text-primary">{formatCurrency(totais.valor)}</p>
               </Card>
             </div>
 
-            {/* Tabela de Itens */}
-            <div className="border rounded-lg overflow-hidden">
+            {/* Lista de Itens - Mobile */}
+            <div className="md:hidden space-y-2">
+              {carga.itens.map((item) => {
+                const enviado = Number(item.quantidadeEnviada) || 0;
+                const retornado = Number(item.quantidadeRetornada) || 0;
+                const vendido = Math.max(0, enviado - retornado);
+                const preco = Number(item.precoUnitario) || Number(item.produtoPreco) || 0;
+                const valorItem = vendido * preco;
+                const temProblema = retornado > enviado;
+
+                return (
+                  <div 
+                    key={item.id} 
+                    className={`flex items-center gap-3 p-3 rounded-lg border ${
+                      temProblema 
+                        ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800' 
+                        : 'bg-muted/30'
+                    }`}
+                  >
+                    {/* Imagem */}
+                    <div className="w-14 h-14 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                      <LotImage 
+                        src={item.produtoImagem} 
+                        alt={item.produtoNome || 'Produto'} 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    
+                    {/* Info principal */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm line-clamp-2">
+                        {item.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {formatCurrency(preco)} • Total: <span className="text-emerald-600 font-semibold">{formatCurrency(valorItem)}</span>
+                      </p>
+                    </div>
+                    
+                    {/* Métricas em coluna */}
+                    <div className="flex gap-3 text-center text-xs shrink-0">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Env</p>
+                        <p className="font-bold text-blue-600">{enviado}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Ret</p>
+                        <p className="font-bold text-amber-600">{retornado}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Vend</p>
+                        <p className="font-bold text-emerald-600">{vendido}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Tabela de Itens - Desktop */}
+            <div className="hidden md:block border rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
