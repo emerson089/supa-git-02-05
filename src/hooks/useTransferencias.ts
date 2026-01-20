@@ -227,11 +227,10 @@ export function useCriarCargaFeira() {
         throw new Error('Sessão expirada. Por favor, recarregue a página e faça login novamente.');
       }
 
-      // Buscar locais Central e Banca
+      // Buscar locais Central e Banca (sem filtrar user_id para permitir colaboração)
       const { data: locais, error: locaisError } = await supabase
         .from('estoque_locais')
         .select('*')
-        .eq('user_id', user.id)
         .in('tipo', ['central', 'banca']);
 
       if (locaisError) {
@@ -467,11 +466,10 @@ export function useRegistrarRetornoFeira() {
         throw new Error('Sessão expirada. Por favor, recarregue a página e faça login novamente.');
       }
 
-      // Buscar locais
+      // Buscar locais (sem filtrar por user_id - vendedores precisam ver locais de todos)
       const { data: locais, error: locaisError } = await supabase
         .from('estoque_locais')
         .select('*')
-        .eq('user_id', user.id)
         .in('tipo', ['central', 'banca']);
 
       if (locaisError) {

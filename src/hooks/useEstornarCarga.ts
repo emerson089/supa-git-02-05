@@ -41,11 +41,10 @@ export function useEstornarCarga() {
       if (carga.deleted_at) throw new Error('Esta carga já foi excluída');
       if (carga.status !== 'concluida') throw new Error('Apenas cargas concluídas podem ser estornadas');
 
-      // 2. Buscar locais
+      // 2. Buscar locais (sem filtrar user_id - vendedores precisam acessar)
       const { data: locais } = await supabase
         .from('estoque_locais')
         .select('*')
-        .eq('user_id', user.id)
         .in('tipo', ['central', 'banca']);
 
       const central = locais?.find(l => l.tipo === 'central');
