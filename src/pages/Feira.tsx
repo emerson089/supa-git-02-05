@@ -464,36 +464,36 @@ export default function Feira() {
               "grid gap-3 overflow-hidden",
               isMobile ? "grid-cols-2" : "grid-cols-4"
             )}>
-              <Card className="overflow-hidden">
+              <Card className="overflow-hidden bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/50">
                 <CardContent className={cn("p-4", isMobile && "p-3")}>
                   <div className="flex items-center gap-3">
-                    <div className={cn("p-2 rounded-lg bg-blue-500/10", isMobile && "p-1.5")}>
+                    <div className={cn("p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50", isMobile && "p-1.5")}>
                       <Truck className={cn("h-5 w-5 text-blue-600", isMobile && "h-4 w-4")} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs text-muted-foreground truncate">Carga</p>
-                      <p className={cn("font-bold", isMobile ? "text-lg" : "text-xl")}>{resumo.totalCarga}</p>
+                      <p className={cn("font-bold text-blue-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalCarga}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="overflow-hidden">
+              <Card className="overflow-hidden bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/50">
                 <CardContent className={cn("p-4", isMobile && "p-3")}>
                   <div className="flex items-center gap-3">
-                    <div className={cn("p-2 rounded-lg bg-amber-500/10", isMobile && "p-1.5")}>
+                    <div className={cn("p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50", isMobile && "p-1.5")}>
                       <RotateCcw className={cn("h-5 w-5 text-amber-600", isMobile && "h-4 w-4")} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs text-muted-foreground truncate">Retorno</p>
-                      <p className={cn("font-bold", isMobile ? "text-lg" : "text-xl")}>{resumo.totalRetorno}</p>
+                      <p className={cn("font-bold text-amber-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalRetorno}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="overflow-hidden">
+              <Card className="overflow-hidden bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50">
                 <CardContent className={cn("p-4", isMobile && "p-3")}>
                   <div className="flex items-center gap-3">
-                    <div className={cn("p-2 rounded-lg bg-emerald-500/10", isMobile && "p-1.5")}>
+                    <div className={cn("p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50", isMobile && "p-1.5")}>
                       <ShoppingBag className={cn("h-5 w-5 text-emerald-600", isMobile && "h-4 w-4")} />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -503,7 +503,7 @@ export default function Feira() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="overflow-hidden">
+              <Card className="overflow-hidden bg-primary/5 border-primary/20">
                 <CardContent className={cn("p-4", isMobile && "p-3")}>
                   <div className="flex items-center gap-3">
                     <div className={cn("p-2 rounded-lg bg-primary/10", isMobile && "p-1.5")}>
@@ -523,82 +523,12 @@ export default function Feira() {
               </Card>
             </div>
 
-            {/* Alerta de Cargas Ativas (quando período não é Hoje) */}
+            {/* Alerta de Cargas Ativas com lista compacta e ação de retorno */}
             <CargasAtivasAlerta
               cargasAtivas={todasCargasAtivas || []}
-              onVerCarga={(carga) => setCargaDetalhes(carga)}
-              onExcluirCarga={(carga) => setCargaExcluir(carga)}
+              onRegistrarRetorno={handleOpenRetornoFromHistorico}
               periodoEhHoje={periodoEhHoje}
             />
-
-            {/* Cargas Ativas de Hoje (apenas quando período = Hoje) */}
-            {periodoEhHoje && cargasAtivasHoje.length > 0 && (
-              <div>
-                <h2 className="text-lg font-semibold mb-3">Cargas Ativas</h2>
-                <div className="grid gap-3">
-                  {cargasAtivasHoje.map(carga => {
-                    const totalPecas = carga.itens.reduce((s, i) => s + i.quantidadeEnviada, 0);
-                    const valorTotal = carga.itens.reduce((s, i) => s + (i.quantidadeEnviada * (i.precoUnitario || i.produtoPreco || 0)), 0);
-
-                    return (
-                      <Card key={carga.id} className="border-primary/30">
-                        <CardContent className="p-4">
-                          <div className="space-y-2 mb-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                                  Em andamento
-                                </Badge>
-                                <span className="text-sm text-muted-foreground">
-                                  {format(new Date(carga.dataSaida), "HH:mm")}
-                                </span>
-                              </div>
-                              <span className="font-semibold text-sm">{formatCurrency(valorTotal)}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">{totalPecas} peças</span>
-                              <div className="flex items-center gap-2">
-                                <Button 
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleGerarPDF(carga)}
-                                  disabled={isGeneratingPDF}
-                                  className="gap-1 h-8 px-2"
-                                >
-                                  <FileText size={14} />
-                                  <span className="hidden sm:inline">PDF</span>
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => handleOpenRetornoFromHistorico(carga)}
-                                  className="gap-1 h-8 px-2"
-                                >
-                                  <RotateCcw size={14} />
-                                  <span className="sm:hidden">Retorno</span>
-                                  <span className="hidden sm:inline">Registrar Retorno</span>
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {carga.itens.slice(0, 3).map(item => (
-                              <Badge key={item.id} variant="secondary" className="text-xs">
-                                {item.quantidadeEnviada}x {item.produtoNome?.slice(0, 15) || ''}
-                              </Badge>
-                            ))}
-                            {carga.itens.length > 3 && (
-                              <Badge variant="secondary" className="text-xs">
-                                +{carga.itens.length - 3}
-                              </Badge>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* Histórico Agrupado */}
             <HistoricoAgrupado
