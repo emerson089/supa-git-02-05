@@ -174,17 +174,24 @@ export async function generateCargaPDF(
     doc.text('CATÁLOGO DE PRODUTOS', margin, yPos);
     yPos += 8;
 
-    // Layout: 3 produtos por linha
+    // Layout: 3 produtos por linha - LAYOUT EMPILHADO (imagem acima, texto abaixo)
     const cardWidth = (pageWidth - 2 * margin - 20) / 3;
-    const cardHeight = 65;
-    const imageSize = 35;
+    const cardHeight = 72;
+    const imageSize = 38;
     let col = 0;
     let rowY = yPos;
 
     for (const item of carga.itens) {
+      // Verificar nova página ANTES de desenhar o card
+      if (rowY + cardHeight > doc.internal.pageSize.getHeight() - 60) {
+        doc.addPage();
+        rowY = margin;
+      }
+
       const base64Image = imageCache.get(item.itemId);
       const qtd = Number(item.quantidadeEnviada) || 0;
       const preco = Number(item.precoUnitario) || Number(item.produtoPreco) || 0;
+      const subtotal = qtd * preco;
       
       const x = margin + col * (cardWidth + 10);
       
@@ -193,69 +200,84 @@ export async function generateCargaPDF(
       doc.setFillColor(255, 255, 255);
       doc.roundedRect(x, rowY, cardWidth, cardHeight, 3, 3, 'FD');
       
-      // Renderizar imagem (se disponível)
+      // Imagem CENTRALIZADA no topo do card
+      const imageX = x + (cardWidth - imageSize) / 2;
       if (base64Image) {
         try {
-          doc.addImage(base64Image, 'JPEG', x + 3, rowY + 3, imageSize, imageSize);
+          doc.addImage(base64Image, 'JPEG', imageX, rowY + 3, imageSize, imageSize);
         } catch {
           // Fallback para placeholder se imagem falhar
           doc.setFillColor(240, 240, 240);
-          doc.rect(x + 3, rowY + 3, imageSize, imageSize, 'F');
+          doc.rect(imageX, rowY + 3, imageSize, imageSize, 'F');
           doc.setFontSize(6);
           doc.setTextColor(150, 150, 150);
-          doc.text('Sem foto', x + 8, rowY + 22);
+          doc.text('Sem foto', imageX + imageSize / 2 - 7, rowY + 22);
         }
       } else {
         // Placeholder para produtos sem imagem
         doc.setFillColor(240, 240, 240);
-        doc.rect(x + 3, rowY + 3, imageSize, imageSize, 'F');
+        doc.rect(imageX, rowY + 3, imageSize, imageSize, 'F');
         doc.setFontSize(6);
         doc.setTextColor(150, 150, 150);
-        doc.text('Sem foto', x + 8, rowY + 22);
+        doc.text('Sem foto', imageX + imageSize / 2 - 7, rowY + 22);
       }
       
-      // Info do produto (ao lado da imagem)
-      const textX = x + imageSize + 6;
-      const maxTextWidth = cardWidth - imageSize - 10;
+      // Texto ABAIXO da imagem - agora com mais espaço horizontal!
+      const textY = rowY + imageSize + 8;
+      const maxTextWidth = cardWidth - 6;
+      
+      // Extrair código do nome (ex: "Short cinto encapado preto - 990")
+      let nome = item.produtoNome || 'Produto';
+      let codigo = '';
+      const matchCodigo = nome.match(/\s*-\s*(\d+)$/);
+      if (matchCodigo) {
+        codigo = matchCodigo[1];
+        nome = nome.replace(/\s*-\s*\d+$/, '').trim();
+      }
+      
+      // Nome do produto (truncar se necessário)
       doc.setTextColor(...textColor);
       doc.setFontSize(7);
       doc.setFont('helvetica', 'bold');
-      
-      // Truncar nome se muito longo
-      let nome = item.produtoNome || 'Produto';
-      while (doc.getTextWidth(nome) > maxTextWidth && nome.length > 5) {
+      while (doc.getTextWidth(nome) > maxTextWidth && nome.length > 10) {
         nome = nome.slice(0, -1);
       }
-      if (nome !== item.produtoNome && nome.length > 3) {
+      if (nome.length < (item.produtoNome?.replace(/\s*-\s*\d+$/, '').trim().length || 0) - 3) {
         nome = nome.slice(0, -3) + '...';
       }
-      doc.text(nome, textX, rowY + 12);
+      doc.text(nome, x + 3, textY);
       
+      // Código do produto (se extraído)
+      let codeLineY = textY + 5;
+      if (codigo) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6);
+        doc.setTextColor(...mutedColor);
+        doc.text(`Cód: ${codigo}`, x + 3, codeLineY);
+        codeLineY += 5;
+      }
+      
+      // Qtd e Preço na mesma linha
+      doc.setFontSize(7);
+      doc.setTextColor(...textColor);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text(`Qtd: ${qtd}`, textX, rowY + 22);
+      doc.text(`Qtd: ${qtd}`, x + 3, codeLineY);
       
-      doc.setFont('helvetica', 'bold');
       doc.setTextColor(...primaryColor);
-      doc.text(formatCurrency(preco), textX, rowY + 32);
+      doc.setFont('helvetica', 'bold');
+      const precoText = formatCurrency(preco);
+      doc.text(precoText, x + cardWidth - 3 - doc.getTextWidth(precoText), codeLineY);
       
-      // Info abaixo da imagem
-      doc.setTextColor(...mutedColor);
+      // Subtotal
       doc.setFontSize(6);
+      doc.setTextColor(...mutedColor);
       doc.setFont('helvetica', 'normal');
-      const subtotal = qtd * preco;
-      doc.text(`Sub: ${formatCurrency(subtotal)}`, x + 3, rowY + imageSize + 10);
+      doc.text(`Sub: ${formatCurrency(subtotal)}`, x + 3, codeLineY + 5);
       
       col++;
       if (col >= 3) {
         col = 0;
         rowY += cardHeight + 8;
-        
-        // Verificar se precisa de nova página
-        if (rowY + cardHeight > doc.internal.pageSize.getHeight() - 60) {
-          doc.addPage();
-          rowY = margin;
-        }
       }
     }
 
