@@ -21,23 +21,27 @@ import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useRole } from '@/contexts/RoleContext';
+import { AppRole } from '@/types/roles';
 import { toast } from 'sonner';
 
 interface NavItemType {
   label: string;
   icon: LucideIcon;
   path: string;
+  roles?: AppRole[];
 }
 
 interface QuickActionType {
   label: string;
   icon: LucideIcon;
   path: string;
+  roles?: AppRole[];
 }
 
 const leftNavItems: NavItemType[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-  { label: 'Vendas', icon: ShoppingCart, path: '/pedidos/criados' },
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['admin', 'gerente'] },
+  { label: 'Vendas', icon: ShoppingCart, path: '/pedidos/criados', roles: ['admin', 'gerente'] },
 ];
 
 const rightNavItems: NavItemType[] = [
@@ -46,19 +50,19 @@ const rightNavItems: NavItemType[] = [
 ];
 
 const moreMenuItems: NavItemType[] = [
-  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias' },
-  { label: 'Clientes', icon: Users, path: '/clientes' },
-  { label: 'Produção', icon: Factory, path: '/producao' },
-  { label: 'Pedidos Criados', icon: FileText, path: '/pedidos/criados' },
-  { label: 'Configurações', icon: Settings, path: '/configuracoes' },
+  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente'] },
+  { label: 'Clientes', icon: Users, path: '/clientes', roles: ['admin', 'gerente'] },
+  { label: 'Produção', icon: Factory, path: '/producao', roles: ['admin', 'gerente'] },
+  { label: 'Pedidos Criados', icon: FileText, path: '/pedidos/criados', roles: ['admin', 'gerente'] },
+  { label: 'Configurações', icon: Settings, path: '/configuracoes/usuarios', roles: ['admin'] },
   { label: 'Ajuda', icon: HelpCircle, path: '/ajuda' },
 ];
 
 const quickActions: QuickActionType[] = [
-  { label: 'Novo Pedido', icon: ShoppingCart, path: '/pedidos/novo' },
-  { label: 'Nova Transferência', icon: ArrowLeftRight, path: '/transferencias' },
+  { label: 'Novo Pedido', icon: ShoppingCart, path: '/pedidos/novo', roles: ['admin', 'gerente'] },
+  { label: 'Nova Transferência', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente'] },
   { label: 'Nova Carga (Feira)', icon: Store, path: '/feira' },
-  { label: 'Novo Cliente', icon: UserPlus, path: '/clientes' },
+  { label: 'Novo Cliente', icon: UserPlus, path: '/clientes', roles: ['admin', 'gerente'] },
 ];
 
 interface NavItemProps {
@@ -98,8 +102,18 @@ export function BottomNavigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  const { role } = useRole();
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+
+  // Filter items by role
+  const filterByRole = <T extends { roles?: AppRole[] }>(items: T[]): T[] =>
+    items.filter(item => !item.roles || (role && item.roles.includes(role)));
+
+  const visibleLeftItems = filterByRole(leftNavItems);
+  const visibleRightItems = filterByRole(rightNavItems);
+  const visibleMoreItems = filterByRole(moreMenuItems);
+  const visibleQuickActions = filterByRole(quickActions);
 
   const isActive = (path: string) => {
     if (path === '/producao') return location.pathname === '/producao';
@@ -125,7 +139,7 @@ export function BottomNavigation() {
       <nav className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border z-50 md:hidden safe-area-pb">
         <div className="relative flex justify-around items-center h-16 px-2">
           {/* Left items */}
-          {leftNavItems.map((item) => (
+          {visibleLeftItems.map((item) => (
             <NavItem 
               key={item.path} 
               item={item} 
@@ -145,7 +159,7 @@ export function BottomNavigation() {
           </div>
           
           {/* Right items */}
-          {rightNavItems.map((item) => (
+          {visibleRightItems.map((item) => (
             <NavItem 
               key={item.path} 
               item={item} 
@@ -177,7 +191,7 @@ export function BottomNavigation() {
             <SheetTitle className="text-left">Ações Rápidas</SheetTitle>
           </SheetHeader>
           <div className="grid grid-cols-2 gap-3 py-4">
-            {quickActions.map((action) => (
+            {visibleQuickActions.map((action) => (
               <button
                 key={action.label}
                 onClick={() => handleNavigate(action.path)}
@@ -202,7 +216,7 @@ export function BottomNavigation() {
           
           {/* Scrollable menu items */}
           <div className="flex-1 overflow-y-auto py-2 space-y-1">
-            {moreMenuItems.map((item) => {
+            {visibleMoreItems.map((item) => {
               const active = isActive(item.path);
               return (
                 <button
