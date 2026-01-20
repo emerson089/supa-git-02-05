@@ -45,7 +45,7 @@ const leftNavItems: NavItemType[] = [
 ];
 
 const rightNavItems: NavItemType[] = [
-  { label: 'Estoque', icon: Warehouse, path: '/estoque' },
+  { label: 'Estoque', icon: Warehouse, path: '/estoque', roles: ['admin', 'gerente'] },
   { label: 'Feira', icon: Store, path: '/feira' },
 ];
 
