@@ -37,16 +37,9 @@ export function usePedidosTotals(params: TotalsParams) {
       debouncedModelo
     ],
     queryFn: async (): Promise<PedidosTotals> => {
-      // Function to build a fresh query with all filters applied
-      const buildQuery = () => {
-        // Only include pedido_itens if modelo filter is active (reduces payload)
-        const selectFields = debouncedModelo 
-          ? 'id, valor_total, total_pecas, pedido_itens(produto_nome, quantidade, valor_unitario)'
-          : 'id, valor_total, total_pecas';
-        
-        let q = supabase.from('pedidos').select(selectFields);
-
-        // Apply search filter (client name only - UUID search not supported with ilike)
+      // Helper to apply common filters to a query
+      const applyFilters = (q: any) => {
+        // Apply search filter
         if (debouncedSearch) {
           const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(debouncedSearch);
           if (isUUID) {
@@ -69,42 +62,43 @@ export function usePedidosTotals(params: TotalsParams) {
 
         // Apply date filters
         if (params.startDate) {
-          const startOfDay = new Date(params.startDate);
-          startOfDay.setHours(0, 0, 0, 0);
-          q = q.gte('created_at', startOfDay.toISOString());
+          const startOfDayDate = new Date(params.startDate);
+          startOfDayDate.setHours(0, 0, 0, 0);
+          q = q.gte('created_at', startOfDayDate.toISOString());
         }
         if (params.endDate) {
-          const endOfDay = new Date(params.endDate);
-          endOfDay.setHours(23, 59, 59, 999);
-          q = q.lte('created_at', endOfDay.toISOString());
+          const endOfDayDate = new Date(params.endDate);
+          endOfDayDate.setHours(23, 59, 59, 999);
+          q = q.lte('created_at', endOfDayDate.toISOString());
         }
 
         return q;
       };
 
-      // Fetch with pagination to get all records for totals
-      // IMPORTANT: Build a fresh query for each page to avoid reusing the same builder
-      const pageSize = 1000;
-      let allData: any[] = [];
-      let page = 0;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data, error } = await buildQuery().range(page * pageSize, (page + 1) * pageSize - 1);
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          allData = [...allData, ...data];
-          hasMore = data.length === pageSize;
-          page++;
-        } else {
-          hasMore = false;
-        }
-      }
-
-      // If modelo filter is active, calculate totals only for that modelo
+      // If modelo filter is active, we need to fetch pedido_itens
       if (debouncedModelo) {
+        const buildModeloQuery = () => {
+          let q = supabase.from('pedidos').select('id, valor_total, total_pecas, pedido_itens(produto_nome, quantidade, valor_unitario)');
+          return applyFilters(q);
+        };
+
+        const pageSize = 1000;
+        let allData: any[] = [];
+        let page = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+          const { data, error } = await buildModeloQuery().range(page * pageSize, (page + 1) * pageSize - 1);
+          if (error) throw error;
+          if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            hasMore = data.length === pageSize;
+            page++;
+          } else {
+            hasMore = false;
+          }
+        }
+
         const modeloLower = debouncedModelo.toLowerCase();
         let pecasModelo = 0;
         let valorModelo = 0;
@@ -127,11 +121,43 @@ export function usePedidosTotals(params: TotalsParams) {
         };
       }
 
-      // Calculate totals
+      // OPTIMIZED: Get count using exact count (no data transfer)
+      let countQuery = supabase.from('pedidos').select('*', { count: 'exact', head: true });
+      countQuery = applyFilters(countQuery);
+      const { count, error: countError } = await countQuery;
+      if (countError) throw countError;
+
+      // OPTIMIZED: Fetch only valor_total and total_pecas (minimal payload)
+      const buildSumQuery = () => {
+        let q = supabase.from('pedidos').select('valor_total, total_pecas');
+        return applyFilters(q);
+      };
+
+      const pageSize = 1000;
+      let totalValor = 0;
+      let totalPecas = 0;
+      let page = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await buildSumQuery().range(page * pageSize, (page + 1) * pageSize - 1);
+        if (error) throw error;
+        if (data && data.length > 0) {
+          data.forEach(p => {
+            totalValor += p.valor_total || 0;
+            totalPecas += p.total_pecas || 0;
+          });
+          hasMore = data.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+
       return {
-        totalPedidos: allData.length,
-        totalValor: allData.reduce((sum, p) => sum + (p.valor_total || 0), 0),
-        totalPecas: allData.reduce((sum, p) => sum + (p.total_pecas || 0), 0)
+        totalPedidos: count || 0,
+        totalValor,
+        totalPecas
       };
     },
     enabled: !!user,

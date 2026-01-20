@@ -72,7 +72,7 @@ import {
   Loader2,
   RefreshCw
 } from 'lucide-react';
-import { format, isWithinInterval, startOfDay, endOfDay, parse } from 'date-fns';
+import { format, isWithinInterval, startOfDay, endOfDay, parse, subDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { ptBR } from 'date-fns/locale';
@@ -207,13 +207,17 @@ export default function PedidosCriados() {
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   
-  // Date filters - carregar do localStorage
-  const [startDate, setStartDate] = useState<Date | undefined>(
-    persistedFilters.startDate ? new Date(persistedFilters.startDate) : undefined
-  );
-  const [endDate, setEndDate] = useState<Date | undefined>(
-    persistedFilters.endDate ? new Date(persistedFilters.endDate) : undefined
-  );
+  // Date filters - carregar do localStorage ou usar HOJE como default
+  const [startDate, setStartDate] = useState<Date | undefined>(() => {
+    if (persistedFilters.startDate) return new Date(persistedFilters.startDate);
+    // Default: HOJE se não houver filtro persistido
+    return new Date();
+  });
+  const [endDate, setEndDate] = useState<Date | undefined>(() => {
+    if (persistedFilters.endDate) return new Date(persistedFilters.endDate);
+    // Default: HOJE se não houver filtro persistido
+    return new Date();
+  });
   
   // Advanced filters - priorizar URL sobre localStorage
   const [filterStatusPagamento, setFilterStatusPagamento] = useState(() => {
@@ -478,6 +482,96 @@ export default function PedidosCriados() {
     // Limpar também do localStorage
     localStorage.removeItem(FILTERS_STORAGE_KEY);
   };
+
+  // Atalhos rápidos de filtro
+  const applyQuickFilter = (filter: 'hoje' | 'ontem' | '7dias' | 'emAberto' | 'pendPagamento' | 'naoSeparado') => {
+    // Reset all filters first
+    setSearchTerm('');
+    setFilterStatusPagamento('all');
+    setFilterStatusPedido('all');
+    setFilterStatusEntrega('all');
+    setFilterModelo('');
+    
+    switch (filter) {
+      case 'hoje':
+        setStartDate(new Date());
+        setEndDate(new Date());
+        break;
+      case 'ontem':
+        const ontem = subDays(new Date(), 1);
+        setStartDate(ontem);
+        setEndDate(ontem);
+        break;
+      case '7dias':
+        setStartDate(subDays(new Date(), 6));
+        setEndDate(new Date());
+        break;
+      case 'emAberto':
+        setStartDate(undefined);
+        setEndDate(undefined);
+        // Filtrar por entrega diferente de ENTREGUE
+        setFilterStatusEntrega('PEND. ENTREGA');
+        break;
+      case 'pendPagamento':
+        setStartDate(undefined);
+        setEndDate(undefined);
+        setFilterStatusPagamento('PENDENTE');
+        break;
+      case 'naoSeparado':
+        setStartDate(undefined);
+        setEndDate(undefined);
+        setFilterStatusPedido('NÃO SEPARADO');
+        break;
+    }
+  };
+
+  // Determinar qual atalho está ativo
+  const getActiveQuickFilter = (): string | null => {
+    const hoje = new Date();
+    const ontem = subDays(hoje, 1);
+    const seteDiasAtras = subDays(hoje, 6);
+    
+    // Verificar se é "Hoje"
+    if (startDate && endDate && 
+        format(startDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') &&
+        format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') &&
+        filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+      return 'hoje';
+    }
+    
+    // Verificar se é "Ontem"
+    if (startDate && endDate && 
+        format(startDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') &&
+        format(endDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') &&
+        filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+      return 'ontem';
+    }
+    
+    // Verificar se é "Últimos 7 dias"
+    if (startDate && endDate && 
+        format(startDate, 'yyyy-MM-dd') === format(seteDiasAtras, 'yyyy-MM-dd') &&
+        format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') &&
+        filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+      return '7dias';
+    }
+    
+    // Verificar filtros de status
+    if (!startDate && !endDate) {
+      if (filterStatusEntrega === 'PEND. ENTREGA' && filterStatusPagamento === 'all' && filterStatusPedido === 'all') {
+        return 'emAberto';
+      }
+      if (filterStatusPagamento === 'PENDENTE' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+        return 'pendPagamento';
+      }
+      if (filterStatusPedido === 'NÃO SEPARADO' && filterStatusPagamento === 'all' && filterStatusEntrega === 'all') {
+        return 'naoSeparado';
+      }
+    }
+    
+    return null;
+  };
+
+  const activeQuickFilter = getActiveQuickFilter();
 
   // Função de refresh manual
   const handleRefreshData = async () => {
@@ -820,6 +914,90 @@ const formatNumber = (value: number) => {
                 </div>
               </div>
             )}
+
+            {/* Quick Filter Shortcuts */}
+            <div className={cn(
+              "flex gap-2 overflow-x-auto pb-1 scrollbar-hide",
+              isMobile ? "-mx-4 px-4" : ""
+            )}>
+              <Button
+                variant={activeQuickFilter === 'hoje' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => applyQuickFilter('hoje')}
+                className={cn(
+                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
+                  activeQuickFilter === 'hoje' && "bg-primary text-primary-foreground"
+                )}
+              >
+                Hoje
+              </Button>
+              <Button
+                variant={activeQuickFilter === 'ontem' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => applyQuickFilter('ontem')}
+                className={cn(
+                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
+                  activeQuickFilter === 'ontem' && "bg-primary text-primary-foreground"
+                )}
+              >
+                Ontem
+              </Button>
+              <Button
+                variant={activeQuickFilter === '7dias' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => applyQuickFilter('7dias')}
+                className={cn(
+                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
+                  activeQuickFilter === '7dias' && "bg-primary text-primary-foreground"
+                )}
+              >
+                Últimos 7 dias
+              </Button>
+              <Button
+                variant={activeQuickFilter === 'emAberto' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => applyQuickFilter('emAberto')}
+                className={cn(
+                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
+                  activeQuickFilter === 'emAberto' && "bg-primary text-primary-foreground"
+                )}
+              >
+                Em aberto
+              </Button>
+              <Button
+                variant={activeQuickFilter === 'pendPagamento' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => applyQuickFilter('pendPagamento')}
+                className={cn(
+                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
+                  activeQuickFilter === 'pendPagamento' && "bg-primary text-primary-foreground"
+                )}
+              >
+                Pend. Pagamento
+              </Button>
+              <Button
+                variant={activeQuickFilter === 'naoSeparado' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => applyQuickFilter('naoSeparado')}
+                className={cn(
+                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
+                  activeQuickFilter === 'naoSeparado' && "bg-primary text-primary-foreground"
+                )}
+              >
+                Não separado
+              </Button>
+              {hasAnyFilter && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllFilters}
+                  className="rounded-full whitespace-nowrap text-xs h-8 px-3 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Limpar
+                </Button>
+              )}
+            </div>
 
             {/* Filters and Actions Bar */}
             {isMobile ? (
