@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
@@ -95,6 +95,10 @@ export default function Feira() {
   const produtosAcabados = getProdutosAcabados();
   const periodoEhHoje = periodo.tipo === 'hoje';
 
+  // Proteção contra loop infinito na criação de locais
+  const [locaisCreationFailed, setLocaisCreationFailed] = useState(false);
+  const locaisCreationAttempted = useRef(false);
+
   // Filtrar produtos em tempo real
   const produtosFiltrados = useMemo(() => {
     if (!buscaProduto.trim()) return produtosAcabados;
@@ -139,14 +143,27 @@ export default function Feira() {
     salvarFiltroPeriodo(periodo);
   }, [periodo]);
 
-  // Garantir que locais existem - esperar dados estarem prontos
+  // Garantir que locais existem - com proteção contra loop infinito
   useEffect(() => {
+    // Proteção: só tenta uma vez, e não tenta se já falhou
+    if (locaisCreationAttempted.current || locaisCreationFailed) return;
+    
     // Só tenta criar se temos certeza que não há locais (data loaded, array vazio)
     if (locais !== undefined && locais.length === 0 && !ensureLocais.isPending) {
-      console.log('[Feira] Criando locais padrão...');
-      ensureLocais.mutate();
+      locaisCreationAttempted.current = true;
+      console.log('[Feira] Tentando criar locais padrão...');
+      ensureLocais.mutate(undefined, {
+        onError: (error) => {
+          console.warn('[Feira] Falha ao criar locais - possível problema de autenticação:', error);
+          setLocaisCreationFailed(true);
+        },
+        onSuccess: () => {
+          // Reset para permitir nova tentativa se necessário após logout/login
+          locaisCreationAttempted.current = false;
+        }
+      });
     }
-  }, [locais, ensureLocais.isPending]);
+  }, [locais, ensureLocais.isPending, locaisCreationFailed]);
 
   // Sincronizar estoque inicial - aguardar locais existirem
   useEffect(() => {
