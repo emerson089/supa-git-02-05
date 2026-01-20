@@ -3,6 +3,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/contexts/RoleContext';
 import { Loader2 } from 'lucide-react';
 import { AppRole, ROLE_LANDING_PAGES } from '@/types/roles';
+import { toast } from 'sonner';
+import { useEffect, useRef } from 'react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -13,8 +15,28 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const { user, loading: authLoading } = useAuth();
   const { role, loading: roleLoading, mustChangePassword, profile } = useRole();
   const location = useLocation();
+  const hasShownToast = useRef(false);
 
   const isLoading = authLoading || roleLoading;
+  
+  // Check if access is denied based on role
+  const isAccessDenied = !isLoading && user && role && allowedRoles && !allowedRoles.includes(role);
+
+  // Show toast when access is denied
+  useEffect(() => {
+    if (isAccessDenied && !hasShownToast.current) {
+      hasShownToast.current = true;
+      toast.error('Acesso negado', {
+        description: 'Você não tem permissão para acessar esta página.',
+        duration: 4000,
+      });
+    }
+  }, [isAccessDenied]);
+
+  // Reset toast flag when route changes
+  useEffect(() => {
+    hasShownToast.current = false;
+  }, [location.pathname]);
 
   if (isLoading) {
     return (
