@@ -325,9 +325,9 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
           </div>
         </div>
 
-        {/* Items List */}
-        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-          <div className="px-3 sm:px-6 py-2 sm:py-3 flex-shrink-0">
+        {/* Items List - Native scroll for better flexbox compatibility */}
+        <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
+          <div className="px-3 sm:px-6 py-2 sm:py-3 flex-shrink-0 sticky top-0 bg-background z-10 border-b border-border/30">
             <div className="flex items-center justify-between">
               <h3 className="text-sm sm:text-base font-semibold text-foreground">Itens do Pedido</h3>
               <div className="hidden lg:flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider">
@@ -339,27 +339,25 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
             </div>
           </div>
 
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="space-y-2 pb-6 px-3 sm:px-6 w-full max-w-full">
-              {pedido.itens.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
-                  <Package className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">Nenhum item no pedido</p>
-                </div>
-              ) : (
-                pedido.itens.map((item) => (
-                  <EditableItemRow
-                    key={item.id}
-                    item={item}
-                    onUpdate={handleUpdateItem}
-                    onRemove={handleRemoveItem}
-                    isUpdating={updatingItemId === item.id}
-                    isRemoving={removingItemId === item.id}
-                  />
-                ))
-              )}
-            </div>
-          </ScrollArea>
+          <div className="space-y-2 pb-6 px-3 sm:px-6 w-full max-w-full">
+            {pedido.itens.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                <Package className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Nenhum item no pedido</p>
+              </div>
+            ) : (
+              pedido.itens.map((item) => (
+                <EditableItemRow
+                  key={item.id}
+                  item={item}
+                  onUpdate={handleUpdateItem}
+                  onRemove={handleRemoveItem}
+                  isUpdating={updatingItemId === item.id}
+                  isRemoving={removingItemId === item.id}
+                />
+              ))
+            )}
+          </div>
         </div>
 
         {/* Add Item Section */}
