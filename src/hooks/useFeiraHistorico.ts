@@ -158,6 +158,7 @@ export function useCargasPorPeriodo(inicio: Date, fim: Date) {
       // Buscar todas as cargas do período
       // Para concluídas: filtrar por data_retorno OU data_saida
       // Para em_andamento: filtrar por data_saida
+      // Buscar todas as cargas do período (sem filtrar user_id - vendedores precisam ver cargas de todos)
       const { data, error } = await supabase
         .from('transferencias')
         .select(`
@@ -170,7 +171,6 @@ export function useCargasPorPeriodo(inicio: Date, fim: Date) {
           )
         `)
         .eq('tipo', 'carga_feira')
-        .eq('user_id', user.id)
         .is('deleted_at', null)
         .order('data_saida', { ascending: false });
 
@@ -200,6 +200,7 @@ export function useTodasCargasAtivas() {
     queryFn: async () => {
       if (!user) return [];
 
+      // Buscar todas as cargas ativas (sem filtrar user_id - vendedores precisam ver cargas de todos)
       const { data, error } = await supabase
         .from('transferencias')
         .select(`
@@ -213,7 +214,6 @@ export function useTodasCargasAtivas() {
         `)
         .eq('tipo', 'carga_feira')
         .eq('status', 'em_andamento')
-        .eq('user_id', user.id)
         .is('deleted_at', null)
         .order('data_saida', { ascending: false });
 
@@ -381,11 +381,10 @@ export function useExcluirCargaFeira() {
         throw new Error(`Não é possível excluir carga com status "${carga.status}".`);
       }
 
-      // 2. Buscar locais Central e Banca
+      // 2. Buscar locais Central e Banca (sem filtrar user_id - vendedores precisam acessar)
       const { data: locais } = await supabase
         .from('estoque_locais')
         .select('*')
-        .eq('user_id', user.id)
         .in('tipo', ['central', 'banca']);
 
       const central = locais?.find(l => l.tipo === 'central');
