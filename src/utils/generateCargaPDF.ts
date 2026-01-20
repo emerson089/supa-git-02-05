@@ -145,15 +145,7 @@ export async function generateCargaPDF(
     yPos += obsHeight + 10;
   }
 
-  // ===== TABELA DE ITENS =====
-  doc.setTextColor(...primaryColor);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('ITENS DA CARGA', margin, yPos);
-  yPos += 5;
-
-  // Preparar dados da tabela
-  const tableData: (string | { content: string; styles?: object })[][] = [];
+  // Preparar cache de imagens
   const imageCache: Map<string, string | null> = new Map();
 
   // Carregar imagens em paralelo se necessário
@@ -173,6 +165,119 @@ export async function generateCargaPDF(
     });
     await Promise.all(imagePromises);
   }
+
+  // ===== CATÁLOGO DE PRODUTOS COM FOTOS =====
+  if (includeImages && carga.itens.length > 0) {
+    doc.setTextColor(...primaryColor);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CATÁLOGO DE PRODUTOS', margin, yPos);
+    yPos += 8;
+
+    // Layout: 3 produtos por linha
+    const cardWidth = (pageWidth - 2 * margin - 20) / 3;
+    const cardHeight = 65;
+    const imageSize = 35;
+    let col = 0;
+    let rowY = yPos;
+
+    for (const item of carga.itens) {
+      const base64Image = imageCache.get(item.itemId);
+      const qtd = Number(item.quantidadeEnviada) || 0;
+      const preco = Number(item.precoUnitario) || Number(item.produtoPreco) || 0;
+      
+      const x = margin + col * (cardWidth + 10);
+      
+      // Desenhar card com borda
+      doc.setDrawColor(229, 231, 235);
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(x, rowY, cardWidth, cardHeight, 3, 3, 'FD');
+      
+      // Renderizar imagem (se disponível)
+      if (base64Image) {
+        try {
+          doc.addImage(base64Image, 'JPEG', x + 3, rowY + 3, imageSize, imageSize);
+        } catch {
+          // Fallback para placeholder se imagem falhar
+          doc.setFillColor(240, 240, 240);
+          doc.rect(x + 3, rowY + 3, imageSize, imageSize, 'F');
+          doc.setFontSize(6);
+          doc.setTextColor(150, 150, 150);
+          doc.text('Sem foto', x + 8, rowY + 22);
+        }
+      } else {
+        // Placeholder para produtos sem imagem
+        doc.setFillColor(240, 240, 240);
+        doc.rect(x + 3, rowY + 3, imageSize, imageSize, 'F');
+        doc.setFontSize(6);
+        doc.setTextColor(150, 150, 150);
+        doc.text('Sem foto', x + 8, rowY + 22);
+      }
+      
+      // Info do produto (ao lado da imagem)
+      const textX = x + imageSize + 6;
+      const maxTextWidth = cardWidth - imageSize - 10;
+      doc.setTextColor(...textColor);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      
+      // Truncar nome se muito longo
+      let nome = item.produtoNome || 'Produto';
+      while (doc.getTextWidth(nome) > maxTextWidth && nome.length > 5) {
+        nome = nome.slice(0, -1);
+      }
+      if (nome !== item.produtoNome && nome.length > 3) {
+        nome = nome.slice(0, -3) + '...';
+      }
+      doc.text(nome, textX, rowY + 12);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(`Qtd: ${qtd}`, textX, rowY + 22);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...primaryColor);
+      doc.text(formatCurrency(preco), textX, rowY + 32);
+      
+      // Info abaixo da imagem
+      doc.setTextColor(...mutedColor);
+      doc.setFontSize(6);
+      doc.setFont('helvetica', 'normal');
+      const subtotal = qtd * preco;
+      doc.text(`Sub: ${formatCurrency(subtotal)}`, x + 3, rowY + imageSize + 10);
+      
+      col++;
+      if (col >= 3) {
+        col = 0;
+        rowY += cardHeight + 8;
+        
+        // Verificar se precisa de nova página
+        if (rowY + cardHeight > doc.internal.pageSize.getHeight() - 60) {
+          doc.addPage();
+          rowY = margin;
+        }
+      }
+    }
+
+    // Ajustar posição para próxima seção
+    yPos = rowY + (col > 0 ? cardHeight + 15 : 10);
+    
+    // Verificar se precisa de nova página para tabela
+    if (yPos > doc.internal.pageSize.getHeight() - 100) {
+      doc.addPage();
+      yPos = margin;
+    }
+  }
+
+  // ===== TABELA DE ITENS =====
+  doc.setTextColor(...primaryColor);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('RESUMO DOS ITENS', margin, yPos);
+  yPos += 5;
+
+  // Preparar dados da tabela
+  const tableData: (string | { content: string; styles?: object })[][] = [];
 
   // Montar linhas da tabela
   for (const item of carga.itens) {
