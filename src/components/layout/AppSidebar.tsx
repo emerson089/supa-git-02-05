@@ -16,7 +16,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/dashboard', roles: ['admin', 'gerente'] },
   { label: 'Clientes', icon: <Users size={18} />, path: '/clientes', roles: ['admin', 'gerente'] },
-  { label: 'Estoque', icon: <Warehouse size={18} />, path: '/estoque' },
+  { label: 'Estoque', icon: <Warehouse size={18} />, path: '/estoque', roles: ['admin', 'gerente'] },
   { label: 'Feira', icon: <Store size={18} />, path: '/feira' },
   { label: 'Transferências', icon: <ArrowLeftRight size={18} />, path: '/transferencias', roles: ['admin', 'gerente'] },
   { label: 'Novo Pedido', icon: <ShoppingCart size={18} />, path: '/pedidos/novo', roles: ['admin', 'gerente'] },
