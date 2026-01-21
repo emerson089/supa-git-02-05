@@ -1,13 +1,14 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Clock, RotateCcw, FileText, Loader2 } from 'lucide-react';
+import { AlertTriangle, Clock, RotateCcw, FileText, Loader2, Pencil } from 'lucide-react';
 import { TransferenciaComItensHistorico } from '@/hooks/useFeiraHistorico';
 import { format } from 'date-fns';
 
 interface CargasAtivasAlertaProps {
   cargasAtivas: TransferenciaComItensHistorico[];
   onRegistrarRetorno: (carga: TransferenciaComItensHistorico) => void;
+  onEditarCarga?: (carga: TransferenciaComItensHistorico) => void;
   onGerarPDF?: (carga: TransferenciaComItensHistorico) => void;
   periodoEhHoje: boolean;
   isGeneratingPDF?: boolean;
@@ -19,7 +20,8 @@ const formatCurrency = (value: number) => {
 
 export function CargasAtivasAlerta({ 
   cargasAtivas, 
-  onRegistrarRetorno, 
+  onRegistrarRetorno,
+  onEditarCarga,
   onGerarPDF,
   periodoEhHoje,
   isGeneratingPDF 
@@ -70,7 +72,19 @@ export function CargasAtivasAlerta({
                     {formatCurrency(valorTotal)}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  {onEditarCarga && (
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => onEditarCarga(carga)}
+                      className="gap-1 shrink-0"
+                      title="Editar carga"
+                    >
+                      <Pencil size={14} />
+                      <span className="hidden sm:inline">Editar</span>
+                    </Button>
+                  )}
                   {onGerarPDF && (
                     <Button 
                       size="sm" 

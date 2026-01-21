@@ -652,6 +652,273 @@ export function useRegistrarRetornoFeira() {
   });
 }
 
+// Interface para itens de edição
+interface ItemEdicao {
+  itemId: string;
+  nome: string;
+  quantidade: number;
+  quantidadeOriginal: number;
+  precoUnitario: number;
+  disponivelCentral: number;
+  imagemUrl: string | null;
+  isNovo: boolean;
+}
+
+// Hook para editar carga da feira (adicionar/remover/alterar itens)
+export function useEditarCargaFeira() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      transferenciaId,
+      itens,
+    }: {
+      transferenciaId: string;
+      itens: ItemEdicao[];
+    }) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // Verificar sessão ativa
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Sessão expirada. Por favor, recarregue a página e faça login novamente.');
+      }
+
+      // Buscar locais Central e Banca
+      const { data: locais, error: locaisError } = await supabase
+        .from('estoque_locais')
+        .select('*')
+        .in('tipo', ['central', 'banca']);
+
+      if (locaisError) throw new Error('Erro ao buscar configuração de locais.');
+
+      const central = locais?.find(l => l.tipo === 'central');
+      const banca = locais?.find(l => l.tipo === 'banca');
+
+      if (!central || !banca) {
+        throw new Error('Locais não configurados. Recarregue a página.');
+      }
+
+      // Buscar itens originais da carga
+      const { data: itensOriginais, error: itensError } = await supabase
+        .from('transferencia_itens')
+        .select('*')
+        .eq('transferencia_id', transferenciaId);
+
+      if (itensError) throw new Error('Erro ao buscar itens da carga.');
+
+      const mapItensOriginais = new Map(
+        (itensOriginais || []).map(i => [i.item_id, i])
+      );
+
+      // Buscar todos os estoques necessários
+      const todosItemIds = [...new Set([
+        ...itens.map(i => i.itemId),
+        ...(itensOriginais || []).map(i => i.item_id)
+      ])];
+
+      const { data: estoques } = await supabase
+        .from('estoque_por_local')
+        .select('*')
+        .in('item_id', todosItemIds)
+        .in('local_id', [central.id, banca.id]);
+
+      const mapEstoquesCentral = new Map<string, { id: string; quantidade: number }>();
+      const mapEstoquesBanca = new Map<string, { id: string; quantidade: number }>();
+
+      estoques?.forEach(e => {
+        if (e.local_id === central.id) {
+          mapEstoquesCentral.set(e.item_id, { id: e.id, quantidade: Number(e.quantidade) });
+        } else if (e.local_id === banca.id) {
+          mapEstoquesBanca.set(e.item_id, { id: e.id, quantidade: Number(e.quantidade) });
+        }
+      });
+
+      // Processar cada item
+      for (const item of itens) {
+        const original = mapItensOriginais.get(item.itemId);
+        const estoqueCentral = mapEstoquesCentral.get(item.itemId);
+        const estoqueBanca = mapEstoquesBanca.get(item.itemId);
+
+        if (item.isNovo) {
+          // NOVO ITEM: Adicionar à carga
+          const disponivel = estoqueCentral?.quantidade || 0;
+          if (disponivel < item.quantidade) {
+            throw new Error(`${item.nome}: apenas ${disponivel} disponível no Central.`);
+          }
+
+          // Inserir em transferencia_itens
+          await supabase.from('transferencia_itens').insert({
+            user_id: user.id,
+            transferencia_id: transferenciaId,
+            item_id: item.itemId,
+            quantidade_enviada: item.quantidade,
+            preco_unitario: item.precoUnitario,
+          });
+
+          // Registrar movimentação ENVIO_FEIRA
+          await supabase.from('estoque_movimentacoes').insert({
+            user_id: user.id,
+            item_id: item.itemId,
+            tipo: 'ENVIO_FEIRA',
+            quantidade: item.quantidade,
+            motivo: `Adição à carga - #${transferenciaId.slice(0, 8)}`,
+            transferencia_id: transferenciaId,
+            local_id: central.id,
+            estoque_antes: estoqueCentral?.quantidade || 0,
+            estoque_depois: (estoqueCentral?.quantidade || 0) - item.quantidade,
+          });
+
+          // Atualizar estoque Central
+          if (estoqueCentral) {
+            await supabase
+              .from('estoque_por_local')
+              .update({ quantidade: estoqueCentral.quantidade - item.quantidade, updated_at: new Date().toISOString() })
+              .eq('id', estoqueCentral.id);
+          }
+
+          // Atualizar/criar estoque Banca
+          if (estoqueBanca) {
+            await supabase
+              .from('estoque_por_local')
+              .update({ quantidade: estoqueBanca.quantidade + item.quantidade, updated_at: new Date().toISOString() })
+              .eq('id', estoqueBanca.id);
+          } else {
+            await supabase.from('estoque_por_local').insert({
+              user_id: user.id,
+              item_id: item.itemId,
+              local_id: banca.id,
+              quantidade: item.quantidade,
+              quantidade_reservada: 0,
+            });
+          }
+
+        } else if (original) {
+          // ITEM EXISTENTE: Verificar se quantidade mudou
+          const qtdOriginal = Number(original.quantidade_enviada);
+          const diferenca = item.quantidade - qtdOriginal;
+
+          if (diferenca !== 0) {
+            // Validar disponibilidade se aumentando
+            if (diferenca > 0) {
+              const disponivel = estoqueCentral?.quantidade || 0;
+              if (disponivel < diferenca) {
+                throw new Error(`${item.nome}: apenas ${disponivel} disponível no Central para adicionar.`);
+              }
+            }
+
+            // Atualizar transferencia_itens
+            await supabase
+              .from('transferencia_itens')
+              .update({ quantidade_enviada: item.quantidade })
+              .eq('id', original.id);
+
+            // Registrar movimentação
+            const tipo = diferenca > 0 ? 'ENVIO_FEIRA' : 'ESTORNO_ENVIO';
+            const motivo = diferenca > 0 
+              ? `Aumento qtd carga - #${transferenciaId.slice(0, 8)}`
+              : `Redução qtd carga - #${transferenciaId.slice(0, 8)}`;
+
+            await supabase.from('estoque_movimentacoes').insert({
+              user_id: user.id,
+              item_id: item.itemId,
+              tipo,
+              quantidade: Math.abs(diferenca),
+              motivo,
+              transferencia_id: transferenciaId,
+              local_id: central.id,
+              estoque_antes: estoqueCentral?.quantidade || 0,
+              estoque_depois: (estoqueCentral?.quantidade || 0) - diferenca,
+            });
+
+            // Atualizar estoques
+            if (estoqueCentral) {
+              await supabase
+                .from('estoque_por_local')
+                .update({ quantidade: estoqueCentral.quantidade - diferenca, updated_at: new Date().toISOString() })
+                .eq('id', estoqueCentral.id);
+            }
+
+            if (estoqueBanca) {
+              await supabase
+                .from('estoque_por_local')
+                .update({ quantidade: estoqueBanca.quantidade + diferenca, updated_at: new Date().toISOString() })
+                .eq('id', estoqueBanca.id);
+            }
+          }
+        }
+
+        // Remover da lista de originais para detectar remoções
+        mapItensOriginais.delete(item.itemId);
+      }
+
+      // Processar itens REMOVIDOS (estavam na carga original mas não estão mais)
+      for (const [itemId, original] of mapItensOriginais) {
+        const qtdOriginal = Number(original.quantidade_enviada);
+        const estoqueCentral = mapEstoquesCentral.get(itemId);
+        const estoqueBanca = mapEstoquesBanca.get(itemId);
+
+        // Deletar de transferencia_itens
+        await supabase
+          .from('transferencia_itens')
+          .delete()
+          .eq('id', original.id);
+
+        // Registrar movimentação de estorno
+        await supabase.from('estoque_movimentacoes').insert({
+          user_id: user.id,
+          item_id: itemId,
+          tipo: 'ESTORNO_ENVIO',
+          quantidade: qtdOriginal,
+          motivo: `Item removido da carga - #${transferenciaId.slice(0, 8)}`,
+          transferencia_id: transferenciaId,
+          local_id: central.id,
+          estoque_antes: estoqueCentral?.quantidade || 0,
+          estoque_depois: (estoqueCentral?.quantidade || 0) + qtdOriginal,
+        });
+
+        // Devolver ao Central
+        if (estoqueCentral) {
+          await supabase
+            .from('estoque_por_local')
+            .update({ quantidade: estoqueCentral.quantidade + qtdOriginal, updated_at: new Date().toISOString() })
+            .eq('id', estoqueCentral.id);
+        }
+
+        // Remover da Banca
+        if (estoqueBanca) {
+          await supabase
+            .from('estoque_por_local')
+            .update({ quantidade: Math.max(0, estoqueBanca.quantidade - qtdOriginal), updated_at: new Date().toISOString() })
+            .eq('id', estoqueBanca.id);
+        }
+      }
+
+      // Sincronizar estoque_itens para todos os itens afetados
+      await Promise.all(todosItemIds.map(id => sincronizarEstoqueTotal(id, user.id)));
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transferencias'] });
+      queryClient.invalidateQueries({ queryKey: ['cargas-hoje'] });
+      queryClient.invalidateQueries({ queryKey: ['cargas-periodo'] });
+      queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
+      queryClient.invalidateQueries({ queryKey: ['resumo-feira'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] === 'estoque-por-local' || 
+           query.queryKey[0] === 'estoque-detalhado-por-local' ||
+           query.queryKey[0] === 'estoque-itens'),
+        refetchType: 'all'
+      });
+      queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
+    },
+  });
+}
+
 // Hook para criar transferência comum (Central <-> Loja) - USANDO RPC ATÔMICA
 export function useCriarTransferencia() {
   const { user } = useAuth();
