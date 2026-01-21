@@ -74,3 +74,55 @@ export async function getImageAsBase64(imageUrl: string): Promise<string | null>
     return null;
   }
 }
+
+/**
+ * Compresses and resizes an image for PDF embedding
+ * Uses Canvas API to reduce file size significantly
+ */
+export async function compressImageForPDF(
+  imageUrl: string,
+  maxWidth: number = 150,
+  maxHeight: number = 150,
+  quality: number = 0.6
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      // Calculate dimensions maintaining aspect ratio
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+      }
+      if (height > maxHeight) {
+        width = (width * maxHeight) / height;
+        height = maxHeight;
+      }
+      
+      // Create canvas for resizing
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+      
+      // Draw resized image
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Export as JPEG with reduced quality
+      const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressedBase64);
+    };
+    
+    img.onerror = () => resolve(null);
+    img.src = imageUrl;
+  });
+}
