@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getSignedUrl, getImageAsBase64 } from './imageUtils';
+import { getSignedUrl, compressImageForPDF } from './imageUtils';
 import type { TransferenciaComItensHistorico, TransferenciaItemComProduto } from '@/hooks/useFeiraHistorico';
 
 // Formatar valor em reais
@@ -148,14 +148,15 @@ export async function generateCargaPDF(
   // Preparar cache de imagens
   const imageCache: Map<string, string | null> = new Map();
 
-  // Carregar imagens em paralelo se necessário
+  // Carregar imagens em paralelo se necessário (com compressão)
   if (includeImages) {
     const imagePromises = carga.itens.map(async (item) => {
       if (item.produtoImagem) {
         try {
           const signedUrl = await getSignedUrl(item.produtoImagem);
           if (signedUrl) {
-            const base64 = await getImageAsBase64(signedUrl);
+            // Comprimir imagem para 150x150px com qualidade 60%
+            const base64 = await compressImageForPDF(signedUrl, 150, 150, 0.6);
             imageCache.set(item.itemId, base64);
           }
         } catch {
