@@ -6,7 +6,7 @@ import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { useDisponivelCentral, useLocais, useEnsureDefaultLocais, useSincronizarEstoqueInicial } from '@/hooks/useEstoqueLocais';
-import { useCriarCargaFeira, useRegistrarRetornoFeira, TransferenciaComItens } from '@/hooks/useTransferencias';
+import { useCriarCargaFeira, useRegistrarRetornoFeira, useEditarCargaFeira, TransferenciaComItens } from '@/hooks/useTransferencias';
 import { useRecalcularEstoque } from '@/hooks/useRecalcularEstoque';
 import { useEstornarCarga } from '@/hooks/useEstornarCarga';
 import { 
@@ -29,6 +29,7 @@ import { EstornarCargaModal } from '@/components/feira/EstornarCargaModal';
 import { NovaCargaStepProdutos } from '@/components/feira/NovaCargaStepProdutos';
 import { NovaCargaBottomSheet } from '@/components/feira/NovaCargaBottomSheet';
 import { NovaCargaBottomBar } from '@/components/feira/NovaCargaBottomBar';
+import { EditarCargaModal } from '@/components/feira/EditarCargaModal';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,6 +65,7 @@ export default function Feira() {
   const sincronizarEstoque = useSincronizarEstoqueInicial();
   const criarCarga = useCriarCargaFeira();
   const registrarRetorno = useRegistrarRetornoFeira();
+  const editarCarga = useEditarCargaFeira();
   const excluirCarga = useExcluirCargaFeira();
   const excluirHistorico = useExcluirHistoricoCarga();
   const recalcularEstoque = useRecalcularEstoque();
@@ -86,6 +88,7 @@ export default function Feira() {
   const [cargaExcluir, setCargaExcluir] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaExcluirHistorico, setCargaExcluirHistorico] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaEstornar, setCargaEstornar] = useState<TransferenciaComItensHistorico | null>(null);
+  const [cargaEditar, setCargaEditar] = useState<TransferenciaComItensHistorico | null>(null);
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
   const [buscaProduto, setBuscaProduto] = useState('');
   const [itensRetorno, setItensRetorno] = useState<{ itemId: string; quantidadeRetornada: number }[]>([]);
@@ -381,6 +384,31 @@ export default function Feira() {
     setCargaExcluirHistorico(carga);
   };
 
+  // Handler para editar carga (apenas em_andamento)
+  const handleEditarCarga = (carga: TransferenciaComItensHistorico) => {
+    if (carga.status !== 'em_andamento') {
+      toast.error('Apenas cargas em andamento podem ser editadas');
+      return;
+    }
+    setCargaEditar(carga);
+  };
+
+  // Handler para salvar edição da carga
+  const handleSalvarEdicaoCarga = (transferenciaId: string, itens: any[]) => {
+    editarCarga.mutate(
+      { transferenciaId, itens },
+      {
+        onSuccess: () => {
+          toast.success('Carga atualizada com sucesso!');
+          setCargaEditar(null);
+        },
+        onError: (error: any) => {
+          toast.error(error.message || 'Erro ao editar carga');
+        },
+      }
+    );
+  };
+
   const handleRecalcularEstoque = async () => {
     try {
       const result = await recalcularEstoque.mutateAsync();
@@ -545,6 +573,7 @@ export default function Feira() {
             <CargasAtivasAlerta
               cargasAtivas={todasCargasAtivas || []}
               onRegistrarRetorno={handleOpenRetornoFromHistorico}
+              onEditarCarga={handleEditarCarga}
               onGerarPDF={handleGerarPDF}
               periodoEhHoje={periodoEhHoje}
               isGeneratingPDF={isGeneratingPDF}
@@ -573,6 +602,10 @@ export default function Feira() {
         onExcluirCarga={(carga) => {
           setCargaDetalhes(null);
           setCargaExcluir(carga);
+        }}
+        onEditarCarga={(carga) => {
+          setCargaDetalhes(null);
+          handleEditarCarga(carga);
         }}
         onRegistrarRetorno={(carga) => {
           setCargaDetalhes(null);
@@ -1121,6 +1154,17 @@ export default function Feira() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Editar Carga */}
+      <EditarCargaModal
+        carga={cargaEditar}
+        produtos={produtosAcabados}
+        getDisponivelCentral={getDisponivelCentral}
+        onClose={() => setCargaEditar(null)}
+        onSalvar={handleSalvarEdicaoCarga}
+        isPending={editarCarga.isPending}
+        formatCurrency={formatCurrency}
+      />
     </div>
   );
 }

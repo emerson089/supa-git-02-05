@@ -18,7 +18,8 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  Trash2
+  Trash2,
+  Pencil
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -30,6 +31,7 @@ interface DetalhesCargaModalProps {
   onClose: () => void;
   onExcluirCarga?: (carga: TransferenciaComItensHistorico) => void;
   onRegistrarRetorno?: (carga: TransferenciaComItensHistorico) => void;
+  onEditarCarga?: (carga: TransferenciaComItensHistorico) => void;
 }
 
 const formatCurrency = (value: number) => {
@@ -72,7 +74,7 @@ const getStatusConfig = (status: string) => {
   }
 };
 
-export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrarRetorno }: DetalhesCargaModalProps) {
+export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrarRetorno, onEditarCarga }: DetalhesCargaModalProps) {
   if (!carga) return null;
   
   const isEmAndamento = carga.status === 'em_andamento';
@@ -327,7 +329,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
         </ScrollArea>
 
         {/* Footer com ações para cargas em andamento */}
-        {isEmAndamento && (onExcluirCarga || onRegistrarRetorno) && (
+        {isEmAndamento && (onExcluirCarga || onRegistrarRetorno || onEditarCarga) && (
           <DialogFooter className="px-6 py-4 border-t bg-muted/30 gap-2 sm:gap-2">
             {onExcluirCarga && (
               <Button
@@ -337,6 +339,16 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
               >
                 <Trash2 className="h-4 w-4" />
                 Excluir Carga
+              </Button>
+            )}
+            {onEditarCarga && (
+              <Button
+                variant="outline"
+                onClick={() => onEditarCarga(carga)}
+                className="gap-2"
+              >
+                <Pencil className="h-4 w-4" />
+                Editar Carga
               </Button>
             )}
             {onRegistrarRetorno && (
