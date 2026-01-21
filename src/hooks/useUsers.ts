@@ -89,9 +89,12 @@ export function useUsers() {
         return { success: false, error: 'Usuário não autenticado' };
       }
 
-      const response = await supabase.functions.invoke('invite-user', {
-        body: params,
-      });
+    const response = await supabase.functions.invoke('invite-user', {
+      body: params,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
       if (response.error) {
         const errorMessage = response.error.message || 'Erro ao criar usuário';
@@ -119,8 +122,19 @@ export function useUsers() {
 
   const updateUserRole = useCallback(async (userId: string, newRole: AppRole): Promise<boolean> => {
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      if (!token) {
+        toast.error('Usuário não autenticado');
+        return false;
+      }
+
       const response = await supabase.functions.invoke('update-user-role', {
         body: { userId, newRole },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (response.error) {
@@ -147,8 +161,19 @@ export function useUsers() {
 
   const toggleUserStatus = useCallback(async (userId: string, newStatus: 'ativo' | 'inativo'): Promise<boolean> => {
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      if (!token) {
+        toast.error('Usuário não autenticado');
+        return false;
+      }
+
       const response = await supabase.functions.invoke('toggle-user-status', {
         body: { userId, status: newStatus },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (response.error) {
@@ -175,8 +200,19 @@ export function useUsers() {
 
   const resetUserPassword = useCallback(async (userId: string): Promise<string | null> => {
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      if (!token) {
+        toast.error('Usuário não autenticado');
+        return null;
+      }
+
       const response = await supabase.functions.invoke('admin-reset-password', {
         body: { userId },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (response.error) {
