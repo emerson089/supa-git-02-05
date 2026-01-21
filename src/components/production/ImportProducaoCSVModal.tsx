@@ -5,6 +5,12 @@ import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from 'lucide-react
 import { toast } from 'sonner';
 import { Producao, ProducaoInsert } from '@/entities/Producao';
 import { STAGES } from '@/data/production-data';
+import { 
+  ProducaoCSVRowSchema,
+  sanitizeString,
+  safeParseInt,
+  validateCSVFile 
+} from '@/lib/csv-validation-schemas';
 
 interface ImportProducaoCSVModalProps {
   open: boolean;
@@ -50,7 +56,7 @@ export function ImportProducaoCSVModal({ open, onOpenChange, onSuccess }: Import
     const parseErrors: string[] = [];
 
     dataLines.forEach((line, index) => {
-      const values = line.split(',').map(v => v.replace(/^"|"$/g, '').trim());
+      const values = line.split(',').map(v => sanitizeString(v.replace(/^"|"$/g, '')));
       
       if (values.length < 3) {
         parseErrors.push(`Linha ${index + 2}: Dados insuficientes`);
@@ -59,11 +65,21 @@ export function ImportProducaoCSVModal({ open, onOpenChange, onSuccess }: Import
 
       const referencia = values[0] || '';
       const modelo = values[1] || '';
-      const quantidade = parseInt(values[2]) || 0;
+      const quantidade = safeParseInt(values[2]);
       let etapa = (values[3] || 'Corte').trim();
       const responsavel = values[4] || '';
       let prioridade = (values[5] || 'normal').toLowerCase().trim();
       const observacoes = values[6] || '';
+
+      // Validate with Zod schema
+      const rawRow = { referencia, modelo, quantidade, etapa, responsavel, prioridade, observacoes };
+      const validation = ProducaoCSVRowSchema.safeParse(rawRow);
+      
+      if (!validation.success) {
+        const errs = validation.error.errors.map(e => `Linha ${index + 2}: ${e.message}`);
+        parseErrors.push(...errs);
+        return;
+      }
 
       // Validate stage - find matching stage
       const matchedStage = STAGES.find(s => 
@@ -79,11 +95,6 @@ export function ImportProducaoCSVModal({ open, onOpenChange, onSuccess }: Import
 
       if (!modelo && !referencia) {
         parseErrors.push(`Linha ${index + 2}: Referência ou modelo é obrigatório`);
-        return;
-      }
-
-      if (quantidade <= 0) {
-        parseErrors.push(`Linha ${index + 2}: Quantidade inválida`);
         return;
       }
 
@@ -103,8 +114,10 @@ export function ImportProducaoCSVModal({ open, onOpenChange, onSuccess }: Import
   };
 
   const handleFile = (file: File) => {
-    if (!file.name.endsWith('.csv')) {
-      toast.error('Por favor, selecione um arquivo CSV.');
+    // Validate file
+    const fileValidation = validateCSVFile(file);
+    if (!fileValidation.valid) {
+      toast.error(fileValidation.error);
       return;
     }
 

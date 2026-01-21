@@ -4,6 +4,14 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Upload, FileSpreadsheet, AlertCircle, Check, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { 
+  CustoCSVRowSchema, 
+  ValidatedCustoCSVRow,
+  validateTipoCusto,
+  sanitizeString,
+  safeParseNumber,
+  validateCSVFile 
+} from '@/lib/csv-validation-schemas';
 
 interface ImportCustosCSVModalProps {
   open: boolean;
@@ -48,28 +56,45 @@ export function ImportCustosCSVModal({ open, onOpenChange, onSuccess }: ImportCu
     const parsed: ParsedCusto[] = [];
     
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.replace(/^"|"$/g, '').trim());
+      const values = lines[i].split(',').map(v => sanitizeString(v.replace(/^"|"$/g, '')));
       
       if (values.length < 6) continue;
 
       const referencia = values[0] || '';
       const modelo = values[1] || '';
-      const quantidade = parseFloat(values[2]) || 0;
-      const metrosTecido = parseFloat(values[3]) || 0;
-      const valorMetro = parseFloat(values[4]) || 0;
-      const precoVenda = parseFloat(values[5]) || 0;
+      const quantidade = safeParseNumber(values[2]);
+      const metrosTecido = safeParseNumber(values[3]);
+      const valorMetro = safeParseNumber(values[4]);
+      const precoVenda = safeParseNumber(values[5]);
       const tipoCusto = values[6] || '';
       const descricaoCusto = values[7] || '';
-      const valorUnitario = parseFloat(values[8]) || 0;
+      const valorUnitario = safeParseNumber(values[8]);
       const pagoStr = (values[9] || '').toLowerCase();
       const pago = pagoStr === 'sim' || pagoStr === 'true' || pagoStr === '1';
       const dataPagamento = values[10] || '';
 
-      let error: string | undefined;
+      // Validate with Zod schema
+      const rawRow = {
+        referencia,
+        modelo,
+        quantidade,
+        metrosTecido,
+        valorMetro,
+        precoVenda,
+        tipoCusto,
+        descricaoCusto,
+        valorUnitario,
+        pago,
+        dataPagamento
+      };
 
-      if (!referencia) {
-        error = 'Referência obrigatória';
-      } else if (tipoCusto && !VALID_TIPOS.includes(tipoCusto)) {
+      const validation = CustoCSVRowSchema.safeParse(rawRow);
+      
+      let error: string | undefined;
+      
+      if (!validation.success) {
+        error = validation.error.errors.map(e => e.message).join(', ');
+      } else if (tipoCusto && !validateTipoCusto(tipoCusto)) {
         error = `Tipo inválido: ${tipoCusto}`;
       }
 
@@ -93,8 +118,10 @@ export function ImportCustosCSVModal({ open, onOpenChange, onSuccess }: ImportCu
   };
 
   const handleFile = async (file: File) => {
-    if (!file.name.endsWith('.csv')) {
-      toast.error('Por favor, selecione um arquivo CSV');
+    // Validate file
+    const fileValidation = validateCSVFile(file);
+    if (!fileValidation.valid) {
+      toast.error(fileValidation.error);
       return;
     }
 

@@ -14,6 +14,13 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
+import { 
+  PedidoCSVRowSchema, 
+  ValidatedPedidoCSVRow, 
+  sanitizeString, 
+  safeParseNumber,
+  validateCSVFile 
+} from '@/lib/csv-validation-schemas';
 
 interface ImportPedidosCSVModalProps {
   open: boolean;
@@ -51,7 +58,7 @@ const normalizeHeader = (header: string): string => {
 };
 
 const normalizeStatus = (status: string, type: 'pagamento' | 'pedido' | 'entrega'): string => {
-  const normalized = status.toUpperCase().trim();
+  const normalized = sanitizeString(status).toUpperCase().trim();
   
   const pagamentoMap: Record<string, string> = {
     'PAGO': 'PAGO',
@@ -102,36 +109,28 @@ const normalizeStatus = (status: string, type: 'pagamento' | 'pedido' | 'entrega
 };
 
 const parseDate = (dateStr: string): string => {
+  const sanitized = sanitizeString(dateStr);
+  
   // Try DD/MM/YYYY format
-  const ddmmyyyy = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const ddmmyyyy = sanitized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (ddmmyyyy) {
     const [, day, month, year] = ddmmyyyy;
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`;
   }
   
   // Try YYYY-MM-DD format
-  const yyyymmdd = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const yyyymmdd = sanitized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (yyyymmdd) {
-    return `${dateStr}T00:00:00`;
+    return `${sanitized}T00:00:00`;
   }
   
   // Default to now
   return new Date().toISOString();
 };
 
-const parseNumber = (value: string): number => {
-  if (!value) return 0;
-  // Handle Brazilian format (1.234,56) and standard format (1234.56)
-  const cleaned = value
-    .replace(/[^\d.,]/g, '')
-    .replace(/\.(?=.*\.)/g, '') // Remove thousands separators
-    .replace(',', '.'); // Convert decimal comma to point
-  return parseFloat(cleaned) || 0;
-};
-
-const parseCSV = (content: string): CSVPedidoRow[] => {
+const parseCSV = (content: string): { rows: CSVPedidoRow[]; validationErrors: string[] } => {
   const lines = content.split(/\r?\n/).filter(line => line.trim());
-  if (lines.length < 2) return [];
+  if (lines.length < 2) return { rows: [], validationErrors: ['Arquivo vazio ou sem dados'] };
 
   const headers = lines[0].split(/[;,]/).map(normalizeHeader);
   
@@ -148,29 +147,39 @@ const parseCSV = (content: string): CSVPedidoRow[] => {
   });
 
   const rows: CSVPedidoRow[] = [];
+  const validationErrors: string[] = [];
   
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(/[;,]/).map(v => v.trim().replace(/^["']|["']$/g, ''));
+    const values = lines[i].split(/[;,]/).map(v => sanitizeString(v.replace(/^["']|["']$/g, '')));
     
     if (values.length === 0 || values.every(v => !v)) continue;
 
-    const row: CSVPedidoRow = {
+    const rawRow = {
       data: columnMap.data !== undefined ? values[columnMap.data] : '',
       cliente: columnMap.cliente !== undefined ? values[columnMap.cliente] : '',
-      qtdTotal: columnMap.qtdTotal !== undefined ? parseNumber(values[columnMap.qtdTotal]) : 0,
-      valorTotal: columnMap.valorTotal !== undefined ? parseNumber(values[columnMap.valorTotal]) : 0,
+      qtdTotal: columnMap.qtdTotal !== undefined ? safeParseNumber(values[columnMap.qtdTotal]) : 0,
+      valorTotal: columnMap.valorTotal !== undefined ? safeParseNumber(values[columnMap.valorTotal]) : 0,
       statusPagamento: columnMap.statusPagamento !== undefined ? values[columnMap.statusPagamento] : 'PENDENTE',
       statusPedido: columnMap.statusPedido !== undefined ? values[columnMap.statusPedido] : 'NÃO SEPARADO',
       statusEntrega: columnMap.statusEntrega !== undefined ? values[columnMap.statusEntrega] : 'PEND. ENTREGA',
     };
 
+    // Validate with Zod schema
+    const validation = PedidoCSVRowSchema.safeParse(rawRow);
+    
+    if (!validation.success) {
+      const errors = validation.error.errors.map(e => `Linha ${i + 1}: ${e.path.join('.') || 'campo'} - ${e.message}`);
+      validationErrors.push(...errors);
+      continue;
+    }
+
     // Only include rows with at least a client name
-    if (row.cliente) {
-      rows.push(row);
+    if (validation.data.cliente) {
+      rows.push(validation.data as CSVPedidoRow);
     }
   }
 
-  return rows;
+  return { rows, validationErrors };
 };
 
 export function ImportPedidosCSVModal({ open, onOpenChange }: ImportPedidosCSVModalProps) {
@@ -407,8 +416,10 @@ export function ImportPedidosCSVModal({ open, onOpenChange }: ImportPedidosCSVMo
   };
 
   const handleFileSelect = async (file: File) => {
-    if (!file.name.endsWith('.csv')) {
-      toast.error('Por favor, selecione um arquivo .csv');
+    // Validate file
+    const fileValidation = validateCSVFile(file);
+    if (!fileValidation.valid) {
+      toast.error(fileValidation.error);
       return;
     }
 
@@ -416,15 +427,24 @@ export function ImportPedidosCSVModal({ open, onOpenChange }: ImportPedidosCSVMo
 
     try {
       const content = await file.text();
-      const rows = parseCSV(content);
+      const { rows, validationErrors } = parseCSV(content);
 
       if (rows.length === 0) {
-        toast.error('Nenhum pedido válido encontrado no arquivo.');
+        if (validationErrors.length > 0) {
+          toast.error(`Erros de validação encontrados: ${validationErrors.slice(0, 3).join('; ')}`);
+        } else {
+          toast.error('Nenhum pedido válido encontrado no arquivo.');
+        }
         return;
       }
 
       // Show preview
       setPreviewRows(rows.slice(0, 5));
+      
+      // Log validation errors if any (but continue with valid rows)
+      if (validationErrors.length > 0) {
+        console.warn('CSV validation warnings:', validationErrors);
+      }
       
       // Start import
       await processImport(rows);

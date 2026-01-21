@@ -4,6 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Upload, FileSpreadsheet, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useEstoque, ItemEstoque } from '@/contexts/EstoqueContext';
+import { 
+  ModeloCSVRowSchema,
+  sanitizeString,
+  safeParseNumber,
+  safeParseInt,
+  validateCSVFile 
+} from '@/lib/csv-validation-schemas';
 
 interface ImportModelosCSVModalProps {
   open: boolean;
@@ -26,13 +33,13 @@ export function ImportModelosCSVModal({ open, onOpenChange }: ImportModelosCSVMo
   const [pendingData, setPendingData] = useState<{ nome: string; referencia: string; quantidade: number; preco: number }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const parseCSV = (text: string) => {
+  const parseCSV = (text: string): { data: { nome: string; referencia: string; quantidade: number; preco: number }[]; errors: string[] } => {
     const lines = text.split('\n').filter(line => line.trim());
-    if (lines.length < 2) return [];
+    if (lines.length < 2) return { data: [], errors: ['Arquivo vazio ou sem dados'] };
 
     const headerLine = lines[0].toLowerCase();
     const separator = headerLine.includes(';') ? ';' : ',';
-    const headers = headerLine.split(separator).map(h => h.trim().replace(/"/g, ''));
+    const headers = headerLine.split(separator).map(h => sanitizeString(h.replace(/"/g, '')));
 
     // Mapear colunas
     const referenciaIdx = headers.findIndex(h => h.includes('referencia') || h.includes('referência') || h === 'ref');
@@ -41,21 +48,31 @@ export function ImportModelosCSVModal({ open, onOpenChange }: ImportModelosCSVMo
     const precoIdx = headers.findIndex(h => h.includes('preco') || h.includes('preço') || h.includes('valor'));
 
     const data: { nome: string; referencia: string; quantidade: number; preco: number }[] = [];
+    const errors: string[] = [];
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(separator).map(v => v.trim().replace(/"/g, ''));
+      const values = lines[i].split(separator).map(v => sanitizeString(v.replace(/"/g, '')));
       
       const referencia = referenciaIdx >= 0 ? values[referenciaIdx] || '' : '';
       const nome = modeloIdx >= 0 ? values[modeloIdx] || '' : '';
-      const quantidade = quantidadeIdx >= 0 ? parseInt(values[quantidadeIdx]) || 0 : 0;
-      const preco = precoIdx >= 0 ? parseFloat(values[precoIdx]?.replace(',', '.')) || 0 : 0;
+      const quantidade = quantidadeIdx >= 0 ? safeParseInt(values[quantidadeIdx]) : 0;
+      const preco = precoIdx >= 0 ? safeParseNumber(values[precoIdx]?.replace(',', '.')) : 0;
+
+      // Validate with Zod schema
+      const validation = ModeloCSVRowSchema.safeParse({ referencia, nome, quantidade, preco });
+      
+      if (!validation.success) {
+        const errs = validation.error.errors.map(e => `Linha ${i + 1}: ${e.message}`);
+        errors.push(...errs);
+        continue;
+      }
 
       if (nome || referencia) {
         data.push({ referencia, nome, quantidade, preco });
       }
     }
 
-    return data;
+    return { data, errors };
   };
 
   const processImport = useCallback((data: { nome: string; referencia: string; quantidade: number; preco: number }[], handleDuplicates: 'sum' | 'skip' | 'ask') => {
@@ -120,17 +137,28 @@ export function ImportModelosCSVModal({ open, onOpenChange }: ImportModelosCSVMo
   }, [itens, addItem, updateItem]);
 
   const handleFile = async (file: File) => {
-    if (!file.name.endsWith('.csv')) {
-      toast.error('Por favor, selecione um arquivo .csv');
+    // Validate file
+    const fileValidation = validateCSVFile(file);
+    if (!fileValidation.valid) {
+      toast.error(fileValidation.error);
       return;
     }
 
     const text = await file.text();
-    const data = parseCSV(text);
+    const { data, errors: parseErrors } = parseCSV(text);
 
     if (data.length === 0) {
-      toast.error('Nenhum dado válido encontrado no arquivo');
+      if (parseErrors.length > 0) {
+        toast.error(`Erros de validação: ${parseErrors.slice(0, 3).join('; ')}`);
+      } else {
+        toast.error('Nenhum dado válido encontrado no arquivo');
+      }
       return;
+    }
+    
+    // Log validation warnings
+    if (parseErrors.length > 0) {
+      console.warn('CSV validation warnings:', parseErrors);
     }
 
     setPendingData(data);
