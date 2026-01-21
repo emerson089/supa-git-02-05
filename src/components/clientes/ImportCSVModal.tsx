@@ -14,6 +14,11 @@ import { toast } from 'sonner';
 import { useClientesContext } from '@/contexts/ClientesContext';
 import { useClientesBatchImport } from '@/hooks/useClientesBatchImport';
 import { ClienteInsertWithDate } from '@/hooks/useClientesData';
+import { 
+  ClienteCSVRowSchema, 
+  sanitizeString, 
+  validateCSVFile 
+} from '@/lib/csv-validation-schemas';
 
 interface ImportCSVModalProps {
   open: boolean;
@@ -37,9 +42,9 @@ const normalizeHeader = (header: string): string => {
     .trim();
 };
 
-const parseCSV = (content: string): CSVRow[] => {
+const parseCSV = (content: string): { rows: CSVRow[]; validationErrors: string[] } => {
   const lines = content.split(/\r?\n/).filter(line => line.trim());
-  if (lines.length < 2) return [];
+  if (lines.length < 2) return { rows: [], validationErrors: ['Arquivo vazio ou sem dados'] };
 
   const headers = lines[0].split(/[,;]/).map(normalizeHeader);
   
@@ -57,13 +62,14 @@ const parseCSV = (content: string): CSVRow[] => {
   });
 
   const rows: CSVRow[] = [];
+  const validationErrors: string[] = [];
   
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(/[,;]/).map(v => v.trim().replace(/^["']|["']$/g, ''));
+    const values = lines[i].split(/[,;]/).map(v => sanitizeString(v.replace(/^["']|["']$/g, '')));
     
     if (values.length === 0 || values.every(v => !v)) continue;
 
-    const row: CSVRow = {
+    const rawRow = {
       nome: columnMap.nome !== undefined ? values[columnMap.nome] : '',
       telefone: columnMap.telefone !== undefined ? values[columnMap.telefone] : '',
       cidade: columnMap.cidade !== undefined ? values[columnMap.cidade] : '',
@@ -72,13 +78,22 @@ const parseCSV = (content: string): CSVRow[] => {
       datahora: columnMap.datahora !== undefined ? values[columnMap.datahora] : undefined,
     };
 
+    // Validate with Zod schema
+    const validation = ClienteCSVRowSchema.safeParse(rawRow);
+    
+    if (!validation.success) {
+      const errors = validation.error.errors.map(e => `Linha ${i + 1}: ${e.path.join('.') || 'campo'} - ${e.message}`);
+      validationErrors.push(...errors);
+      continue;
+    }
+
     // Only include rows with at least a name
-    if (row.nome) {
-      rows.push(row);
+    if (validation.data.nome) {
+      rows.push(validation.data);
     }
   }
 
-  return rows;
+  return { rows, validationErrors };
 };
 
 export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
@@ -98,8 +113,10 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
   const batchImportMutation = useClientesBatchImport({ onProgress: handleProgress });
 
   const handleFileSelect = async (file: File) => {
-    if (!file.name.endsWith('.csv')) {
-      toast.error('Por favor, selecione um arquivo .csv');
+    // Validate file
+    const fileValidation = validateCSVFile(file);
+    if (!fileValidation.valid) {
+      toast.error(fileValidation.error);
       return;
     }
 
@@ -109,12 +126,21 @@ export function ImportCSVModal({ open, onOpenChange }: ImportCSVModalProps) {
 
     try {
       const content = await file.text();
-      const rows = parseCSV(content);
+      const { rows, validationErrors } = parseCSV(content);
 
       if (rows.length === 0) {
-        toast.error('Nenhum cliente válido encontrado no arquivo. Verifique se as colunas estão corretas (Nome, Telefone, Cidade, Estado, Excursão).');
+        if (validationErrors.length > 0) {
+          toast.error(`Erros de validação: ${validationErrors.slice(0, 3).join('; ')}`);
+        } else {
+          toast.error('Nenhum cliente válido encontrado no arquivo. Verifique se as colunas estão corretas (Nome, Telefone, Cidade, Estado, Excursão).');
+        }
         setIsProcessing(false);
         return;
+      }
+      
+      // Log validation warnings
+      if (validationErrors.length > 0) {
+        console.warn('CSV validation warnings:', validationErrors);
       }
 
       // Create a set of existing client names (normalized) for duplicate detection
