@@ -114,16 +114,16 @@ export default function Feira() {
     [todasCargasAtivas]
   );
 
-  // Limpar estado ao fechar modal
+  // Fechar modal - manter itens selecionados para persistência
   const handleCloseNovaCarga = () => {
     setShowNovaCarga(false);
-    setItensCarga([]);
+    // Não limpa itensCarga para persistir ao reabrir
     setBuscaProduto('');
   };
 
-  // Abrir modal com estado limpo e refetch de estoque
+  // Abrir modal - mantém itens selecionados e refetch de estoque
   const handleOpenNovaCarga = async () => {
-    setItensCarga([]);
+    // Não limpa itensCarga para manter seleção anterior
     setBuscaProduto('');
     setShowNovaCarga(true);
     setIsRefetchingEstoque(true);
@@ -272,6 +272,7 @@ export default function Feira() {
       {
         onSuccess: () => {
           toast.success('Carga criada com sucesso!');
+          setItensCarga([]); // Limpar apenas após criar com sucesso
         },
         onError: (error: any) => {
           toast.error(error.message || 'Erro ao criar carga');
@@ -899,23 +900,22 @@ export default function Feira() {
                             <p className="text-sm font-medium truncate">{item.nome}</p>
                             <p className="text-xs text-muted-foreground">{formatCurrency(item.precoUnitario)} × {item.quantidade}</p>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleUpdateQuantidadeCarga(item.itemId, -1); }} disabled={item.quantidade <= 1}>
-                              <Minus size={14} />
-                            </Button>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={item.disponivelCentral}
-                              value={item.quantidade}
-                              onChange={(e) => handleSetQuantidadeCarga(item.itemId, parseInt(e.target.value) || 1)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-12 h-7 text-center text-sm font-medium px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleUpdateQuantidadeCarga(item.itemId, 1); }} disabled={item.quantidade >= item.disponivelCentral}>
-                              <Plus size={14} />
-                            </Button>
-                          </div>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            value={item.quantidade || ''}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '');
+                              handleSetQuantidadeCarga(item.itemId, val === '' ? 0 : parseInt(val));
+                            }}
+                            onBlur={(e) => {
+                              const val = parseInt(e.target.value) || 1;
+                              if (val < 1) handleSetQuantidadeCarga(item.itemId, 1);
+                            }}
+                            onFocus={(e) => e.target.select()}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-16 h-8 text-center text-sm font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
                           <span className="text-sm font-semibold text-primary w-20 text-right">{formatCurrency(item.precoUnitario * item.quantidade)}</span>
                           <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleRemoveItemCarga(item.itemId); }}>
                             <Trash2 size={14} />

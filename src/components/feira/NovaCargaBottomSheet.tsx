@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ShoppingBag, Minus, Plus, Trash2, Truck, Loader2 } from 'lucide-react';
+import { ShoppingBag, Trash2, Truck, Loader2 } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -129,46 +129,18 @@ export function NovaCargaBottomSheet({
                   </Button>
                 </div>
                 
-                {/* Row 2: Quantity controls + Subtotal */}
+                {/* Row 2: Quantity input + Subtotal */}
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      size="icon" 
-                      variant="outline" 
-                      className="h-10 w-10 touch-manipulation" 
-                      onClick={() => onUpdateQtd(item.itemId, Math.max(1, item.quantidade - 1))} 
-                      disabled={item.quantidade <= 1}
-                    >
-                      <Minus size={18} />
-                    </Button>
-                    
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={item.quantidade}
-                      onChange={(e) => handleQuantityChange(item, e.target.value)}
-                      onFocus={(e) => e.target.select()}
-                      onBlur={(e) => handleQuantityBlur(item, e.target.value)}
-                      className="w-16 h-10 text-center text-base font-semibold px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                    
-                    <Button 
-                      size="icon" 
-                      variant="outline" 
-                      className="h-10 w-10 touch-manipulation" 
-                      onClick={() => {
-                        if (item.quantidade >= item.disponivelCentral) {
-                          toast.warning(`Máximo disponível: ${item.disponivelCentral}`);
-                          return;
-                        }
-                        onUpdateQtd(item.itemId, item.quantidade + 1);
-                      }}
-                      disabled={item.quantidade >= item.disponivelCentral}
-                    >
-                      <Plus size={18} />
-                    </Button>
-                  </div>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={item.quantidade || ''}
+                    onChange={(e) => handleQuantityChange(item, e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                    onBlur={(e) => handleQuantityBlur(item, e.target.value)}
+                    className="w-20 h-10 text-center text-base font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
                   
                   <div className="text-right">
                     <p className="text-base font-bold text-primary tabular-nums">
