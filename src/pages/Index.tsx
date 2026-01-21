@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ViewMode, ChecklistAprontamento } from '@/types/production';
 import { Producao, ProducaoData, ProducaoInsert, ProducaoUpdate } from '@/entities/Producao';
 import { ProducaoLog } from '@/entities/ProducaoLog';
@@ -17,13 +17,13 @@ import { ImportProducaoCSVModal } from '@/components/production/ImportProducaoCS
 import { ImportCustosCSVModal } from '@/components/production/ImportCustosCSVModal';
 import ProducaoForm from '@/components/producao/ProducaoForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useResponsaveisUnicos, FiltrosProducao } from '@/hooks/useProducaoPorEtapa';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
-import { Download, Upload } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { getSignedUrl, getImageAsBase64 } from '@/utils/imageUtils';
 
@@ -33,6 +33,13 @@ const Index = () => {
   const [lots, setLots] = useState<ProducaoData[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [filtros, setFiltros] = useState<FiltrosProducao>({ prioridade: 'todos' });
+  
+  // Debounce search for performance
+  const debouncedSearch = useDebouncedValue(search, 300);
+  
+  // Buscar responsáveis únicos para o filtro
+  const { data: responsaveisDisponiveis = [] } = useResponsaveisUnicos();
   
   // Modal control
   const [showForm, setShowForm] = useState(false);
@@ -508,12 +515,30 @@ const Index = () => {
     }
   };
 
-  // Filter lots
-  const filteredLots = lots.filter(l =>
-    (l.modelo_nome_cache || '').toLowerCase().includes(search.toLowerCase()) ||
-    (l.id_producao || '').toLowerCase().includes(search.toLowerCase()) ||
-    (l.responsavel || '').toLowerCase().includes(search.toLowerCase())
-  );
+  // Filter lots (memoizado para evitar re-cálculos)
+  const filteredLots = useMemo(() => {
+    return lots.filter(l => {
+      // Filtro de busca por texto
+      const searchMatch = !debouncedSearch || 
+        (l.modelo_nome_cache || '').toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        (l.id_producao || '').toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        (l.responsavel || '').toLowerCase().includes(debouncedSearch.toLowerCase());
+      
+      if (!searchMatch) return false;
+      
+      // Filtro de prioridade
+      if (filtros.prioridade && filtros.prioridade !== 'todos' && l.prioridade !== filtros.prioridade) {
+        return false;
+      }
+      
+      // Filtro de responsável
+      if (filtros.responsavel && l.responsavel !== filtros.responsavel) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [lots, debouncedSearch, filtros]);
 
   const isMobile = useIsMobile();
 
@@ -541,7 +566,10 @@ const Index = () => {
           onExportCustos={handleExportCustos}
           onImportCustos={() => setShowImportCustosModal(true)}
           loading={loading}
-          totalLots={lots.length}
+          totalLots={filteredLots.length}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          responsaveisDisponiveis={responsaveisDisponiveis}
         />
 
         {/* Content Area */}
@@ -567,6 +595,7 @@ const Index = () => {
                 onManageCosts={handleManageCosts}
                 onOpenChecklist={handleOpenChecklist}
                 onUpdateProgress={handleUpdateProgress}
+                filtros={filtros}
               />
             )
           ) : (

@@ -115,12 +115,13 @@ export function MobileProductionCard({
       priority === 'atencao' && "border-amber-500/50 bg-amber-500/5"
     )}>
       <div className="flex gap-3">
-        {/* Image */}
+        {/* Image with LazyImage */}
         <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-muted">
           <LotImage
             src={lot.imagem_url}
             alt={lot.modelo_nome_cache || 'Lote'}
             className="w-full h-full object-cover"
+            containerClassName="w-full h-full"
           />
         </div>
 

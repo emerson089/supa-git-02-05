@@ -9,6 +9,7 @@ import { useTempoNaEtapa } from '@/hooks/useTempoNaEtapa';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
+import { LazyImage } from '@/components/ui/lazy-image';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -187,13 +188,13 @@ export function ProductionCard({
         </div>
       </div>
 
-      {/* Large Image */}
+      {/* Large Image with LazyImage */}
       <div className="aspect-[4/3] rounded-xl overflow-hidden mb-3 neu-input">
-        <img 
-          src={signedUrl || 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&q=80&w=400'} 
+        <LazyImage 
+          src={signedUrl} 
           alt={lot.modelo_nome_cache || 'Produto'} 
           className="w-full h-full object-cover"
-          draggable={false}
+          containerClassName="w-full h-full"
         />
       </div>
 

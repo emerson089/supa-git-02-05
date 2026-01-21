@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { 
   DndContext, 
   DragEndEvent, 
@@ -13,6 +13,7 @@ import { ProducaoData } from '@/entities/Producao';
 import { STAGES } from '@/data/production-data';
 import { KanbanColumn } from './KanbanColumn';
 import { ProductionCard } from './ProductionCard';
+import { FiltrosProducao } from '@/hooks/useProducaoPorEtapa';
 
 interface KanbanBoardProps {
   lots: ProducaoData[];
@@ -23,7 +24,99 @@ interface KanbanBoardProps {
   onManageCosts?: (lot: ProducaoData) => void;
   onOpenChecklist?: (lot: ProducaoData) => void;
   onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
+  filtros?: FiltrosProducao;
 }
+
+// Memoized column wrapper para lazy loading
+const LazyColumn = memo(function LazyColumn({
+  stageId,
+  stageIndex,
+  allLots,
+  filtros,
+  onMoveCard,
+  onEditCard,
+  onDeleteCard,
+  onManageCosts,
+  onOpenChecklist,
+  onUpdateProgress,
+}: {
+  stageId: string;
+  stageIndex: number;
+  allLots: ProducaoData[];
+  filtros?: FiltrosProducao;
+  onMoveCard: (lot: ProducaoData, direction: 'next' | 'prev') => void;
+  onEditCard?: (lot: ProducaoData) => void;
+  onDeleteCard?: (lot: ProducaoData) => void;
+  onManageCosts?: (lot: ProducaoData) => void;
+  onOpenChecklist?: (lot: ProducaoData) => void;
+  onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
+}) {
+  const columnRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(stageIndex < 3); // Primeiras 3 visíveis imediatamente
+  
+  const stage = STAGES[stageIndex];
+  
+  // IntersectionObserver para lazy loading de colunas
+  useEffect(() => {
+    if (isVisible) return;
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px', threshold: 0 }
+    );
+    
+    if (columnRef.current) {
+      observer.observe(columnRef.current);
+    }
+    
+    return () => observer.disconnect();
+  }, [isVisible]);
+
+  // Filtrar lotes para esta etapa
+  const stageLots = allLots.filter(l => {
+    if (l.processo_atual !== stageId) return false;
+    
+    // Aplicar filtros locais
+    if (filtros?.prioridade && filtros.prioridade !== 'todos' && l.prioridade !== filtros.prioridade) {
+      return false;
+    }
+    if (filtros?.responsavel && l.responsavel !== filtros.responsavel) {
+      return false;
+    }
+    
+    return true;
+  });
+
+  return (
+    <div ref={columnRef} className="min-w-[320px]">
+      {isVisible ? (
+        <KanbanColumn
+          stage={stage}
+          lots={stageLots}
+          onMoveCard={onMoveCard}
+          onEditCard={onEditCard}
+          onDeleteCard={onDeleteCard}
+          onManageCosts={onManageCosts}
+          onOpenChecklist={onOpenChecklist}
+          onUpdateProgress={onUpdateProgress}
+          isFirstStage={stageIndex === 0}
+          isLastStage={stageIndex === STAGES.length - 1}
+        />
+      ) : (
+        // Placeholder enquanto não está visível
+        <div className="w-[320px] h-full flex flex-col">
+          <div className="h-16 bg-muted/30 rounded-xl animate-pulse mb-4" />
+          <div className="flex-1 bg-muted/20 rounded-xl" />
+        </div>
+      )}
+    </div>
+  );
+});
 
 export function KanbanBoard({ 
   lots, 
@@ -33,7 +126,8 @@ export function KanbanBoard({
   onDeleteCard, 
   onManageCosts,
   onOpenChecklist,
-  onUpdateProgress
+  onUpdateProgress,
+  filtros,
 }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeLot = activeId ? lots.find(l => l.id === activeId) : null;
@@ -71,24 +165,21 @@ export function KanbanBoard({
       onDragEnd={handleDragEnd}
     >
       <div className="flex gap-6 h-full min-w-max pb-4">
-        {STAGES.map((stage, index) => {
-          const stageLots = lots.filter(l => l.processo_atual === stage.id);
-          return (
-            <KanbanColumn
-              key={stage.id}
-              stage={stage}
-              lots={stageLots}
-              onMoveCard={onMoveCard}
-              onEditCard={onEditCard}
-              onDeleteCard={onDeleteCard}
-              onManageCosts={onManageCosts}
-              onOpenChecklist={onOpenChecklist}
-              onUpdateProgress={onUpdateProgress}
-              isFirstStage={index === 0}
-              isLastStage={index === STAGES.length - 1}
-            />
-          );
-        })}
+        {STAGES.map((stage, index) => (
+          <LazyColumn
+            key={stage.id}
+            stageId={stage.id}
+            stageIndex={index}
+            allLots={lots}
+            filtros={filtros}
+            onMoveCard={onMoveCard}
+            onEditCard={onEditCard}
+            onDeleteCard={onDeleteCard}
+            onManageCosts={onManageCosts}
+            onOpenChecklist={onOpenChecklist}
+            onUpdateProgress={onUpdateProgress}
+          />
+        ))}
       </div>
 
       <DragOverlay>

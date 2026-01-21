@@ -1,21 +1,23 @@
 import { useSignedUrl } from '@/hooks/useSignedUrl';
-
-const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&q=80&w=200';
+import { LazyImage } from '@/components/ui/lazy-image';
 
 interface LotImageProps {
   src: string | null | undefined;
   alt: string;
   className?: string;
+  containerClassName?: string;
 }
 
-export function LotImage({ src, alt, className = '' }: LotImageProps) {
-  const { signedUrl } = useSignedUrl(src);
+export function LotImage({ src, alt, className = '', containerClassName = '' }: LotImageProps) {
+  const { signedUrl, loading } = useSignedUrl(src);
 
   return (
-    <img 
-      src={signedUrl || DEFAULT_IMAGE} 
-      alt={alt} 
+    <LazyImage
+      src={signedUrl}
+      alt={alt}
       className={className}
+      containerClassName={containerClassName}
+      showPlaceholderIcon={true}
     />
   );
 }
