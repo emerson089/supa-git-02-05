@@ -1002,7 +1002,7 @@ export default function Feira() {
 
       {/* Modal Retorno */}
       <Dialog open={showRetorno} onOpenChange={setShowRetorno}>
-        <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogContent className="max-w-md sm:h-[85vh] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-4 pt-4 pb-3 border-b shrink-0">
             <DialogTitle className="text-lg">Registrar Retorno</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
@@ -1014,7 +1014,7 @@ export default function Feira() {
           </DialogHeader>
 
           {/* Header de colunas fixo */}
-          <div className="grid grid-cols-[40px_1fr_50px_80px_70px] gap-2 px-4 py-2 border-b bg-muted/30 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+          <div className="grid grid-cols-[40px_1fr_50px_80px_70px] gap-2 px-4 py-2 border-b bg-muted/30 text-[10px] font-medium text-muted-foreground uppercase tracking-wide sticky top-0 z-10">
             <span></span>
             <span>Produto</span>
             <span className="text-center">Enviado</span>
@@ -1022,7 +1022,7 @@ export default function Feira() {
             <span className="text-center">Vendido</span>
           </div>
 
-          <ScrollArea className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
             <div className="divide-y">
               {cargaSelecionada?.itens.map(item => {
                 const retorno = itensRetorno.find(i => i.itemId === item.itemId);
@@ -1117,7 +1117,7 @@ export default function Feira() {
                 );
               })}
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Footer fixo com resumo */}
           <div className="border-t px-4 py-3 shrink-0 bg-muted/30">
