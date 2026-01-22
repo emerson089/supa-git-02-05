@@ -102,6 +102,10 @@ export default function Feira() {
   const [itensRetorno, setItensRetorno] = useState<{ itemId: string; quantidadeRetornada: number }[]>([]);
   const [isRefetchingEstoque, setIsRefetchingEstoque] = useState(false);
   const [inputRetornoValues, setInputRetornoValues] = useState<Record<string, string>>({});
+  
+  // Estados para busca e persistência no modal de retorno
+  const [buscaRetorno, setBuscaRetorno] = useState('');
+  const [retornosSalvos, setRetornosSalvos] = useState<Record<string, Record<string, string>>>({});
 
   const produtosAcabados = getProdutosAcabados();
   const periodoEhHoje = periodo.tipo === 'hoje';
@@ -318,19 +322,45 @@ export default function Feira() {
 
   const handleOpenRetorno = (carga: TransferenciaComItens) => {
     setCargaSelecionada(carga);
-    setItensRetorno(carga.itens.map(i => ({
-      itemId: i.itemId,
-      quantidadeRetornada: 0,
-    })));
-    // Inicializar inputValues com "0" para cada item
-    setInputRetornoValues(
-      carga.itens.reduce((acc, i) => ({ ...acc, [i.itemId]: '0' }), {})
-    );
+    setBuscaRetorno(''); // Resetar busca
+    
+    // Verificar se há valores salvos para esta carga
+    const valoresSalvos = retornosSalvos[carga.id];
+    
+    if (valoresSalvos) {
+      // Restaurar valores salvos
+      setInputRetornoValues(valoresSalvos);
+      setItensRetorno(carga.itens.map(i => ({
+        itemId: i.itemId,
+        quantidadeRetornada: parseInt(valoresSalvos[i.itemId] || '0', 10) || 0,
+      })));
+    } else {
+      // Inicializar como VAZIO (não "0") - exige preenchimento explícito
+      setInputRetornoValues(
+        carga.itens.reduce((acc, i) => ({ ...acc, [i.itemId]: '' }), {})
+      );
+      setItensRetorno(carga.itens.map(i => ({
+        itemId: i.itemId,
+        quantidadeRetornada: 0,
+      })));
+    }
+    
     setShowRetorno(true);
   };
 
   const handleOpenRetornoFromHistorico = (carga: TransferenciaComItensHistorico) => {
     handleOpenRetorno(convertToTransferenciaComItens(carga));
+  };
+  
+  // Handler para fechar modal de retorno (salva dados parciais)
+  const handleCloseRetorno = () => {
+    if (cargaSelecionada) {
+      setRetornosSalvos(prev => ({
+        ...prev,
+        [cargaSelecionada.id]: inputRetornoValues,
+      }));
+    }
+    setShowRetorno(false);
   };
 
   const handleUpdateRetorno = (itemId: string, quantidade: number) => {
@@ -353,6 +383,14 @@ export default function Feira() {
         transferenciaId: cargaSelecionada.id,
         itensRetornados: itensRetorno,
       });
+      
+      // Limpar dados salvos desta carga após sucesso
+      setRetornosSalvos(prev => {
+        const novo = { ...prev };
+        delete novo[cargaSelecionada.id];
+        return novo;
+      });
+      
       toast.success('Retorno registrado com sucesso!');
       setShowRetorno(false);
       setCargaSelecionada(null);
@@ -361,6 +399,37 @@ export default function Feira() {
       toast.error(error.message || 'Erro ao registrar retorno');
     }
   };
+
+  // Filtro de itens para o modal de retorno
+  const itensRetornoFiltrados = useMemo(() => {
+    if (!cargaSelecionada) return [];
+    if (!buscaRetorno.trim()) return cargaSelecionada.itens;
+    
+    const termo = buscaRetorno.toLowerCase().trim();
+    return cargaSelecionada.itens.filter(item => {
+      const itemWithExtras = item as typeof item & { produtoNome?: string | null };
+      const nome = (itemWithExtras.produtoNome || '').toLowerCase();
+      return nome.includes(termo);
+    });
+  }, [cargaSelecionada, buscaRetorno]);
+  
+  // Validação: todos os itens devem ter um valor preenchido (incluindo "0" explícito)
+  const todosItensPreenchidos = useMemo(() => {
+    if (!cargaSelecionada) return false;
+    
+    return cargaSelecionada.itens.every(item => {
+      const val = inputRetornoValues[item.itemId];
+      return val !== undefined && val !== '' && /^\d+$/.test(val);
+    });
+  }, [cargaSelecionada, inputRetornoValues]);
+  
+  // Contagem de itens pendentes
+  const itensPendentes = useMemo(() => {
+    if (!cargaSelecionada) return 0;
+    return cargaSelecionada.itens.filter(i => 
+      inputRetornoValues[i.itemId] === '' || inputRetornoValues[i.itemId] === undefined
+    ).length;
+  }, [cargaSelecionada, inputRetornoValues]);
 
   const totalCarga = itensCarga.reduce((sum, i) => sum + i.quantidade, 0);
   const valorCarga = itensCarga.reduce((sum, i) => sum + (i.quantidade * i.precoUnitario), 0);
@@ -1060,17 +1129,45 @@ export default function Feira() {
       )}
 
       {/* Modal Retorno */}
-      <Dialog open={showRetorno} onOpenChange={setShowRetorno}>
+      <Dialog open={showRetorno} onOpenChange={(open) => {
+        if (!open) handleCloseRetorno();
+      }}>
         <DialogContent className="max-w-md sm:h-[85vh] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-4 pt-4 pb-3 border-b shrink-0">
             <DialogTitle className="text-lg">Registrar Retorno</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Informe quantos itens retornaram da feira
+              Preencha o retorno de cada item. Campos vazios precisam de um valor (0 se não retornou).
             </DialogDescription>
-            <p className="text-[11px] text-muted-foreground/80 mt-1">
-              Vendido é calculado automaticamente: Enviado − Retorno
-            </p>
           </DialogHeader>
+
+          {/* Barra de busca fixa */}
+          <div className="flex items-center justify-between shrink-0 px-4 py-2 border-b gap-3">
+            <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">
+              {itensRetornoFiltrados.length} de {cargaSelecionada?.itens.length || 0} produto(s)
+            </span>
+            
+            <div className="relative flex-1 max-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Buscar modelo..."
+                value={buscaRetorno}
+                onChange={(e) => setBuscaRetorno(e.target.value)}
+                className="pl-8 h-7 text-xs"
+              />
+              {buscaRetorno && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 h-5 w-5 p-0"
+                  onClick={() => setBuscaRetorno('')}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          </div>
 
           {/* Header de colunas fixo */}
           <div className="grid grid-cols-[40px_1fr_50px_80px_70px] gap-2 px-4 py-2 border-b bg-muted/30 text-[10px] font-medium text-muted-foreground uppercase tracking-wide sticky top-0 z-10">
@@ -1082,81 +1179,106 @@ export default function Feira() {
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
-            <div className="divide-y">
-              {cargaSelecionada?.itens.map(item => {
-                const retorno = itensRetorno.find(i => i.itemId === item.itemId);
-                const retornado = retorno?.quantidadeRetornada || 0;
-                const vendido = item.quantidadeEnviada - retornado;
-                const itemWithExtras = item as typeof item & { produtoNome?: string | null; produtoImagem?: string | null };
+            {itensRetornoFiltrados.length === 0 && buscaRetorno ? (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Nenhum produto encontrado</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {itensRetornoFiltrados.map(item => {
+                  const retorno = itensRetorno.find(i => i.itemId === item.itemId);
+                  const retornado = retorno?.quantidadeRetornada || 0;
+                  const vendido = item.quantidadeEnviada - retornado;
+                  const itemWithExtras = item as typeof item & { produtoNome?: string | null; produtoImagem?: string | null };
+                  const inputValue = inputRetornoValues[item.itemId];
+                  const campoVazio = inputValue === '' || inputValue === undefined;
 
-                return (
-                  <div key={item.id} className="grid grid-cols-[40px_1fr_50px_80px_70px] gap-2 items-center px-4 py-2.5 hover:bg-muted/20 transition-colors">
-                    {/* Coluna 1: Imagem */}
-                    <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                      <LotImage 
-                        src={itemWithExtras.produtoImagem} 
-                        alt={itemWithExtras.produtoNome || 'Produto'} 
-                        className="w-full h-full object-cover"
-                        eager={true}
-                      />
-                    </div>
-                    
-                    {/* Coluna 2: Nome do Produto */}
-                    <p className="text-sm font-medium truncate leading-tight">
-                      {itemWithExtras.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
-                    </p>
-                    
-                    {/* Coluna 3: Enviado */}
-                    <span className="text-center text-sm font-medium text-blue-600 dark:text-blue-400">
-                      {item.quantidadeEnviada}
-                    </span>
-                    
-                    {/* Coluna 4: Input Retorno */}
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={inputRetornoValues[item.itemId] ?? String(retornado)}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === '' || /^\d+$/.test(val)) {
-                          setInputRetornoValues(prev => ({ ...prev, [item.itemId]: val }));
-                          if (val !== '') {
-                            handleUpdateRetorno(item.itemId, parseInt(val, 10));
+                  return (
+                    <div key={item.id} className="grid grid-cols-[40px_1fr_50px_80px_70px] gap-2 items-center px-4 py-2.5 hover:bg-muted/20 transition-colors">
+                      {/* Coluna 1: Imagem */}
+                      <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                        <LotImage 
+                          src={itemWithExtras.produtoImagem} 
+                          alt={itemWithExtras.produtoNome || 'Produto'} 
+                          className="w-full h-full object-cover"
+                          eager={true}
+                        />
+                      </div>
+                      
+                      {/* Coluna 2: Nome do Produto */}
+                      <p className="text-sm font-medium truncate leading-tight">
+                        {itemWithExtras.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
+                      </p>
+                      
+                      {/* Coluna 3: Enviado */}
+                      <span className="text-center text-sm font-medium text-blue-600 dark:text-blue-400">
+                        {item.quantidadeEnviada}
+                      </span>
+                      
+                      {/* Coluna 4: Input Retorno */}
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="—"
+                        value={inputRetornoValues[item.itemId] ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d+$/.test(val)) {
+                            setInputRetornoValues(prev => ({ ...prev, [item.itemId]: val }));
+                            if (val !== '') {
+                              handleUpdateRetorno(item.itemId, parseInt(val, 10));
+                            }
                           }
-                        }
-                      }}
-                      onBlur={() => {
-                        const val = inputRetornoValues[item.itemId];
-                        if (val === '' || isNaN(parseInt(val, 10))) {
-                          setInputRetornoValues(prev => ({ ...prev, [item.itemId]: '0' }));
-                          handleUpdateRetorno(item.itemId, 0);
-                        } else {
-                          const numVal = parseInt(val, 10);
-                          const clampedVal = Math.max(0, Math.min(item.quantidadeEnviada, numVal));
-                          setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(clampedVal) }));
-                          handleUpdateRetorno(item.itemId, clampedVal);
-                        }
-                      }}
-                      className="w-14 h-8 text-center text-base font-medium px-1"
-                    />
-                    
-                    {/* Coluna 5: Vendido - sempre com estilo suave */}
-                    <span className="inline-flex items-center justify-center text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium">
-                      {vendido} vendido
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                        }}
+                        onBlur={() => {
+                          const val = inputRetornoValues[item.itemId];
+                          // Não forçar valor no blur - manter vazio se usuário deixou vazio
+                          if (val !== '' && val !== undefined) {
+                            const numVal = parseInt(val, 10);
+                            if (!isNaN(numVal)) {
+                              const clampedVal = Math.max(0, Math.min(item.quantidadeEnviada, numVal));
+                              setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(clampedVal) }));
+                              handleUpdateRetorno(item.itemId, clampedVal);
+                            }
+                          }
+                        }}
+                        className={cn(
+                          "w-14 h-8 text-center text-base font-medium px-1",
+                          campoVazio && "border-amber-400 bg-amber-50/50 dark:bg-amber-900/20"
+                        )}
+                      />
+                      
+                      {/* Coluna 5: Vendido - sempre com estilo suave */}
+                      <span className={cn(
+                        "inline-flex items-center justify-center text-xs px-2 py-0.5 rounded-full font-medium",
+                        campoVazio 
+                          ? "bg-muted text-muted-foreground" 
+                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                      )}>
+                        {campoVazio ? '—' : `${vendido} vendido`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Footer fixo com resumo */}
           <div className="border-t px-4 py-3 shrink-0 bg-muted/30">
+            {/* Aviso de itens pendentes */}
+            {!todosItensPreenchidos && (
+              <p className="text-xs text-amber-600 mb-2 text-center font-medium">
+                {itensPendentes} item(s) pendente(s) de preenchimento
+              </p>
+            )}
+            
             <div className="flex items-center justify-between mb-3">
-              <div className="flex gap-3 text-xs">
+              <div className="flex gap-3 text-xs flex-wrap">
                 <span className="text-muted-foreground">
-                  Total enviado: <strong className="text-foreground">{cargaSelecionada?.itens.reduce((sum, i) => sum + i.quantidadeEnviada, 0) || 0}</strong>
+                  Enviado: <strong className="text-foreground">{cargaSelecionada?.itens.reduce((sum, i) => sum + i.quantidadeEnviada, 0) || 0}</strong>
                 </span>
                 <span className="text-muted-foreground">
                   Retorno: <strong className="text-amber-600">{itensRetorno.reduce((sum, i) => sum + i.quantidadeRetornada, 0)}</strong>
@@ -1167,12 +1289,12 @@ export default function Feira() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setShowRetorno(false)} className="flex-1">
+              <Button variant="outline" onClick={handleCloseRetorno} className="flex-1">
                 Cancelar
               </Button>
               <Button 
                 onClick={handleRegistrarRetorno}
-                disabled={registrarRetorno.isPending}
+                disabled={registrarRetorno.isPending || !todosItensPreenchidos}
                 className="flex-1"
               >
                 {registrarRetorno.isPending ? (
