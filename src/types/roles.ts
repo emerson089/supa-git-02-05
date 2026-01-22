@@ -35,6 +35,8 @@ export const ROLE_PERMISSIONS: Record<AppRole, string[]> = {
     'feira.create',
     'feira.edit',
     'feira.delete',
+    'feira.view_history',
+    'feira.generate_pdf',
     'transferencias.view',
     'transferencias.create',
     'transferencias.edit',
@@ -66,6 +68,8 @@ export const ROLE_PERMISSIONS: Record<AppRole, string[]> = {
     'feira.create',
     'feira.edit',
     'feira.delete',
+    'feira.view_history',
+    'feira.generate_pdf',
     'transferencias.view',
     'transferencias.create',
     'pedidos.view',
@@ -78,8 +82,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, string[]> = {
   ],
   vendedor: [
     'feira.view',
-    'feira.create',
-    'feira.edit',
+    'feira.retorno', // Apenas registrar retorno
     'estoque.view',
   ],
 };
