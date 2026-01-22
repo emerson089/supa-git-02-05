@@ -76,6 +76,10 @@ export default function ConfigUsuarios() {
   const [selectedUser, setSelectedUser] = useState<typeof users[0] | null>(null);
   const [showTempPassword, setShowTempPassword] = useState<string | null>(null);
 
+  // Loading states for individual user actions
+  const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
+
   // Form state for creating user
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserNome, setNewUserNome] = useState('');
@@ -134,15 +138,23 @@ export default function ConfigUsuarios() {
   };
 
   const handleToggleStatus = async (user: typeof users[0]) => {
+    if (togglingUserId) return; // Prevent multiple clicks
+    
+    setTogglingUserId(user.user_id);
     const newStatus = user.status === 'ativo' ? 'inativo' : 'ativo';
     await toggleUserStatus(user.user_id, newStatus);
+    setTogglingUserId(null);
   };
 
   const handleResetPassword = async (user: typeof users[0]) => {
+    if (resettingUserId) return; // Prevent multiple clicks
+    
+    setResettingUserId(user.user_id);
     const tempPassword = await resetUserPassword(user.user_id);
     if (tempPassword) {
       setShowTempPassword(tempPassword);
     }
+    setResettingUserId(null);
   };
 
   const copyToClipboard = (text: string) => {
@@ -316,29 +328,49 @@ export default function ConfigUsuarios() {
                                     <Shield className="h-4 w-4 mr-2" />
                                     Alterar Role
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleToggleStatus(user)}
-                                    disabled={user.user_id === currentUserProfile?.user_id}
-                                  >
-                                    {user.status === 'ativo' ? (
-                                      <>
-                                        <Ban className="h-4 w-4 mr-2" />
-                                        Desativar
-                                      </>
-                                    ) : (
-                                      <>
-                                        <CheckCircle className="h-4 w-4 mr-2" />
-                                        Ativar
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleResetPassword(user)}
-                                    disabled={user.user_id === currentUserProfile?.user_id}
-                                  >
-                                    <Key className="h-4 w-4 mr-2" />
-                                    Resetar Senha
-                                  </DropdownMenuItem>
+                                                  <DropdownMenuItem
+                                                    onClick={() => handleToggleStatus(user)}
+                                                    disabled={
+                                                      user.user_id === currentUserProfile?.user_id ||
+                                                      togglingUserId === user.user_id
+                                                    }
+                                                  >
+                                                    {togglingUserId === user.user_id ? (
+                                                      <>
+                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                        {user.status === 'ativo' ? 'Desativando...' : 'Ativando...'}
+                                                      </>
+                                                    ) : user.status === 'ativo' ? (
+                                                      <>
+                                                        <Ban className="h-4 w-4 mr-2" />
+                                                        Desativar
+                                                      </>
+                                                    ) : (
+                                                      <>
+                                                        <CheckCircle className="h-4 w-4 mr-2" />
+                                                        Ativar
+                                                      </>
+                                                    )}
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuItem
+                                                    onClick={() => handleResetPassword(user)}
+                                                    disabled={
+                                                      user.user_id === currentUserProfile?.user_id ||
+                                                      resettingUserId === user.user_id
+                                                    }
+                                                  >
+                                                    {resettingUserId === user.user_id ? (
+                                                      <>
+                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                        Resetando...
+                                                      </>
+                                                    ) : (
+                                                      <>
+                                                        <Key className="h-4 w-4 mr-2" />
+                                                        Resetar Senha
+                                                      </>
+                                                    )}
+                                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </TableCell>
