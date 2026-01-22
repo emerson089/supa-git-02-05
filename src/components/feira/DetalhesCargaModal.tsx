@@ -196,6 +196,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
                         src={item.produtoImagem} 
                         alt={item.produtoNome || 'Produto'} 
                         className="w-full h-full object-cover"
+                        eager={true}
                       />
                     </div>
                     
@@ -262,6 +263,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
                                 src={item.produtoImagem} 
                                 alt={item.produtoNome || 'Produto'} 
                                 className="w-full h-full object-cover"
+                                eager={true}
                               />
                             </div>
                           </TableCell>

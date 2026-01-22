@@ -228,7 +228,7 @@ export function EditarCargaModal({
                           onClick={() => !semEstoque && handleAddItem(produto)}
                         >
                           <div className="w-10 h-10 rounded overflow-hidden bg-muted flex-shrink-0 border">
-                            <LotImage src={produto.imagemUrl} alt={produto.nome} className="w-full h-full object-cover" />
+                            <LotImage src={produto.imagemUrl} alt={produto.nome} className="w-full h-full object-cover" eager={true} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{produto.nome}</p>
@@ -280,7 +280,7 @@ export function EditarCargaModal({
                   {itensEdicao.map((item) => (
                     <div key={item.itemId} className="flex items-center gap-3 px-4 py-2.5 bg-card">
                       <div className="w-10 h-10 rounded overflow-hidden bg-muted flex-shrink-0 border relative">
-                        <LotImage src={item.imagemUrl} alt={item.nome} className="w-full h-full object-cover" />
+                        <LotImage src={item.imagemUrl} alt={item.nome} className="w-full h-full object-cover" eager={true} />
                         {item.isNovo && (
                           <Badge className="absolute -top-1 -right-1 h-4 px-1 text-[10px] bg-emerald-500">Novo</Badge>
                         )}
