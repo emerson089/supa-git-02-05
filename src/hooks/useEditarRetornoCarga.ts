@@ -42,6 +42,12 @@ export function useEditarRetornoCarga() {
       itensCorrigidos,
       motivo,
     }: EditarRetornoParams): Promise<EditarRetornoResult> => {
+      console.log('[useEditarRetornoCarga] Iniciando correção:', {
+        transferenciaId,
+        itensCorrigidos: itensCorrigidos.length,
+        motivo,
+      });
+
       if (!user) throw new Error('Usuário não autenticado');
       if (!motivo.trim()) throw new Error('Motivo da correção é obrigatório');
 
@@ -171,6 +177,12 @@ export function useEditarRetornoCarga() {
       if (itensAjustados === 0) {
         throw new Error('Nenhum item foi alterado');
       }
+
+      console.log('[useEditarRetornoCarga] Correção concluída:', {
+        cargaId: transferenciaId,
+        itensAjustados,
+        deltaTotal,
+      });
 
       return {
         cargaId: transferenciaId,

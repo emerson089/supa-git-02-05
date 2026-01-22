@@ -766,12 +766,11 @@ export default function Feira() {
         carga={cargaCorrigirRetorno}
         onClose={() => setCargaCorrigirRetorno(null)}
         onConfirm={(transferenciaId, itensCorrigidos, motivo) => {
-          setCargaCorrigirRetorno(null);
-          
           editarRetornoCarga.mutate(
             { transferenciaId, itensCorrigidos, motivo },
             {
               onSuccess: (result) => {
+                setCargaCorrigirRetorno(null);
                 toast.success(`Retorno corrigido! ${result.itensAjustados} item(s) ajustado(s).`);
               },
               onError: (error: any) => {
