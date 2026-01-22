@@ -94,7 +94,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, string[]> = {
 
 // Role-based landing pages
 export const ROLE_LANDING_PAGES: Record<AppRole, string> = {
-  admin: '/',
+  admin: '/dashboard',
   gerente: '/pedidos/criados',
   vendedor: '/feira',
   vendedor_loja: '/transferencias',
