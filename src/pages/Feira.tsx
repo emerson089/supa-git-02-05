@@ -1062,6 +1062,7 @@ export default function Feira() {
                         src={itemWithExtras.produtoImagem} 
                         alt={itemWithExtras.produtoNome || 'Produto'} 
                         className="w-full h-full object-cover"
+                        eager={true}
                       />
                     </div>
                     

@@ -11,6 +11,8 @@ interface LazyImageProps {
   onLoad?: () => void;
   onClick?: () => void;
   showPlaceholderIcon?: boolean;
+  /** When true, bypasses IntersectionObserver and loads image immediately. Useful for modals. */
+  eager?: boolean;
 }
 
 export function LazyImage({
@@ -22,13 +24,20 @@ export function LazyImage({
   onLoad,
   onClick,
   showPlaceholderIcon = true,
+  eager = false,
 }: LazyImageProps) {
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(eager);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Skip IntersectionObserver if eager loading
+    if (eager) {
+      setIsVisible(true);
+      return;
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -49,7 +58,7 @@ export function LazyImage({
     }
 
     return () => observer.disconnect();
-  }, []);
+  }, [eager]);
 
   // Reset states when src changes
   useEffect(() => {

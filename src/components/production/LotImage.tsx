@@ -6,9 +6,11 @@ interface LotImageProps {
   alt: string;
   className?: string;
   containerClassName?: string;
+  /** When true, bypasses lazy loading and loads image immediately. Useful for modals. */
+  eager?: boolean;
 }
 
-export function LotImage({ src, alt, className = '', containerClassName = '' }: LotImageProps) {
+export function LotImage({ src, alt, className = '', containerClassName = '', eager }: LotImageProps) {
   const { signedUrl, loading } = useSignedUrl(src);
 
   return (
@@ -18,6 +20,7 @@ export function LotImage({ src, alt, className = '', containerClassName = '' }: 
       className={className}
       containerClassName={containerClassName}
       showPlaceholderIcon={true}
+      eager={eager}
     />
   );
 }
