@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LotImage } from '@/components/production/LotImage';
-import { Loader2, AlertTriangle, ArrowRight, Package } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowRight, Package, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hooks/useFeiraHistorico';
 import { format } from 'date-fns';
@@ -50,6 +50,7 @@ export function EditarRetornoCargaModal({
 }: EditarRetornoCargaModalProps) {
   const [motivo, setMotivo] = useState('');
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Inicializar valores quando modal abre
   useEffect(() => {
@@ -60,6 +61,7 @@ export function EditarRetornoCargaModal({
       });
       setInputValues(initialValues);
       setMotivo('');
+      setSearchTerm('');
     }
   }, [carga]);
 
@@ -117,6 +119,18 @@ export function EditarRetornoCargaModal({
 
     return { itensComDelta, resumoAntes, resumoDepois, temAlteracoes };
   }, [carga, inputValues]);
+
+  // Filtrar itens baseado no termo de busca
+  const itensFiltrados = useMemo(() => {
+    if (!searchTerm.trim()) return itensComDelta;
+    
+    const termo = searchTerm.toLowerCase().trim();
+    
+    return itensComDelta.filter((item) => {
+      const nome = (item.produtoNome || '').toLowerCase();
+      return nome.includes(termo);
+    });
+  }, [itensComDelta, searchTerm]);
 
   const handleUpdateRetorno = (itemId: string, value: string) => {
     // Permitir apenas números
@@ -193,15 +207,44 @@ export function EditarRetornoCargaModal({
           />
         </div>
 
-        <div className="flex items-center justify-between shrink-0 py-2 border-b">
-          <span className="text-sm text-muted-foreground font-medium">
-            {itensComDelta.length} produto(s)
+        <div className="flex items-center justify-between shrink-0 py-2 border-b gap-3">
+          <span className="text-sm text-muted-foreground font-medium whitespace-nowrap">
+            {itensFiltrados.length === itensComDelta.length 
+              ? `${itensComDelta.length} produto(s)`
+              : `${itensFiltrados.length} de ${itensComDelta.length} produto(s)`
+            }
           </span>
+          
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Buscar por nome ou referência..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 pr-8 h-8 text-sm"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground"
+                onClick={() => setSearchTerm('')}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y pr-1">
           <div className="space-y-3">
-            {itensComDelta.map((item) => {
+            {itensFiltrados.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Nenhum produto encontrado para "{searchTerm}"</p>
+              </div>
+            ) : (
+            itensFiltrados.map((item) => {
               const preco = item.precoUnitario ?? item.produtoPreco ?? 0;
 
               return (
@@ -269,7 +312,8 @@ export function EditarRetornoCargaModal({
                   </div>
                 </div>
               );
-            })}
+            })
+            )}
           </div>
         </div>
 
