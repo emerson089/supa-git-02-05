@@ -123,7 +123,7 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
             value={quantidade}
             onChange={handleQuantidadeChange}
             disabled={isDisabled}
-            className="w-14 h-8 text-center text-sm font-semibold shrink-0 rounded-lg border-border/50"
+            className="w-14 h-8 text-center text-base md:text-sm font-semibold shrink-0 rounded-lg border-border/50"
           />
           <span className="text-muted-foreground text-xs shrink-0">×</span>
           <span className="text-muted-foreground text-xs shrink-0">R$</span>
@@ -134,7 +134,7 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
             value={valorUnitario}
             onChange={handleValorChange}
             disabled={isDisabled}
-            className="flex-1 h-8 text-right text-sm font-semibold rounded-lg border-border/50 min-w-[60px]"
+            className="flex-1 h-8 text-right text-base md:text-sm font-semibold rounded-lg border-border/50 min-w-[60px]"
           />
         </div>
         
@@ -161,7 +161,7 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
             value={quantidade}
             onChange={handleQuantidadeChange}
             disabled={isDisabled}
-            className="h-9 text-center text-sm font-semibold rounded-lg border-border/50"
+            className="h-9 text-center text-base md:text-sm font-semibold rounded-lg border-border/50"
           />
         </div>
 
@@ -176,7 +176,7 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
               value={valorUnitario}
               onChange={handleValorChange}
               disabled={isDisabled}
-              className="h-9 pl-7 text-right text-sm font-semibold rounded-lg border-border/50"
+              className="h-9 pl-7 text-right text-base md:text-sm font-semibold rounded-lg border-border/50"
             />
           </div>
         </div>

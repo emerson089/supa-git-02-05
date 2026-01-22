@@ -125,7 +125,7 @@ export function AddItemSelector({ produtos, onAdd, isAdding, existingProductIds 
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Buscar por nome ou referência..."
-                className="w-full h-10 pl-9 pr-4 bg-muted/50 rounded-lg border-0 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full h-10 pl-9 pr-4 bg-muted/50 rounded-lg border-0 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
           </div>
