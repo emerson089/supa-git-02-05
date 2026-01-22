@@ -259,8 +259,8 @@ export async function generateCargaPDF(
     bodyStyles: {
       textColor: textColor,
       fontSize: 7,
-      cellPadding: 1.5,
-      minCellHeight: 12,
+      cellPadding: { top: 1, right: 2, bottom: 1, left: 2 },
+      minCellHeight: 10,
       valign: 'middle',
     },
     alternateRowStyles: {
@@ -275,34 +275,23 @@ export async function generateCargaPDF(
       5: { cellWidth: 26, halign: 'right' }, // Subtotal
     },
     didDrawCell: (data) => {
-      // Capturar posição da célula de imagem
-      if (data.column.index === 0 && data.cell.section === 'body') {
+      // Desenhar imagem diretamente dentro do callback para garantir coordenadas corretas
+      if (data.column.index === 0 && data.cell.section === 'body' && includeImages) {
         const rowIndex = data.row.index;
         const itemId = imagePositions[rowIndex]?.itemId;
         if (itemId) {
-          imageCells.push({
-            x: data.cell.x,
-            y: data.cell.y,
-            itemId,
-          });
+          const base64Image = imageCache.get(itemId);
+          if (base64Image) {
+            try {
+              doc.addImage(base64Image, 'JPEG', data.cell.x + 2, data.cell.y + 0.5, 8, 8);
+            } catch {
+              // Silently fail if image can't be added
+            }
+          }
         }
       }
     },
   });
-
-  // Desenhar imagens após a tabela ser renderizada
-  if (includeImages) {
-    for (const cell of imageCells) {
-      const base64Image = imageCache.get(cell.itemId);
-      if (base64Image) {
-        try {
-          doc.addImage(base64Image, 'JPEG', cell.x + 2, cell.y + 1, 10, 10);
-        } catch {
-          // Silently fail if image can't be added
-        }
-      }
-    }
-  }
 
   // @ts-expect-error - autoTable adds this property
   yPos = doc.lastAutoTable.finalY + 5;

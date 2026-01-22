@@ -422,12 +422,12 @@ export default function Feira() {
   };
 
   // Handler para gerar PDF da carga
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [generatingPDFId, setGeneratingPDFId] = useState<string | null>(null);
   
   const handleGerarPDF = async (carga: TransferenciaComItensHistorico) => {
-    if (isGeneratingPDF) return;
+    if (generatingPDFId) return; // Já está gerando um PDF
     
-    setIsGeneratingPDF(true);
+    setGeneratingPDFId(carga.id);
     toast.info('Gerando PDF...');
     
     try {
@@ -437,7 +437,7 @@ export default function Feira() {
       console.error('Erro ao gerar PDF:', error);
       toast.error('Erro ao gerar PDF');
     } finally {
-      setIsGeneratingPDF(false);
+      setGeneratingPDFId(null);
     }
   };
 
@@ -576,7 +576,7 @@ export default function Feira() {
               onEditarCarga={handleEditarCarga}
               onGerarPDF={handleGerarPDF}
               periodoEhHoje={periodoEhHoje}
-              isGeneratingPDF={isGeneratingPDF}
+              isGeneratingPDF={generatingPDFId !== null}
             />
 
             {/* Histórico Agrupado */}
@@ -1052,62 +1052,34 @@ export default function Feira() {
                     </span>
                     
                     {/* Coluna 4: Input Retorno */}
-                    <div className="flex items-center justify-center gap-0.5">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => {
-                          const newVal = Math.max(0, retornado - 1);
-                          handleUpdateRetorno(item.itemId, newVal);
-                          setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(newVal) }));
-                        }}
-                        disabled={retornado <= 0}
-                      >
-                        <Minus size={14} />
-                      </Button>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={inputRetornoValues[item.itemId] ?? String(retornado)}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === '' || /^\d+$/.test(val)) {
-                            setInputRetornoValues(prev => ({ ...prev, [item.itemId]: val }));
-                            if (val !== '') {
-                              handleUpdateRetorno(item.itemId, parseInt(val, 10));
-                            }
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={inputRetornoValues[item.itemId] ?? String(retornado)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '' || /^\d+$/.test(val)) {
+                          setInputRetornoValues(prev => ({ ...prev, [item.itemId]: val }));
+                          if (val !== '') {
+                            handleUpdateRetorno(item.itemId, parseInt(val, 10));
                           }
-                        }}
-                        onBlur={() => {
-                          const val = inputRetornoValues[item.itemId];
-                          if (val === '' || isNaN(parseInt(val, 10))) {
-                            setInputRetornoValues(prev => ({ ...prev, [item.itemId]: '0' }));
-                            handleUpdateRetorno(item.itemId, 0);
-                          } else {
-                            const numVal = parseInt(val, 10);
-                            const clampedVal = Math.max(0, Math.min(item.quantidadeEnviada, numVal));
-                            setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(clampedVal) }));
-                            handleUpdateRetorno(item.itemId, clampedVal);
-                          }
-                        }}
-                        className="w-12 h-8 text-center text-base font-medium px-0"
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => {
-                          const newVal = Math.min(item.quantidadeEnviada, retornado + 1);
-                          handleUpdateRetorno(item.itemId, newVal);
-                          setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(newVal) }));
-                        }}
-                        disabled={retornado >= item.quantidadeEnviada}
-                      >
-                        <Plus size={14} />
-                      </Button>
-                    </div>
+                        }
+                      }}
+                      onBlur={() => {
+                        const val = inputRetornoValues[item.itemId];
+                        if (val === '' || isNaN(parseInt(val, 10))) {
+                          setInputRetornoValues(prev => ({ ...prev, [item.itemId]: '0' }));
+                          handleUpdateRetorno(item.itemId, 0);
+                        } else {
+                          const numVal = parseInt(val, 10);
+                          const clampedVal = Math.max(0, Math.min(item.quantidadeEnviada, numVal));
+                          setInputRetornoValues(prev => ({ ...prev, [item.itemId]: String(clampedVal) }));
+                          handleUpdateRetorno(item.itemId, clampedVal);
+                        }
+                      }}
+                      className="w-14 h-8 text-center text-base font-medium px-1"
+                    />
                     
                     {/* Coluna 5: Vendido - sempre com estilo suave */}
                     <span className="inline-flex items-center justify-center text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium">
