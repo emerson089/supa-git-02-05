@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, ChevronRight, Eye, Check, Clock, Package, MoreVertical, Trash2, RotateCcw, Ban, FileText } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye, Check, Clock, Package, MoreVertical, Trash2, RotateCcw, Ban, FileText, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CargaDiaAgrupada, TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hooks/useFeiraHistorico';
@@ -23,6 +23,7 @@ interface HistoricoAgrupadoProps {
   onEstornarCarga?: (carga: TransferenciaComItensHistorico) => void;
   onExcluirHistorico?: (carga: TransferenciaComItensHistorico) => void;
   onGerarPDF?: (carga: TransferenciaComItensHistorico) => void;
+  onEditarRetorno?: (carga: TransferenciaComItensHistorico) => void;
   isLoading: boolean;
 }
 
@@ -84,7 +85,7 @@ function getStatusConfig(status: string) {
   }
 }
 
-export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, onEstornarCarga, onExcluirHistorico, onGerarPDF, isLoading }: HistoricoAgrupadoProps) {
+export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, onEstornarCarga, onExcluirHistorico, onGerarPDF, onEditarRetorno, isLoading }: HistoricoAgrupadoProps) {
   const [openDays, setOpenDays] = useState<Set<string>>(new Set([historico[0]?.data]));
 
   const toggleDay = (data: string) => {
@@ -224,6 +225,14 @@ export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, on
                                   <DropdownMenuItem onClick={() => onGerarPDF(carga)}>
                                     <FileText className="mr-2 h-4 w-4" />
                                     Gerar PDF
+                                  </DropdownMenuItem>
+                                )}
+                                
+                                {/* Corrigir retorno: apenas concluída */}
+                                {carga.status === 'concluida' && onEditarRetorno && (
+                                  <DropdownMenuItem onClick={() => onEditarRetorno(carga)}>
+                                    <Pencil className="mr-2 h-4 w-4" />
+                                    Corrigir retorno
                                   </DropdownMenuItem>
                                 )}
                                 
