@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LotImage } from '@/components/production/LotImage';
 import { Loader2, AlertTriangle, ArrowRight, Package } from 'lucide-react';
@@ -164,8 +163,8 @@ export function EditarRetornoCargaModal({
 
   return (
     <Dialog open={!!carga} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl sm:h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500" />
             Corrigir Retorno
@@ -175,14 +174,14 @@ export function EditarRetornoCargaModal({
           </DialogDescription>
         </DialogHeader>
 
-        <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800">
+        <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 shrink-0">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-amber-800 dark:text-amber-300">
             Esta carga já foi concluída. A correção irá ajustar o estoque baseado na diferença.
           </AlertDescription>
         </Alert>
 
-        <div className="space-y-3">
+        <div className="space-y-3 shrink-0">
           <Label htmlFor="motivo">Motivo da correção *</Label>
           <Textarea
             id="motivo"
@@ -194,7 +193,13 @@ export function EditarRetornoCargaModal({
           />
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 max-h-[300px] pr-3">
+        <div className="flex items-center justify-between shrink-0 py-2 border-b">
+          <span className="text-sm text-muted-foreground font-medium">
+            {itensComDelta.length} produto(s)
+          </span>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y pr-1">
           <div className="space-y-3">
             {itensComDelta.map((item) => {
               const preco = item.precoUnitario ?? item.produtoPreco ?? 0;
@@ -266,11 +271,11 @@ export function EditarRetornoCargaModal({
               );
             })}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Resumo das alterações */}
         {temAlteracoes && (
-          <div className="border rounded-lg p-4 bg-muted/30 space-y-2">
+          <div className="border rounded-lg p-4 bg-muted/30 space-y-2 shrink-0">
             <h4 className="font-medium text-sm flex items-center gap-2">
               <Package className="h-4 w-4" />
               Resumo das alterações
@@ -308,7 +313,7 @@ export function EditarRetornoCargaModal({
           </div>
         )}
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 shrink-0">
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
             Cancelar
           </Button>
