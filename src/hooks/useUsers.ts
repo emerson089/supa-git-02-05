@@ -236,6 +236,45 @@ export function useUsers() {
     }
   }, []);
 
+  const deleteUser = useCallback(async (userId: string): Promise<boolean> => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      if (!token) {
+        toast.error('Usuário não autenticado');
+        return false;
+      }
+
+      const response = await supabase.functions.invoke('delete-user', {
+        body: { userId },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.error) {
+        toast.error(response.error.message || 'Erro ao excluir usuário');
+        return false;
+      }
+
+      const data = response.data;
+      
+      if (!data.success) {
+        toast.error(data.error || 'Erro ao excluir usuário');
+        return false;
+      }
+
+      toast.success('Usuário excluído com sucesso');
+      await fetchUsers();
+      return true;
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      toast.error('Erro ao excluir usuário');
+      return false;
+    }
+  }, [fetchUsers]);
+
   return {
     users,
     loading,
@@ -245,5 +284,6 @@ export function useUsers() {
     updateUserRole,
     toggleUserStatus,
     resetUserPassword,
+    deleteUser,
   };
 }
