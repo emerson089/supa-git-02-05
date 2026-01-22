@@ -30,6 +30,8 @@ import { NovaCargaStepProdutos } from '@/components/feira/NovaCargaStepProdutos'
 import { NovaCargaBottomSheet } from '@/components/feira/NovaCargaBottomSheet';
 import { NovaCargaBottomBar } from '@/components/feira/NovaCargaBottomBar';
 import { EditarCargaModal } from '@/components/feira/EditarCargaModal';
+import { RoleGate } from '@/components/RoleGate';
+import { useRole } from '@/contexts/RoleContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,6 +61,7 @@ interface ItemCarga {
 export default function Feira() {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
+  const { hasPermission, isVendedor } = useRole();
   const { getProdutosAcabados } = useEstoque();
   const { getDisponivelCentral, isLoading: isLoadingLocais } = useDisponivelCentral();
   const { data: locais } = useLocais();
@@ -486,27 +489,31 @@ export default function Feira() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setShowRecalcularConfirm(true)}
-                  disabled={recalcularEstoque.isPending}
-                  className="gap-2"
-                >
-                  <RefreshCw size={16} className={recalcularEstoque.isPending ? 'animate-spin' : ''} />
-                  Recalcular Estoque
-                </Button>
-                <Button onClick={handleOpenNovaCarga} className="gap-2">
-                  <Plus size={18} />
-                  Nova Carga
-                </Button>
+                <RoleGate allowedRoles={['admin']}>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowRecalcularConfirm(true)}
+                    disabled={recalcularEstoque.isPending}
+                    className="gap-2"
+                  >
+                    <RefreshCw size={16} className={recalcularEstoque.isPending ? 'animate-spin' : ''} />
+                    Recalcular Estoque
+                  </Button>
+                </RoleGate>
+                <RoleGate requiredPermission="feira.create">
+                  <Button onClick={handleOpenNovaCarga} className="gap-2">
+                    <Plus size={18} />
+                    Nova Carga
+                  </Button>
+                </RoleGate>
               </div>
             </div>
           </header>
         )}
 
-        {/* Mobile Action Button */}
-        {isMobile && (
+        {/* Mobile Action Button - Hidden for vendedor */}
+        {isMobile && !isVendedor && (
           <div className="px-4 py-3">
             <Button onClick={handleOpenNovaCarga} className="w-full gap-2">
               <Plus size={18} />
@@ -588,22 +595,24 @@ export default function Feira() {
             <CargasAtivasAlerta
               cargasAtivas={todasCargasAtivas || []}
               onRegistrarRetorno={handleOpenRetornoFromHistorico}
-              onEditarCarga={handleEditarCarga}
-              onGerarPDF={handleOpenPDFOptions}
+              onEditarCarga={hasPermission('feira.edit') && !isVendedor ? handleEditarCarga : undefined}
+              onGerarPDF={hasPermission('feira.generate_pdf') ? handleOpenPDFOptions : undefined}
               periodoEhHoje={periodoEhHoje}
               isGeneratingPDF={generatingPDFId !== null}
             />
 
-            {/* Histórico Agrupado */}
-            <HistoricoAgrupado
-              historico={historico}
-              onVerDetalhes={(carga) => setCargaDetalhes(carga)}
-              onExcluirCarga={handleExcluirCarga}
-              onEstornarCarga={handleEstornarCarga}
-              onExcluirHistorico={handleExcluirHistorico}
-              onGerarPDF={handleOpenPDFOptions}
-              isLoading={isLoadingHistorico}
-            />
+            {/* Histórico Agrupado - Hidden for vendedor */}
+            <RoleGate requiredPermission="feira.view_history">
+              <HistoricoAgrupado
+                historico={historico}
+                onVerDetalhes={(carga) => setCargaDetalhes(carga)}
+                onExcluirCarga={handleExcluirCarga}
+                onEstornarCarga={handleEstornarCarga}
+                onExcluirHistorico={handleExcluirHistorico}
+                onGerarPDF={handleOpenPDFOptions}
+                isLoading={isLoadingHistorico}
+              />
+            </RoleGate>
           </div>
         </ScrollArea>
       </main>
