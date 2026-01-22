@@ -310,7 +310,7 @@ export function EditarCargaModal({
                         }}
                         onFocus={(e) => e.target.select()}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-16 h-8 text-center text-sm font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-16 h-8 text-center text-base md:text-sm font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <span className="text-sm font-semibold text-primary w-20 text-right">
                         {formatCurrency(item.precoUnitario * item.quantidade)}
