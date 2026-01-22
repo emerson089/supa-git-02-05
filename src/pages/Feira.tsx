@@ -9,6 +9,7 @@ import { useDisponivelCentral, useLocais, useEnsureDefaultLocais, useSincronizar
 import { useCriarCargaFeira, useRegistrarRetornoFeira, useEditarCargaFeira, TransferenciaComItens } from '@/hooks/useTransferencias';
 import { useRecalcularEstoque } from '@/hooks/useRecalcularEstoque';
 import { useEstornarCarga } from '@/hooks/useEstornarCarga';
+import { useEditarRetornoCarga } from '@/hooks/useEditarRetornoCarga';
 import { 
   PeriodoFeira, 
   calcularPeriodo, 
@@ -26,6 +27,7 @@ import { CargasAtivasAlerta } from '@/components/feira/CargasAtivasAlerta';
 import { ExcluirCargaModal } from '@/components/feira/ExcluirCargaModal';
 import { ExcluirHistoricoModal } from '@/components/feira/ExcluirHistoricoModal';
 import { EstornarCargaModal } from '@/components/feira/EstornarCargaModal';
+import { EditarRetornoCargaModal } from '@/components/feira/EditarRetornoCargaModal';
 import { NovaCargaStepProdutos } from '@/components/feira/NovaCargaStepProdutos';
 import { NovaCargaBottomSheet } from '@/components/feira/NovaCargaBottomSheet';
 import { NovaCargaBottomBar } from '@/components/feira/NovaCargaBottomBar';
@@ -74,6 +76,7 @@ export default function Feira() {
   const excluirHistorico = useExcluirHistoricoCarga();
   const recalcularEstoque = useRecalcularEstoque();
   const estornarCarga = useEstornarCarga();
+  const editarRetornoCarga = useEditarRetornoCarga();
 
   // Estado do período - carregado do localStorage
   const [periodo, setPeriodo] = useState<PeriodoFeira>(() => carregarFiltroPeriodo());
@@ -92,6 +95,7 @@ export default function Feira() {
   const [cargaExcluir, setCargaExcluir] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaExcluirHistorico, setCargaExcluirHistorico] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaEstornar, setCargaEstornar] = useState<TransferenciaComItensHistorico | null>(null);
+  const [cargaCorrigirRetorno, setCargaCorrigirRetorno] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaEditar, setCargaEditar] = useState<TransferenciaComItensHistorico | null>(null);
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
   const [buscaProduto, setBuscaProduto] = useState('');
@@ -397,7 +401,16 @@ export default function Feira() {
     setCargaEditar(carga);
   };
 
-  // Handler para salvar edição da carga
+  // Handler para corrigir retorno de carga concluída
+  const handleCorrigirRetorno = (carga: TransferenciaComItensHistorico) => {
+    if (carga.status !== 'concluida') {
+      toast.error('Apenas cargas concluídas podem ter o retorno corrigido');
+      return;
+    }
+    setCargaCorrigirRetorno(carga);
+  };
+
+  // Handler para salvar correção de retorno
   const handleSalvarEdicaoCarga = (transferenciaId: string, itens: any[]) => {
     editarCarga.mutate(
       { transferenciaId, itens },
@@ -610,6 +623,7 @@ export default function Feira() {
                 onEstornarCarga={handleEstornarCarga}
                 onExcluirHistorico={handleExcluirHistorico}
                 onGerarPDF={handleOpenPDFOptions}
+                onEditarRetorno={handleCorrigirRetorno}
                 isLoading={isLoadingHistorico}
               />
             </RoleGate>
@@ -745,6 +759,28 @@ export default function Feira() {
           );
         }}
         isLoading={false}
+      />
+
+      {/* Modal Corrigir Retorno (apenas para concluídas) */}
+      <EditarRetornoCargaModal
+        carga={cargaCorrigirRetorno}
+        onClose={() => setCargaCorrigirRetorno(null)}
+        onConfirm={(transferenciaId, itensCorrigidos, motivo) => {
+          setCargaCorrigirRetorno(null);
+          
+          editarRetornoCarga.mutate(
+            { transferenciaId, itensCorrigidos, motivo },
+            {
+              onSuccess: (result) => {
+                toast.success(`Retorno corrigido! ${result.itensAjustados} item(s) ajustado(s).`);
+              },
+              onError: (error: any) => {
+                toast.error(error.message || 'Erro ao corrigir retorno');
+              },
+            }
+          );
+        }}
+        isLoading={editarRetornoCarga.isPending}
       />
 
       {/* Modal Confirmar Recálculo de Estoque */}
