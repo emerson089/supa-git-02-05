@@ -4,6 +4,7 @@ import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useEstoque } from '@/contexts/EstoqueContext';
+import { useRole } from '@/contexts/RoleContext';
 import { useDisponivelCentral, useLocais } from '@/hooks/useEstoqueLocais';
 import { useTransferencias, useCriarTransferencia } from '@/hooks/useTransferencias';
 import { useEstoqueDetalhadoPorLocal, EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
@@ -16,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box } from 'lucide-react';
+import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { ProdutoEstoqueLocalCard } from '@/components/estoque/ProdutoEstoqueLocalCard';
 import { AjusteEstoqueModal } from '@/components/estoque/AjusteEstoqueModal';
@@ -38,6 +39,7 @@ interface ItemTransferencia {
 
 export default function Transferencias() {
   const isMobile = useIsMobile();
+  const { isVendedorLoja, isAdmin, isGerente } = useRole();
   const { getProdutosAcabados } = useEstoque();
   const { locais, estoquePorLocal, isLoading: isLoadingLocais } = useDisponivelCentral();
   const { data: transferencias, isLoading: isLoadingTransferencias } = useTransferencias('transferencia');
@@ -92,7 +94,24 @@ export default function Transferencias() {
   );
   const totalModelosLocal = estoqueDetalhado.length;
 
-  // Locais disponíveis (apenas Central e Loja para transferências)
+  // Locais disponíveis (para vendedor_loja: origem só loja, destino só central)
+  const locaisOrigem = useMemo(() => {
+    const filtered = locais.filter(l => l.tipo === 'central' || l.tipo === 'loja');
+    if (isVendedorLoja) {
+      return filtered.filter(l => l.tipo === 'loja');
+    }
+    return filtered;
+  }, [locais, isVendedorLoja]);
+
+  const locaisDestino = useMemo(() => {
+    const filtered = locais.filter(l => l.tipo === 'central' || l.tipo === 'loja');
+    if (isVendedorLoja) {
+      return filtered.filter(l => l.tipo === 'central');
+    }
+    return filtered.filter(l => l.id !== origemId);
+  }, [locais, origemId, isVendedorLoja]);
+
+  // Locais disponíveis para exibição de resumo
   const locaisDisponiveis = useMemo(() => 
     locais.filter(l => l.tipo === 'central' || l.tipo === 'loja'),
     [locais]
@@ -250,11 +269,21 @@ export default function Transferencias() {
   };
 
   const handleOpenModal = () => {
-    setOrigemId('');
-    setDestinoId('');
-    setItensTransferencia([]);
     setSearchProdutos('');
     setLastAddedItemId(null);
+    setItensTransferencia([]);
+    
+    // Para vendedor_loja, auto-selecionar origem (loja) e destino (central)
+    if (isVendedorLoja) {
+      const loja = locais.find(l => l.tipo === 'loja');
+      const central = locais.find(l => l.tipo === 'central');
+      setOrigemId(loja?.id || '');
+      setDestinoId(central?.id || '');
+    } else {
+      setOrigemId('');
+      setDestinoId('');
+    }
+    
     setShowNovaTransferencia(true);
   };
 
@@ -543,16 +572,30 @@ export default function Transferencias() {
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            {/* Aviso para vendedor_loja */}
+            {isVendedorLoja && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                <Info className="h-4 w-4 text-blue-600 shrink-0" />
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  Você pode transferir apenas da <strong>Loja</strong> para o <strong>Estoque Central</strong>.
+                </p>
+              </div>
+            )}
+
             {/* Seleção de Origem e Destino */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-sm font-medium mb-2 block">De:</Label>
-                <Select value={origemId} onValueChange={handleOrigemChange}>
+                <Select 
+                  value={origemId} 
+                  onValueChange={handleOrigemChange}
+                  disabled={isVendedorLoja && locaisOrigem.length === 1}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione origem" />
                   </SelectTrigger>
                   <SelectContent>
-                    {locaisDisponiveis.map(local => (
+                    {locaisOrigem.map(local => (
                       <SelectItem key={local.id} value={local.id}>
                         {local.nome}
                       </SelectItem>
@@ -562,18 +605,20 @@ export default function Transferencias() {
               </div>
               <div>
                 <Label className="text-sm font-medium mb-2 block">Para:</Label>
-                <Select value={destinoId} onValueChange={setDestinoId}>
+                <Select 
+                  value={destinoId} 
+                  onValueChange={setDestinoId}
+                  disabled={isVendedorLoja && locaisDestino.length === 1}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione destino" />
                   </SelectTrigger>
                   <SelectContent>
-                    {locaisDisponiveis
-                      .filter(l => l.id !== origemId)
-                      .map(local => (
-                        <SelectItem key={local.id} value={local.id}>
-                          {local.nome}
-                        </SelectItem>
-                      ))}
+                    {locaisDestino.map(local => (
+                      <SelectItem key={local.id} value={local.id}>
+                        {local.nome}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -13,6 +13,7 @@ interface RoleContextType {
   isAdmin: boolean;
   isGerente: boolean;
   isVendedor: boolean;
+  isVendedorLoja: boolean;
   mustChangePassword: boolean;
   refreshProfile: () => Promise<void>;
 }
@@ -111,6 +112,7 @@ export function RoleProvider({ children }: RoleProviderProps) {
     isAdmin: role === 'admin',
     isGerente: role === 'gerente',
     isVendedor: role === 'vendedor',
+    isVendedorLoja: role === 'vendedor_loja',
     mustChangePassword: profile?.must_change_password ?? false,
     refreshProfile,
   };
