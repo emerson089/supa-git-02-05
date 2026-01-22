@@ -38,6 +38,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle, FileText } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { toast } from 'sonner';
@@ -423,15 +424,29 @@ export default function Feira() {
 
   // Handler para gerar PDF da carga
   const [generatingPDFId, setGeneratingPDFId] = useState<string | null>(null);
+  const [pdfOptionsModal, setPdfOptionsModal] = useState<{
+    isOpen: boolean;
+    carga: TransferenciaComItensHistorico | null;
+  }>({ isOpen: false, carga: null });
+  const [hideFinancials, setHideFinancials] = useState(false);
   
-  const handleGerarPDF = async (carga: TransferenciaComItensHistorico) => {
-    if (generatingPDFId) return; // Já está gerando um PDF
+  const handleOpenPDFOptions = (carga: TransferenciaComItensHistorico) => {
+    setPdfOptionsModal({ isOpen: true, carga });
+  };
+
+  const handleConfirmGerarPDF = async () => {
+    if (!pdfOptionsModal.carga || generatingPDFId) return;
     
+    const carga = pdfOptionsModal.carga;
     setGeneratingPDFId(carga.id);
+    setPdfOptionsModal({ isOpen: false, carga: null });
     toast.info('Gerando PDF...');
     
     try {
-      await generateCargaPDF(carga);
+      await generateCargaPDF(carga, { 
+        includeImages: true,
+        hideFinancials 
+      });
       toast.success('PDF gerado com sucesso!');
     } catch (error: any) {
       console.error('Erro ao gerar PDF:', error);
@@ -574,7 +589,7 @@ export default function Feira() {
               cargasAtivas={todasCargasAtivas || []}
               onRegistrarRetorno={handleOpenRetornoFromHistorico}
               onEditarCarga={handleEditarCarga}
-              onGerarPDF={handleGerarPDF}
+              onGerarPDF={handleOpenPDFOptions}
               periodoEhHoje={periodoEhHoje}
               isGeneratingPDF={generatingPDFId !== null}
             />
@@ -586,7 +601,7 @@ export default function Feira() {
               onExcluirCarga={handleExcluirCarga}
               onEstornarCarga={handleEstornarCarga}
               onExcluirHistorico={handleExcluirHistorico}
-              onGerarPDF={handleGerarPDF}
+              onGerarPDF={handleOpenPDFOptions}
               isLoading={isLoadingHistorico}
             />
           </div>
@@ -1137,6 +1152,63 @@ export default function Feira() {
         isPending={editarCarga.isPending}
         formatCurrency={formatCurrency}
       />
+
+      {/* Modal Opções do PDF */}
+      <Dialog 
+        open={pdfOptionsModal.isOpen} 
+        onOpenChange={(open) => !open && setPdfOptionsModal({ isOpen: false, carga: null })}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Gerar PDF da Carga
+            </DialogTitle>
+            <DialogDescription>
+              Configure as opções antes de gerar o PDF.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="flex items-center justify-between space-x-3 p-3 rounded-lg border bg-muted/30">
+              <div className="space-y-0.5">
+                <Label htmlFor="hide-financials" className="text-sm font-medium">
+                  Ocultar valores financeiros
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Mostra apenas Produto, Código e Quantidade
+                </p>
+              </div>
+              <Switch
+                id="hide-financials"
+                checked={hideFinancials}
+                onCheckedChange={setHideFinancials}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setPdfOptionsModal({ isOpen: false, carga: null })}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleConfirmGerarPDF} 
+              disabled={generatingPDFId !== null}
+              className="gap-2"
+            >
+              {generatingPDFId ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              Gerar PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
