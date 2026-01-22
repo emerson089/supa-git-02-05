@@ -12,40 +12,55 @@ import {
   Store,
   ArrowLeftRight,
   Factory,
-  FileText
+  FileText,
+  LucideIcon
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRole } from '@/contexts/RoleContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { AppRole } from '@/types/roles';
 
-const drawerNavItems = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-  { label: 'Pedidos Criados', icon: FileText, path: '/pedidos/criados' },
-  { label: 'Novo Pedido', icon: ShoppingCart, path: '/pedidos/novo' },
-  { label: 'Clientes', icon: Users, path: '/clientes' },
+interface DrawerNavItem {
+  label: string;
+  icon: LucideIcon;
+  path: string;
+  roles?: AppRole[];
+}
+
+const drawerNavItems: DrawerNavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['admin', 'gerente'] },
+  { label: 'Pedidos Criados', icon: FileText, path: '/pedidos/criados', roles: ['admin', 'gerente'] },
+  { label: 'Novo Pedido', icon: ShoppingCart, path: '/pedidos/novo', roles: ['admin', 'gerente'] },
+  { label: 'Clientes', icon: Users, path: '/clientes', roles: ['admin', 'gerente'] },
 ];
 
-const drawerOperationsItems = [
-  { label: 'Estoque', icon: Warehouse, path: '/estoque' },
-  { label: 'Feira', icon: Store, path: '/feira' },
-  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias' },
-  { label: 'Produção', icon: Factory, path: '/producao' },
+const drawerOperationsItems: DrawerNavItem[] = [
+  { label: 'Estoque', icon: Warehouse, path: '/estoque', roles: ['admin', 'gerente'] },
+  { label: 'Feira', icon: Store, path: '/feira', roles: ['admin', 'gerente', 'vendedor'] },
+  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente', 'vendedor_loja'] },
+  { label: 'Produção', icon: Factory, path: '/producao', roles: ['admin', 'gerente'] },
 ];
 
-const drawerBottomItems = [
-  { label: 'Configurações', icon: Settings, path: '/configuracoes' },
+const drawerBottomItems: DrawerNavItem[] = [
+  { label: 'Configurações', icon: Settings, path: '/configuracoes/usuarios', roles: ['admin'] },
   { label: 'Ajuda', icon: HelpCircle, path: '/ajuda' },
 ];
 
 export function MobileDrawer() {
   const [open, setOpen] = useState(false);
   const { user, signOut } = useAuth();
+  const { role } = useRole();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const filterByRole = (items: DrawerNavItem[]): DrawerNavItem[] => {
+    return items.filter(item => !item.roles || (role && item.roles.includes(role)));
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -109,63 +124,67 @@ export function MobileDrawer() {
         <Separator className="my-2" />
 
         {/* Main Navigation */}
-        <nav className="p-4 pt-2 pb-1 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Principal</p>
-          {drawerNavItems.map((item) => {
-            const active = isActive(item.path);
-            return (
-              <button
-                key={item.label}
-                onClick={() => handleNavigate(item.path)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 min-h-[44px]",
-                  active
-                    ? 'neu-button-pressed bg-background text-primary font-semibold shadow-neu-inset'
-                    : 'hover:bg-muted/30 text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <item.icon size={18} />
-                <span className="text-sm">{item.label}</span>
-                {active && (
-                  <div className="ml-auto w-2 h-2 rounded-full bg-primary" />
-                )}
-              </button>
-            );
-          })}
-        </nav>
+        {filterByRole(drawerNavItems).length > 0 && (
+          <nav className="p-4 pt-2 pb-1 space-y-1">
+            <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Principal</p>
+            {filterByRole(drawerNavItems).map((item) => {
+              const active = isActive(item.path);
+              return (
+                <button
+                  key={item.label}
+                  onClick={() => handleNavigate(item.path)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 min-h-[44px]",
+                    active
+                      ? 'neu-button-pressed bg-background text-primary font-semibold shadow-neu-inset'
+                      : 'hover:bg-muted/30 text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <item.icon size={18} />
+                  <span className="text-sm">{item.label}</span>
+                  {active && (
+                    <div className="ml-auto w-2 h-2 rounded-full bg-primary" />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        )}
 
         {/* Operations Navigation */}
-        <nav className="p-4 pt-1 pb-1 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Operações</p>
-          {drawerOperationsItems.map((item) => {
-            const active = isActive(item.path);
-            return (
-              <button
-                key={item.label}
-                onClick={() => handleNavigate(item.path)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 min-h-[44px]",
-                  active
-                    ? 'neu-button-pressed bg-background text-primary font-semibold shadow-neu-inset'
-                    : 'hover:bg-muted/30 text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <item.icon size={18} />
-                <span className="text-sm">{item.label}</span>
-                {active && (
-                  <div className="ml-auto w-2 h-2 rounded-full bg-primary" />
-                )}
-              </button>
-            );
-          })}
-        </nav>
+        {filterByRole(drawerOperationsItems).length > 0 && (
+          <nav className="p-4 pt-1 pb-1 space-y-1">
+            <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Operações</p>
+            {filterByRole(drawerOperationsItems).map((item) => {
+              const active = isActive(item.path);
+              return (
+                <button
+                  key={item.label}
+                  onClick={() => handleNavigate(item.path)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 min-h-[44px]",
+                    active
+                      ? 'neu-button-pressed bg-background text-primary font-semibold shadow-neu-inset'
+                      : 'hover:bg-muted/30 text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <item.icon size={18} />
+                  <span className="text-sm">{item.label}</span>
+                  {active && (
+                    <div className="ml-auto w-2 h-2 rounded-full bg-primary" />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        )}
 
         <Separator className="my-2" />
 
         {/* Bottom Navigation */}
         <nav className="p-4 pt-2 space-y-1">
           <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Configurações</p>
-          {drawerBottomItems.map((item) => {
+          {filterByRole(drawerBottomItems).map((item) => {
             const active = isActive(item.path);
             return (
               <button
