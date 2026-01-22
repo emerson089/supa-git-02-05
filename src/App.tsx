@@ -8,6 +8,7 @@ import { ClientesProvider } from "@/contexts/ClientesContext";
 import { EstoqueProvider } from "@/contexts/EstoqueContext";
 import { PedidosProvider } from "@/contexts/PedidosContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RoleBasedRedirect } from "@/components/RoleBasedRedirect";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import NovoPedido from "./pages/NovoPedido";
@@ -73,7 +74,7 @@ function App() {
                       path="/"
                       element={
                         <ProtectedRoute>
-                          <Navigate to="/pedidos/novo" replace />
+                          <RoleBasedRedirect />
                         </ProtectedRoute>
                       }
                     />
@@ -112,7 +113,7 @@ function App() {
                     <Route
                       path="/transferencias"
                       element={
-                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                        <ProtectedRoute allowedRoles={['admin', 'gerente', 'vendedor_loja']}>
                           <Transferencias />
                         </ProtectedRoute>
                       }
