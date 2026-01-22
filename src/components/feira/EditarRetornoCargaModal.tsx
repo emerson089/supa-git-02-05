@@ -156,8 +156,21 @@ export function EditarRetornoCargaModal({
     }));
   };
 
+  // Debug: log estado do botão
+  console.log('[EditarRetornoCargaModal] Estado do botão:', {
+    isLoading,
+    temAlteracoes,
+    motivoPreenchido: !!motivo.trim(),
+    itensAlterados: itensComDelta.filter(i => i.delta !== 0).length,
+  });
+
   const handleConfirm = () => {
-    if (!carga || !motivo.trim()) return;
+    console.log('[EditarRetornoCargaModal] handleConfirm chamado');
+    
+    if (!carga || !motivo.trim()) {
+      console.log('[EditarRetornoCargaModal] Validação falhou:', { carga: !!carga, motivo: motivo.trim() });
+      return;
+    }
 
     const itensCorrigidos = itensComDelta
       .filter((item) => item.delta !== 0)
@@ -168,6 +181,12 @@ export function EditarRetornoCargaModal({
         quantidadeRetornadaAnterior: item.retornoAnterior,
       }));
 
+    console.log('[EditarRetornoCargaModal] Chamando onConfirm com:', {
+      cargaId: carga.id,
+      itensCorrigidos: itensCorrigidos.length,
+      motivo: motivo.trim(),
+    });
+    
     onConfirm(carga.id, itensCorrigidos, motivo.trim());
   };
 
@@ -362,6 +381,7 @@ export function EditarRetornoCargaModal({
             Cancelar
           </Button>
           <Button
+            type="button"
             onClick={handleConfirm}
             disabled={isLoading || !temAlteracoes || !motivo.trim()}
             className="bg-amber-600 hover:bg-amber-700"
