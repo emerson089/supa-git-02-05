@@ -42,7 +42,7 @@ const drawerNavItems: DrawerNavItem[] = [
 const drawerOperationsItems: DrawerNavItem[] = [
   { label: 'Estoque', icon: Warehouse, path: '/estoque', roles: ['admin', 'gerente'] },
   { label: 'Feira', icon: Store, path: '/feira', roles: ['admin', 'gerente', 'vendedor'] },
-  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente', 'vendedor_loja'] },
+  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente'] },
   { label: 'Produção', icon: Factory, path: '/producao', roles: ['admin', 'gerente'] },
 ];
 

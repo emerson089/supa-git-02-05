@@ -39,7 +39,7 @@ interface ItemTransferencia {
 
 export default function Transferencias() {
   const isMobile = useIsMobile();
-  const { isVendedorLoja, isAdmin, isGerente } = useRole();
+  const { isAdmin, isGerente } = useRole();
   const { getProdutosAcabados } = useEstoque();
   const { locais, estoquePorLocal, isLoading: isLoadingLocais } = useDisponivelCentral();
   const { data: transferencias, isLoading: isLoadingTransferencias } = useTransferencias('transferencia');
@@ -94,22 +94,15 @@ export default function Transferencias() {
   );
   const totalModelosLocal = estoqueDetalhado.length;
 
-  // Locais disponíveis (para vendedor_loja: origem só loja, destino só central)
+  // Locais disponíveis para transferência
   const locaisOrigem = useMemo(() => {
-    const filtered = locais.filter(l => l.tipo === 'central' || l.tipo === 'loja');
-    if (isVendedorLoja) {
-      return filtered.filter(l => l.tipo === 'loja');
-    }
-    return filtered;
-  }, [locais, isVendedorLoja]);
+    return locais.filter(l => l.tipo === 'central' || l.tipo === 'loja');
+  }, [locais]);
 
   const locaisDestino = useMemo(() => {
     const filtered = locais.filter(l => l.tipo === 'central' || l.tipo === 'loja');
-    if (isVendedorLoja) {
-      return filtered.filter(l => l.tipo === 'central');
-    }
     return filtered.filter(l => l.id !== origemId);
-  }, [locais, origemId, isVendedorLoja]);
+  }, [locais, origemId]);
 
   // Locais disponíveis para exibição de resumo
   const locaisDisponiveis = useMemo(() => 
@@ -272,18 +265,8 @@ export default function Transferencias() {
     setSearchProdutos('');
     setLastAddedItemId(null);
     setItensTransferencia([]);
-    
-    // Para vendedor_loja, auto-selecionar origem (loja) e destino (central)
-    if (isVendedorLoja) {
-      const loja = locais.find(l => l.tipo === 'loja');
-      const central = locais.find(l => l.tipo === 'central');
-      setOrigemId(loja?.id || '');
-      setDestinoId(central?.id || '');
-    } else {
-      setOrigemId('');
-      setDestinoId('');
-    }
-    
+    setOrigemId('');
+    setDestinoId('');
     setShowNovaTransferencia(true);
   };
 
@@ -572,16 +555,6 @@ export default function Transferencias() {
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-            {/* Aviso para vendedor_loja */}
-            {isVendedorLoja && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-                <Info className="h-4 w-4 text-blue-600 shrink-0" />
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Você pode transferir apenas da <strong>Loja</strong> para o <strong>Estoque Central</strong>.
-                </p>
-              </div>
-            )}
-
             {/* Seleção de Origem e Destino */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -589,7 +562,6 @@ export default function Transferencias() {
                 <Select 
                   value={origemId} 
                   onValueChange={handleOrigemChange}
-                  disabled={isVendedorLoja && locaisOrigem.length === 1}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione origem" />
@@ -608,7 +580,6 @@ export default function Transferencias() {
                 <Select 
                   value={destinoId} 
                   onValueChange={setDestinoId}
-                  disabled={isVendedorLoja && locaisDestino.length === 1}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione destino" />

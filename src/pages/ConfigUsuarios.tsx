@@ -196,8 +196,6 @@ export default function ConfigUsuarios() {
         return 'secondary';
       case 'vendedor':
         return 'outline';
-      case 'vendedor_loja':
-        return 'outline';
       default:
         return 'outline';
     }
@@ -470,7 +468,6 @@ export default function ConfigUsuarios() {
                   <SelectItem value="admin">Administrador</SelectItem>
                   <SelectItem value="gerente">Gerente</SelectItem>
                   <SelectItem value="vendedor">Vendedor</SelectItem>
-                  <SelectItem value="vendedor_loja">Vendedor Loja</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -512,7 +509,6 @@ export default function ConfigUsuarios() {
                   <SelectItem value="admin">Administrador</SelectItem>
                   <SelectItem value="gerente">Gerente</SelectItem>
                   <SelectItem value="vendedor">Vendedor</SelectItem>
-                  <SelectItem value="vendedor_loja">Vendedor Loja</SelectItem>
                 </SelectContent>
               </Select>
             </div>

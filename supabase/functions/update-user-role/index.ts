@@ -20,7 +20,7 @@ function getCorsHeaders(req: Request): Record<string, string> {
 
 interface UpdateRoleRequest {
   userId: string;
-  newRole: 'admin' | 'gerente' | 'vendedor' | 'vendedor_loja';
+  newRole: 'admin' | 'gerente' | 'vendedor';
 }
 
 serve(async (req) => {
@@ -90,7 +90,7 @@ serve(async (req) => {
       );
     }
 
-    if (!['admin', 'gerente', 'vendedor', 'vendedor_loja'].includes(newRole)) {
+    if (!['admin', 'gerente', 'vendedor'].includes(newRole)) {
       return new Response(
         JSON.stringify({ error: 'Role inválido' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

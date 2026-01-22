@@ -47,11 +47,10 @@ const leftNavItems: NavItemType[] = [
 const rightNavItems: NavItemType[] = [
   { label: 'Estoque', icon: Warehouse, path: '/estoque', roles: ['admin', 'gerente'] },
   { label: 'Feira', icon: Store, path: '/feira', roles: ['admin', 'gerente', 'vendedor'] },
-  { label: 'Transferir', icon: ArrowLeftRight, path: '/transferencias', roles: ['vendedor_loja'] },
 ];
 
 const moreMenuItems: NavItemType[] = [
-  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente', 'vendedor_loja'] },
+  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente'] },
   { label: 'Clientes', icon: Users, path: '/clientes', roles: ['admin', 'gerente'] },
   { label: 'Produção', icon: Factory, path: '/producao', roles: ['admin', 'gerente'] },
   { label: 'Pedidos Criados', icon: FileText, path: '/pedidos/criados', roles: ['admin', 'gerente'] },
@@ -61,7 +60,7 @@ const moreMenuItems: NavItemType[] = [
 
 const quickActions: QuickActionType[] = [
   { label: 'Novo Pedido', icon: ShoppingCart, path: '/pedidos/novo', roles: ['admin', 'gerente'] },
-  { label: 'Nova Transferência', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente', 'vendedor_loja'] },
+  { label: 'Nova Transferência', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente'] },
   { label: 'Nova Carga (Feira)', icon: Store, path: '/feira', roles: ['admin', 'gerente', 'vendedor'] },
   { label: 'Novo Cliente', icon: UserPlus, path: '/clientes', roles: ['admin', 'gerente'] },
 ];
