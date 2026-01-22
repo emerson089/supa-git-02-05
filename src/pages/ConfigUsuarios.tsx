@@ -25,6 +25,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -35,6 +45,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,6 +62,7 @@ import {
   Users,
   Copy,
   Search,
+  Trash2,
 } from 'lucide-react';
 import { AppRole, ROLE_DISPLAY_NAMES } from '@/types/roles';
 import { useRole } from '@/contexts/RoleContext';
@@ -67,7 +79,8 @@ export default function ConfigUsuarios() {
     inviteUser, 
     updateUserRole, 
     toggleUserStatus, 
-    resetUserPassword 
+    resetUserPassword,
+    deleteUser,
   } = useUsers();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,6 +92,8 @@ export default function ConfigUsuarios() {
   // Loading states for individual user actions
   const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
   const [resettingUserId, setResettingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<typeof users[0] | null>(null);
 
   // Form state for creating user
   const [newUserEmail, setNewUserEmail] = useState('');
@@ -155,6 +170,17 @@ export default function ConfigUsuarios() {
       setShowTempPassword(tempPassword);
     }
     setResettingUserId(null);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!confirmDeleteUser || deletingUserId) return;
+    
+    setDeletingUserId(confirmDeleteUser.user_id);
+    const success = await deleteUser(confirmDeleteUser.user_id);
+    if (success) {
+      setConfirmDeleteUser(null);
+    }
+    setDeletingUserId(null);
   };
 
   const copyToClipboard = (text: string) => {
@@ -368,11 +394,20 @@ export default function ConfigUsuarios() {
                                                       </>
                                                     ) : (
                                                       <>
-                                                        <Key className="h-4 w-4 mr-2" />
-                                                        Resetar Senha
-                                                      </>
-                                                    )}
-                                                  </DropdownMenuItem>
+                                                         <Key className="h-4 w-4 mr-2" />
+                                                         Resetar Senha
+                                                       </>
+                                                     )}
+                                                   </DropdownMenuItem>
+                                                   <DropdownMenuSeparator />
+                                                   <DropdownMenuItem
+                                                     onClick={() => setConfirmDeleteUser(user)}
+                                                     disabled={user.user_id === currentUserProfile?.user_id}
+                                                     className="text-destructive focus:text-destructive"
+                                                   >
+                                                     <Trash2 className="h-4 w-4 mr-2" />
+                                                     Excluir
+                                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </TableCell>
@@ -525,6 +560,38 @@ export default function ConfigUsuarios() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!confirmDeleteUser} onOpenChange={() => setConfirmDeleteUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Usuário</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir permanentemente o usuário{' '}
+              <strong>{confirmDeleteUser?.nome || confirmDeleteUser?.email}</strong>?
+              <br /><br />
+              Esta ação não pode ser desfeita. Todos os dados do usuário serão removidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!deletingUserId}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteUser}
+              disabled={!!deletingUserId}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deletingUserId ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                'Excluir Permanentemente'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
