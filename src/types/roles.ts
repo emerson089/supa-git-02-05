@@ -1,4 +1,4 @@
-export type AppRole = 'admin' | 'gerente' | 'vendedor';
+export type AppRole = 'admin' | 'gerente' | 'vendedor' | 'vendedor_loja';
 
 export interface UserProfile {
   id: string;
@@ -85,6 +85,11 @@ export const ROLE_PERMISSIONS: Record<AppRole, string[]> = {
     'feira.retorno', // Apenas registrar retorno
     'estoque.view',
   ],
+  vendedor_loja: [
+    'transferencias.view',
+    'transferencias.create_loja_to_central', // Permissão específica: só loja -> central
+    'estoque.view',
+  ],
 };
 
 // Role-based landing pages
@@ -92,6 +97,7 @@ export const ROLE_LANDING_PAGES: Record<AppRole, string> = {
   admin: '/',
   gerente: '/pedidos/criados',
   vendedor: '/feira',
+  vendedor_loja: '/transferencias',
 };
 
 // Role display names
@@ -99,4 +105,5 @@ export const ROLE_DISPLAY_NAMES: Record<AppRole, string> = {
   admin: 'Administrador',
   gerente: 'Gerente',
   vendedor: 'Vendedor',
+  vendedor_loja: 'Vendedor Loja',
 };
