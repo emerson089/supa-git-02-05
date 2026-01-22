@@ -64,10 +64,11 @@ export function useLocais() {
     queryFn: async () => {
       if (!user) return [];
 
+      // Não filtramos por user_id — a RLS decide quem pode ver.
+      // Isso permite que vendedor_loja veja locais compartilhados.
       const { data, error } = await supabase
         .from('estoque_locais')
         .select('*')
-        .eq('user_id', user.id)
         .eq('ativo', true)
         .order('created_at', { ascending: true });
 
