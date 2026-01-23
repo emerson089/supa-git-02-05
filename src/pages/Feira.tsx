@@ -1132,35 +1132,35 @@ export default function Feira() {
       <Dialog open={showRetorno} onOpenChange={(open) => {
         if (!open) handleCloseRetorno();
       }}>
-        <DialogContent className="max-w-md sm:h-[85vh] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogContent className="w-full max-w-md h-[90vh] sm:h-[85vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden rounded-t-2xl sm:rounded-lg">
           <DialogHeader className="px-4 pt-4 pb-3 border-b shrink-0">
-            <DialogTitle className="text-lg">Registrar Retorno</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
+            <DialogTitle className="text-lg text-center">Registrar Retorno</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground text-center">
               Preencha o retorno de cada item. Campos vazios precisam de um valor (0 se não retornou).
             </DialogDescription>
           </DialogHeader>
 
           {/* Barra de busca fixa */}
-          <div className="flex items-center justify-between shrink-0 px-4 py-2 border-b gap-3">
+          <div className="flex items-center justify-between shrink-0 px-4 py-2.5 border-b gap-3">
             <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">
               {itensRetornoFiltrados.length} de {cargaSelecionada?.itens.length || 0} produto(s)
             </span>
             
-            <div className="relative flex-1 max-w-[200px]">
+            <div className="relative flex-1 max-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 type="text"
                 placeholder="Buscar modelo..."
                 value={buscaRetorno}
                 onChange={(e) => setBuscaRetorno(e.target.value)}
-                className="pl-8 h-7 text-xs"
+                className="pl-8 h-8 text-base rounded-full"
               />
               {buscaRetorno && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-0.5 top-1/2 -translate-y-1/2 h-5 w-5 p-0"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0 rounded-full"
                   onClick={() => setBuscaRetorno('')}
                 >
                   <X className="h-3 w-3" />
@@ -1170,7 +1170,7 @@ export default function Feira() {
           </div>
 
           {/* Header de colunas fixo */}
-          <div className="grid grid-cols-[40px_1fr_50px_80px_70px] gap-2 px-4 py-2 border-b bg-muted/30 text-[10px] font-medium text-muted-foreground uppercase tracking-wide sticky top-0 z-10">
+          <div className="grid grid-cols-[52px_1fr_44px_64px_64px] gap-2 px-4 py-2.5 border-b bg-muted/30 text-[10px] font-medium text-muted-foreground uppercase tracking-wide sticky top-0 z-10">
             <span></span>
             <span>Produto</span>
             <span className="text-center">Enviado</span>
@@ -1195,9 +1195,9 @@ export default function Feira() {
                   const campoVazio = inputValue === '' || inputValue === undefined;
 
                   return (
-                    <div key={item.id} className="grid grid-cols-[40px_1fr_50px_80px_70px] gap-2 items-center px-4 py-2.5 hover:bg-muted/20 transition-colors">
+                    <div key={item.id} className="grid grid-cols-[52px_1fr_44px_64px_64px] gap-2 items-center px-4 py-3 hover:bg-muted/20 transition-colors">
                       {/* Coluna 1: Imagem */}
-                      <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                      <div className="w-12 h-12 rounded-xl overflow-hidden bg-muted flex-shrink-0">
                         <LotImage 
                           src={itemWithExtras.produtoImagem} 
                           alt={itemWithExtras.produtoNome || 'Produto'} 
@@ -1234,7 +1234,6 @@ export default function Feira() {
                         }}
                         onBlur={() => {
                           const val = inputRetornoValues[item.itemId];
-                          // Não forçar valor no blur - manter vazio se usuário deixou vazio
                           if (val !== '' && val !== undefined) {
                             const numVal = parseInt(val, 10);
                             if (!isNaN(numVal)) {
@@ -1245,19 +1244,21 @@ export default function Feira() {
                           }
                         }}
                         className={cn(
-                          "w-14 h-8 text-center text-base font-medium px-1",
-                          campoVazio && "border-amber-400 bg-amber-50/50 dark:bg-amber-900/20"
+                          "w-14 h-9 text-center text-base font-medium rounded-full border-2",
+                          campoVazio 
+                            ? "border-amber-400 bg-white dark:bg-background" 
+                            : "border-input bg-white dark:bg-background"
                         )}
                       />
                       
-                      {/* Coluna 5: Vendido - sempre com estilo suave */}
+                      {/* Coluna 5: Vendido */}
                       <span className={cn(
-                        "inline-flex items-center justify-center text-xs px-2 py-0.5 rounded-full font-medium",
+                        "inline-flex items-center justify-center h-9 text-sm rounded-full font-medium",
                         campoVazio 
-                          ? "bg-muted text-muted-foreground" 
+                          ? "bg-muted/60 text-muted-foreground" 
                           : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                       )}>
-                        {campoVazio ? '—' : `${vendido} vendido`}
+                        {campoVazio ? '—' : vendido}
                       </span>
                     </div>
                   );
@@ -1267,7 +1268,7 @@ export default function Feira() {
           </div>
 
           {/* Footer fixo com resumo */}
-          <div className="border-t px-4 py-3 shrink-0 bg-muted/30">
+          <div className="border-t px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shrink-0 bg-muted/30">
             {/* Aviso de itens pendentes */}
             {!todosItensPreenchidos && (
               <p className="text-xs text-amber-600 mb-2 text-center font-medium">
@@ -1275,8 +1276,8 @@ export default function Feira() {
               </p>
             )}
             
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex gap-3 text-xs flex-wrap">
+            <div className="flex items-center justify-center mb-3">
+              <div className="flex gap-4 text-xs">
                 <span className="text-muted-foreground">
                   Enviado: <strong className="text-foreground">{cargaSelecionada?.itens.reduce((sum, i) => sum + i.quantidadeEnviada, 0) || 0}</strong>
                 </span>
@@ -1288,14 +1289,14 @@ export default function Feira() {
                 </span>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleCloseRetorno} className="flex-1">
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={handleCloseRetorno} className="flex-1 rounded-xl h-11">
                 Cancelar
               </Button>
               <Button 
                 onClick={handleRegistrarRetorno}
                 disabled={registrarRetorno.isPending || !todosItensPreenchidos}
-                className="flex-1"
+                className="flex-1 rounded-xl h-11"
               >
                 {registrarRetorno.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
