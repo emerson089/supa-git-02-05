@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck, History } from 'lucide-react';
+import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck, History, BarChart3 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PrintEstoqueLocal } from '@/components/estoque/PrintEstoqueLocal';
 import { LotImage } from '@/components/production/LotImage';
@@ -30,6 +30,7 @@ import { ZerarEstoqueModal } from '@/components/estoque/ZerarEstoqueModal';
 import { EditarPrecoLocalModal } from '@/components/estoque/EditarPrecoLocalModal';
 import { NovaContagemModal } from '@/components/estoque/NovaContagemModal';
 import { HistoricoContagensModal } from '@/components/estoque/HistoricoContagensModal';
+import { RelatorioSaidasModal } from '@/components/estoque/RelatorioSaidasModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -61,6 +62,7 @@ export default function Transferencias() {
   const [showEditarPrecoModal, setShowEditarPrecoModal] = useState(false);
   const [showNovaContagemModal, setShowNovaContagemModal] = useState(false);
   const [showHistoricoContagensModal, setShowHistoricoContagensModal] = useState(false);
+  const [showRelatorioSaidasModal, setShowRelatorioSaidasModal] = useState(false);
   const [itemSelecionado, setItemSelecionado] = useState<EstoqueLocalDetalhado | null>(null);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
 
@@ -368,6 +370,15 @@ export default function Transferencias() {
             <h2 className="font-semibold truncate">{lojaNome}</h2>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => setShowRelatorioSaidasModal(true)}
+              disabled={!lojaId}
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Saídas</span>
+            </Button>
             <Button 
               size="sm" 
               variant="outline"
@@ -1063,6 +1074,13 @@ export default function Transferencias() {
         showPreview={showPDFPreview}
         onClose={handleClosePreview}
         onPrint={handlePrint}
+      />
+
+      {/* Modal de Relatório de Saídas */}
+      <RelatorioSaidasModal
+        open={showRelatorioSaidasModal}
+        onOpenChange={setShowRelatorioSaidasModal}
+        localIdInicial={lojaId || undefined}
       />
     </div>
   );
