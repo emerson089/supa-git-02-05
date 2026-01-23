@@ -295,36 +295,37 @@ export default function Transferencias() {
 
   // Seção: Estoque do Local
   const EstoqueLocalSection = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
       {/* Header do Estoque */}
-      <div className={cn("shrink-0", isMobile ? "px-4 pt-2 pb-3" : "pb-4")}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Store className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold">{lojaNome}</h2>
+      <div className={cn("shrink-0", isMobile ? "px-3 pt-2 pb-3" : "pb-4")}>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Store className="h-5 w-5 text-primary shrink-0" />
+            <h2 className="font-semibold truncate">{lojaNome}</h2>
           </div>
           <Button 
             size="sm" 
             onClick={() => setShowAdicionarModal(true)}
             disabled={!lojaId}
+            className="shrink-0"
           >
-            <Plus className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Adicionar</span>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline ml-1">Adicionar</span>
           </Button>
         </div>
 
         {/* Cards de totais */}
         <div className="grid grid-cols-2 gap-2 mb-3">
           <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Total Peças</p>
-              <p className="text-2xl font-bold">{totalPecasLocal}</p>
+            <CardContent className="p-2 sm:p-3">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">Total Peças</p>
+              <p className="text-xl sm:text-2xl font-bold">{totalPecasLocal}</p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Total Modelos</p>
-              <p className="text-2xl font-bold">{totalModelosLocal}</p>
+            <CardContent className="p-2 sm:p-3">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">Total Modelos</p>
+              <p className="text-xl sm:text-2xl font-bold">{totalModelosLocal}</p>
             </CardContent>
           </Card>
         </div>
@@ -342,8 +343,8 @@ export default function Transferencias() {
       </div>
 
       {/* Lista de produtos */}
-      <ScrollArea className="flex-1">
-        <div className={cn("space-y-2", isMobile ? "px-4 pb-4" : "pb-4")}>
+      <ScrollArea className="flex-1 w-full">
+        <div className={cn("space-y-2 w-full", isMobile ? "px-3 pb-4" : "pb-4")}>
           {isLoadingEstoqueDetalhado ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -374,17 +375,17 @@ export default function Transferencias() {
 
   // Seção: Histórico de Transferências
   const HistoricoTransferenciasSection = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
       {/* Header do Histórico */}
-      <div className={cn("shrink-0", isMobile ? "px-4 pt-2 pb-3" : "pb-4")}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <ArrowLeftRight className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold">Histórico de Transferências</h2>
+      <div className={cn("shrink-0", isMobile ? "px-3 pt-2 pb-3" : "pb-4")}>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <ArrowLeftRight className="h-5 w-5 text-primary shrink-0" />
+            <h2 className="font-semibold truncate text-sm sm:text-base">Transferências</h2>
           </div>
-          <Button size="sm" onClick={handleOpenModal}>
-            <Plus className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Nova</span>
+          <Button size="sm" onClick={handleOpenModal} className="shrink-0">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline ml-1">Nova</span>
           </Button>
         </div>
 
@@ -421,8 +422,8 @@ export default function Transferencias() {
       </div>
 
       {/* Lista de transferências */}
-      <ScrollArea className="flex-1">
-        <div className={cn("space-y-2", isMobile ? "px-4 pb-4" : "pb-4")}>
+      <ScrollArea className="flex-1 w-full">
+        <div className={cn("space-y-2 w-full", isMobile ? "px-3 pb-4" : "pb-4")}>
           {(!transferencias || transferencias.length === 0) ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <ArrowLeftRight className="h-12 w-12 mb-3 opacity-50" />
@@ -460,12 +461,12 @@ export default function Transferencias() {
   );
 
   return (
-    <div className="min-h-screen bg-background flex overflow-hidden">
+    <div className="min-h-screen bg-background flex max-w-full overflow-x-hidden">
       {isMobile && <MobileHeader title="Estoque por Local" />}
       {!isMobile && <AppSidebar />}
 
       <main className={cn(
-        "flex-1 flex flex-col h-screen overflow-hidden",
+        "flex-1 flex flex-col h-screen overflow-y-auto overflow-x-hidden w-full max-w-full",
         isMobile && "pt-14 pb-20"
       )}>
         {/* Header - Desktop */}
