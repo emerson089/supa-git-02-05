@@ -28,9 +28,9 @@ export function ProdutoEstoqueLocalCard({
   const isMobile = useIsMobile();
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow">
+    <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow w-full max-w-full overflow-hidden">
       {/* Foto */}
-      <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted border shrink-0">
+      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden bg-muted border shrink-0">
         <LotImage
           src={item.itemImagemUrl}
           alt={item.itemNome}
@@ -39,13 +39,13 @@ export function ProdutoEstoqueLocalCard({
       </div>
 
       {/* Info */}
-      <div className="flex-1 min-w-0">
-        <h4 className="font-medium truncate text-sm">{item.itemNome}</h4>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Cód: {item.itemCodigo}</span>
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <h4 className="font-medium truncate text-sm leading-tight">{item.itemNome}</h4>
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs text-muted-foreground">
+          <span className="truncate max-w-[80px] sm:max-w-none">Cód: {item.itemCodigo}</span>
           {item.itemPrecoUnitario && (
             <>
-              <span>•</span>
+              <span className="hidden sm:inline">•</span>
               <span>R$ {item.itemPrecoUnitario.toFixed(2)}</span>
             </>
           )}
@@ -53,23 +53,23 @@ export function ProdutoEstoqueLocalCard({
       </div>
 
       {/* Quantidade */}
-      <div className="text-right shrink-0 mr-1">
+      <div className="text-right shrink-0">
         <p className={cn(
-          "text-lg font-bold",
+          "text-base sm:text-lg font-bold",
           item.quantidade <= 0 && "text-destructive",
           item.quantidade > 0 && item.quantidade <= 5 && "text-yellow-600"
         )}>
           {item.quantidade}
         </p>
-        <p className="text-xs text-muted-foreground">peças</p>
+        <p className="text-[10px] sm:text-xs text-muted-foreground">peças</p>
       </div>
 
       {/* Ações */}
       {isMobile ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
-              <MoreVertical className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 -mr-1">
+              <MoreVertical className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="z-50">
