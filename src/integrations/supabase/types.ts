@@ -449,6 +449,36 @@ export type Database = {
           },
         ]
       }
+      precos_por_local: {
+        Row: {
+          created_at: string | null
+          id: string
+          item_id: string
+          local_id: string
+          preco_venda: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          item_id: string
+          local_id: string
+          preco_venda: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          item_id?: string
+          local_id?: string
+          preco_venda?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       prestadores_servico: {
         Row: {
           ativo: boolean | null
