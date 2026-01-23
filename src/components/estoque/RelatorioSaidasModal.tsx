@@ -1,0 +1,412 @@
+import { useState, useMemo } from 'react';
+import { format, subDays, startOfMonth } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { FileDown, FileSpreadsheet, Loader2, Calendar, Filter, TrendingDown, DollarSign, Package } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import {
+  useRelatorioSaidas,
+  useLocaisParaFiltro,
+  FiltrosSaidas,
+  TIPOS_SAIDA,
+  TIPO_LABELS,
+} from '@/hooks/useRelatorioSaidas';
+import { generateRelatorioSaidasPDF } from '@/utils/generateRelatorioSaidasPDF';
+import { generateRelatorioSaidasExcel } from '@/utils/generateRelatorioSaidasExcel';
+
+interface RelatorioSaidasModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  localIdInicial?: string;
+}
+
+export function RelatorioSaidasModal({
+  open,
+  onOpenChange,
+  localIdInicial,
+}: RelatorioSaidasModalProps) {
+  // Estado dos filtros
+  const [dataInicial, setDataInicial] = useState<Date>(startOfMonth(new Date()));
+  const [dataFinal, setDataFinal] = useState<Date>(new Date());
+  const [localId, setLocalId] = useState<string>(localIdInicial || 'todos');
+  const [tiposSelecionados, setTiposSelecionados] = useState<string[]>([]);
+  const [filtrosAplicados, setFiltrosAplicados] = useState<FiltrosSaidas | null>(null);
+
+  // Queries
+  const { data: locais } = useLocaisParaFiltro();
+  const { data, isLoading, isFetching } = useRelatorioSaidas(filtrosAplicados);
+
+  const saidas = data?.saidas || [];
+  const resumo = data?.resumo || { totalPecas: 0, valorVendaTotal: 0, valorCustoTotal: null, quantidadeSemPreco: 0 };
+
+  // Nome do local selecionado para exibição
+  const localNomeFiltro = useMemo(() => {
+    if (!localId || localId === 'todos') return undefined;
+    return locais?.find(l => l.id === localId)?.nome;
+  }, [localId, locais]);
+
+  // Aplicar filtros
+  const handleAplicarFiltros = () => {
+    setFiltrosAplicados({
+      dataInicial,
+      dataFinal,
+      localId: localId !== 'todos' ? localId : undefined,
+      tiposMovimento: tiposSelecionados.length > 0 ? tiposSelecionados : undefined,
+    });
+  };
+
+  // Toggle tipo de movimento
+  const handleToggleTipo = (tipo: string) => {
+    setTiposSelecionados(prev =>
+      prev.includes(tipo)
+        ? prev.filter(t => t !== tipo)
+        : [...prev, tipo]
+    );
+  };
+
+  // Exportar PDF
+  const handleExportPDF = () => {
+    if (!filtrosAplicados || saidas.length === 0) return;
+    generateRelatorioSaidasPDF({
+      saidas,
+      resumo,
+      filtros: filtrosAplicados,
+      localNomeFiltro,
+    });
+  };
+
+  // Exportar Excel/CSV
+  const handleExportExcel = () => {
+    if (!filtrosAplicados || saidas.length === 0) return;
+    generateRelatorioSaidasExcel({
+      saidas,
+      resumo,
+      filtros: filtrosAplicados,
+      localNomeFiltro,
+    });
+  };
+
+  // Formatar moeda
+  const formatarMoeda = (valor: number | null) => {
+    if (valor === null) return '—';
+    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
+
+  // Formatar data
+  const formatarData = (data: Date) => {
+    return format(data, 'dd/MM HH:mm', { locale: ptBR });
+  };
+
+  // Truncar texto
+  const truncateText = (text: string, maxLength: number) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength - 3) + '...';
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <TrendingDown className="h-5 w-5 text-destructive" />
+            Relatório de Saídas do Estoque
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Filtros */}
+        <div className="border rounded-lg p-4 bg-muted/30 space-y-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Filter className="h-4 w-4" />
+            Filtros
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Data Inicial */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Data Inicial</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {format(dataInicial, 'dd/MM/yyyy', { locale: ptBR })}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={dataInicial}
+                    onSelect={(date) => date && setDataInicial(date)}
+                    locale={ptBR}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Data Final */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Data Final</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {format(dataFinal, 'dd/MM/yyyy', { locale: ptBR })}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={dataFinal}
+                    onSelect={(date) => date && setDataFinal(date)}
+                    locale={ptBR}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Local */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Local</Label>
+              <Select value={localId} onValueChange={setLocalId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os locais" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os locais</SelectItem>
+                  {locais?.map(local => (
+                    <SelectItem key={local.id} value={local.id}>
+                      {local.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Tipos de Saída */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tipo de Saída</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    {tiposSelecionados.length === 0
+                      ? 'Todos os tipos'
+                      : `${tiposSelecionados.length} selecionado(s)`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56" align="start">
+                  <div className="space-y-2">
+                    {TIPOS_SAIDA.map(tipo => (
+                      <div key={tipo} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={tipo}
+                          checked={tiposSelecionados.includes(tipo)}
+                          onCheckedChange={() => handleToggleTipo(tipo)}
+                        />
+                        <label
+                          htmlFor={tipo}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          {TIPO_LABELS[tipo]}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={handleAplicarFiltros} disabled={isLoading}>
+              {isFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Aplicar Filtros
+            </Button>
+          </div>
+        </div>
+
+        {/* Resumo */}
+        {filtrosAplicados && (
+          <div className="grid grid-cols-3 gap-4">
+            <Card className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-xs mb-1">
+                  <Package className="h-4 w-4" />
+                  Total Peças
+                </div>
+                <div className="text-2xl font-bold text-blue-800 dark:text-blue-200">
+                  {resumo.totalPecas.toLocaleString('pt-BR')}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-xs mb-1">
+                  <DollarSign className="h-4 w-4" />
+                  Valor Venda
+                </div>
+                <div className="text-2xl font-bold text-green-800 dark:text-green-200">
+                  {formatarMoeda(resumo.valorVendaTotal)}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400 text-xs mb-1">
+                  <DollarSign className="h-4 w-4" />
+                  Valor Custo
+                </div>
+                <div className="text-2xl font-bold text-yellow-800 dark:text-yellow-200">
+                  {formatarMoeda(resumo.valorCustoTotal)}
+                </div>
+                {resumo.quantidadeSemPreco > 0 && (
+                  <div className="text-xs text-destructive mt-1">
+                    * {resumo.quantidadeSemPreco} sem preço
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Tabela de Detalhamento */}
+        {filtrosAplicados && (
+          <div className="flex-1 min-h-0 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                {saidas.length} movimentação(ões)
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportPDF}
+                  disabled={saidas.length === 0}
+                >
+                  <FileDown className="mr-2 h-4 w-4" />
+                  PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportExcel}
+                  disabled={saidas.length === 0}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Excel
+                </Button>
+              </div>
+            </div>
+
+            <ScrollArea className="h-[300px] border rounded-lg">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : saidas.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                  <TrendingDown className="h-12 w-12 mb-2 opacity-50" />
+                  <p>Nenhuma saída encontrada no período</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[100px]">Data/Hora</TableHead>
+                      <TableHead>Modelo</TableHead>
+                      <TableHead className="text-center w-[60px]">Qtd</TableHead>
+                      <TableHead className="text-right w-[80px]">Unit.</TableHead>
+                      <TableHead className="text-right w-[90px]">Total</TableHead>
+                      <TableHead className="w-[100px]">Tipo</TableHead>
+                      <TableHead>Motivo</TableHead>
+                      <TableHead className="w-[120px]">Local</TableHead>
+                      <TableHead className="w-[120px]">Destino</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {saidas.map(saida => (
+                      <TableRow key={saida.id}>
+                        <TableCell className="text-xs">
+                          {formatarData(saida.data)}
+                        </TableCell>
+                        <TableCell className="font-medium text-sm">
+                          {truncateText(saida.modeloNome, 30)}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">
+                          {saida.quantidade}
+                        </TableCell>
+                        <TableCell className="text-right text-xs">
+                          {formatarMoeda(saida.valorUnitario)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatarMoeda(saida.valorTotal)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-xs">
+                            {saida.tipoLabel}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {truncateText(saida.motivo || '—', 25)}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {truncateText(saida.localNome, 15)}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {saida.localDestinoNome ? truncateText(saida.localDestinoNome, 15) : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </ScrollArea>
+          </div>
+        )}
+
+        {/* Estado inicial - antes de aplicar filtros */}
+        {!filtrosAplicados && (
+          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground py-12">
+            <Filter className="h-16 w-16 mb-4 opacity-30" />
+            <p className="text-lg font-medium">Configure os filtros acima</p>
+            <p className="text-sm">Selecione o período e clique em "Aplicar Filtros"</p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
