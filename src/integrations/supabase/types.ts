@@ -50,6 +50,80 @@ export type Database = {
         }
         Relationships: []
       }
+      contagem_itens: {
+        Row: {
+          contagem_id: string
+          created_at: string | null
+          id: string
+          item_id: string
+          preco_aplicado: number
+          quantidade_contada: number
+          quantidade_sistema: number
+          user_id: string
+        }
+        Insert: {
+          contagem_id: string
+          created_at?: string | null
+          id?: string
+          item_id: string
+          preco_aplicado?: number
+          quantidade_contada?: number
+          quantidade_sistema?: number
+          user_id: string
+        }
+        Update: {
+          contagem_id?: string
+          created_at?: string | null
+          id?: string
+          item_id?: string
+          preco_aplicado?: number
+          quantidade_contada?: number
+          quantidade_sistema?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contagem_itens_contagem_id_fkey"
+            columns: ["contagem_id"]
+            isOneToOne: false
+            referencedRelation: "contagens_estoque"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contagens_estoque: {
+        Row: {
+          created_at: string | null
+          data_contagem: string
+          id: string
+          local_id: string
+          observacoes: string | null
+          total_pecas: number
+          user_id: string
+          valor_total: number
+        }
+        Insert: {
+          created_at?: string | null
+          data_contagem?: string
+          id?: string
+          local_id: string
+          observacoes?: string | null
+          total_pecas?: number
+          user_id: string
+          valor_total?: number
+        }
+        Update: {
+          created_at?: string | null
+          data_contagem?: string
+          id?: string
+          local_id?: string
+          observacoes?: string | null
+          total_pecas?: number
+          user_id?: string
+          valor_total?: number
+        }
+        Relationships: []
+      }
       estoque_itens: {
         Row: {
           categoria: string
@@ -145,6 +219,7 @@ export type Database = {
           item_id: string
           local_id: string | null
           motivo: string | null
+          preco_aplicado: number | null
           producao_id: string | null
           quantidade: number
           tipo: string
@@ -159,6 +234,7 @@ export type Database = {
           item_id: string
           local_id?: string | null
           motivo?: string | null
+          preco_aplicado?: number | null
           producao_id?: string | null
           quantidade: number
           tipo: string
@@ -173,6 +249,7 @@ export type Database = {
           item_id?: string
           local_id?: string | null
           motivo?: string | null
+          preco_aplicado?: number | null
           producao_id?: string | null
           quantidade?: number
           tipo?: string

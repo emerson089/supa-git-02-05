@@ -8,6 +8,7 @@ import { useRole } from '@/contexts/RoleContext';
 import { useDisponivelCentral, useLocais } from '@/hooks/useEstoqueLocais';
 import { useTransferencias, useCriarTransferencia } from '@/hooks/useTransferencias';
 import { useEstoqueDetalhadoPorLocal, EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
+import { useVendasDesdeContagem } from '@/hooks/useContagensEstoque';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck } from 'lucide-react';
+import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck, History } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PrintEstoqueLocal } from '@/components/estoque/PrintEstoqueLocal';
 import { LotImage } from '@/components/production/LotImage';
@@ -27,6 +28,8 @@ import { AdicionarProdutoLocalModal } from '@/components/estoque/AdicionarProdut
 import { HistoricoMovimentacoesModal } from '@/components/estoque/HistoricoMovimentacoesModal';
 import { ZerarEstoqueModal } from '@/components/estoque/ZerarEstoqueModal';
 import { EditarPrecoLocalModal } from '@/components/estoque/EditarPrecoLocalModal';
+import { NovaContagemModal } from '@/components/estoque/NovaContagemModal';
+import { HistoricoContagensModal } from '@/components/estoque/HistoricoContagensModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -56,6 +59,8 @@ export default function Transferencias() {
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
   const [showZerarModal, setShowZerarModal] = useState(false);
   const [showEditarPrecoModal, setShowEditarPrecoModal] = useState(false);
+  const [showNovaContagemModal, setShowNovaContagemModal] = useState(false);
+  const [showHistoricoContagensModal, setShowHistoricoContagensModal] = useState(false);
   const [itemSelecionado, setItemSelecionado] = useState<EstoqueLocalDetalhado | null>(null);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
 
@@ -81,6 +86,9 @@ export default function Transferencias() {
 
   // Buscar estoque detalhado da loja
   const { data: estoqueDetalhado = [], isLoading: isLoadingEstoqueDetalhado } = useEstoqueDetalhadoPorLocal(lojaId);
+  
+  // Buscar vendas desde última contagem
+  const { data: vendasData } = useVendasDesdeContagem(lojaId);
 
   // Filtrar produtos do estoque local
   const estoqueFiltrado = useMemo(() => {
@@ -457,28 +465,71 @@ export default function Transferencias() {
             </Card>
           </div>
 
-          {/* Card de Contagem/Vendas - Placeholder compacto */}
-          <Card className="mb-3 opacity-60">
+          {/* Card de Contagem/Vendas - Funcional */}
+          <Card className={cn("mb-3", !vendasData?.dataContagem && "opacity-70")}>
             <CardContent className="p-2 sm:p-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground">Desde última contagem</p>
-                    <p className="text-[10px] text-muted-foreground">Vendas e valor desde o snapshot</p>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <ClipboardCheck className="h-4 w-4 text-primary shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    {vendasData?.dataContagem ? (
+                      <>
+                        <p className="text-xs font-medium">Desde última contagem</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {format(new Date(vendasData.dataContagem), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs font-medium text-muted-foreground">Nenhuma contagem</p>
+                        <p className="text-[10px] text-muted-foreground">Registre para acompanhar vendas</p>
+                      </>
+                    )}
                   </div>
                 </div>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">—</span>
-                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                
+                {vendasData?.dataContagem ? (
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-sm font-bold">{vendasData.pecasVendidas} peças</p>
+                      {vendasData.valorVendido > 0 && (
+                        <p className="text-xs text-emerald-600">
+                          R$ {vendasData.valorVendido.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                        </p>
+                      )}
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="left" className="max-w-[240px]">
-                    <p className="text-xs">Sistema de contagem de estoque (snapshot) não implementado. Permitirá comparar estoque físico vs sistema e calcular vendas desde a última contagem.</p>
-                  </TooltipContent>
-                </Tooltip>
+                    <div className="flex flex-col gap-1">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="h-7 text-xs px-2"
+                        onClick={() => setShowNovaContagemModal(true)}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Nova
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="h-7 text-xs px-2"
+                        onClick={() => setShowHistoricoContagensModal(true)}
+                      >
+                        <History className="h-3 w-3 mr-1" />
+                        Ver
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => setShowNovaContagemModal(true)}
+                    disabled={estoqueDetalhado.length === 0}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Nova Contagem
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -720,7 +771,26 @@ export default function Transferencias() {
         />
       )}
 
-      {/* Modal Nova Transferência */}
+      {/* Modal Nova Contagem */}
+      {lojaId && (
+        <NovaContagemModal
+          open={showNovaContagemModal}
+          onOpenChange={setShowNovaContagemModal}
+          localId={lojaId}
+          localNome={lojaNome}
+          itensEstoque={estoqueDetalhado}
+        />
+      )}
+
+      {/* Modal Histórico de Contagens */}
+      {lojaId && (
+        <HistoricoContagensModal
+          open={showHistoricoContagensModal}
+          onOpenChange={setShowHistoricoContagensModal}
+          localId={lojaId}
+          localNome={lojaNome}
+        />
+      )}
       <Dialog open={showNovaTransferencia} onOpenChange={setShowNovaTransferencia}>
         <DialogContent className="w-[96vw] max-w-[720px] max-h-[85vh] overflow-hidden flex flex-col p-0">
           <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
