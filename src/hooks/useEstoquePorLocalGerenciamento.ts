@@ -9,7 +9,9 @@ export interface EstoqueLocalDetalhado {
   itemNome: string;
   itemCodigo: string;
   itemImagemUrl: string | null;
-  itemPrecoUnitario: number | null;
+  itemPrecoUnitario: number | null; // Preço base do produto
+  precoLocal: number | null; // Preço específico deste local (se existir)
+  precoExibido: number | null; // Preço final a usar (precoLocal ou precoUnitario)
   quantidade: number;
   quantidadeReservada: number;
   localId: string;
@@ -47,7 +49,7 @@ interface MovimentacaoHistorico {
   motivo: string | null;
 }
 
-// Hook para buscar estoque detalhado de um local
+// Hook para buscar estoque detalhado de um local (com preços por local)
 export function useEstoqueDetalhadoPorLocal(localId: string | null) {
   const { user } = useAuth();
 
@@ -56,6 +58,7 @@ export function useEstoqueDetalhadoPorLocal(localId: string | null) {
     queryFn: async (): Promise<EstoqueLocalDetalhado[]> => {
       if (!localId || !user?.id) return [];
 
+      // 1. Buscar estoque com dados do item
       const { data, error } = await supabase
         .from('estoque_por_local')
         .select(`
@@ -77,17 +80,42 @@ export function useEstoqueDetalhadoPorLocal(localId: string | null) {
 
       if (error) throw error;
 
-      return (data || []).map((item: any) => ({
-        id: item.id,
-        itemId: item.item_id,
-        itemNome: item.estoque_itens.nome,
-        itemCodigo: item.estoque_itens.categoria,
-        itemImagemUrl: item.estoque_itens.imagem_url,
-        itemPrecoUnitario: item.estoque_itens.preco_unitario,
-        quantidade: Number(item.quantidade),
-        quantidadeReservada: Number(item.quantidade_reservada),
-        localId: item.local_id,
-      }));
+      // 2. Buscar preços por local
+      const { data: precosLocal, error: precosError } = await supabase
+        .from('precos_por_local')
+        .select('item_id, preco_venda')
+        .eq('local_id', localId)
+        .eq('user_id', user.id);
+
+      if (precosError) {
+        console.warn('Erro ao buscar preços por local:', precosError);
+      }
+
+      // Criar mapa de preços por local
+      const precosMap = new Map<string, number>(
+        (precosLocal || []).map(p => [p.item_id, Number(p.preco_venda)])
+      );
+
+      return (data || []).map((item: any) => {
+        const precoBase = item.estoque_itens.preco_unitario;
+        const precoLocal = precosMap.get(item.item_id) ?? null;
+        // Prioridade: preço local > preço base
+        const precoExibido = precoLocal ?? precoBase;
+
+        return {
+          id: item.id,
+          itemId: item.item_id,
+          itemNome: item.estoque_itens.nome,
+          itemCodigo: item.estoque_itens.categoria,
+          itemImagemUrl: item.estoque_itens.imagem_url,
+          itemPrecoUnitario: precoBase,
+          precoLocal,
+          precoExibido,
+          quantidade: Number(item.quantidade),
+          quantidadeReservada: Number(item.quantidade_reservada),
+          localId: item.local_id,
+        };
+      });
     },
     enabled: !!localId && !!user?.id,
   });

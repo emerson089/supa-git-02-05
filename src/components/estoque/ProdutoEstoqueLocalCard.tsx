@@ -1,8 +1,9 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { LotImage } from '@/components/production/LotImage';
 import { EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
-import { Settings, History, Trash2, MoreVertical } from 'lucide-react';
+import { Settings, History, Trash2, MoreVertical, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -16,6 +17,7 @@ interface ProdutoEstoqueLocalCardProps {
   onAjustar: (item: EstoqueLocalDetalhado) => void;
   onHistorico: (item: EstoqueLocalDetalhado) => void;
   onZerar?: (item: EstoqueLocalDetalhado) => void;
+  onEditarPreco?: (item: EstoqueLocalDetalhado) => void;
 }
 
 export function ProdutoEstoqueLocalCard({
@@ -23,7 +25,10 @@ export function ProdutoEstoqueLocalCard({
   onAjustar,
   onHistorico,
   onZerar,
+  onEditarPreco,
 }: ProdutoEstoqueLocalCardProps) {
+  const temPrecoLocal = item.precoLocal !== null;
+  const precoExibir = item.precoExibido;
   return (
     <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow w-full">
       {/* Foto */}
@@ -40,10 +45,17 @@ export function ProdutoEstoqueLocalCard({
         <h4 className="font-medium truncate text-sm leading-tight">{item.itemNome}</h4>
         <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
           <span className="truncate">Cód: {item.itemCodigo}</span>
-          {item.itemPrecoUnitario && (
+          {precoExibir && precoExibir > 0 && (
             <>
               <span>•</span>
-              <span>R$ {item.itemPrecoUnitario.toFixed(2)}</span>
+              <span className={cn("font-medium", temPrecoLocal && "text-amber-600")}>
+                R$ {precoExibir.toFixed(2)}
+              </span>
+              {temPrecoLocal && (
+                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-amber-500 text-amber-600">
+                  Preço local
+                </Badge>
+              )}
             </>
           )}
         </div>
@@ -83,6 +95,12 @@ export function ProdutoEstoqueLocalCard({
                 <Settings className="h-4 w-4 mr-2" />
                 Ajustar estoque
               </DropdownMenuItem>
+              {onEditarPreco && (
+                <DropdownMenuItem onClick={() => onEditarPreco(item)}>
+                  <Tag className="h-4 w-4 mr-2" />
+                  Editar preço
+                </DropdownMenuItem>
+              )}
               {onZerar && (
                 <DropdownMenuItem 
                   onClick={() => onZerar(item)}
@@ -116,6 +134,17 @@ export function ProdutoEstoqueLocalCard({
           >
             <Settings className="h-4 w-4" />
           </Button>
+          {onEditarPreco && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8", temPrecoLocal && "text-amber-600 hover:text-amber-700")}
+              onClick={() => onEditarPreco(item)}
+              title="Editar preço"
+            >
+              <Tag className="h-4 w-4" />
+            </Button>
+          )}
           {onZerar && (
             <Button
               variant="ghost"

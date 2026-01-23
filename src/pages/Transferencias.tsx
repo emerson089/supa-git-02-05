@@ -26,6 +26,7 @@ import { AjusteEstoqueModal } from '@/components/estoque/AjusteEstoqueModal';
 import { AdicionarProdutoLocalModal } from '@/components/estoque/AdicionarProdutoLocalModal';
 import { HistoricoMovimentacoesModal } from '@/components/estoque/HistoricoMovimentacoesModal';
 import { ZerarEstoqueModal } from '@/components/estoque/ZerarEstoqueModal';
+import { EditarPrecoLocalModal } from '@/components/estoque/EditarPrecoLocalModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -54,6 +55,7 @@ export default function Transferencias() {
   const [showAdicionarModal, setShowAdicionarModal] = useState(false);
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
   const [showZerarModal, setShowZerarModal] = useState(false);
+  const [showEditarPrecoModal, setShowEditarPrecoModal] = useState(false);
   const [itemSelecionado, setItemSelecionado] = useState<EstoqueLocalDetalhado | null>(null);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
 
@@ -97,22 +99,31 @@ export default function Transferencias() {
   );
   const totalModelosLocal = estoqueDetalhado.length;
 
-  // MVP: Valor do estoque (venda) - usando preco_unitario existente
-  const { valorEstoqueVenda, itensComPreco, itensSemPreco } = useMemo(() => {
+  // MVP: Valor do estoque (venda) - usando precoExibido (local > base)
+  const { valorEstoqueVenda, itensComPreco, itensSemPreco, itensComPrecoLocal } = useMemo(() => {
     let total = 0;
     let comPreco = 0;
     let semPreco = 0;
+    let comPrecoLocal = 0;
     
     estoqueDetalhado.forEach(item => {
-      if (item.itemPrecoUnitario && item.itemPrecoUnitario > 0) {
-        total += item.quantidade * item.itemPrecoUnitario;
+      if (item.precoExibido && item.precoExibido > 0) {
+        total += item.quantidade * item.precoExibido;
         comPreco++;
+        if (item.precoLocal !== null) {
+          comPrecoLocal++;
+        }
       } else {
         semPreco++;
       }
     });
     
-    return { valorEstoqueVenda: total, itensComPreco: comPreco, itensSemPreco: semPreco };
+    return { 
+      valorEstoqueVenda: total, 
+      itensComPreco: comPreco, 
+      itensSemPreco: semPreco,
+      itensComPrecoLocal: comPrecoLocal 
+    };
   }, [estoqueDetalhado]);
 
   // Locais disponíveis para transferência
@@ -180,6 +191,11 @@ export default function Transferencias() {
   const handleZerar = (item: EstoqueLocalDetalhado) => {
     setItemSelecionado(item);
     setShowZerarModal(true);
+  };
+
+  const handleEditarPreco = (item: EstoqueLocalDetalhado) => {
+    setItemSelecionado(item);
+    setShowEditarPrecoModal(true);
   };
 
   // Handler para abrir preview do PDF
@@ -395,16 +411,22 @@ export default function Transferencias() {
                 <div className="flex items-center gap-1">
                   <DollarSign className="h-3 w-3 text-emerald-600" />
                   <p className="text-[10px] sm:text-xs text-muted-foreground">Valor (Venda)</p>
-                  {itensSemPreco > 0 && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-3 w-3 text-amber-500 cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[200px]">
-                        <p className="text-xs">{itensSemPreco} modelo(s) sem preço cadastrado. O valor exibido considera apenas {itensComPreco} modelo(s).</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className={cn("h-3 w-3 cursor-help", itensSemPreco > 0 ? "text-amber-500" : "text-muted-foreground")} />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[250px]">
+                      <div className="text-xs space-y-1">
+                        {itensSemPreco > 0 && (
+                          <p className="text-amber-600">{itensSemPreco} modelo(s) sem preço.</p>
+                        )}
+                        {itensComPrecoLocal > 0 && (
+                          <p className="text-amber-600">{itensComPrecoLocal} modelo(s) com preço local diferenciado.</p>
+                        )}
+                        <p className="text-muted-foreground">Calculado usando preço local quando disponível, senão preço base.</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
                 <p className="text-lg sm:text-xl font-bold text-emerald-600">
                   {valorEstoqueVenda > 0 
@@ -497,6 +519,7 @@ export default function Transferencias() {
                 onAjustar={handleAjustar}
                 onHistorico={handleHistorico}
                 onZerar={handleZerar}
+                onEditarPreco={handleEditarPreco}
               />
             ))
           )}
@@ -679,6 +702,23 @@ export default function Transferencias() {
         onOpenChange={setShowZerarModal}
         item={itemSelecionado}
       />
+
+      {/* Modal de Editar Preço Local */}
+      {itemSelecionado && lojaId && (
+        <EditarPrecoLocalModal
+          open={showEditarPrecoModal}
+          onClose={() => setShowEditarPrecoModal(false)}
+          item={{
+            itemId: itemSelecionado.itemId,
+            itemNome: itemSelecionado.itemNome,
+            itemImagemUrl: itemSelecionado.itemImagemUrl,
+            itemPrecoUnitario: itemSelecionado.itemPrecoUnitario,
+          }}
+          localId={lojaId}
+          localNome={lojaNome}
+          precoLocal={itemSelecionado.precoLocal}
+        />
+      )}
 
       {/* Modal Nova Transferência */}
       <Dialog open={showNovaTransferencia} onOpenChange={setShowNovaTransferencia}>
