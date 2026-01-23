@@ -54,7 +54,7 @@ export default function Transferencias() {
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
   const [showZerarModal, setShowZerarModal] = useState(false);
   const [itemSelecionado, setItemSelecionado] = useState<EstoqueLocalDetalhado | null>(null);
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [showPDFPreview, setShowPDFPreview] = useState(false);
 
   // Estados para modal de nova transferência
   const [showNovaTransferencia, setShowNovaTransferencia] = useState(false);
@@ -163,20 +163,23 @@ export default function Transferencias() {
     setShowZerarModal(true);
   };
 
-  // Handler para exportar PDF via window.print()
+  // Handler para abrir preview do PDF
   const handleExportarPDF = () => {
     if (!lojaId || estoqueDetalhado.length === 0) {
       toast.error('Nenhum produto para exportar');
       return;
     }
+    setShowPDFPreview(true);
+  };
 
-    setIsGeneratingPDF(true);
-    
-    // Pequeno delay para garantir que o componente de print foi renderizado
-    setTimeout(() => {
-      window.print();
-      setIsGeneratingPDF(false);
-    }, 100);
+  // Handler para imprimir (chamado do preview)
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // Handler para fechar preview
+  const handleClosePreview = () => {
+    setShowPDFPreview(false);
   };
 
   // Handlers de transferência
@@ -326,13 +329,9 @@ export default function Transferencias() {
               size="sm" 
               variant="outline"
               onClick={handleExportarPDF}
-              disabled={!lojaId || estoqueDetalhado.length === 0 || isGeneratingPDF}
+              disabled={!lojaId || estoqueDetalhado.length === 0}
             >
-              {isGeneratingPDF ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <FileDown className="h-4 w-4" />
-              )}
+              <FileDown className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">PDF</span>
             </Button>
             <Button 
@@ -846,8 +845,14 @@ export default function Transferencias() {
         </DialogContent>
       </Dialog>
 
-      {/* Componente de impressão (invisível na tela, visível apenas no print) */}
-      <PrintEstoqueLocal itens={estoqueDetalhado} localNome={lojaNome} />
+      {/* Componente de impressão - modo preview ou oculto */}
+      <PrintEstoqueLocal 
+        itens={estoqueDetalhado} 
+        localNome={lojaNome}
+        showPreview={showPDFPreview}
+        onClose={handleClosePreview}
+        onPrint={handlePrint}
+      />
     </div>
   );
 }
