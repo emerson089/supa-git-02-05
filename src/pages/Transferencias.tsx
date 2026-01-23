@@ -17,7 +17,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown } from 'lucide-react';
+import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PrintEstoqueLocal } from '@/components/estoque/PrintEstoqueLocal';
 import { LotImage } from '@/components/production/LotImage';
 import { ProdutoEstoqueLocalCard } from '@/components/estoque/ProdutoEstoqueLocalCard';
@@ -95,6 +96,24 @@ export default function Transferencias() {
     [estoqueDetalhado]
   );
   const totalModelosLocal = estoqueDetalhado.length;
+
+  // MVP: Valor do estoque (venda) - usando preco_unitario existente
+  const { valorEstoqueVenda, itensComPreco, itensSemPreco } = useMemo(() => {
+    let total = 0;
+    let comPreco = 0;
+    let semPreco = 0;
+    
+    estoqueDetalhado.forEach(item => {
+      if (item.itemPrecoUnitario && item.itemPrecoUnitario > 0) {
+        total += item.quantidade * item.itemPrecoUnitario;
+        comPreco++;
+      } else {
+        semPreco++;
+      }
+    });
+    
+    return { valorEstoqueVenda: total, itensComPreco: comPreco, itensSemPreco: semPreco };
+  }, [estoqueDetalhado]);
 
   // Locais disponíveis para transferência
   const locaisOrigem = useMemo(() => {
@@ -345,21 +364,103 @@ export default function Transferencias() {
           </div>
         </div>
 
-        {/* Cards de totais */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <Card>
+        {/* Cards de totais - MVP com valor do estoque */}
+        <TooltipProvider>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            {/* Total Peças */}
+            <Card>
+              <CardContent className="p-2 sm:p-3">
+                <div className="flex items-center gap-1">
+                  <Package className="h-3 w-3 text-muted-foreground" />
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Total Peças</p>
+                </div>
+                <p className="text-lg sm:text-xl font-bold">{totalPecasLocal}</p>
+              </CardContent>
+            </Card>
+
+            {/* Total Modelos */}
+            <Card>
+              <CardContent className="p-2 sm:p-3">
+                <div className="flex items-center gap-1">
+                  <Box className="h-3 w-3 text-muted-foreground" />
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Total Modelos</p>
+                </div>
+                <p className="text-lg sm:text-xl font-bold">{totalModelosLocal}</p>
+              </CardContent>
+            </Card>
+
+            {/* Valor Estoque (Venda) - MVP */}
+            <Card>
+              <CardContent className="p-2 sm:p-3">
+                <div className="flex items-center gap-1">
+                  <DollarSign className="h-3 w-3 text-emerald-600" />
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Valor (Venda)</p>
+                  {itensSemPreco > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 text-amber-500 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[200px]">
+                        <p className="text-xs">{itensSemPreco} modelo(s) sem preço cadastrado. O valor exibido considera apenas {itensComPreco} modelo(s).</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+                <p className="text-lg sm:text-xl font-bold text-emerald-600">
+                  {valorEstoqueVenda > 0 
+                    ? `R$ ${valorEstoqueVenda.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                    : '—'
+                  }
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Valor Estoque (Custo) - Placeholder */}
+            <Card className="opacity-60">
+              <CardContent className="p-2 sm:p-3">
+                <div className="flex items-center gap-1">
+                  <TrendingUp className="h-3 w-3 text-muted-foreground" />
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Valor (Custo)</p>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[220px]">
+                      <p className="text-xs">Custo unitário por produto ainda não implementado. Será calculado quando campo de custo estiver disponível.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <p className="text-lg sm:text-xl font-bold text-muted-foreground">—</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Card de Contagem/Vendas - Placeholder compacto */}
+          <Card className="mb-3 opacity-60">
             <CardContent className="p-2 sm:p-3">
-              <p className="text-[10px] sm:text-xs text-muted-foreground">Total Peças</p>
-              <p className="text-xl sm:text-2xl font-bold">{totalPecasLocal}</p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Desde última contagem</p>
+                    <p className="text-[10px] text-muted-foreground">Vendas e valor desde o snapshot</p>
+                  </div>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">—</span>
+                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" className="max-w-[240px]">
+                    <p className="text-xs">Sistema de contagem de estoque (snapshot) não implementado. Permitirá comparar estoque físico vs sistema e calcular vendas desde a última contagem.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-2 sm:p-3">
-              <p className="text-[10px] sm:text-xs text-muted-foreground">Total Modelos</p>
-              <p className="text-xl sm:text-2xl font-bold">{totalModelosLocal}</p>
-            </CardContent>
-          </Card>
-        </div>
+        </TooltipProvider>
 
         {/* Busca */}
         <div className="relative">
