@@ -17,7 +17,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info } from 'lucide-react';
+import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown } from 'lucide-react';
+import { generateEstoqueLocalPDF } from '@/utils/generateEstoqueLocalPDF';
 import { LotImage } from '@/components/production/LotImage';
 import { ProdutoEstoqueLocalCard } from '@/components/estoque/ProdutoEstoqueLocalCard';
 import { AjusteEstoqueModal } from '@/components/estoque/AjusteEstoqueModal';
@@ -53,6 +54,7 @@ export default function Transferencias() {
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
   const [showZerarModal, setShowZerarModal] = useState(false);
   const [itemSelecionado, setItemSelecionado] = useState<EstoqueLocalDetalhado | null>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // Estados para modal de nova transferência
   const [showNovaTransferencia, setShowNovaTransferencia] = useState(false);
@@ -159,6 +161,25 @@ export default function Transferencias() {
   const handleZerar = (item: EstoqueLocalDetalhado) => {
     setItemSelecionado(item);
     setShowZerarModal(true);
+  };
+
+  // Handler para exportar PDF
+  const handleExportarPDF = async () => {
+    if (!lojaId || estoqueDetalhado.length === 0) {
+      toast.error('Nenhum produto para exportar');
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+    try {
+      await generateEstoqueLocalPDF(estoqueDetalhado, lojaNome);
+      toast.success('PDF gerado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   // Handlers de transferência
@@ -303,15 +324,29 @@ export default function Transferencias() {
             <Store className="h-5 w-5 text-primary shrink-0" />
             <h2 className="font-semibold truncate">{lojaNome}</h2>
           </div>
-          <Button 
-            size="sm" 
-            onClick={() => setShowAdicionarModal(true)}
-            disabled={!lojaId}
-            className="shrink-0"
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline ml-1">Adicionar</span>
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={handleExportarPDF}
+              disabled={!lojaId || estoqueDetalhado.length === 0 || isGeneratingPDF}
+            >
+              {isGeneratingPDF ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileDown className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline ml-1">PDF</span>
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={() => setShowAdicionarModal(true)}
+              disabled={!lojaId}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Adicionar</span>
+            </Button>
+          </div>
         </div>
 
         {/* Cards de totais */}
