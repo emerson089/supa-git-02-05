@@ -12,6 +12,7 @@ import { ProducaoFormSchema, getValidationErrors } from '@/lib/validations';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { ResponsavelSelector } from '@/components/production/ResponsavelSelector';
+import { ModeloSelector } from '@/components/production/ModeloSelector';
 
 interface ProducaoFormProps {
   lote?: ProducaoData | null;
@@ -68,6 +69,16 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
     };
     generateReference();
   }, [lote]);
+
+  // Handler for selecting existing model
+  const handleModeloSelect = (modelo: { nome: string; imagemUrl: string }) => {
+    setFormData(prev => ({
+      ...prev,
+      modelo_nome_cache: modelo.nome,
+      imagem_url: modelo.imagemUrl,
+    }));
+    toast.success('Modelo selecionado! Complete os demais campos.');
+  };
 
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,6 +170,11 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Seletor de modelo existente - apenas para novos lotes */}
+      {!lote && (
+        <ModeloSelector onSelect={handleModeloSelect} />
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="id_producao">Referência do Lote</Label>
