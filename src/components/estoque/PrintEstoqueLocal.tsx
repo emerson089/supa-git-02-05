@@ -1,12 +1,18 @@
 import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ArrowLeft, Printer } from 'lucide-react';
 import { EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface PrintEstoqueLocalProps {
   itens: EstoqueLocalDetalhado[];
   localNome: string;
+  showPreview?: boolean;
+  onClose?: () => void;
+  onPrint?: () => void;
 }
 
 /**
@@ -98,14 +104,44 @@ function PrintRow({ item }: { item: EstoqueLocalDetalhado }) {
 
 /**
  * Componente de layout para impressão do relatório de estoque
- * Fica oculto na tela e só aparece durante window.print()
+ * Pode funcionar em modo preview (tela cheia com botões) ou oculto para impressão direta
  */
-export function PrintEstoqueLocal({ itens, localNome }: PrintEstoqueLocalProps) {
+export function PrintEstoqueLocal({ 
+  itens, 
+  localNome,
+  showPreview = false,
+  onClose,
+  onPrint
+}: PrintEstoqueLocalProps) {
   const itensOrdenados = useMemo(() => ordenarPorReferencia(itens), [itens]);
   const dataHora = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
   
   return (
-    <div id="print-estoque-area">
+    <div 
+      id="print-estoque-area"
+      className={cn(showPreview && "print-preview-mode")}
+    >
+      {/* Barra de ações - visível apenas no preview */}
+      {showPreview && (
+        <div className="print-preview-actions no-print">
+          <Button 
+            variant="outline" 
+            onClick={onClose}
+            className="h-11"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Voltar
+          </Button>
+          <Button 
+            onClick={onPrint}
+            className="h-11"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Imprimir
+          </Button>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="print-header">
         <h1>ESTOQUE – {localNome.toUpperCase()}</h1>
