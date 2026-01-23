@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown } from 'lucide-react';
-import { generateEstoqueLocalPDF } from '@/utils/generateEstoqueLocalPDF';
+import { PrintEstoqueLocal } from '@/components/estoque/PrintEstoqueLocal';
 import { LotImage } from '@/components/production/LotImage';
 import { ProdutoEstoqueLocalCard } from '@/components/estoque/ProdutoEstoqueLocalCard';
 import { AjusteEstoqueModal } from '@/components/estoque/AjusteEstoqueModal';
@@ -163,23 +163,20 @@ export default function Transferencias() {
     setShowZerarModal(true);
   };
 
-  // Handler para exportar PDF
-  const handleExportarPDF = async () => {
+  // Handler para exportar PDF via window.print()
+  const handleExportarPDF = () => {
     if (!lojaId || estoqueDetalhado.length === 0) {
       toast.error('Nenhum produto para exportar');
       return;
     }
 
     setIsGeneratingPDF(true);
-    try {
-      await generateEstoqueLocalPDF(estoqueDetalhado, lojaNome);
-      toast.success('PDF gerado com sucesso!');
-    } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      toast.error('Erro ao gerar PDF');
-    } finally {
+    
+    // Pequeno delay para garantir que o componente de print foi renderizado
+    setTimeout(() => {
+      window.print();
       setIsGeneratingPDF(false);
-    }
+    }, 100);
   };
 
   // Handlers de transferência
@@ -848,6 +845,9 @@ export default function Transferencias() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Componente de impressão (invisível na tela, visível apenas no print) */}
+      <PrintEstoqueLocal itens={estoqueDetalhado} localNome={lojaNome} />
     </div>
   );
 }

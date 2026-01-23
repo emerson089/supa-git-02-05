@@ -1,0 +1,170 @@
+/* ===== CSS DE IMPRESSÃO PARA RELATÓRIO DE ESTOQUE ===== */
+
+/* Área de impressão fica escondida por padrão na tela */
+#print-estoque-area {
+  display: none;
+}
+
+@media print {
+  /* Configuração da página A4 */
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  
+  /* Esconder tudo exceto área de impressão */
+  body * {
+    visibility: hidden;
+  }
+  
+  #print-estoque-area,
+  #print-estoque-area * {
+    visibility: visible;
+  }
+  
+  #print-estoque-area {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  
+  /* Esconder elementos de UI durante impressão */
+  .no-print,
+  header,
+  nav,
+  aside,
+  footer,
+  [data-sidebar],
+  [data-mobile-header],
+  [data-bottom-nav] {
+    display: none !important;
+  }
+  
+  /* Tabela de estoque */
+  #print-estoque-area table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  
+  /* Cabeçalho repete em cada página */
+  #print-estoque-area thead {
+    display: table-header-group;
+  }
+  
+  #print-estoque-area thead th {
+    background-color: #6366f1 !important;
+    color: white !important;
+    font-weight: 600;
+    padding: 8px 6px;
+    text-align: left;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  /* Linhas não quebram entre páginas */
+  #print-estoque-area tbody tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  #print-estoque-area tbody td {
+    padding: 6px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: middle;
+  }
+  
+  /* Linhas alternadas */
+  #print-estoque-area tbody tr:nth-child(even) {
+    background-color: #f9fafb !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  /* Thumbnails */
+  #print-estoque-area .print-thumbnail {
+    width: 32px;
+    height: 32px;
+    object-fit: cover;
+    border-radius: 4px;
+  }
+  
+  #print-estoque-area .print-placeholder {
+    width: 32px;
+    height: 32px;
+    background-color: #f3f4f6 !important;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 6pt;
+    color: #9ca3af;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  /* Coluna de quantidade em branco para preenchimento manual */
+  #print-estoque-area .print-qty-cell {
+    width: 50px;
+    height: 20px;
+    border: 1px solid #d1d5db !important;
+    background-color: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  /* Header do relatório */
+  #print-estoque-area .print-header {
+    background-color: #6366f1 !important;
+    color: white !important;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border-radius: 4px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  #print-estoque-area .print-header h1 {
+    font-size: 14pt;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+  }
+  
+  #print-estoque-area .print-header p {
+    font-size: 9pt;
+    margin: 0;
+    opacity: 0.9;
+  }
+  
+  /* Rodapé com contagem */
+  #print-estoque-area .print-footer {
+    margin-top: 16px;
+    font-size: 8pt;
+    color: #6b7280;
+    text-align: center;
+  }
+
+  /* Centralizar coluna de foto */
+  #print-estoque-area th:first-child,
+  #print-estoque-area td:first-child {
+    text-align: center;
+    width: 50px;
+  }
+
+  /* Centralizar coluna de referência */
+  #print-estoque-area th:nth-child(3),
+  #print-estoque-area td:nth-child(3) {
+    text-align: center;
+    width: 60px;
+  }
+
+  /* Centralizar coluna de quantidade */
+  #print-estoque-area th:last-child,
+  #print-estoque-area td:last-child {
+    text-align: center;
+    width: 80px;
+  }
+}
