@@ -41,6 +41,18 @@ function truncateText(text: string, maxLength: number): string {
 }
 
 /**
+ * Desenha placeholder "Sem foto" em uma célula
+ */
+function drawPlaceholder(doc: jsPDF, x: number, y: number, size: number): void {
+  doc.setFillColor(229, 231, 235); // gray-200
+  doc.rect(x, y, size, size, 'F');
+  doc.setFontSize(5);
+  doc.setTextColor(107, 114, 128);
+  doc.text('Sem', x + size / 2, y + size / 2 - 1, { align: 'center' });
+  doc.text('foto', x + size / 2, y + size / 2 + 2, { align: 'center' });
+}
+
+/**
  * Gera PDF do estoque de um local para contagem manual
  */
 export async function generateEstoqueLocalPDF(
@@ -114,12 +126,13 @@ export async function generateEstoqueLocalPDF(
   await Promise.all(imagePromises);
 
   // === PREPARAR DADOS DA TABELA ===
+  // Armazenamos o item.id na primeira coluna para lookup confiável da imagem
   const tableData = itensOrdenados.map((item) => {
     const referencia = extrairReferencia(item.itemNome);
     const nomeCompleto = truncateText(item.itemNome, 45);
     
     return [
-      '', // Placeholder para imagem
+      item.id, // ID para lookup da imagem (não será exibido como texto)
       nomeCompleto,
       referencia,
       '', // Quantidade em branco para preenchimento manual
@@ -160,9 +173,9 @@ export async function generateEstoqueLocalPDF(
     didDrawCell: (data) => {
       // Desenhar imagem na coluna 0 (Foto)
       if (data.section === 'body' && data.column.index === 0) {
-        const rowIndex = data.row.index;
-        const item = itensOrdenados[rowIndex];
-        const imageData = imageCache.get(item.id);
+        // Obter o ID diretamente dos dados da linha (armazenado na primeira coluna)
+        const rowData = data.row.raw as string[];
+        const itemId = rowData[0];
         
         const cellX = data.cell.x;
         const cellY = data.cell.y;
@@ -174,26 +187,17 @@ export async function generateEstoqueLocalPDF(
         const imgX = cellX + (cellWidth - imgSize) / 2;
         const imgY = cellY + (cellHeight - imgSize) / 2;
         
+        // Buscar imagem pelo ID
+        const imageData = itemId ? imageCache.get(itemId) : null;
+        
         if (imageData) {
           try {
             doc.addImage(imageData, 'JPEG', imgX, imgY, imgSize, imgSize);
           } catch (error) {
-            // Fallback: desenhar placeholder
-            doc.setFillColor(229, 231, 235); // gray-200
-            doc.rect(imgX, imgY, imgSize, imgSize, 'F');
-            doc.setFontSize(5);
-            doc.setTextColor(107, 114, 128);
-            doc.text('Sem', imgX + imgSize / 2, imgY + imgSize / 2 - 1, { align: 'center' });
-            doc.text('foto', imgX + imgSize / 2, imgY + imgSize / 2 + 2, { align: 'center' });
+            drawPlaceholder(doc, imgX, imgY, imgSize);
           }
         } else {
-          // Sem imagem: desenhar placeholder
-          doc.setFillColor(229, 231, 235); // gray-200
-          doc.rect(imgX, imgY, imgSize, imgSize, 'F');
-          doc.setFontSize(5);
-          doc.setTextColor(107, 114, 128);
-          doc.text('Sem', imgX + imgSize / 2, imgY + imgSize / 2 - 1, { align: 'center' });
-          doc.text('foto', imgX + imgSize / 2, imgY + imgSize / 2 + 2, { align: 'center' });
+          drawPlaceholder(doc, imgX, imgY, imgSize);
         }
       }
     },
