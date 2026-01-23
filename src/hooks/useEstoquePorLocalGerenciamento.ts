@@ -121,13 +121,13 @@ export function useEstoqueDetalhadoPorLocal(localId: string | null) {
   });
 }
 
-// Hook para ajustar estoque (aumentar ou diminuir) - USANDO RPC ATÔMICA
+// Hook para ajustar estoque (aumentar ou diminuir) - USANDO RPC ATÔMICA + preco_aplicado
 export function useAjustarEstoqueLocal() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ estoqueLocalId, itemId, localId, novaQuantidade, motivo }: AjusteEstoqueParams) => {
+    mutationFn: async ({ estoqueLocalId, itemId, localId, novaQuantidade, motivo, precoAplicado }: AjusteEstoqueParams & { precoAplicado?: number }) => {
       if (!user?.id) throw new Error('Usuário não autenticado');
 
       // Chamar RPC atômica - tudo ou nada
@@ -154,9 +154,29 @@ export function useAjustarEstoqueLocal() {
       const diferenca = novaQuantidade - Number(estoqueAtual?.quantidade || 0);
       const tipoMovimentacao = diferenca > 0 ? 'AJUSTE_ENTRADA' : 'AJUSTE_SAIDA';
 
+      // Atualizar a última movimentação para incluir preco_aplicado (se fornecido)
+      if (precoAplicado !== undefined && precoAplicado > 0) {
+        const { data: ultimaMov } = await supabase
+          .from('estoque_movimentacoes')
+          .select('id')
+          .eq('item_id', itemId)
+          .eq('local_id', localId)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (ultimaMov) {
+          await supabase
+            .from('estoque_movimentacoes')
+            .update({ preco_aplicado: precoAplicado })
+            .eq('id', ultimaMov.id);
+        }
+      }
+
       return { tipoMovimentacao, diferenca };
     },
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       // Invalidar TODAS as queries de estoque com predicate para garantir atualização
       queryClient.invalidateQueries({ 
         predicate: (query) => 
@@ -168,6 +188,8 @@ export function useAjustarEstoqueLocal() {
       });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
       queryClient.invalidateQueries({ queryKey: ['produtos-disponiveis-adicionar'] });
+      queryClient.invalidateQueries({ queryKey: ['vendas-desde-contagem'] });
+      queryClient.invalidateQueries({ queryKey: ['contagens-estoque'] });
       
       const tipoTexto = result.tipoMovimentacao === 'AJUSTE_ENTRADA' ? 'entrada' : 'saída';
       toast.success(`Ajuste de ${tipoTexto} registrado com sucesso!`);

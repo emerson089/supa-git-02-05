@@ -65,6 +65,8 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
         localId: item.localId,
         novaQuantidade: novaQtd,
         motivo: motivo.trim(),
+        // Passar preço aplicado para registrar na movimentação
+        precoAplicado: item.precoExibido ?? item.itemPrecoUnitario ?? undefined,
       });
       onOpenChange(false);
     } catch (error) {
