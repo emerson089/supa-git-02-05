@@ -23,6 +23,13 @@ interface KPIs {
   producaoAtiva: number;
   producaoYoY: number; // Mesmo período do ano passado
   anoPassado: number; // Ano de referência
+  producaoFiltrada: boolean; // Se produção usa filtro de período
+}
+
+export interface TopModelosCoverage {
+  pedidosComItens: number;
+  totalPedidos: number;
+  coverage: number; // 0-1
 }
 
 export interface TendenciaVenda {
@@ -79,19 +86,48 @@ interface DashboardData {
   tendenciaVendas: TendenciaVenda[];
   estoqueBaixo: EstoqueBaixoItem[];
   topModelos: TopModelo[];
+  topModelosCoverage: TopModelosCoverage;
   statusPedidos: StatusPedido[];
   producaoKanban: ProducaoEtapa[];
   tipoAgrupamento: TipoAgrupamento;
   metaYoY: MetaYoY;
 }
 
+// Ordem padrão das etapas de produção (configurável)
+const ETAPA_ORDER: string[] = [
+  "Corte",
+  "Costura",
+  "Costura/Facção", // Alias para Costura
+  "Lavanderia",
+  "Acabamento",
+  "Aprontamento",
+  "Concluído",
+];
+
 const ETAPA_COLORS: Record<string, string> = {
   "Corte": "hsl(var(--stage-corte))",
   "Costura": "hsl(var(--stage-costura))",
+  "Costura/Facção": "hsl(var(--stage-costura))", // Mesmo cor que Costura
   "Lavanderia": "hsl(var(--stage-lavanderia))",
   "Acabamento": "hsl(var(--stage-acabamento))",
+  "Aprontamento": "hsl(var(--stage-acabamento))", // Fallback cor
   "Concluído": "hsl(var(--stage-concluido))",
 };
+
+// Função para ordenar etapas conforme ordem padrão ou alfabética
+function sortEtapas(etapas: string[]): string[] {
+  return etapas.sort((a, b) => {
+    const indexA = ETAPA_ORDER.indexOf(a);
+    const indexB = ETAPA_ORDER.indexOf(b);
+    // Se ambos estão na lista, usar ordem da lista
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    // Se apenas um está na lista, ele vem primeiro
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+    // Fallback: ordem alfabética
+    return a.localeCompare(b);
+  });
+}
 
 export const STATUS_COLORS: Record<string, string> = {
   "PAGO": "#22c55e",
@@ -205,10 +241,12 @@ export function useDashboardData(
       producaoAtiva: 0,
       producaoYoY: 0,
       anoPassado: new Date().getFullYear() - 1,
+      producaoFiltrada: false,
     },
     tendenciaVendas: [],
     estoqueBaixo: [],
     topModelos: [],
+    topModelosCoverage: { pedidosComItens: 0, totalPedidos: 0, coverage: 0 },
     statusPedidos: [],
     producaoKanban: [],
     tipoAgrupamento: "dia",
@@ -293,18 +331,22 @@ export function useDashboardData(
             .order("quantidade", { ascending: true })
             .limit(10),
 
-          // Itens de pedido para top modelos
+          // Itens de pedido para top modelos (filtrar por PAGO e respeitar cancelados)
           supabase
             .from("pedido_itens")
-            .select("produto_nome, quantidade, pedidos!inner(user_id, created_at)")
+            .select("pedido_id, produto_nome, quantidade, pedidos!inner(user_id, created_at, status_pagamento, status_pedido)")
             .eq("pedidos.user_id", user.id)
-            .gte("pedidos.created_at", startDate),
+            .eq("pedidos.status_pagamento", "PAGO")
+            .gte("pedidos.created_at", startDate)
+            .lte("pedidos.created_at", endDate),
 
-          // Produção atual
+          // Produção atual (com filtro de período)
           supabase
             .from("producao")
             .select("processo_atual, quantidade, created_date")
-            .eq("user_id", user.id),
+            .eq("user_id", user.id)
+            .gte("created_date", startDate)
+            .lte("created_date", endDate),
 
           // Produção mesmo período do ano passado (YoY)
           supabase
@@ -347,36 +389,46 @@ export function useDashboardData(
         const pedidosAtualData = pedidosAtual.data || [];
         const pedidosYoYData = pedidosYoY.data || [];
 
-        // Filter out canceled orders if excluirCancelados is true
-        const pedidosFiltrados = excluirCancelados
+        // CORREÇÃO: Primeiro filtrar cancelados (se toggle ativo), depois filtrar por PAGO para faturamento
+        const pedidosSemCancelados = excluirCancelados
           ? pedidosAtualData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
           : pedidosAtualData;
 
-        const pedidosYoYFiltrados = excluirCancelados
+        const pedidosYoYSemCancelados = excluirCancelados
           ? pedidosYoYData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
           : pedidosYoYData;
 
-        const faturamento = pedidosFiltrados.reduce((sum, p) => sum + (p.valor_total || 0), 0);
-        const faturamentoYoY = pedidosYoYFiltrados.reduce((sum, p) => sum + (p.valor_total || 0), 0);
-        const pecasVendidas = pedidosFiltrados.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
-        const pecasYoY = pedidosYoYFiltrados.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
-        // Pedidos pendentes do período filtrado
-        const pedidosPendentes = pedidosFiltrados.filter(p => 
+        // CORREÇÃO: Faturamento e Peças agora usam APENAS pedidos PAGOS (consistente com Meta YoY)
+        const pedidosPagos = pedidosSemCancelados.filter(p => 
+          (p.status_pagamento || "").toUpperCase() === "PAGO"
+        );
+        const pedidosYoYPagos = pedidosYoYSemCancelados.filter(p => 
+          (p.status_pagamento || "").toUpperCase() === "PAGO"
+        );
+
+        const faturamento = pedidosPagos.reduce((sum, p) => sum + (p.valor_total || 0), 0);
+        const faturamentoYoY = pedidosYoYPagos.reduce((sum, p) => sum + (p.valor_total || 0), 0);
+        const pecasVendidas = pedidosPagos.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
+        const pecasYoY = pedidosYoYPagos.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
+        
+        // Pedidos pendentes do período filtrado (mantém lógica original)
+        const pedidosPendentes = pedidosSemCancelados.filter(p => 
           p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO"
         ).length;
-        const pedidosYoYPendentes = pedidosYoYFiltrados.filter(p => 
+        const pedidosYoYPendentes = pedidosYoYSemCancelados.filter(p => 
           p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO"
         ).length;
 
+        // Produção agora é filtrada por período
         const producaoData = producao.data || [];
         const producaoYoYData = producaoYoY.data || [];
         const producaoAtiva = producaoData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
         const producaoYoYAtiva = producaoYoYData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
 
-        // Tendência de vendas (grouped by tipoAgrupamento)
+        // Tendência de vendas (grouped by tipoAgrupamento) - AGORA USA APENAS PAGOS
         const vendasAgrupadas: Record<string, { valor: number; pedidos: number; pecas: number; data: Date }> = {};
         
-        pedidosFiltrados.forEach(p => {
+        pedidosPagos.forEach(p => {
           const dataCompleta = parseISO(p.created_at);
           let chave: string;
           
@@ -433,9 +485,17 @@ export function useDashboardData(
           }))
           .slice(0, 5);
 
-        // Top modelos
+        // Top modelos - AGORA filtra por cancelados também (pedidoItens já filtra por PAGO na query)
+        const pedidoItensData = pedidoItens.data || [];
+        const pedidoItensFiltrados = excluirCancelados
+          ? pedidoItensData.filter((item: any) => {
+              const statusPedido = (item.pedidos?.status_pedido || "").toUpperCase();
+              return !STATUS_CANCELADOS.includes(statusPedido);
+            })
+          : pedidoItensData;
+        
         const modelosMap: Record<string, number> = {};
-        (pedidoItens.data || []).forEach(item => {
+        pedidoItensFiltrados.forEach((item: any) => {
           const nome = item.produto_nome || "Sem nome";
           modelosMap[nome] = (modelosMap[nome] || 0) + (item.quantidade || 0);
         });
@@ -444,7 +504,14 @@ export function useDashboardData(
           .sort((a, b) => b.quantidade - a.quantidade)
           .slice(0, 5);
 
-        // Status de pedidos
+        // NOVO: Calcular coverage do Top Modelos
+        // Pedidos PAGOS no período que têm itens detalhados
+        const pedidoIdsComItens = new Set(pedidoItensFiltrados.map((item: any) => item.pedido_id));
+        const totalPedidosPagos = pedidosPagos.length;
+        const pedidosComItens = pedidoIdsComItens.size;
+        const coverage = totalPedidosPagos > 0 ? pedidosComItens / totalPedidosPagos : 0;
+
+        // Status de pedidos (mantém original - todos os pedidos)
         const statusMap: Record<string, number> = {};
         pedidosAtualData.forEach(p => {
           const status = p.status_pagamento || "PENDENTE";
@@ -456,13 +523,18 @@ export function useDashboardData(
           color: STATUS_COLORS[status] || "hsl(var(--muted))",
         }));
 
-        // Produção por etapa com detecção de gargalos
+        // CORREÇÃO: Produção por etapa - DERIVAR etapas do banco ao invés de hardcoded
         const etapaMap: Record<string, number> = {};
         producaoData.forEach(p => {
           const etapa = p.processo_atual || "Corte";
           etapaMap[etapa] = (etapaMap[etapa] || 0) + (p.quantidade || 0);
         });
-        const producaoKanbanBase = ["Corte", "Costura", "Lavanderia", "Acabamento", "Concluído"].map(etapa => ({
+        
+        // Derivar etapas únicas do banco e ordenar
+        const etapasDoDb = Object.keys(etapaMap);
+        const etapasOrdenadas = sortEtapas(etapasDoDb);
+        
+        const producaoKanbanBase = etapasOrdenadas.map(etapa => ({
           etapa,
           pecas: etapaMap[etapa] || 0,
           color: ETAPA_COLORS[etapa] || "hsl(var(--muted))",
@@ -500,10 +572,16 @@ export function useDashboardData(
             producaoAtiva,
             producaoYoY: producaoYoYAtiva,
             anoPassado,
+            producaoFiltrada: true, // Agora produção é sempre filtrada por período
           },
           tendenciaVendas,
           estoqueBaixo,
           topModelos,
+          topModelosCoverage: {
+            pedidosComItens,
+            totalPedidos: totalPedidosPagos,
+            coverage,
+          },
           statusPedidos,
           producaoKanban,
           tipoAgrupamento,

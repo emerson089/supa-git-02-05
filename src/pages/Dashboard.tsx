@@ -38,7 +38,7 @@ import {
   X,
   Filter,
 } from "lucide-react";
-import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, STATUS_COLORS, MetaYoY } from "@/hooks/useDashboardData";
+import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, STATUS_COLORS, MetaYoY, TopModelosCoverage } from "@/hooks/useDashboardData";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -806,7 +806,9 @@ export default function Dashboard() {
           <Card className="neu-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold">Top 5 Modelos</CardTitle>
-              <p className="text-sm text-muted-foreground">Mais vendidos no período</p>
+              <p className="text-sm text-muted-foreground">
+                Mais vendidos no período (pedidos pagos)
+              </p>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -821,6 +823,16 @@ export default function Dashboard() {
                 </p>
               ) : (
                 <div className="space-y-4">
+                  {/* Aviso de cobertura quando < 60% */}
+                  {data.topModelosCoverage.coverage < 0.6 && data.topModelosCoverage.totalPedidos > 0 && (
+                    <div className="flex items-start gap-2 p-2 rounded-md bg-amber-100/50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-xs">
+                      <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                      <span>
+                        Top 5 baseado apenas em {Math.round(data.topModelosCoverage.coverage * 100)}% dos pedidos
+                        ({data.topModelosCoverage.pedidosComItens} de {data.topModelosCoverage.totalPedidos} têm itens detalhados)
+                      </span>
+                    </div>
+                  )}
                   {data.topModelos.map((modelo, index) => (
                     <div 
                       key={modelo.nome} 
