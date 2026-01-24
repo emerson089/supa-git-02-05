@@ -27,13 +27,14 @@ export interface Pedido {
   totalPecas: number;
   valorTotal: number;
   dataCriacao: string;
+  dataPagamento: string | null;
   estornoRealizado?: boolean;
 }
 
 interface PedidosContextType {
   pedidos: Pedido[];
   isLoading: boolean;
-  addPedido: (pedido: Omit<Pedido, 'id' | 'dataCriacao'>) => Promise<Pedido>;
+  addPedido: (pedido: Omit<Pedido, 'id' | 'dataCriacao' | 'dataPagamento'>) => Promise<Pedido>;
   updatePedido: (id: string, data: Partial<Pedido>) => void;
   removePedido: (id: string) => void;
   getPedidoById: (id: string) => Pedido | undefined;
@@ -67,6 +68,7 @@ function transformDBToContext(pedidoDB: PedidoDB): Pedido {
     totalPecas: pedidoDB.total_pecas || 0,
     valorTotal: Number(pedidoDB.valor_total) || 0,
     dataCriacao: pedidoDB.created_at,
+    dataPagamento: pedidoDB.paid_at,
     estornoRealizado: pedidoDB.estorno_realizado || false,
   };
 }
@@ -79,7 +81,7 @@ export function PedidosProvider({ children }: { children: ReactNode }) {
 
   const pedidos: Pedido[] = (pedidosDB || []).map(transformDBToContext);
 
-  const addPedido = async (pedidoData: Omit<Pedido, 'id' | 'dataCriacao'>): Promise<Pedido> => {
+  const addPedido = async (pedidoData: Omit<Pedido, 'id' | 'dataCriacao' | 'dataPagamento'>): Promise<Pedido> => {
     const pedidoInsert: PedidoInsert = {
       cliente_id: pedidoData.clienteId || null,
       cliente_nome: pedidoData.clienteNome,
@@ -110,6 +112,7 @@ export function PedidosProvider({ children }: { children: ReactNode }) {
       ...pedidoData,
       id: result.id,
       dataCriacao: result.created_at,
+      dataPagamento: result.paid_at || null,
     };
   };
 
