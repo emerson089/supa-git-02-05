@@ -23,9 +23,10 @@ export interface PedidoPaginatedDB {
   estorno_realizado: boolean | null;
   created_at: string;
   updated_at: string;
+  paid_at: string | null;
   pedido_itens: Array<{
     id: string;
-    produto_id: string | null;
+    produto_id?: string | null;
     produto_nome: string;
     quantidade: number;
     valor_unitario: number;

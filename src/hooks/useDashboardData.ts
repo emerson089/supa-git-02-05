@@ -307,18 +307,18 @@ export function useDashboardData(
           pedidosMesAnoPassadoAteDia,
           pedidosMesAtualAcumulado,
         ] = await Promise.all([
-          // Pedidos período atual
+          // Pedidos período atual (inclui paid_at para agrupamento correto)
           supabase
             .from("pedidos")
-            .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at")
+            .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at, paid_at")
             .eq("user_id", user.id)
             .gte("created_at", startDate)
             .lte("created_at", endDate),
 
-          // Pedidos mesmo período do ano passado (YoY)
+          // Pedidos mesmo período do ano passado (YoY) - inclui paid_at
           supabase
             .from("pedidos")
-            .select("valor_total, total_pecas, status_pagamento, status_pedido")
+            .select("valor_total, total_pecas, status_pagamento, status_pedido, paid_at")
             .eq("user_id", user.id)
             .gte("created_at", startDateYoY)
             .lte("created_at", endDateYoY),
@@ -425,11 +425,13 @@ export function useDashboardData(
         const producaoAtiva = producaoData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
         const producaoYoYAtiva = producaoYoYData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
 
-        // Tendência de vendas (grouped by tipoAgrupamento) - AGORA USA APENAS PAGOS
+        // Tendência de vendas (grouped by tipoAgrupamento) - USA paid_at PARA PEDIDOS PAGOS
         const vendasAgrupadas: Record<string, { valor: number; pedidos: number; pecas: number; data: Date }> = {};
         
         pedidosPagos.forEach(p => {
-          const dataCompleta = parseISO(p.created_at);
+          // Usar paid_at quando disponível (preferido), fallback para created_at
+          const dataEfetiva = p.paid_at || p.created_at;
+          const dataCompleta = parseISO(dataEfetiva);
           let chave: string;
           
           switch (tipoAgrupamento) {
