@@ -82,8 +82,13 @@ export const ROLE_PERMISSIONS: Record<AppRole, string[]> = {
   ],
   vendedor: [
     'feira.view',
-    'feira.retorno', // Apenas registrar retorno
+    'feira.retorno',
     'estoque.view',
+    // Novas permissões:
+    'transferencias.view',
+    'transferencias.create',
+    'estoque.ajustar_local',
+    'estoque.editar_preco_local',
   ],
 };
 

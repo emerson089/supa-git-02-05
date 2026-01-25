@@ -113,7 +113,7 @@ function App() {
                     <Route
                       path="/transferencias"
                       element={
-                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                        <ProtectedRoute allowedRoles={['admin', 'gerente', 'vendedor']}>
                           <Transferencias />
                         </ProtectedRoute>
                       }
