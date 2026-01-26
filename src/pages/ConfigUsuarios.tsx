@@ -48,6 +48,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { UserLocationManager } from '@/components/usuarios/UserLocationManager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { 
@@ -63,6 +64,7 @@ import {
   Copy,
   Search,
   Trash2,
+  MapPin,
 } from 'lucide-react';
 import { AppRole, ROLE_DISPLAY_NAMES } from '@/types/roles';
 import { useRole } from '@/contexts/RoleContext';
@@ -94,6 +96,7 @@ export default function ConfigUsuarios() {
   const [resettingUserId, setResettingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<typeof users[0] | null>(null);
+  const [locationManagerUser, setLocationManagerUser] = useState<typeof users[0] | null>(null);
 
   // Form state for creating user
   const [newUserEmail, setNewUserEmail] = useState('');
@@ -354,6 +357,14 @@ export default function ConfigUsuarios() {
                                     <Shield className="h-4 w-4 mr-2" />
                                     Alterar Role
                                   </DropdownMenuItem>
+                                  {user.role === 'vendedor' && (
+                                    <DropdownMenuItem
+                                      onClick={() => setLocationManagerUser(user)}
+                                    >
+                                      <MapPin className="h-4 w-4 mr-2" />
+                                      Configurar Locais
+                                    </DropdownMenuItem>
+                                  )}
                                                   <DropdownMenuItem
                                                     onClick={() => handleToggleStatus(user)}
                                                     disabled={
@@ -588,6 +599,20 @@ export default function ConfigUsuarios() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* User Location Manager Modal */}
+      {locationManagerUser && (
+        <UserLocationManager
+          open={!!locationManagerUser}
+          onOpenChange={(open) => !open && setLocationManagerUser(null)}
+          user={{
+            user_id: locationManagerUser.user_id,
+            nome: locationManagerUser.nome,
+            email: locationManagerUser.email,
+            role: locationManagerUser.role
+          }}
+        />
+      )}
     </div>
   );
 }
