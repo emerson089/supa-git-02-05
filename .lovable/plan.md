@@ -1,70 +1,72 @@
 
-## Plano: Corrigir Campo de Busca com Debounce
 
-### Problema Identificado
-
-O campo de busca na tela "Estoque por Local" está atualizando o filtro instantaneamente a cada tecla digitada. Isso causa:
-- Dificuldade em digitar números em sequência (ex: "170")
-- Re-renders excessivos durante a digitação
-- Possível travamento/lag na interface
-
-### Solução
-
-Aplicar **debounce** de 300ms no valor de busca, permitindo que você termine de digitar antes do filtro ser aplicado.
+### Objetivo
+Corrigir o campo “Buscar por nome ou código” na tela **/transferencias** para que você consiga digitar vários números em sequência (ex.: “170”) e para que a lista só seja filtrada **depois que você parar de digitar** (debounce).
 
 ---
 
-### Alterações Técnicas
+## O que está acontecendo (causa real)
+Mesmo com o debounce no filtro, o componente **ainda re-renderiza a cada tecla**, porque o input é controlado por `searchEstoque`.
 
-**Arquivo**: `src/pages/Transferencias.tsx`
+Além disso, dentro de `src/pages/Transferencias.tsx`, a seção que contém o campo de busca (`EstoqueLocalSection`) está declarada **dentro** do componente `Transferencias` e está sendo renderizada como:
 
-#### 1. Adicionar import do hook
-```typescript
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-```
+- `<EstoqueLocalSection />`
 
-#### 2. Criar valor debounced do estado de busca
-Após a declaração do estado `searchEstoque` (linha 62):
-```typescript
-const [searchEstoque, setSearchEstoque] = useState('');
-const debouncedSearchEstoque = useDebouncedValue(searchEstoque, 300);
-```
+Como essa “sub-seção” é recriada em todo render do pai, o React trata como um **componente novo**, desmonta e monta de novo (remount) — e isso faz o input **perder foco** após o primeiro dígito, parecendo que “não dá para digitar mais de um número”.
 
-#### 3. Atualizar o useMemo do filtro
-Alterar de `searchEstoque` para `debouncedSearchEstoque` na dependência (linhas 117-124):
-```typescript
-const estoqueFiltrado = useMemo(() => {
-  if (!debouncedSearchEstoque.trim()) return estoqueDetalhado;
-  const termo = debouncedSearchEstoque.toLowerCase();
-  return estoqueDetalhado.filter(item =>
-    item.itemNome.toLowerCase().includes(termo) ||
-    item.itemCodigo.toLowerCase().includes(termo)
-  );
-}, [estoqueDetalhado, debouncedSearchEstoque]);
-```
+O debounce que já foi aplicado está correto, mas ele não evita o problema de foco porque o remount está acontecendo **antes** (no render do pai).
 
 ---
 
-### Comportamento Esperado
+## Correção proposta (sem mudar o comportamento visual)
+Vamos impedir o remount do input, mantendo o debounce.
 
-| Antes | Depois |
-|-------|--------|
-| Filtra a cada tecla digitada | Aguarda 300ms após parar de digitar |
-| Interfere na digitação de números | Digitação fluida sem interrupções |
-| Re-renders excessivos | Re-render único após debounce |
+### Opção escolhida (mais segura e com menor mudança)
+Transformar `EstoqueLocalSection` e `HistoricoTransferenciasSection` em **funções de renderização** (não “componentes React”) e renderizar chamando a função:
+
+- Trocar:
+  - `<EstoqueLocalSection />`
+  - `<HistoricoTransferenciasSection />`
+
+- Por:
+  - `{renderEstoqueLocalSection()}`
+  - `{renderHistoricoTransferenciasSection()}`
+
+Isso mantém a árvore de elementos estável e evita o “desmonta/monta” do input a cada tecla.
 
 ---
 
-### Arquivos Modificados
+## Passo a passo de implementação
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/Transferencias.tsx` | Adicionar import + debounce no filtro |
+### 1) Ajustar `src/pages/Transferencias.tsx`
+1. Renomear:
+   - `const EstoqueLocalSection = () => (` para `const renderEstoqueLocalSection = () => (`
+   - `const HistoricoTransferenciasSection = () => (` para `const renderHistoricoTransferenciasSection = () => (`
+
+2. Atualizar os locais onde são renderizados (mobile e desktop):
+   - Substituir `<EstoqueLocalSection />` por `{renderEstoqueLocalSection()}`
+   - Substituir `<HistoricoTransferenciasSection />` por `{renderHistoricoTransferenciasSection()}`
+
+### 2) Manter o debounce já implementado
+Não remover nada do debounce atual:
+- `const debouncedSearchEstoque = useDebouncedValue(searchEstoque, 300);`
+- filtro usando `debouncedSearchEstoque`
+
+Assim, o resultado só atualiza após ~300ms sem digitar.
 
 ---
 
-### Padrão Existente
+## Como vamos validar (checklist)
+1. Ir em **Estoque por Local** (/transferencias)
+2. Clicar no campo **Buscar por nome ou código**
+3. Digitar rapidamente: `170` (sem clicar de novo no input)
+4. Confirmar:
+   - o cursor não “some” após o primeiro número
+   - o campo aceita `170` normalmente
+   - a lista só muda depois que você para de digitar (~300ms)
 
-Esta é a mesma solução utilizada em outros módulos do projeto:
-- `src/components/production/ModeloSelector.tsx` (linha 49)
-- Debounce de 300ms é o padrão do projeto
+---
+
+## Arquivo afetado
+- `src/pages/Transferencias.tsx` (somente)
+
