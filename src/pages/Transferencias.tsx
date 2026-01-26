@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -60,6 +61,7 @@ export default function Transferencias() {
   // Estados para gestão de estoque local
   const [activeTab, setActiveTab] = useState('estoque');
   const [searchEstoque, setSearchEstoque] = useState('');
+  const debouncedSearchEstoque = useDebouncedValue(searchEstoque, 300);
   const [showAjusteModal, setShowAjusteModal] = useState(false);
   const [showAdicionarModal, setShowAdicionarModal] = useState(false);
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
@@ -115,13 +117,13 @@ export default function Transferencias() {
 
   // Filtrar produtos do estoque local
   const estoqueFiltrado = useMemo(() => {
-    if (!searchEstoque.trim()) return estoqueDetalhado;
-    const termo = searchEstoque.toLowerCase();
+    if (!debouncedSearchEstoque.trim()) return estoqueDetalhado;
+    const termo = debouncedSearchEstoque.toLowerCase();
     return estoqueDetalhado.filter(item =>
       item.itemNome.toLowerCase().includes(termo) ||
       item.itemCodigo.toLowerCase().includes(termo)
     );
-  }, [estoqueDetalhado, searchEstoque]);
+  }, [estoqueDetalhado, debouncedSearchEstoque]);
 
   // Totais do estoque local
   const totalPecasLocal = useMemo(() => 
