@@ -14,7 +14,7 @@ import {
 
 interface ProdutoEstoqueLocalCardProps {
   item: EstoqueLocalDetalhado;
-  onAjustar: (item: EstoqueLocalDetalhado) => void;
+  onAjustar?: (item: EstoqueLocalDetalhado) => void;
   onHistorico: (item: EstoqueLocalDetalhado) => void;
   onZerar?: (item: EstoqueLocalDetalhado) => void;
   onEditarPreco?: (item: EstoqueLocalDetalhado) => void;
@@ -91,10 +91,12 @@ export function ProdutoEstoqueLocalCard({
                 <History className="h-4 w-4 mr-2" />
                 Ver histórico
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onAjustar(item)}>
-                <Settings className="h-4 w-4 mr-2" />
-                Ajustar estoque
-              </DropdownMenuItem>
+              {onAjustar && (
+                <DropdownMenuItem onClick={() => onAjustar(item)}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Ajustar estoque
+                </DropdownMenuItem>
+              )}
               {onEditarPreco && (
                 <DropdownMenuItem onClick={() => onEditarPreco(item)}>
                   <Tag className="h-4 w-4 mr-2" />
@@ -125,15 +127,17 @@ export function ProdutoEstoqueLocalCard({
           >
             <History className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => onAjustar(item)}
-            title="Ajustar estoque"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
+          {onAjustar && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => onAjustar(item)}
+              title="Ajustar estoque"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
           {onEditarPreco && (
             <Button
               variant="ghost"

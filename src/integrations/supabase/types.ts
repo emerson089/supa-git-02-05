@@ -872,6 +872,47 @@ export type Database = {
           },
         ]
       }
+      user_locations: {
+        Row: {
+          can_adjust_stock: boolean
+          can_edit_price: boolean
+          can_view: boolean
+          created_at: string | null
+          id: string
+          local_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          can_adjust_stock?: boolean
+          can_edit_price?: boolean
+          can_view?: boolean
+          created_at?: string | null
+          id?: string
+          local_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          can_adjust_stock?: boolean
+          can_edit_price?: boolean
+          can_view?: boolean
+          created_at?: string | null
+          id?: string
+          local_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_locations_local_id_fkey"
+            columns: ["local_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -914,9 +955,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_user_allowed_locations: {
+        Args: { _user_id: string }
+        Returns: string[]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_location_access: {
+        Args: { _local_id: string; _permission?: string; _user_id: string }
+        Returns: boolean
       }
       has_role: {
         Args: {

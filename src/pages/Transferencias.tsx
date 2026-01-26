@@ -9,6 +9,7 @@ import { useDisponivelCentral, useLocais } from '@/hooks/useEstoqueLocais';
 import { useTransferencias, useCriarTransferencia } from '@/hooks/useTransferencias';
 import { useEstoqueDetalhadoPorLocal, EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
 import { useVendasDesdeContagem } from '@/hooks/useContagensEstoque';
+import { useUserLocations, useHasLocationAccess } from '@/hooks/useUserLocations';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck, History, BarChart3 } from 'lucide-react';
+import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck, History, BarChart3, AlertTriangle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PrintEstoqueLocal } from '@/components/estoque/PrintEstoqueLocal';
 import { LotImage } from '@/components/production/LotImage';
@@ -31,6 +32,7 @@ import { EditarPrecoLocalModal } from '@/components/estoque/EditarPrecoLocalModa
 import { NovaContagemModal } from '@/components/estoque/NovaContagemModal';
 import { HistoricoContagensModal } from '@/components/estoque/HistoricoContagensModal';
 import { RelatorioSaidasModal } from '@/components/estoque/RelatorioSaidasModal';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -46,11 +48,14 @@ interface ItemTransferencia {
 
 export default function Transferencias() {
   const isMobile = useIsMobile();
-  const { isAdmin, isGerente } = useRole();
+  const { isAdmin, isGerente, isVendedor } = useRole();
   const { getProdutosAcabados } = useEstoque();
   const { locais, estoquePorLocal, isLoading: isLoadingLocais } = useDisponivelCentral();
   const { data: transferencias, isLoading: isLoadingTransferencias } = useTransferencias('transferencia');
   const criarTransferencia = useCriarTransferencia();
+  
+  // Hook para obter locais permitidos do usuário
+  const { data: userLocations = [], isLoading: isLoadingUserLocations } = useUserLocations();
 
   // Estados para gestão de estoque local
   const [activeTab, setActiveTab] = useState('estoque');
@@ -77,14 +82,30 @@ export default function Transferencias() {
   const quantidadeInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const produtosAcabados = getProdutosAcabados();
 
-  // Encontrar local da loja
-  const lojaLocal = useMemo(() => 
-    locais.find(l => l.tipo === 'loja'),
-    [locais]
-  );
+  // Encontrar local da loja - para vendedor, usar o local permitido
+  const lojaLocal = useMemo(() => {
+    if (isVendedor) {
+      // Vendedor: usar primeiro local tipo 'loja' permitido
+      const allowedLoja = userLocations.find(ul => ul.localTipo === 'loja' && ul.canView);
+      if (allowedLoja) {
+        return locais.find(l => l.id === allowedLoja.localId) || null;
+      }
+      return null;
+    }
+    // Admin/Gerente: usar qualquer loja
+    return locais.find(l => l.tipo === 'loja') || null;
+  }, [locais, isVendedor, userLocations]);
   
   const lojaId = lojaLocal?.id || null;
   const lojaNome = lojaLocal?.nome || 'Loja';
+  
+  // Verificar permissões para o local atual
+  const locationAccess = useHasLocationAccess(lojaId);
+  const canAdjustStock = isAdmin || isGerente || locationAccess.canAdjustStock;
+  const canEditPrice = isAdmin || isGerente || locationAccess.canEditPrice;
+  
+  // Verificar se vendedor tem acesso configurado
+  const vendedorSemAcesso = isVendedor && userLocations.length === 0 && !isLoadingUserLocations;
 
   // Buscar estoque detalhado da loja
   const { data: estoqueDetalhado = [], isLoading: isLoadingEstoqueDetalhado } = useEstoqueDetalhadoPorLocal(lojaId);
@@ -351,7 +372,7 @@ export default function Transferencias() {
     return locais.find(l => l.id === localId)?.nome || 'Desconhecido';
   };
 
-  if (isLoadingLocais || isLoadingTransferencias) {
+  if (isLoadingLocais || isLoadingTransferencias || isLoadingUserLocations) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -364,6 +385,17 @@ export default function Transferencias() {
     <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
       {/* Header do Estoque */}
       <div className={cn("shrink-0", isMobile ? "px-3 pt-2 pb-3" : "pb-4")}>
+        {/* Alerta para vendedor sem acesso configurado */}
+        {vendedorSemAcesso && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Acesso não configurado</AlertTitle>
+            <AlertDescription>
+              Seu usuário ainda não possui acesso a nenhum local. Entre em contato com um administrador para configurar suas permissões.
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <Store className="h-5 w-5 text-primary shrink-0" />
@@ -578,10 +610,10 @@ export default function Transferencias() {
               <ProdutoEstoqueLocalCard
                 key={item.id}
                 item={item}
-                onAjustar={handleAjustar}
+                onAjustar={canAdjustStock ? handleAjustar : undefined}
                 onHistorico={handleHistorico}
-                onZerar={handleZerar}
-                onEditarPreco={handleEditarPreco}
+                onZerar={canAdjustStock ? handleZerar : undefined}
+                onEditarPreco={canEditPrice ? handleEditarPreco : undefined}
               />
             ))
           )}
