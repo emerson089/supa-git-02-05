@@ -383,7 +383,7 @@ export default function Transferencias() {
   }
 
   // Seção: Estoque do Local
-  const EstoqueLocalSection = () => (
+  const renderEstoqueLocalSection = () => (
     <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
       {/* Header do Estoque */}
       <div className={cn("shrink-0", isMobile ? "px-3 pt-2 pb-3" : "pb-4")}>
@@ -625,7 +625,7 @@ export default function Transferencias() {
   );
 
   // Seção: Histórico de Transferências
-  const HistoricoTransferenciasSection = () => (
+  const renderHistoricoTransferenciasSection = () => (
     <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
       {/* Header do Histórico */}
       <div className={cn("shrink-0", isMobile ? "px-3 pt-2 pb-3" : "pb-4")}>
@@ -747,20 +747,20 @@ export default function Transferencias() {
             </TabsList>
             
             <TabsContent value="estoque" className="flex-1 overflow-hidden mt-0">
-              <EstoqueLocalSection />
+              {renderEstoqueLocalSection()}
             </TabsContent>
             
             <TabsContent value="historico" className="flex-1 overflow-hidden mt-0">
-              <HistoricoTransferenciasSection />
+              {renderHistoricoTransferenciasSection()}
             </TabsContent>
           </Tabs>
         ) : (
           <div className="flex-1 grid grid-cols-2 gap-6 p-6 overflow-hidden">
             <div className="border rounded-xl p-4 overflow-hidden flex flex-col bg-card">
-              <EstoqueLocalSection />
+              {renderEstoqueLocalSection()}
             </div>
             <div className="border rounded-xl p-4 overflow-hidden flex flex-col bg-card">
-              <HistoricoTransferenciasSection />
+              {renderHistoricoTransferenciasSection()}
             </div>
           </div>
         )}
