@@ -36,7 +36,7 @@ export function useRealtimeEstoque() {
           predicate: (query) => 
             Array.isArray(query.queryKey) && 
             ['estoque-por-local', 'estoque-detalhado-por-local', 
-             'estoque-itens', 'produtos-disponiveis-adicionar'].includes(query.queryKey[0] as string)
+             'estoque-itens', 'produtos-disponiveis-adicionar', 'user-locations'].includes(query.queryKey[0] as string)
         });
       }
     };
