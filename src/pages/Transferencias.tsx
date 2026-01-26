@@ -374,14 +374,6 @@ export default function Transferencias() {
     return locais.find(l => l.id === localId)?.nome || 'Desconhecido';
   };
 
-  if (isLoadingLocais || isLoadingTransferencias || isLoadingUserLocations) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   // Seção: Estoque do Local
   const renderEstoqueLocalSection = () => (
     <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
@@ -710,6 +702,15 @@ export default function Transferencias() {
       </ScrollArea>
     </div>
   );
+
+  // Early return for loading state - placed after render functions are defined
+  if (isLoadingLocais || isLoadingTransferencias || isLoadingUserLocations) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex max-w-full overflow-x-hidden">
