@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
@@ -68,13 +69,24 @@ function ProductImage({ imagemUrl, nome }: { imagemUrl?: string; nome: string })
   );
 }
 
+const SCROLL_KEY = 'estoque_scroll';
+
 export default function Estoque() {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const { itens, addItem, updateItem, removeItem, getMateriasPrimas, getProdutosAcabados } = useEstoque();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'materia_prima' | 'produto_acabado'>('produto_acabado');
+  
+  // URL params para persistir busca, filtros e paginação
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = searchParams.get('q') || '';
+  const activeTab = (searchParams.get('tab') as 'materia_prima' | 'produto_acabado') || 'produto_acabado';
+  const filtroRapido = (searchParams.get('filtro') as FiltroRapido) || 'todos';
+  const currentPage = parseInt(searchParams.get('page') || '0', 10);
+  
+  // Ref para restaurar scroll
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<ItemEstoque | null>(null);
@@ -117,10 +129,6 @@ export default function Estoque() {
   // Modal para importação CSV
   const [showImportModal, setShowImportModal] = useState(false);
 
-  // Filtro rápido e paginação
-  const [filtroRapido, setFiltroRapido] = useState<FiltroRapido>('todos');
-  const [currentPage, setCurrentPage] = useState(0);
-
   // Mapear tipo de tab para tipo de estoque
   const tipoEstoque = activeTab === 'materia_prima' ? 'materia-prima' : 'acabado';
 
@@ -140,21 +148,59 @@ export default function Estoque() {
   // Métricas agregadas para os cards de resumo
   const { data: metrics } = useEstoqueMetrics(tipoEstoque);
 
-  // Reset página quando mudar filtros
+  // Helper para atualizar URL params (persistência)
+  const updateParams = (updates: Record<string, string | undefined>) => {
+    const newParams = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === undefined || value === '') {
+        newParams.delete(key);
+      } else {
+        newParams.set(key, value);
+      }
+    });
+    setSearchParams(newParams, { replace: true });
+  };
+
+  // Handlers que atualizam URL params
   const handleFilterChange = (newFiltro: FiltroRapido) => {
-    setFiltroRapido(newFiltro);
-    setCurrentPage(0);
+    updateParams({ filtro: newFiltro === 'todos' ? undefined : newFiltro, page: '0' });
   };
 
   const handleTabChange = (tab: 'materia_prima' | 'produto_acabado') => {
-    setActiveTab(tab);
-    setCurrentPage(0);
+    updateParams({ tab, page: '0' });
   };
 
   const handleSearchChange = (value: string) => {
-    setSearch(value);
-    setCurrentPage(0);
+    updateParams({ q: value || undefined, page: '0' });
   };
+
+  const handlePageChange = (page: number) => {
+    updateParams({ page: page.toString() });
+  };
+
+  const handleClearSearch = () => {
+    updateParams({ q: undefined, page: '0' });
+  };
+
+  // Salvar posição de scroll ao sair da rota
+  useEffect(() => {
+    return () => {
+      if (scrollContainerRef.current) {
+        sessionStorage.setItem(SCROLL_KEY, scrollContainerRef.current.scrollTop.toString());
+      }
+    };
+  }, []);
+
+  // Restaurar posição de scroll após dados carregarem
+  useEffect(() => {
+    if (!isPaginatedLoading && scrollContainerRef.current) {
+      const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+      if (savedScroll) {
+        scrollContainerRef.current.scrollTop = parseInt(savedScroll, 10);
+        sessionStorage.removeItem(SCROLL_KEY);
+      }
+    }
+  }, [isPaginatedLoading]);
 
   // Função de refresh manual
   const handleRefreshData = async () => {
@@ -657,9 +703,18 @@ export default function Estoque() {
                   <Input
                     placeholder="Buscar item..."
                     value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className="pl-10 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                    onChange={e => handleSearchChange(e.target.value)}
+                    className="pl-10 pr-8 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
                   />
+                  {search && (
+                    <button
+                      onClick={handleClearSearch}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted"
+                      title="Limpar busca"
+                    >
+                      <X size={14} className="text-muted-foreground" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -674,15 +729,24 @@ export default function Estoque() {
               <Input
                 placeholder="Buscar item..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-10 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                onChange={e => handleSearchChange(e.target.value)}
+                className="pl-10 pr-8 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
               />
+              {search && (
+                <button
+                  onClick={handleClearSearch}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted"
+                  title="Limpar busca"
+                >
+                  <X size={14} className="text-muted-foreground" />
+                </button>
+              )}
             </div>
           </div>
         )}
 
         {/* Content */}
-        <div className={cn("flex-1 overflow-auto", isMobile ? "p-4" : "p-6")}>
+        <div ref={scrollContainerRef} className={cn("flex-1 overflow-auto", isMobile ? "p-4" : "p-6")}>
           {/* Metrics Cards */}
           <div className={cn(
             "grid gap-3 mb-4",
@@ -743,7 +807,7 @@ export default function Estoque() {
             <Button
               variant={filtroRapido === 'todos' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setFiltroRapido('todos')}
+              onClick={() => handleFilterChange('todos')}
               className="h-8"
             >
               Ver Todos
@@ -751,7 +815,7 @@ export default function Estoque() {
             <Button
               variant={filtroRapido === 'esgotado' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setFiltroRapido('esgotado')}
+              onClick={() => handleFilterChange('esgotado')}
               className={cn(
                 "h-8 gap-1",
                 filtroRapido === 'esgotado' ? "bg-red-600 hover:bg-red-700" : "text-red-600 border-red-200 hover:bg-red-50"
@@ -763,7 +827,7 @@ export default function Estoque() {
             <Button
               variant={filtroRapido === 'baixo' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setFiltroRapido('baixo')}
+              onClick={() => handleFilterChange('baixo')}
               className={cn(
                 "h-8 gap-1",
                 filtroRapido === 'baixo' ? "bg-amber-600 hover:bg-amber-700" : "text-amber-600 border-amber-200 hover:bg-amber-50"
@@ -774,13 +838,13 @@ export default function Estoque() {
             </Button>
           </div>
 
-          <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'materia_prima' | 'produto_acabado')}>
+          <Tabs value={activeTab} onValueChange={v => handleTabChange(v as 'materia_prima' | 'produto_acabado')}>
             {/* Mobile: Scrollable tabs */}
             {isMobile ? (
               <ScrollArea className="w-full mb-4">
                 <div className="flex gap-2 pb-2">
                   <button
-                    onClick={() => setActiveTab('materia_prima')}
+                    onClick={() => handleTabChange('materia_prima')}
                     className={cn(
                       "flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap",
                       "border text-sm font-medium",
@@ -801,7 +865,7 @@ export default function Estoque() {
                     </span>
                   </button>
                   <button
-                    onClick={() => setActiveTab('produto_acabado')}
+                    onClick={() => handleTabChange('produto_acabado')}
                     className={cn(
                       "flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap",
                       "border text-sm font-medium",
@@ -1049,7 +1113,7 @@ export default function Estoque() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                      onClick={() => handlePageChange(Math.max(0, currentPage - 1))}
                       disabled={currentPage === 0 || isPaginatedFetching}
                       className="gap-1"
                     >
@@ -1062,7 +1126,7 @@ export default function Estoque() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                      onClick={() => handlePageChange(Math.min(totalPages - 1, currentPage + 1))}
                       disabled={currentPage >= totalPages - 1 || isPaginatedFetching}
                       className="gap-1"
                     >
