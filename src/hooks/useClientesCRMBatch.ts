@@ -139,9 +139,15 @@ export function useClientesCRMBatch(clienteIds: string[]) {
   });
 }
 
+interface ClienteWithPendingDate {
+  id: string;
+  oldestPendingDate: Date | null;
+}
+
 /**
  * Hook to get IDs of clients that match a CRM status filter.
  * Used for hybrid filtering (server-side base + CRM filter).
+ * Returns IDs sorted appropriately (e.g., oldest pending first for 'pendente' filter).
  */
 export function useClientesCRMFilter(filtroStatus: 'vip' | 'frequente' | 'inativo' | 'risco' | 'pendente' | null) {
   const { user } = useAuth();
@@ -187,6 +193,7 @@ export function useClientesCRMFilter(filtroStatus: 'vip' | 'frequente' | 'inativ
         const stats = statsMap.get(clienteId)!;
         const isPago = pedido.status_pagamento?.toUpperCase() === 'PAGO';
         const isCancelado = pedido.status_pedido && statusCancelados.includes(pedido.status_pedido.toUpperCase());
+        const isPendente = pedido.status_pagamento?.toUpperCase() === 'PENDENTE';
         const valorTotal = Number(pedido.valor_total) || 0;
         const createdAt = pedido.created_at ? new Date(pedido.created_at) : null;
 
@@ -204,10 +211,18 @@ export function useClientesCRMFilter(filtroStatus: 'vip' | 'frequente' | 'inativ
           stats.ultimoPedidoValor = valorTotal;
           stats.ultimoPedidoStatus = pedido.status_pagamento || null;
         }
+
+        // Track the OLDEST pending order for sorting
+        if (isPendente && createdAt) {
+          if (!stats.ultimoPedidoPendenteData || createdAt < stats.ultimoPedidoPendenteData) {
+            stats.ultimoPedidoPendenteData = createdAt;
+            stats.ultimoPedidoPendenteValor = valorTotal;
+          }
+        }
       }
 
       // Filter based on status
-      const matchingIds: string[] = [];
+      const matchingClients: ClienteWithPendingDate[] = [];
       const hoje = new Date();
 
       for (const [clienteId, stats] of statsMap) {
@@ -231,16 +246,29 @@ export function useClientesCRMFilter(filtroStatus: 'vip' | 'frequente' | 'inativ
             matches = stats.cancelamentos >= 2;
             break;
           case 'pendente':
-            matches = stats.ultimoPedidoStatus?.toUpperCase() === 'PENDENTE';
+            // Check if client has ANY pending order (not just the most recent one)
+            matches = stats.ultimoPedidoPendenteData !== null;
             break;
         }
 
         if (matches) {
-          matchingIds.push(clienteId);
+          matchingClients.push({
+            id: clienteId,
+            oldestPendingDate: stats.ultimoPedidoPendenteData,
+          });
         }
       }
 
-      return matchingIds;
+      // Sort by oldest pending date first (for 'pendente' filter)
+      if (filtroStatus === 'pendente') {
+        matchingClients.sort((a, b) => {
+          if (!a.oldestPendingDate) return 1;
+          if (!b.oldestPendingDate) return -1;
+          return a.oldestPendingDate.getTime() - b.oldestPendingDate.getTime();
+        });
+      }
+
+      return matchingClients.map(c => c.id);
     },
     enabled: !!user?.id && !!filtroStatus,
     staleTime: 60000,
