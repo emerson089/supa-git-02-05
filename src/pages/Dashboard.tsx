@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import { 
   KpiCardSkeleton, 
   ChartSkeleton, 
@@ -37,8 +38,9 @@ import {
   Pencil,
   X,
   Filter,
+  Settings,
 } from "lucide-react";
-import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, STATUS_COLORS, MetaYoY, TopModelosCoverage } from "@/hooks/useDashboardData";
+import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, STATUS_COLORS, MetaYoY, TopModelosCoverage, PrevisaoMensal, MetaAutomatica, FaturamentoDiaSemana } from "@/hooks/useDashboardData";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -47,6 +49,8 @@ import { ptBR } from "date-fns/locale";
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -100,6 +104,31 @@ function CustomTooltip({
   return null;
 }
 
+// Custom tooltip for weekday chart
+function WeekdayTooltip({ 
+  active, 
+  payload 
+}: { 
+  active?: boolean; 
+  payload?: Array<{ payload: FaturamentoDiaSemana }>;
+}) {
+  if (active && payload?.[0]) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-card p-3 rounded-lg border shadow-lg">
+        <p className="font-medium text-sm">{data.diaSemana}</p>
+        <p className="text-primary font-bold text-lg">{formatCurrency(data.valor)}</p>
+        <div className="flex gap-4 text-xs text-muted-foreground mt-1">
+          <span>{data.pedidos} pedidos</span>
+          <span>{data.pecas} peças</span>
+          <span>{data.percentual.toFixed(1)}%</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
 export default function Dashboard() {
   // Estado inicial vindo do localStorage
   const [periodo, setPeriodo] = useState<Periodo>(() => {
@@ -129,6 +158,13 @@ export default function Dashboard() {
   });
   
   const [calendarOpen, setCalendarOpen] = useState(false);
+
+  // NOVO: Estado para configuração do % de crescimento
+  const [percentualCrescimento, setPercentualCrescimento] = useState(() => {
+    const saved = localStorage.getItem('dashboard-meta-crescimento');
+    return saved ? parseFloat(saved) : 10;
+  });
+  const [metaConfigOpen, setMetaConfigOpen] = useState(false);
   
   // Persistir mudanças no localStorage
   useEffect(() => {
@@ -145,6 +181,12 @@ export default function Dashboard() {
   useEffect(() => {
     localStorage.setItem('dashboard-excluir-cancelados', String(excluirCancelados));
   }, [excluirCancelados]);
+
+  // NOVO: Persistir % de crescimento
+  const handlePercentualChange = (value: number) => {
+    setPercentualCrescimento(value);
+    localStorage.setItem('dashboard-meta-crescimento', String(value));
+  };
   
   const { data, loading } = useDashboardData(periodo, dateRange, excluirCancelados);
   const navigate = useNavigate();
@@ -501,100 +543,133 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Meta YoY Card - Destaque */}
+        {/* NOVO: Card de Meta Automática + Previsão Mensal */}
         <div className="mb-6">
           <Card className="neu-card border-primary/20 shadow-lg bg-gradient-to-br from-card to-primary/5">
             <CardContent className="p-4 sm:p-6">
               {loading ? (
                 <div className="flex flex-col sm:flex-row gap-4">
                   <Skeleton className="h-24 flex-1" />
+                  <Skeleton className="h-24 flex-1" />
                 </div>
               ) : (
-                <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 sm:items-center">
-                  {/* Ícone e título */}
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Target size={24} className="text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground">Meta Mensal (YoY)</h3>
-                      <p className="text-xs text-muted-foreground capitalize">
-                        {data.metaYoY.mesAtual} {new Date().getFullYear()}
+                <>
+                  <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
+                    {/* Meta Automática */}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Target size={18} className="text-primary" />
+                        <h3 className="text-sm font-semibold">Meta Mensal</h3>
+                        {data.metaAutomatica.temHistorico ? (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Média 3m + {data.metaAutomatica.percentualCrescimento.toFixed(0)}%
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
+                            Sem histórico
+                          </Badge>
+                        )}
+                        <Popover open={metaConfigOpen} onOpenChange={setMetaConfigOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-auto">
+                              <Settings size={12} className="text-muted-foreground" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-56" align="end">
+                            <div className="space-y-3">
+                              <div className="space-y-1">
+                                <Label className="text-xs">% de Crescimento</Label>
+                                <div className="flex items-center gap-2">
+                                  <Input 
+                                    type="number" 
+                                    value={percentualCrescimento}
+                                    onChange={(e) => handlePercentualChange(parseFloat(e.target.value) || 0)}
+                                    className="h-8 text-sm"
+                                    min={0}
+                                    max={100}
+                                  />
+                                  <span className="text-sm text-muted-foreground">%</span>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">
+                                  Aplicado sobre a média dos últimos 3 meses
+                                </p>
+                              </div>
+                              <Button 
+                                size="sm" 
+                                className="w-full h-8"
+                                onClick={() => {
+                                  setMetaConfigOpen(false);
+                                  // Force refetch by toggling excluirCancelados (workaround)
+                                  window.location.reload();
+                                }}
+                              >
+                                Aplicar
+                              </Button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <p className="text-2xl font-bold text-foreground">
+                        {formatCurrency(data.metaAutomatica.metaCalculada)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {data.metaAutomatica.temHistorico 
+                          ? `Base: ${data.metaAutomatica.mesesUsados.join(', ')}`
+                          : 'Configure uma meta manualmente'
+                        }
                       </p>
                     </div>
-                  </div>
 
-                  {/* Conteúdo principal */}
-                  {data.metaYoY.temDadosAnoPassado ? (
-                    <div className="flex-1 space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Meta (+15%)</p>
-                          <p className="text-xl sm:text-2xl font-bold text-foreground">
-                            {formatCurrency(data.metaYoY.metaAnual)}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">
-                            Base {data.metaYoY.anoPassado}: {formatCurrency(data.metaYoY.faturamentoAnoPassado)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">Faturado</p>
-                          <p className="text-xl sm:text-2xl font-bold text-primary">
-                            {formatCurrency(data.metaYoY.faturamentoAtualAcumulado)}
-                          </p>
-                          <div className={cn(
-                            "flex items-center gap-1 text-xs font-semibold justify-end",
-                            data.metaYoY.variacaoVsMesmoDia >= 0 ? "text-emerald-600" : "text-red-500"
-                          )}>
-                            {data.metaYoY.variacaoVsMesmoDia >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                            <span>{Math.abs(data.metaYoY.variacaoVsMesmoDia).toFixed(1)}% vs. mesmo dia</span>
-                          </div>
-                        </div>
+                    {/* Previsão Mensal */}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <TrendingUp size={18} className="text-emerald-500" />
+                        <h3 className="text-sm font-semibold">Previsão Mensal</h3>
                       </div>
-
-                      {/* Barra de progresso */}
-                      <div className="space-y-1">
-                        <Progress 
-                          value={Math.min(data.metaYoY.percentualAtingido, 100)} 
-                          className={cn(
-                            "h-3",
-                            data.metaYoY.percentualAtingido >= 80 ? "[&>div]:bg-emerald-500" :
-                            data.metaYoY.percentualAtingido >= 50 ? "[&>div]:bg-amber-500" :
-                            "[&>div]:bg-red-500"
-                          )}
-                        />
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-muted-foreground">
-                            {data.metaYoY.faltaParaMeta > 0 
-                              ? `Faltam ${formatCurrency(data.metaYoY.faltaParaMeta)} para superar ${data.metaYoY.mesAtual} ${data.metaYoY.anoPassado}`
-                              : `🎉 Meta de ${data.metaYoY.anoPassado} superada!`
-                            }
-                          </span>
+                      <p className={cn(
+                        "text-2xl font-bold",
+                        data.previsaoMensal.acimaOuAbaixo === 'acima' ? "text-emerald-600" : 
+                        data.previsaoMensal.acimaOuAbaixo === 'abaixo' ? "text-amber-600" : "text-foreground"
+                      )}>
+                        {formatCurrency(data.previsaoMensal.projecaoMensal)}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs flex-wrap">
+                        <span className="text-muted-foreground">
+                          Ritmo: {formatCurrency(data.previsaoMensal.mediaDiaria)}/dia
+                        </span>
+                        {data.metaAutomatica.metaCalculada > 0 && (
                           <span className={cn(
-                            "text-sm font-bold",
-                            data.metaYoY.percentualAtingido >= 80 ? "text-emerald-600" :
-                            data.metaYoY.percentualAtingido >= 50 ? "text-amber-600" :
-                            "text-red-500"
+                            "font-semibold",
+                            data.previsaoMensal.acimaOuAbaixo === 'acima' ? "text-emerald-600" : "text-amber-600"
                           )}>
-                            {data.metaYoY.percentualAtingido.toFixed(1)}%
+                            {data.previsaoMensal.variacaoVsMeta > 0 ? '+' : ''}
+                            {data.previsaoMensal.variacaoVsMeta.toFixed(1)}% vs. meta
                           </span>
-                        </div>
+                        )}
                       </div>
                     </div>
-                  ) : (
-                    <div className="flex-1 flex items-center justify-center py-4">
-                      <div className="text-center">
-                        <p className="text-sm text-muted-foreground mb-2">
-                          Sem dados de {data.metaYoY.mesAtual} {data.metaYoY.anoPassado}
-                        </p>
-                        <Button variant="outline" size="sm" className="gap-2">
-                          <Pencil size={14} />
-                          Definir meta manual
-                        </Button>
-                      </div>
+                  </div>
+                  
+                  {/* Barra de progresso - Faturado vs Meta */}
+                  {data.metaAutomatica.metaCalculada > 0 && (
+                    <div className="mt-4">
+                      <Progress 
+                        value={Math.min((data.metaYoY.faturamentoAtualAcumulado / data.metaAutomatica.metaCalculada) * 100, 100)} 
+                        className={cn(
+                          "h-2",
+                          (data.metaYoY.faturamentoAtualAcumulado / data.metaAutomatica.metaCalculada) >= 0.8 ? "[&>div]:bg-emerald-500" :
+                          (data.metaYoY.faturamentoAtualAcumulado / data.metaAutomatica.metaCalculada) >= 0.5 ? "[&>div]:bg-amber-500" :
+                          "[&>div]:bg-primary"
+                        )}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatCurrency(data.metaYoY.faturamentoAtualAcumulado)} de {formatCurrency(data.metaAutomatica.metaCalculada)} 
+                        {' '}({((data.metaYoY.faturamentoAtualAcumulado / data.metaAutomatica.metaCalculada) * 100).toFixed(1)}%)
+                        {' '} • Dia {data.previsaoMensal.diasDecorridos} de {data.previsaoMensal.diasTotais}
+                      </p>
                     </div>
                   )}
-                </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -800,8 +875,8 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Bottom Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Bottom Grid - AGORA COM 4 COLUNAS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Top 5 Modelos */}
           <Card className="neu-card">
             <CardHeader className="pb-2">
@@ -844,7 +919,7 @@ export default function Dashboard() {
                           <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-medium">
                             {index + 1}
                           </span>
-                          <span className="flex-1 leading-tight" title={modelo.nome}>{modelo.nome}</span>
+                          <span className="flex-1 leading-tight truncate max-w-[120px]" title={modelo.nome}>{modelo.nome}</span>
                         </span>
                         <span className="font-medium">{modelo.quantidade} un</span>
                       </div>
@@ -854,6 +929,61 @@ export default function Dashboard() {
                       />
                     </div>
                   ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* NOVO: Vendas por Dia da Semana */}
+          <Card className="neu-card">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <CalendarIcon size={18} className="text-primary" />
+                <CardTitle className="text-base font-semibold">Vendas por Dia</CardTitle>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Faturamento por dia da semana
+              </p>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <Skeleton className="h-[180px] w-full" />
+              ) : data.faturamentoDiaSemana.every(d => d.valor === 0) ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Nenhuma venda no período
+                </p>
+              ) : (
+                <div className="h-[180px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart 
+                      data={data.faturamentoDiaSemana} 
+                      layout="vertical"
+                      margin={{ left: -10, right: 10 }}
+                    >
+                      <XAxis 
+                        type="number" 
+                        tickFormatter={(v) => `${(v/1000).toFixed(0)}k`}
+                        fontSize={10}
+                        stroke="hsl(var(--muted-foreground))"
+                      />
+                      <YAxis 
+                        dataKey="diaSemana" 
+                        type="category" 
+                        width={55}
+                        fontSize={11}
+                        tickLine={false}
+                        axisLine={false}
+                        stroke="hsl(var(--muted-foreground))"
+                        tickFormatter={(value) => value.slice(0, 3)}
+                      />
+                      <Tooltip content={<WeekdayTooltip />} />
+                      <Bar 
+                        dataKey="valor" 
+                        fill="hsl(var(--primary))" 
+                        radius={[0, 4, 4, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               )}
             </CardContent>
@@ -886,15 +1016,15 @@ export default function Dashboard() {
                 return (
                   <div className="flex flex-col items-center gap-4">
                     {/* Donut Chart with Center Label */}
-                    <div className="relative w-[130px] h-[130px]">
+                    <div className="relative w-[100px] h-[100px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
                             data={sortedStatus}
                             cx="50%"
                             cy="50%"
-                            innerRadius={40}
-                            outerRadius={60}
+                            innerRadius={30}
+                            outerRadius={45}
                             paddingAngle={2}
                             dataKey="count"
                             nameKey="status"
@@ -921,14 +1051,14 @@ export default function Dashboard() {
                       </ResponsiveContainer>
                       {/* Center Label */}
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-2xl font-bold text-foreground">{totalPedidos}</span>
-                        <span className="text-[10px] text-muted-foreground">pedidos</span>
+                        <span className="text-xl font-bold text-foreground">{totalPedidos}</span>
+                        <span className="text-[9px] text-muted-foreground">pedidos</span>
                       </div>
                     </div>
                     
                     {/* Status List - Grid compacto */}
-                    <div className="w-full grid grid-cols-2 gap-x-4 gap-y-1">
-                      {displayStatus.map((status) => {
+                    <div className="w-full grid grid-cols-2 gap-x-2 gap-y-0.5">
+                      {displayStatus.slice(0, 4).map((status) => {
                         const percentage = totalPedidos > 0 ? ((status.count / totalPedidos) * 100).toFixed(0) : 0;
                         const isClickable = status.status !== 'OUTROS';
                         
@@ -936,25 +1066,22 @@ export default function Dashboard() {
                           <button 
                             key={status.status}
                             className={cn(
-                              "flex items-center justify-between py-1 px-1.5 rounded text-left transition-colors",
+                              "flex items-center justify-between py-0.5 px-1 rounded text-left transition-colors",
                               isClickable && "hover:bg-muted/50 cursor-pointer"
                             )}
                             onClick={() => isClickable && navigate(`/pedidos-criados?status=${status.status}`)}
                             disabled={!isClickable}
                           >
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1">
                               <div 
                                 className="w-2 h-2 rounded-full flex-shrink-0"
                                 style={{ backgroundColor: status.color }}
                               />
-                              <span className="text-[11px] text-muted-foreground">
+                              <span className="text-[10px] text-muted-foreground truncate max-w-[50px]">
                                 {status.status}
                               </span>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs font-semibold">{status.count}</span>
-                              <span className="text-[10px] text-muted-foreground">({percentage}%)</span>
-                            </div>
+                            <span className="text-[10px] font-semibold">{status.count}</span>
                           </button>
                         );
                       })}

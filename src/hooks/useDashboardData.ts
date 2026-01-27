@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, startOfYear, getWeek, endOfMonth, subYears, getMonth, getYear } from "date-fns";
+import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, startOfYear, getWeek, endOfMonth, subYears, getMonth, getYear, subMonths, getDate, getDaysInMonth, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export type Periodo = "hoje" | "7dias" | "mes" | "personalizado";
@@ -81,6 +81,33 @@ export interface MetaYoY {
   anoPassado: number;             // Ano anterior
 }
 
+// NOVOS TIPOS: Inteligência de Vendas
+export interface PrevisaoMensal {
+  projecaoMensal: number;        // Faturamento projetado para o mês
+  mediaDiaria: number;           // Média diária atual
+  diasDecorridos: number;        // Dias do início do mês até hoje
+  diasTotais: number;            // Total de dias do mês
+  variacaoVsMeta: number;        // % acima/abaixo da meta
+  acimaOuAbaixo: 'acima' | 'abaixo' | 'igual';
+}
+
+export interface MetaAutomatica {
+  media3Meses: number;           // Média faturamento últimos 3 meses
+  percentualCrescimento: number; // % de crescimento (default 10)
+  metaCalculada: number;         // Média × (1 + %)
+  mesesUsados: string[];         // Lista de meses usados no cálculo
+  temHistorico: boolean;         // Se há dados suficientes
+}
+
+export interface FaturamentoDiaSemana {
+  diaSemana: string;             // Segunda, Terça, etc.
+  diaSemanaIndex: number;        // 0=Dom, 1=Seg, ..., 6=Sáb
+  valor: number;                 // Total faturado
+  pedidos: number;               // Quantidade de pedidos
+  pecas: number;                 // Total de peças
+  percentual: number;            // % do total
+}
+
 interface DashboardData {
   kpis: KPIs;
   tendenciaVendas: TendenciaVenda[];
@@ -91,6 +118,10 @@ interface DashboardData {
   producaoKanban: ProducaoEtapa[];
   tipoAgrupamento: TipoAgrupamento;
   metaYoY: MetaYoY;
+  // NOVOS CAMPOS: Inteligência de Vendas
+  previsaoMensal: PrevisaoMensal;
+  metaAutomatica: MetaAutomatica;
+  faturamentoDiaSemana: FaturamentoDiaSemana[];
 }
 
 // Ordem padrão das etapas de produção (configurável)
@@ -113,6 +144,8 @@ const ETAPA_COLORS: Record<string, string> = {
   "Aprontamento": "hsl(var(--stage-acabamento))", // Fallback cor
   "Concluído": "hsl(var(--stage-concluido))",
 };
+
+const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
 // Função para ordenar etapas conforme ordem padrão ou alfabética
 function sortEtapas(etapas: string[]): string[] {
@@ -262,6 +295,23 @@ export function useDashboardData(
       mesAtual: "",
       anoPassado: 0,
     },
+    // NOVOS DEFAULTS: Inteligência de Vendas
+    previsaoMensal: {
+      projecaoMensal: 0,
+      mediaDiaria: 0,
+      diasDecorridos: 0,
+      diasTotais: 0,
+      variacaoVsMeta: 0,
+      acimaOuAbaixo: 'igual',
+    },
+    metaAutomatica: {
+      media3Meses: 0,
+      percentualCrescimento: 10,
+      metaCalculada: 0,
+      mesesUsados: [],
+      temHistorico: false,
+    },
+    faturamentoDiaSemana: [],
   });
 
   useEffect(() => {
@@ -296,6 +346,18 @@ export function useDashboardData(
         const startDateYoY = subYears(new Date(startDate), 1).toISOString();
         const endDateYoY = subYears(new Date(endDate), 1).toISOString();
 
+        // NOVO: Datas para últimos 3 meses (meta automática)
+        const mes1Inicio = startOfMonth(subMonths(now, 1));
+        const mes1Fim = endOfMonth(subMonths(now, 1));
+        const mes2Inicio = startOfMonth(subMonths(now, 2));
+        const mes2Fim = endOfMonth(subMonths(now, 2));
+        const mes3Inicio = startOfMonth(subMonths(now, 3));
+        const mes3Fim = endOfMonth(subMonths(now, 3));
+
+        // Carregar % configurável do localStorage
+        const savedPercentual = localStorage.getItem('dashboard-meta-crescimento');
+        const percentualCrescimento = savedPercentual ? parseFloat(savedPercentual) / 100 : 0.10;
+
         const [
           pedidosAtual,
           pedidosYoY, // Mesmo período do ano passado (YoY)
@@ -306,6 +368,10 @@ export function useDashboardData(
           pedidosMesAnoPassadoCompleto,
           pedidosMesAnoPassadoAteDia,
           pedidosMesAtualAcumulado,
+          // NOVO: Faturamento últimos 3 meses
+          faturamentoMes1,
+          faturamentoMes2,
+          faturamentoMes3,
         ] = await Promise.all([
           // Pedidos período atual (inclui paid_at para agrupamento correto)
           supabase
@@ -383,6 +449,32 @@ export function useDashboardData(
             .gte("created_at", inicioMesAtual.toISOString())
             .lte("created_at", now.toISOString()),
 
+          // NOVO: Faturamento mês 1 (mês passado)
+          supabase
+            .from("pedidos")
+            .select("valor_total")
+            .eq("user_id", user.id)
+            .eq("status_pagamento", "PAGO")
+            .gte("paid_at", mes1Inicio.toISOString())
+            .lte("paid_at", mes1Fim.toISOString()),
+
+          // NOVO: Faturamento mês 2
+          supabase
+            .from("pedidos")
+            .select("valor_total")
+            .eq("user_id", user.id)
+            .eq("status_pagamento", "PAGO")
+            .gte("paid_at", mes2Inicio.toISOString())
+            .lte("paid_at", mes2Fim.toISOString()),
+
+          // NOVO: Faturamento mês 3
+          supabase
+            .from("pedidos")
+            .select("valor_total")
+            .eq("user_id", user.id)
+            .eq("status_pagamento", "PAGO")
+            .gte("paid_at", mes3Inicio.toISOString())
+            .lte("paid_at", mes3Fim.toISOString()),
         ]);
 
         // Calculate KPIs
@@ -563,6 +655,90 @@ export function useDashboardData(
           ? ((faturamentoAtualAcumulado - faturamentoMesmoDiaAnoPassadoTotal) / faturamentoMesmoDiaAnoPassadoTotal) * 100
           : 0;
 
+        // NOVO: Calcular Meta Automática (média 3 meses)
+        const somaMeses = [
+          (faturamentoMes1.data || []).reduce((s, p) => s + (p.valor_total || 0), 0),
+          (faturamentoMes2.data || []).reduce((s, p) => s + (p.valor_total || 0), 0),
+          (faturamentoMes3.data || []).reduce((s, p) => s + (p.valor_total || 0), 0),
+        ];
+
+        const mesesComDados = somaMeses.filter(v => v > 0);
+        const media3Meses = mesesComDados.length > 0 
+          ? mesesComDados.reduce((a, b) => a + b, 0) / mesesComDados.length 
+          : 0;
+
+        const metaCalculada = media3Meses * (1 + percentualCrescimento);
+
+        const metaAutomatica: MetaAutomatica = {
+          media3Meses,
+          percentualCrescimento: percentualCrescimento * 100,
+          metaCalculada,
+          mesesUsados: [
+            format(subMonths(now, 1), "MMM/yy", { locale: ptBR }),
+            format(subMonths(now, 2), "MMM/yy", { locale: ptBR }),
+            format(subMonths(now, 3), "MMM/yy", { locale: ptBR }),
+          ],
+          temHistorico: mesesComDados.length >= 2,
+        };
+
+        // NOVO: Calcular Previsão Mensal
+        const diasDecorridos = getDate(now);
+        const diasTotais = getDaysInMonth(now);
+        const mediaDiaria = diasDecorridos > 0 
+          ? faturamentoAtualAcumulado / diasDecorridos 
+          : 0;
+        const projecaoMensal = mediaDiaria * diasTotais;
+
+        const variacaoVsMetaAuto = metaAutomatica.metaCalculada > 0 
+          ? ((projecaoMensal - metaAutomatica.metaCalculada) / metaAutomatica.metaCalculada) * 100 
+          : 0;
+
+        const previsaoMensal: PrevisaoMensal = {
+          projecaoMensal,
+          mediaDiaria,
+          diasDecorridos,
+          diasTotais,
+          variacaoVsMeta: variacaoVsMetaAuto,
+          acimaOuAbaixo: projecaoMensal > metaAutomatica.metaCalculada 
+            ? 'acima' 
+            : projecaoMensal < metaAutomatica.metaCalculada 
+              ? 'abaixo' 
+              : 'igual',
+        };
+
+        // NOVO: Calcular Faturamento por Dia da Semana (usando pedidos PAGOS do período)
+        const diaSemanaMap: Record<number, { valor: number; pedidos: number; pecas: number }> = {
+          0: { valor: 0, pedidos: 0, pecas: 0 }, // Domingo
+          1: { valor: 0, pedidos: 0, pecas: 0 }, // Segunda
+          2: { valor: 0, pedidos: 0, pecas: 0 }, // Terça
+          3: { valor: 0, pedidos: 0, pecas: 0 }, // Quarta
+          4: { valor: 0, pedidos: 0, pecas: 0 }, // Quinta
+          5: { valor: 0, pedidos: 0, pecas: 0 }, // Sexta
+          6: { valor: 0, pedidos: 0, pecas: 0 }, // Sábado
+        };
+
+        pedidosPagos.forEach(p => {
+          const dataEfetiva = p.paid_at || p.created_at;
+          const dia = getDay(parseISO(dataEfetiva)); // 0-6
+          diaSemanaMap[dia].valor += p.valor_total || 0;
+          diaSemanaMap[dia].pedidos += 1;
+          diaSemanaMap[dia].pecas += p.total_pecas || 0;
+        });
+
+        const totalValorSemana = Object.values(diaSemanaMap).reduce((s, d) => s + d.valor, 0);
+
+        // Filtrar apenas Segunda a Sábado (1-6), ordenar por maior valor
+        const faturamentoDiaSemana: FaturamentoDiaSemana[] = [1, 2, 3, 4, 5, 6]
+          .map(i => ({
+            diaSemana: DIAS_SEMANA[i],
+            diaSemanaIndex: i,
+            valor: diaSemanaMap[i].valor,
+            pedidos: diaSemanaMap[i].pedidos,
+            pecas: diaSemanaMap[i].pecas,
+            percentual: totalValorSemana > 0 ? (diaSemanaMap[i].valor / totalValorSemana) * 100 : 0,
+          }))
+          .sort((a, b) => b.valor - a.valor);
+
         setData({
           kpis: {
             faturamento,
@@ -599,6 +775,10 @@ export function useDashboardData(
             mesAtual: nomeMesAtual,
             anoPassado,
           },
+          // NOVOS CAMPOS
+          previsaoMensal,
+          metaAutomatica,
+          faturamentoDiaSemana,
         });
       } catch (error) {
         console.error("Erro ao buscar dados do dashboard:", error);
