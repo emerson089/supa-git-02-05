@@ -246,22 +246,17 @@ export default function Clientes() {
   const crmFilterStatus = filtroStatus !== 'todos' ? filtroStatus : null;
   const { data: crmFilterIds, isLoading: crmFilterLoading } = useClientesCRMFilter(crmFilterStatus);
 
-  // Paginated query
+  // Paginated query - now with filterByIds for CRM filters (filter BEFORE pagination)
   const { data: paginatedData, isLoading: paginatedLoading, isFetching } = useClientesPaginated({
     page: currentPage,
     pageSize: PAGE_SIZE,
     search: busca,
     ordenacao,
+    filterByIds: filtroStatus !== 'todos' ? crmFilterIds : null,
   });
 
-  // Filter clients by CRM status if needed
-  const filteredClientes = useMemo(() => {
-    if (!paginatedData?.data) return [];
-    if (filtroStatus === 'todos' || !crmFilterIds) return paginatedData.data;
-    
-    // Filter by matching CRM IDs
-    return paginatedData.data.filter(c => crmFilterIds.includes(c.id));
-  }, [paginatedData?.data, filtroStatus, crmFilterIds]);
+  // No need for client-side filtering - the query already filters by IDs
+  const filteredClientes = paginatedData?.data || [];
 
   // Get IDs of visible clients for batch CRM stats
   const visibleClienteIds = useMemo(() => {

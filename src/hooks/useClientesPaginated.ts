@@ -19,6 +19,7 @@ export interface ClientesPaginatedParams {
   pageSize: number;
   search?: string;
   ordenacao?: 'nome' | 'recente';
+  filterByIds?: string[] | null; // Filter by specific client IDs (for CRM filters)
 }
 
 export interface ClientesPaginatedResult {
@@ -29,15 +30,20 @@ export interface ClientesPaginatedResult {
 
 export function useClientesPaginated(params: ClientesPaginatedParams) {
   const { user } = useAuth();
-  const { page, pageSize, search = '', ordenacao = 'nome' } = params;
+  const { page, pageSize, search = '', ordenacao = 'nome', filterByIds } = params;
   
   // Debounce search by 400ms
   const debouncedSearch = useDebouncedValue(search, 400);
 
   return useQuery<ClientesPaginatedResult>({
-    queryKey: ['clientes-paginated', user?.id, page, pageSize, debouncedSearch, ordenacao],
+    queryKey: ['clientes-paginated', user?.id, page, pageSize, debouncedSearch, ordenacao, filterByIds?.length ?? null],
     queryFn: async () => {
       if (!user?.id) {
+        return { data: [], count: 0, totalPages: 0 };
+      }
+
+      // If filterByIds is an empty array, return empty results (filter active but no matches)
+      if (filterByIds !== null && filterByIds !== undefined && filterByIds.length === 0) {
         return { data: [], count: 0, totalPages: 0 };
       }
 
@@ -54,6 +60,12 @@ export function useClientesPaginated(params: ClientesPaginatedParams) {
         .from('clientes')
         .select('id, nome, telefone, cidade, estado, excursao, created_at, user_id')
         .eq('user_id', user.id);
+
+      // Apply ID filter BEFORE pagination (for CRM filters like Pendentes, VIP, etc.)
+      if (filterByIds && filterByIds.length > 0) {
+        countQuery = countQuery.in('id', filterByIds);
+        dataQuery = dataQuery.in('id', filterByIds);
+      }
 
       // Apply search filter (server-side)
       if (debouncedSearch) {
