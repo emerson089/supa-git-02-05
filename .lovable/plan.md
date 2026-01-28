@@ -1,132 +1,357 @@
 
-## Plano: Corrigir Cálculo da Meta Automática Mensal
 
-### Problema Identificado
+## Plano: Meta e Ritmo com Sazonalidade do Setor de Moda
 
-A Meta Mensal mostra R$ 0,00 porque a lógica de agrupamento por mês está usando `paid_at` como data de referência. Porém, quando o trigger de preenchimento automático do `paid_at` foi executado, ele atualizou **pedidos históricos** com a data de **janeiro de 2026** (data da execução do trigger).
-
-**Exemplo do problema:**
-- Pedido criado em 22/12/2025 (`created_at`)
-- Marcado como PAGO retroativamente, trigger preencheu `paid_at = 2026-01-19`
-- Código agrupa pelo `paid_at` = janeiro
-- Resultado: dezembro fica sem dados, janeiro recebe tudo
-
-**Dados reais:**
-- 911 pedidos de setembro-dezembro 2025 
-- Faturamento total: R$ 1.734.379
-- Todos estão sendo agrupados em janeiro ao invés dos meses corretos
+### Objetivo
+Refinar o sistema de Meta Mensal e Ritmo do Dashboard para respeitar a sazonalidade do setor de moda/jeans, comparando com dados do **mesmo mês em anos anteriores** ao invés de usar média simples dos últimos 3 meses.
 
 ---
 
-### Solução Proposta
+## Dados Históricos Disponíveis
 
-**Usar `created_at` como referência temporal principal** para cálculo de métricas históricas, mantendo `paid_at` apenas para ordenação visual de pedidos recentes.
+A análise do banco confirmou dados robustos para cálculo sazonal:
 
-#### Opção A: Ajustar código JavaScript (Recomendada)
+| Mês | Jan/2025 | Jan/2026 | Dez/2024 | Dez/2025 |
+|-----|----------|----------|----------|----------|
+| **Faturamento** | R$ 231.253 | R$ 311.757 | R$ 412.603 | R$ 645.033 |
+| **Pedidos Pagos** | 154 | 223 | 208 | 297 |
 
-Modificar a lógica de agrupamento no `useDashboardData.ts`:
+**Curva de Janeiro (histórica):**
+- Até dia 10: ~30% acumulado
+- Até dia 16: ~62% acumulado  
+- Até dia 28: ~92% acumulado
 
-```typescript
-// ANTES (problemático):
-const dataEfetiva = p.paid_at || p.created_at;
+Isso demonstra que as vendas não são lineares - há concentração em semanas específicas.
 
-// DEPOIS (corrigido):
-// Para cálculo de média histórica, sempre usar created_at
-// pois paid_at foi preenchido retroativamente com data errada
-const dataEfetiva = p.created_at;
+---
+
+## Solução Proposta
+
+### 1. Meta Mensal Sazonal
+
+**Antes**: Média dos últimos 3 meses (out/nov/dez)  
+**Depois**: Média do MESMO mês em anos anteriores + % crescimento
+
+| Janeiro 2026 | Cálculo |
+|--------------|---------|
+| Jan/2025 | R$ 231.253 |
+| Jan/2024 | (não disponível) |
+| **Média** | R$ 231.253 |
+| **Meta (+10%)** | R$ 254.378 |
+
+### 2. Ritmo Sazonal (Curva não-linear)
+
+**Antes**: % esperado = dia ÷ total_dias (linear)  
+**Depois**: % esperado = curva histórica do mesmo mês
+
+| Dia | % Esperado (Sazonal) | % Linear |
+|-----|---------------------|----------|
+| 10 | 30.7% | 32.3% |
+| 16 | 62.6% | 51.6% |
+| 28 | 92.2% | 90.3% |
+
+### 3. Comparativo de Status
+
+**Exemplo para dia 27 de janeiro:**
+- Faturamento atual: R$ 311.757
+- Meta sazonal: R$ 254.378
+- % Realizado: 122.6%
+- % Esperado (curva): ~89% 
+- **Status**: ✅ Acima do ritmo sazonal (+33pp)
+
+---
+
+## Alterações Técnicas
+
+### Nova Tabela: `curvas_mensais`
+
+Armazena a curva percentual acumulada por dia do mês:
+
+```sql
+CREATE TABLE curvas_mensais (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  mes INTEGER NOT NULL,        -- 1-12
+  dia INTEGER NOT NULL,        -- 1-31
+  percentual_esperado NUMERIC NOT NULL,
+  anos_considerados INTEGER DEFAULT 1,
+  total_faturamento_base NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, mes, dia)
+);
+
+-- RLS
+ALTER TABLE curvas_mensais ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage own curvas" ON curvas_mensais
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 ```
 
-#### Opção B: Usar função RPC do banco
+### Nova Função RPC: `get_media_mes_anos_anteriores`
 
-Usar a função `get_faturamento_periodo` já criada que faz o COALESCE corretamente:
+Calcula a média do mesmo mês em todos os anos disponíveis:
 
-```typescript
-const [fat1, fat2, fat3] = await Promise.all([
-  supabase.rpc('get_faturamento_periodo', {
-    p_user_id: user.id,
-    p_inicio: mes1Inicio.toISOString(),
-    p_fim: mes1Fim.toISOString(),
-  }),
-  // ... outros meses
-]);
+```sql
+CREATE OR REPLACE FUNCTION get_media_mes_anos_anteriores(
+  p_user_id UUID,
+  p_mes INTEGER,
+  p_limite_anos INTEGER DEFAULT 5
+) RETURNS TABLE (
+  media_faturamento NUMERIC,
+  anos_usados INTEGER[],
+  faturamentos_por_ano JSONB
+) AS $$
+  WITH faturamentos AS (
+    SELECT 
+      EXTRACT(YEAR FROM created_at)::int as ano,
+      SUM(valor_total) as faturamento
+    FROM pedidos 
+    WHERE user_id = p_user_id
+      AND status_pagamento = 'PAGO'
+      AND EXTRACT(MONTH FROM created_at) = p_mes
+      AND EXTRACT(YEAR FROM created_at) < EXTRACT(YEAR FROM NOW())
+    GROUP BY EXTRACT(YEAR FROM created_at)
+    ORDER BY ano DESC
+    LIMIT p_limite_anos
+  )
+  SELECT 
+    COALESCE(AVG(faturamento), 0)::numeric as media_faturamento,
+    ARRAY_AGG(ano ORDER BY ano DESC)::integer[] as anos_usados,
+    COALESCE(jsonb_object_agg(ano::text, faturamento), '{}'::jsonb) as faturamentos_por_ano
+  FROM faturamentos;
+$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public;
+```
+
+### Nova Função RPC: `get_curva_mes`
+
+Calcula a curva percentual acumulada de um mês específico:
+
+```sql
+CREATE OR REPLACE FUNCTION get_curva_mes(
+  p_user_id UUID,
+  p_mes INTEGER
+) RETURNS TABLE (
+  dia INTEGER,
+  percentual_acumulado NUMERIC,
+  faturamento_acumulado NUMERIC
+) AS $$
+  WITH dados_diarios AS (
+    SELECT 
+      EXTRACT(DAY FROM created_at)::int as dia,
+      SUM(valor_total) as fat_dia
+    FROM pedidos 
+    WHERE user_id = p_user_id
+      AND status_pagamento = 'PAGO'
+      AND EXTRACT(MONTH FROM created_at) = p_mes
+      AND EXTRACT(YEAR FROM created_at) < EXTRACT(YEAR FROM NOW())
+    GROUP BY EXTRACT(DAY FROM created_at)
+  ),
+  total AS (
+    SELECT COALESCE(SUM(fat_dia), 0) as total_mes FROM dados_diarios
+  ),
+  acumulado AS (
+    SELECT 
+      d.dia,
+      SUM(d.fat_dia) OVER (ORDER BY d.dia) as fat_acumulado,
+      t.total_mes
+    FROM dados_diarios d, total t
+  )
+  SELECT 
+    a.dia,
+    CASE WHEN a.total_mes > 0 
+      THEN ROUND((a.fat_acumulado / a.total_mes * 100)::numeric, 2)
+      ELSE (a.dia::numeric / 31 * 100)
+    END as percentual_acumulado,
+    a.fat_acumulado as faturamento_acumulado
+  FROM acumulado a
+  ORDER BY a.dia;
+$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public;
 ```
 
 ---
 
-### Alterações Técnicas
+### Atualizar Interface `MetaAutomatica`
 
-#### Arquivo: `src/hooks/useDashboardData.ts`
+Adicionar novos campos para dados sazonais:
 
-**1. Modificar linha 653** - Usar `created_at` para agrupamento histórico:
 ```typescript
-// Linha 653 - ANTES:
-const dataEfetiva = p.paid_at || p.created_at;
-
-// DEPOIS:
-// Para cálculo de média histórica, usar created_at
-// porque paid_at foi preenchido retroativamente em alguns casos
-const dataEfetiva = p.created_at;
-```
-
-**2. Alternativamente, usar RPC** para os 3 meses anteriores:
-```typescript
-// Substituir queries manuais por chamadas RPC
-const [fatMes1, fatMes2, fatMes3] = await Promise.all([
-  supabase.rpc('get_faturamento_periodo', {
-    p_user_id: user.id,
-    p_inicio: mes1Inicio.toISOString(),
-    p_fim: mes1Fim.toISOString(),
-  }),
-  supabase.rpc('get_faturamento_periodo', {
-    p_user_id: user.id,
-    p_inicio: mes2Inicio.toISOString(),
-    p_fim: mes2Fim.toISOString(),
-  }),
-  supabase.rpc('get_faturamento_periodo', {
-    p_user_id: user.id,
-    p_inicio: mes3Inicio.toISOString(),
-    p_fim: mes3Fim.toISOString(),
-  }),
-]);
-
-// Usar diretamente os valores retornados
-const somaMeses = [
-  fatMes1.data || 0,
-  fatMes2.data || 0,
-  fatMes3.data || 0,
-];
+export interface MetaAutomatica {
+  // Existentes (renomeados para clareza)
+  mediaBase: number;              // Média do mesmo mês em anos anteriores
+  percentualCrescimento: number;
+  metaCalculada: number;
+  
+  // Novos campos para sazonalidade
+  anosUsados: number[];           // Ex: [2025, 2024]
+  faturamentosPorAno: Record<string, number>; // { "2025": 231253, "2024": 0 }
+  temHistoricoSazonal: boolean;   // Se há dados do mesmo mês em anos anteriores
+  
+  // Ritmo sazonal
+  percentualEsperadoHoje: number; // % esperado até hoje baseado na curva
+  percentualRealizado: number;    // % realizado (faturamento / meta)
+  diferencaRitmo: number;         // realizado - esperado (em pontos percentuais)
+  curvaDisponivel: boolean;       // Se há curva histórica
+  
+  // Campos existentes mantidos
+  faturamentoAtualMes: number;
+  percentualAtingido: number;
+  diferencaPrevisao: number;
+  statusMeta: 'acima' | 'abaixo' | 'atingida' | 'noritmo';
+}
 ```
 
 ---
 
-### Resultado Esperado
+### Atualizar `useDashboardData.ts`
 
-Com a correção, o Dashboard passará a mostrar:
+**1. Novas queries para dados sazonais:**
 
-| Métrica | Valor Aproximado |
-|---------|------------------|
-| Média 3 meses (set-nov-dez/2025) | ~R$ 458.000 |
-| Meta (+10%) | ~R$ 503.800 |
-| Faturamento jan/2026 | R$ 6.504.632 |
-| % Atingido | ~1290% |
-| Status | Meta atingida |
+```typescript
+// Buscar média do mesmo mês em anos anteriores
+const mediaSazonal = await supabase.rpc('get_media_mes_anos_anteriores', {
+  p_user_id: user.id,
+  p_mes: mesAtual + 1, // 1-12
+  p_limite_anos: 5
+});
+
+// Buscar curva de ritmo do mês
+const curvaMes = await supabase.rpc('get_curva_mes', {
+  p_user_id: user.id,
+  p_mes: mesAtual + 1
+});
+```
+
+**2. Lógica de cálculo atualizada:**
+
+```typescript
+// Meta sazonal: média do mesmo mês + % crescimento
+const mediaBase = mediaSazonal.data?.[0]?.media_faturamento || 0;
+const anosUsados = mediaSazonal.data?.[0]?.anos_usados || [];
+const temHistoricoSazonal = anosUsados.length > 0;
+
+// Fallback: se não tem histórico sazonal, usar média 3 meses
+const metaCalculada = temHistoricoSazonal
+  ? mediaBase * (1 + percentualCrescimento)
+  : media3Meses * (1 + percentualCrescimento);
+
+// Ritmo sazonal: buscar % esperado para o dia atual
+const curvaData = curvaMes.data || [];
+const diaAtual = getDate(now);
+const curvaDisponivel = curvaData.length > 0;
+
+// Encontrar % esperado até hoje (interpolando se necessário)
+let percentualEsperadoHoje = (diaAtual / diasTotais) * 100; // fallback linear
+if (curvaDisponivel) {
+  const curvaAteDia = curvaData.filter(c => c.dia <= diaAtual);
+  if (curvaAteDia.length > 0) {
+    percentualEsperadoHoje = curvaAteDia[curvaAteDia.length - 1].percentual_acumulado;
+  }
+}
+
+// Cálculo de ritmo
+const percentualRealizado = metaCalculada > 0 
+  ? (faturamentoAtual / metaCalculada) * 100 
+  : 0;
+const diferencaRitmo = percentualRealizado - percentualEsperadoHoje;
+
+// Status atualizado com tolerância de ±5%
+const statusMeta = 
+  percentualRealizado >= 100 ? 'atingida' :
+  diferencaRitmo >= 5 ? 'acima' :
+  diferencaRitmo >= -5 ? 'noritmo' : 'abaixo';
+```
 
 ---
 
-### Arquivos Modificados
+### Atualizar `Dashboard.tsx`
+
+**Card de Meta reformulado com indicadores sazonais:**
+
+```
+┌──────────────────────────────────────────────────────┐
+│ Meta Mensal                    jan/25 + 10%  ⚙️     │
+│ R$ 254.378                                          │
+│ Base sazonal: jan/2025 (R$ 231.253)                 │
+├─────────────────┬─────────────────┬─────────────────┤
+│ Faturamento     │ Previsão        │ Ritmo Sazonal   │
+│ R$ 311.757      │ R$ 354.000      │ 122.6% realizado│
+│ 122.6% da meta  │ +R$ 99.6k       │ vs 89% esperado │
+│                 │                 │ +33.6pp ✅      │
+├─────────────────┴─────────────────┴─────────────────┤
+│ [============================●───] 89% esperado     │
+│ [=================================●] 122.6% atual   │
+│                                                      │
+│ ✅ Acima do ritmo sazonal para este dia do mês!     │
+└──────────────────────────────────────────────────────┘
+```
+
+**Novos indicadores:**
+
+| Indicador | Descrição |
+|-----------|-----------|
+| **% Esperado** | Curva histórica: quanto deveria ter vendido até hoje |
+| **% Realizado** | Faturamento atual ÷ Meta |
+| **Diferença (pp)** | Realizado - Esperado em pontos percentuais |
+| **Status** | "Acima" (+5pp) / "No ritmo" (±5pp) / "Abaixo" (-5pp) |
+
+---
+
+### Fallback (sem histórico sazonal)
+
+Se não houver dados do mesmo mês em anos anteriores:
+
+```typescript
+if (!temHistoricoSazonal) {
+  // Meta: média últimos 3 meses
+  const metaCalculada = media3Meses * (1 + percentualCrescimento);
+  
+  // Ritmo: curva linear
+  const percentualEsperadoHoje = (diaAtual / diasTotais) * 100;
+}
+```
+
+**UI com badge:**
+```
+Meta Mensal                    [⚠️ Sem histórico sazonal]
+```
+
+---
+
+## Arquivos Modificados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useDashboardData.ts` | Corrigir lógica de agrupamento ou usar RPC |
+| `supabase/migrations/` | Nova tabela `curvas_mensais` + funções RPC |
+| `src/hooks/useDashboardData.ts` | Lógica de meta sazonal + ritmo com curva |
+| `src/pages/Dashboard.tsx` | Card com % esperado vs % realizado |
+| `src/hooks/useMetasMensais.ts` | Atualizar para persistir dados sazonais |
 
 ---
 
-### Recomendação
+## Resultado Esperado
 
-A **Opção A** (usar `created_at`) é mais simples e resolve o problema imediatamente. A Opção B (RPC) é mais robusta para futuro mas requer mais mudanças.
+### Cenário: Janeiro 2026, Dia 27
 
-Ambas funcionam - a diferença é que:
-- `created_at` = data em que o pedido foi criado
-- `COALESCE(paid_at, created_at)` = data do pagamento real (quando disponível)
+| Métrica | Atual (3 meses) | Sazonal (mesmo mês) |
+|---------|-----------------|---------------------|
+| Média Base | R$ 458.251 (out-dez) | R$ 231.253 (jan/25) |
+| Meta (+10%) | R$ 504.076 | R$ 254.378 |
+| % Esperado | 87.1% (linear) | 89.3% (curva jan) |
+| % Realizado | 61.8% | 122.6% |
+| Status | ⚠️ Abaixo | ✅ Meta atingida |
 
-Para dados históricos importados, `created_at` é mais confiável porque representa a data original do pedido.
+**Vantagem:** O sistema deixa de comparar janeiro com dezembro (mês atípico de Natal) e passa a usar o histórico específico de janeiro, evitando alertas falsos.
+
+---
+
+## Critérios de Aceite
+
+| Cenário | Resultado Esperado |
+|---------|-------------------|
+| Meta janeiro | Usar jan/2025 como base (R$ 231k), não média 3 meses |
+| Ritmo dia 27 | Mostrar "122.6% vs 89% esperado" com curva sazonal |
+| Sem histórico sazonal | Fallback para média 3 meses + badge de aviso |
+| Status | Refletir posição real vs. padrão histórico do mês |
+| Persistência | Salvar meta calculada na tabela `metas_mensais` |
+
