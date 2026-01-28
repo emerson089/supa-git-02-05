@@ -1,54 +1,61 @@
 
 
-## Plano: Alterar Acesso do Vendedor de Banca para Loja
+## Plano: Corrigir Modal "Ajustar Estoque" Cortado no Mobile
 
-### Situação Atual
+### Problema Atual
+O modal usa `grid-cols-3` com `gap-4` e `px-6` de padding, o que não cabe em telas de celular. A coluna "Diferença" está sendo cortada.
 
-| Configuração | Valor |
-|--------------|-------|
-| Vendedor | `emerson089@gmail.com` |
-| Acesso atual | "Banca da Feira" (tipo: banca) |
-| Permissões atuais | Ver, Ajustar Estoque, Editar Preço |
+### Solução
+Aplicar o padrão responsivo já estabelecido no projeto: **Drawer (Bottom Sheet) no mobile + Dialog no desktop**.
 
-### Ação Necessária
+### Alterações no Arquivo
 
-Atualizar a entrada na tabela `user_locations` para apontar para "Loja Parque das Feiras" em vez de "Banca da Feira".
+**`src/components/estoque/AjusteEstoqueModal.tsx`**
 
-### Dados da Alteração
+| Área | Problema | Correção |
+|------|----------|----------|
+| Componente raiz | Sempre usa Dialog | Usar Drawer no mobile, Dialog no desktop |
+| Container | `px-6` muito largo | `px-4 sm:px-6` |
+| Grid 3 colunas | Colunas muito estreitas | Reduzir gap para `gap-2 sm:gap-4` |
+| Input fonte | Pode causar zoom no iOS | Adicionar `text-base md:text-sm` |
+| Altura | Fixa no mobile | Drawer com `h-[85vh]` |
 
-| Campo | Valor Atual | Novo Valor |
-|-------|-------------|------------|
-| local_id | `e1e0b6df-...` (Banca da Feira) | `d42e5bcc-...` (Loja Parque das Feiras) |
-| can_view | true | true (mantido) |
-| can_adjust_stock | true | true (mantido) |
-| can_edit_price | true | true (mantido) |
+### Estrutura de Código
 
-### Operação de Banco de Dados
+```
+// Padrão responsivo
+const isMobile = useIsMobile();
 
-Atualizar o registro existente na tabela `user_locations`:
-
-```sql
-UPDATE user_locations 
-SET local_id = 'd42e5bcc-0d39-4623-8166-d78018675264',
-    updated_at = now()
-WHERE id = '381d3bda-4f55-447c-8f96-ccf2bc7de11c';
+if (isMobile) {
+  return <Drawer>...</Drawer>  // Bottom Sheet
+} else {
+  return <Dialog>...</Dialog>  // Modal centralizado
+}
 ```
 
-### Por que Não Vai Quebrar Nada
+### Mudanças CSS Principais
 
-1. **Código já suporta 'loja'**: A lógica em `Transferencias.tsx` prioriza locais tipo 'loja' antes de 'banca'
-2. **RLS já configurado**: As policies de `has_location_access()` funcionam para qualquer tipo de local
-3. **Permissões mantidas**: As mesmas permissões (ver, ajustar, editar preço) serão preservadas
-4. **Estoque da loja tem dados**: "Loja Parque das Feiras" tem 1038 peças e 79 modelos
+```css
+/* Container */
+px-4 sm:px-6
+
+/* Grid de quantidades */
+grid-cols-3 gap-2 sm:gap-4
+
+/* Texto do input - previne zoom iOS */
+text-base sm:text-2xl
+
+/* Padding das colunas */
+p-2 sm:p-4
+```
 
 ### Resultado Esperado
 
-Após a alteração, o vendedor verá:
-- **1038 peças** em vez de 852
-- **79 modelos** em vez de 27
-- Mesmos totais que o admin vê atualmente
+- Mobile: Bottom Sheet ocupando 85% da tela, todas as 3 colunas visíveis
+- Desktop: Modal centralizado como antes
+- Input com fonte 16px para evitar zoom automático no iOS
 
 ### Arquivos Impactados
 
-Nenhum código precisa ser alterado. Apenas a configuração no banco de dados.
+1. `src/components/estoque/AjusteEstoqueModal.tsx` - Refatorar para padrão responsivo
 
