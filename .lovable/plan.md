@@ -1,106 +1,54 @@
 
 
-## Plano: Corrigir Acesso do Vendedor à Aba Estoque por Local
+## Plano: Alterar Acesso do Vendedor de Banca para Loja
 
-### Diagnóstico
-
-O vendedor não vê os produtos porque o frontend está **buscando um local do tipo 'loja'**, mas a configuração em `user_locations` dá acesso a uma **'banca'**:
+### Situação Atual
 
 | Configuração | Valor |
 |--------------|-------|
 | Vendedor | `emerson089@gmail.com` |
-| Local permitido | "Banca da Feira" (tipo: `banca`) |
-| Owner do local | Admin (`delockjeans@gmail.com`) |
-| Estoque no local | 25+ produtos com quantidade > 0 |
+| Acesso atual | "Banca da Feira" (tipo: banca) |
+| Permissões atuais | Ver, Ajustar Estoque, Editar Preço |
 
-**Problema no código** (Transferencias.tsx, linha 91):
-```typescript
-// Procura apenas 'loja', ignora 'banca'
-const allowedLoja = userLocations.find(ul => ul.localTipo === 'loja' && ul.canView);
+### Ação Necessária
+
+Atualizar a entrada na tabela `user_locations` para apontar para "Loja Parque das Feiras" em vez de "Banca da Feira".
+
+### Dados da Alteração
+
+| Campo | Valor Atual | Novo Valor |
+|-------|-------------|------------|
+| local_id | `e1e0b6df-...` (Banca da Feira) | `d42e5bcc-...` (Loja Parque das Feiras) |
+| can_view | true | true (mantido) |
+| can_adjust_stock | true | true (mantido) |
+| can_edit_price | true | true (mantido) |
+
+### Operação de Banco de Dados
+
+Atualizar o registro existente na tabela `user_locations`:
+
+```sql
+UPDATE user_locations 
+SET local_id = 'd42e5bcc-0d39-4623-8166-d78018675264',
+    updated_at = now()
+WHERE id = '381d3bda-4f55-447c-8f96-ccf2bc7de11c';
 ```
 
-Como o vendedor só tem acesso a uma "banca", a variável `allowedLoja` é `undefined`, e `lojaId` fica `null`.
+### Por que Não Vai Quebrar Nada
 
----
-
-### Solução
-
-Modificar a lógica de seleção de local para aceitar **qualquer tipo de local permitido** (loja, banca, ou central), priorizando por ordem de preferência.
-
----
-
-### Alterações Técnicas
-
-#### Arquivo: `src/pages/Transferencias.tsx`
-
-**Modificar linhas 87-99** - Lógica de seleção do local para o vendedor:
-
-```typescript
-// Encontrar local - para vendedor, usar o primeiro local permitido
-// Prioridade: loja > banca > central
-const selectedLocal = useMemo(() => {
-  if (isVendedor) {
-    // Vendedor: buscar primeiro local permitido (priorizar loja, depois banca)
-    const allowedLocations = userLocations.filter(ul => ul.canView);
-    
-    // Tentar primeiro uma 'loja', depois 'banca', depois qualquer outro
-    const priorityOrder = ['loja', 'banca', 'central'];
-    for (const tipo of priorityOrder) {
-      const found = allowedLocations.find(ul => ul.localTipo === tipo);
-      if (found) {
-        return locais.find(l => l.id === found.localId) || null;
-      }
-    }
-    
-    // Fallback: usar primeiro local permitido
-    if (allowedLocations.length > 0) {
-      return locais.find(l => l.id === allowedLocations[0].localId) || null;
-    }
-    
-    return null;
-  }
-  
-  // Admin/Gerente: usar qualquer loja ou banca
-  return locais.find(l => l.tipo === 'loja' || l.tipo === 'banca') || null;
-}, [locais, isVendedor, userLocations]);
-
-const lojaId = selectedLocal?.id || null;
-const lojaNome = selectedLocal?.nome || 'Local';
-```
-
-#### Atualizar nome da variável
-
-Renomear `lojaLocal` para `selectedLocal` e `lojaNome` para refletir que pode ser qualquer tipo de local.
-
----
+1. **Código já suporta 'loja'**: A lógica em `Transferencias.tsx` prioriza locais tipo 'loja' antes de 'banca'
+2. **RLS já configurado**: As policies de `has_location_access()` funcionam para qualquer tipo de local
+3. **Permissões mantidas**: As mesmas permissões (ver, ajustar, editar preço) serão preservadas
+4. **Estoque da loja tem dados**: "Loja Parque das Feiras" tem 1038 peças e 79 modelos
 
 ### Resultado Esperado
 
-Após a correção:
+Após a alteração, o vendedor verá:
+- **1038 peças** em vez de 852
+- **79 modelos** em vez de 27
+- Mesmos totais que o admin vê atualmente
 
-| Antes | Depois |
-|-------|--------|
-| `lojaLocal = null` | `selectedLocal = { id: "e1e0b6df...", nome: "Banca da Feira" }` |
-| `lojaId = null` | `lojaId = "e1e0b6df-3dc3-4eae-a84b-300b4f0f1031"` |
-| `estoqueDetalhado = []` | `estoqueDetalhado = [25+ produtos]` |
-| Mensagem "Nenhum produto" | Lista de produtos visível |
+### Arquivos Impactados
 
----
-
-### Arquivos Modificados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/Transferencias.tsx` | Corrigir lógica de seleção de local para aceitar 'banca' |
-
----
-
-### Critérios de Aceite
-
-| Cenário | Resultado Esperado |
-|---------|-------------------|
-| Vendedor com acesso a "banca" | Ver produtos da banca |
-| Vendedor com acesso a "loja" | Ver produtos da loja |
-| Vendedor sem acesso configurado | Ver alerta "Acesso não configurado" |
-| Admin/Gerente | Ver qualquer local disponível |
+Nenhum código precisa ser alterado. Apenas a configuração no banco de dados.
 
