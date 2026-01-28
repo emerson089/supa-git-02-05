@@ -597,10 +597,26 @@ export function useDashboardData(
           })
           .sort((a, b) => a.dataOriginal.getTime() - b.dataOriginal.getTime());
 
-        // Estoque baixo (filtrar onde quantidade < quantidade_minima)
+        // Estoque crítico - CORRIGIDO: fallback quando quantidade_minima não está configurada
         const estoqueData = estoque.data || [];
         const estoqueBaixo: EstoqueBaixoItem[] = estoqueData
-          .filter(item => item.quantidade < (item.quantidade_minima || 0))
+          .filter(item => {
+            const minimo = item.quantidade_minima || 0;
+            
+            // Se tem mínimo configurado, usar como referência
+            if (minimo > 0) {
+              return item.quantidade < minimo;
+            }
+            
+            // Fallback: considerar crítico se quantidade <= 10 (típico para moda)
+            return item.quantidade <= 10;
+          })
+          .sort((a, b) => {
+            // Ordenar: zerados primeiro, depois por quantidade crescente
+            if (a.quantidade === 0 && b.quantidade !== 0) return -1;
+            if (a.quantidade !== 0 && b.quantidade === 0) return 1;
+            return a.quantidade - b.quantidade;
+          })
           .map(item => ({
             ...item,
             status: getEstoqueStatus(item.quantidade),
