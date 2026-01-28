@@ -650,7 +650,9 @@ export function useDashboardData(
         const faturamentoPorMes: Record<string, number> = {};
         
         pedidosHistorico.forEach(p => {
-          const dataEfetiva = p.paid_at || p.created_at;
+          // Usar created_at para cálculo de média histórica
+          // porque paid_at foi preenchido retroativamente com data errada em pedidos históricos
+          const dataEfetiva = p.created_at;
           const mesAno = format(parseISO(dataEfetiva), "yyyy-MM");
           faturamentoPorMes[mesAno] = (faturamentoPorMes[mesAno] || 0) + (p.valor_total || 0);
         });
