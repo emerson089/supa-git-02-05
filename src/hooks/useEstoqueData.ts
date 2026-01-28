@@ -394,9 +394,12 @@ export function useRemoveItem() {
         console.error('[useRemoveItem] Erro ao buscar itens para limpeza:', itensLimparError);
       }
 
-      // Filtrar itens que podem ser deletados (concluídas ou soft-deleted)
+      // Filtrar itens que podem ser deletados (concluídas, estornadas, canceladas ou soft-deleted)
       const itensParaDeletar = itensParaLimpar?.filter((i: any) => 
-        i.transferencias?.deleted_at !== null || i.transferencias?.status === 'concluida'
+        i.transferencias?.deleted_at !== null || 
+        i.transferencias?.status === 'concluida' ||
+        i.transferencias?.status === 'estornada' ||
+        i.transferencias?.status === 'cancelada'
       ) || [];
 
       if (itensParaDeletar.length > 0) {
