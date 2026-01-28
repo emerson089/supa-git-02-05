@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { AppSidebar } from "@/components/layout/AppSidebar";
+import { LotImage } from "@/components/production/LotImage";
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -667,7 +668,11 @@ export default function Dashboard() {
                   const ActionIcon = statusConfig.actionIcon;
                   return <div key={item.id} className={cn("flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01]", statusConfig.bgColor)} onClick={() => navigate(`/estoque?search=${encodeURIComponent(item.nome)}`)}>
                           <div className="w-10 h-10 rounded-lg bg-white/80 flex items-center justify-center overflow-hidden">
-                            {item.imagem_url ? <img src={item.imagem_url} alt={item.nome} className="w-full h-full object-cover" /> : <Package size={18} className="text-muted-foreground" />}
+                            <LotImage
+                              src={item.imagem_url}
+                              alt={item.nome}
+                              className="w-full h-full object-cover"
+                            />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{item.nome}</p>
