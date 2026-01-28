@@ -543,7 +543,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* NOVO: Card de Meta Automática + Faturamento + Previsão (3 colunas) */}
+        {/* Card de Meta Automática + Faturamento + Ritmo Sazonal */}
         <div className="mb-6">
           <Card className="neu-card border-primary/20 shadow-lg bg-gradient-to-br from-card to-primary/5">
             <CardContent className="p-4 sm:p-6">
@@ -561,7 +561,11 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <Target size={18} className="text-primary" />
                         <h3 className="text-sm font-semibold">Meta Mensal</h3>
-                        {data.metaAutomatica.temHistorico ? (
+                        {data.metaAutomatica.temHistoricoSazonal ? (
+                          <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300">
+                            Sazonal + {data.metaAutomatica.percentualCrescimento.toFixed(0)}%
+                          </Badge>
+                        ) : data.metaAutomatica.temHistorico ? (
                           <Badge variant="secondary" className="text-[10px]">
                             Média 3m + {data.metaAutomatica.percentualCrescimento.toFixed(0)}%
                           </Badge>
@@ -576,7 +580,7 @@ export default function Dashboard() {
                               <Settings size={12} className="text-muted-foreground" />
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-56" align="end">
+                          <PopoverContent className="w-64" align="end">
                             <div className="space-y-3">
                               <div className="space-y-1">
                                 <Label className="text-xs">% de Crescimento</Label>
@@ -592,13 +596,19 @@ export default function Dashboard() {
                                   <span className="text-sm text-muted-foreground">%</span>
                                 </div>
                                 <p className="text-[10px] text-muted-foreground">
-                                  Aplicado sobre a média dos últimos 3 meses
+                                  {data.metaAutomatica.temHistoricoSazonal 
+                                    ? 'Aplicado sobre a média do mesmo mês em anos anteriores'
+                                    : 'Aplicado sobre a média dos últimos 3 meses'
+                                  }
                                 </p>
                               </div>
                               {data.metaAutomatica.temHistorico && (
-                                <p className="text-[10px] text-muted-foreground border-t pt-2">
-                                  Base: {data.metaAutomatica.mesesUsados.join(', ')}
-                                </p>
+                                <div className="text-[10px] text-muted-foreground border-t pt-2 space-y-1">
+                                  <p className="font-medium">Base: {data.metaAutomatica.mesesUsados.join(', ')}</p>
+                                  {data.metaAutomatica.temHistoricoSazonal && Object.entries(data.metaAutomatica.faturamentosPorAno).map(([ano, valor]) => (
+                                    <p key={ano}>{ano}: {formatCurrency(Number(valor))}</p>
+                                  ))}
+                                </div>
                               )}
                               <Button 
                                 size="sm" 
@@ -618,7 +628,7 @@ export default function Dashboard() {
                         {formatCurrency(data.metaAutomatica.metaCalculada)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Média base: {formatCurrency(data.metaAutomatica.media3Meses)}
+                        Base: {formatCurrency(data.metaAutomatica.mediaBase)}
                       </p>
                     </div>
 
@@ -633,56 +643,94 @@ export default function Dashboard() {
                       </p>
                       <p className={cn(
                         "text-xs font-semibold",
-                        data.metaAutomatica.percentualAtingido >= 100 ? "text-emerald-600" : "text-muted-foreground"
+                        data.metaAutomatica.percentualRealizado >= 100 ? "text-emerald-600" : "text-muted-foreground"
                       )}>
                         {data.metaAutomatica.metaCalculada > 0 
-                          ? `${data.metaAutomatica.percentualAtingido.toFixed(1)}% da meta`
+                          ? `${data.metaAutomatica.percentualRealizado.toFixed(1)}% da meta`
                           : 'Meta não definida'
                         }
                       </p>
                     </div>
 
-                    {/* Previsão Mensal */}
+                    {/* Ritmo Sazonal */}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <TrendingUp size={18} className="text-blue-500" />
-                        <h3 className="text-sm font-semibold">Previsão Mensal</h3>
+                        <h3 className="text-sm font-semibold">Ritmo Sazonal</h3>
+                        {!data.metaAutomatica.curvaDisponivel && (
+                          <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
+                            Linear
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <p className={cn(
+                          "text-2xl font-bold",
+                          data.metaAutomatica.statusMeta === 'atingida' || data.metaAutomatica.statusMeta === 'acima' 
+                            ? "text-emerald-600" 
+                            : data.metaAutomatica.statusMeta === 'noritmo'
+                              ? "text-blue-600"
+                              : "text-amber-600"
+                        )}>
+                          {data.metaAutomatica.percentualRealizado.toFixed(1)}%
+                        </p>
+                        <span className="text-sm text-muted-foreground">
+                          vs {data.metaAutomatica.percentualEsperadoHoje.toFixed(1)}% esperado
+                        </span>
                       </div>
                       <p className={cn(
-                        "text-2xl font-bold",
-                        data.metaAutomatica.statusMeta === 'atingida' || data.metaAutomatica.statusMeta === 'acima' 
-                          ? "text-emerald-600" 
-                          : "text-amber-600"
-                      )}>
-                        {formatCurrency(data.previsaoMensal.projecaoMensal)}
-                      </p>
-                      <p className={cn(
                         "text-xs font-semibold",
-                        data.metaAutomatica.diferencaPrevisao >= 0 ? "text-emerald-600" : "text-amber-600"
+                        data.metaAutomatica.diferencaRitmo >= 0 ? "text-emerald-600" : "text-amber-600"
                       )}>
-                        {data.metaAutomatica.metaCalculada > 0 
-                          ? `${data.metaAutomatica.diferencaPrevisao >= 0 ? '+' : ''}${formatCurrency(data.metaAutomatica.diferencaPrevisao)} vs. meta`
-                          : `Ritmo: ${formatCurrency(data.previsaoMensal.mediaDiaria)}/dia`
-                        }
+                        {data.metaAutomatica.diferencaRitmo >= 0 ? '+' : ''}{data.metaAutomatica.diferencaRitmo.toFixed(1)}pp {data.metaAutomatica.diferencaRitmo >= 0 ? 'acima' : 'abaixo'} do ritmo
                       </p>
                     </div>
                   </div>
                   
-                  {/* Barra de Progresso */}
+                  {/* Barras de Progresso Comparativas */}
                   {data.metaAutomatica.metaCalculada > 0 && (
-                    <div className="mt-4">
-                      <Progress 
-                        value={Math.min(data.metaAutomatica.percentualAtingido, 100)} 
-                        className={cn(
-                          "h-3",
-                          data.metaAutomatica.percentualAtingido >= 100 ? "[&>div]:bg-emerald-500" :
-                          data.metaAutomatica.percentualAtingido >= 70 ? "[&>div]:bg-amber-500" : 
-                          "[&>div]:bg-primary"
-                        )}
-                      />
-                      <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+                    <div className="mt-4 space-y-2">
+                      {/* Barra: % Esperado (sazonal) */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Esperado até dia {data.previsaoMensal.diasDecorridos}</span>
+                          <span>{data.metaAutomatica.percentualEsperadoHoje.toFixed(1)}%</span>
+                        </div>
+                        <Progress 
+                          value={Math.min(data.metaAutomatica.percentualEsperadoHoje, 100)} 
+                          className="h-2 [&>div]:bg-muted-foreground/40"
+                        />
+                      </div>
+                      
+                      {/* Barra: % Realizado */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Realizado</span>
+                          <span className={cn(
+                            "font-semibold",
+                            data.metaAutomatica.percentualRealizado >= 100 ? "text-emerald-600" :
+                            data.metaAutomatica.percentualRealizado >= data.metaAutomatica.percentualEsperadoHoje ? "text-emerald-600" :
+                            "text-amber-600"
+                          )}>
+                            {data.metaAutomatica.percentualRealizado.toFixed(1)}%
+                          </span>
+                        </div>
+                        <Progress 
+                          value={Math.min(data.metaAutomatica.percentualRealizado, 100)} 
+                          className={cn(
+                            "h-3",
+                            data.metaAutomatica.percentualRealizado >= 100 ? "[&>div]:bg-emerald-500" :
+                            data.metaAutomatica.percentualRealizado >= data.metaAutomatica.percentualEsperadoHoje ? "[&>div]:bg-emerald-500" :
+                            data.metaAutomatica.diferencaRitmo >= -5 ? "[&>div]:bg-blue-500" :
+                            "[&>div]:bg-amber-500"
+                          )}
+                        />
+                      </div>
+                      
+                      {/* Info: Dias e Ritmo */}
+                      <div className="flex justify-between text-xs text-muted-foreground pt-1">
                         <span>Dia {data.previsaoMensal.diasDecorridos} de {data.previsaoMensal.diasTotais}</span>
-                        <span>Ritmo: {formatCurrency(data.previsaoMensal.mediaDiaria)}/dia</span>
+                        <span>Previsão: {formatCurrency(data.previsaoMensal.projecaoMensal)}</span>
                       </div>
                     </div>
                   )}
@@ -692,20 +740,24 @@ export default function Dashboard() {
                     <div className={cn(
                       "mt-4 p-3 rounded-lg",
                       data.metaAutomatica.statusMeta === 'atingida' ? "bg-emerald-100 dark:bg-emerald-900/20" :
-                      data.metaAutomatica.statusMeta === 'acima' ? "bg-blue-100 dark:bg-blue-900/20" :
+                      data.metaAutomatica.statusMeta === 'acima' ? "bg-emerald-100 dark:bg-emerald-900/20" :
+                      data.metaAutomatica.statusMeta === 'noritmo' ? "bg-blue-100 dark:bg-blue-900/20" :
                       "bg-amber-100 dark:bg-amber-900/20"
                     )}>
                       <p className={cn(
                         "text-sm font-medium",
                         data.metaAutomatica.statusMeta === 'atingida' ? "text-emerald-700 dark:text-emerald-400" :
-                        data.metaAutomatica.statusMeta === 'acima' ? "text-blue-700 dark:text-blue-400" : 
+                        data.metaAutomatica.statusMeta === 'acima' ? "text-emerald-700 dark:text-emerald-400" :
+                        data.metaAutomatica.statusMeta === 'noritmo' ? "text-blue-700 dark:text-blue-400" : 
                         "text-amber-700 dark:text-amber-400"
                       )}>
                         {data.metaAutomatica.statusMeta === 'atingida' 
                           ? '🎉 Meta atingida!'
                           : data.metaAutomatica.statusMeta === 'acima'
-                            ? '✅ No ritmo para bater a meta'
-                            : '⚠️ Ritmo abaixo da meta'
+                            ? '✅ Acima do ritmo sazonal para este dia do mês!'
+                            : data.metaAutomatica.statusMeta === 'noritmo'
+                              ? '👍 Dentro do ritmo sazonal esperado'
+                              : '⚠️ Ritmo abaixo do esperado para este dia do mês'
                         }
                       </p>
                     </div>
@@ -715,7 +767,7 @@ export default function Dashboard() {
                   {!data.metaAutomatica.temHistorico && (
                     <div className="mt-4 p-3 rounded-lg bg-muted/50">
                       <p className="text-sm text-muted-foreground">
-                        📊 A meta será calculada automaticamente com base na média de faturamento dos últimos 3 meses. 
+                        📊 A meta será calculada automaticamente com base no histórico de vendas.
                         Continue registrando pedidos pagos para gerar o histórico.
                       </p>
                     </div>

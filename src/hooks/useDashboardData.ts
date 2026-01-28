@@ -92,15 +92,30 @@ export interface PrevisaoMensal {
 }
 
 export interface MetaAutomatica {
-  media3Meses: number;           // Média faturamento últimos 3 meses
-  percentualCrescimento: number; // % de crescimento (default 10)
-  metaCalculada: number;         // Média × (1 + %)
-  mesesUsados: string[];         // Lista de meses usados no cálculo
-  temHistorico: boolean;         // Se há dados suficientes
-  faturamentoAtualMes: number;   // Faturamento acumulado do mês atual
-  percentualAtingido: number;    // % atingido (faturamento / meta)
-  diferencaPrevisao: number;     // Previsão - Meta
-  statusMeta: 'acima' | 'abaixo' | 'atingida'; // Status baseado na previsão
+  // Base da meta
+  mediaBase: number;              // Média base (sazonal ou 3 meses)
+  media3Meses: number;            // Fallback: média 3 meses
+  percentualCrescimento: number;  // % de crescimento (default 10)
+  metaCalculada: number;          // Média × (1 + %)
+  mesesUsados: string[];          // Lista de meses/anos usados no cálculo
+  temHistorico: boolean;          // Se há dados suficientes
+  
+  // Sazonalidade
+  temHistoricoSazonal: boolean;   // Se há dados do mesmo mês em anos anteriores
+  anosUsados: number[];           // Ex: [2025, 2024]
+  faturamentosPorAno: Record<string, number>; // { "2025": 231253, "2024": 0 }
+  
+  // Ritmo sazonal
+  percentualEsperadoHoje: number; // % esperado até hoje baseado na curva histórica
+  percentualRealizado: number;    // % realizado (faturamento / meta)
+  diferencaRitmo: number;         // realizado - esperado (em pontos percentuais)
+  curvaDisponivel: boolean;       // Se há curva histórica
+  
+  // Faturamento e status
+  faturamentoAtualMes: number;    // Faturamento acumulado do mês atual
+  percentualAtingido: number;     // % atingido (faturamento / meta)
+  diferencaPrevisao: number;      // Previsão - Meta
+  statusMeta: 'acima' | 'abaixo' | 'atingida' | 'noritmo'; // Status baseado na curva sazonal
 }
 
 export interface FaturamentoDiaSemana {
@@ -309,11 +324,19 @@ export function useDashboardData(
       acimaOuAbaixo: 'igual',
     },
     metaAutomatica: {
+      mediaBase: 0,
       media3Meses: 0,
       percentualCrescimento: 10,
       metaCalculada: 0,
       mesesUsados: [],
       temHistorico: false,
+      temHistoricoSazonal: false,
+      anosUsados: [],
+      faturamentosPorAno: {},
+      percentualEsperadoHoje: 0,
+      percentualRealizado: 0,
+      diferencaRitmo: 0,
+      curvaDisponivel: false,
       faturamentoAtualMes: 0,
       percentualAtingido: 0,
       diferencaPrevisao: 0,
@@ -376,8 +399,12 @@ export function useDashboardData(
           pedidosMesAnoPassadoCompleto,
           pedidosMesAnoPassadoAteDia,
           pedidosMesAtualAcumulado,
-          // NOVO: Pedidos PAGO dos últimos 4 meses para calcular média (usando COALESCE paid_at/created_at)
+          // Pedidos PAGO dos últimos 4 meses para calcular média (fallback)
           pedidosUltimos4Meses,
+          // SAZONAL: Média do mesmo mês em anos anteriores
+          mediaSazonalResult,
+          // SAZONAL: Curva de ritmo do mês
+          curvaMesResult,
         ] = await Promise.all([
           // Pedidos período atual (inclui paid_at para agrupamento correto)
           supabase
@@ -455,8 +482,7 @@ export function useDashboardData(
             .gte("created_at", inicioMesAtual.toISOString())
             .lte("created_at", now.toISOString()),
 
-          // NOVO: Buscar todos os pedidos PAGO dos últimos 4 meses para calcular média com COALESCE
-          // Isso permite usar paid_at OU created_at como fallback
+          // Buscar todos os pedidos PAGO dos últimos 4 meses para calcular média (fallback)
           supabase
             .from("pedidos")
             .select("valor_total, paid_at, created_at")
@@ -464,6 +490,19 @@ export function useDashboardData(
             .eq("status_pagamento", "PAGO")
             .gte("created_at", subMonths(startOfMonth(now), 4).toISOString())
             .lt("created_at", startOfMonth(now).toISOString()),
+
+          // SAZONAL: Buscar média do mesmo mês em anos anteriores
+          supabase.rpc('get_media_mes_anos_anteriores', {
+            p_user_id: user.id,
+            p_mes: mesAtual + 1, // 1-12
+            p_limite_anos: 5
+          }),
+
+          // SAZONAL: Buscar curva de ritmo do mês
+          supabase.rpc('get_curva_mes', {
+            p_user_id: user.id,
+            p_mes: mesAtual + 1 // 1-12
+          }),
         ]);
 
         // Calculate KPIs
@@ -644,20 +683,18 @@ export function useDashboardData(
           ? ((faturamentoAtualAcumulado - faturamentoMesmoDiaAnoPassadoTotal) / faturamentoMesmoDiaAnoPassadoTotal) * 100
           : 0;
 
-        // NOVO: Calcular Meta Automática (média 3 meses)
-        // Agrupar pedidos dos últimos 4 meses por mês usando COALESCE(paid_at, created_at)
+        // ========= CÁLCULO META COM SAZONALIDADE =========
+        
+        // 1. Calcular média 3 meses (fallback)
         const pedidosHistorico = pedidosUltimos4Meses.data || [];
         const faturamentoPorMes: Record<string, number> = {};
         
         pedidosHistorico.forEach(p => {
-          // Usar created_at para cálculo de média histórica
-          // porque paid_at foi preenchido retroativamente com data errada em pedidos históricos
           const dataEfetiva = p.created_at;
           const mesAno = format(parseISO(dataEfetiva), "yyyy-MM");
           faturamentoPorMes[mesAno] = (faturamentoPorMes[mesAno] || 0) + (p.valor_total || 0);
         });
 
-        // Pegar os 3 meses anteriores ao mês atual
         const meses3anteriores = [
           format(subMonths(now, 1), "yyyy-MM"),
           format(subMonths(now, 2), "yyyy-MM"),
@@ -670,39 +707,88 @@ export function useDashboardData(
           ? mesesComDados.reduce((a, b) => a + b, 0) / mesesComDados.length 
           : 0;
 
-        const metaCalculada = media3Meses * (1 + percentualCrescimento);
-
-        // Calcular campos adicionais para a interface atualizada
-        const percentualAtingidoMeta = metaCalculada > 0 
-          ? (faturamentoAtualAcumulado / metaCalculada) * 100 
-          : 0;
+        // 2. Extrair dados sazonais das RPCs
+        const mediaSazonalData = mediaSazonalResult.data;
+        const curvaMesData = curvaMesResult.data || [];
         
-        // Previsão será calculada abaixo, então calculamos a diferença depois
+        // Dados sazonais do mesmo mês em anos anteriores
+        const mediaSazonal = mediaSazonalData && mediaSazonalData.length > 0 
+          ? Number(mediaSazonalData[0]?.media_faturamento || 0)
+          : 0;
+        const anosUsados: number[] = mediaSazonalData && mediaSazonalData.length > 0 
+          ? (mediaSazonalData[0]?.anos_usados || [])
+          : [];
+        const faturamentosPorAno: Record<string, number> = mediaSazonalData && mediaSazonalData.length > 0 
+          ? (mediaSazonalData[0]?.faturamentos_por_ano as Record<string, number> || {})
+          : {};
+        
+        const temHistoricoSazonal = anosUsados.length > 0 && mediaSazonal > 0;
+        
+        // 3. Determinar base da meta (sazonal ou fallback 3 meses)
+        const mediaBase = temHistoricoSazonal ? mediaSazonal : media3Meses;
+        const metaCalculada = mediaBase * (1 + percentualCrescimento);
+        
+        // 4. Calcular ritmo sazonal (curva histórica)
         const diasDecorridosCalc = getDate(now);
         const diasTotaisCalc = getDaysInMonth(now);
+        const curvaDisponivel = curvaMesData.length > 0;
+        
+        // Encontrar % esperado até hoje baseado na curva histórica
+        let percentualEsperadoHoje = (diasDecorridosCalc / diasTotaisCalc) * 100; // fallback linear
+        
+        if (curvaDisponivel) {
+          // Buscar o dia mais próximo na curva
+          const curvaAteDia = curvaMesData.filter((c: { dia: number }) => c.dia <= diasDecorridosCalc);
+          if (curvaAteDia.length > 0) {
+            const ultimoDiaCurva = curvaAteDia[curvaAteDia.length - 1];
+            percentualEsperadoHoje = Number(ultimoDiaCurva.percentual_acumulado || 0);
+          }
+        }
+        
+        // 5. Calcular % realizado e diferença de ritmo
+        const percentualRealizado = metaCalculada > 0 
+          ? (faturamentoAtualAcumulado / metaCalculada) * 100 
+          : 0;
+        const diferencaRitmo = percentualRealizado - percentualEsperadoHoje;
+        
+        // 6. Calcular previsão e diferença
         const mediaDiariaCalc = diasDecorridosCalc > 0 
           ? faturamentoAtualAcumulado / diasDecorridosCalc 
           : 0;
         const projecaoMensalCalc = mediaDiariaCalc * diasTotaisCalc;
-        
         const diferencaPrevisao = projecaoMensalCalc - metaCalculada;
         
-        const statusMeta: 'acima' | 'abaixo' | 'atingida' = 
-          faturamentoAtualAcumulado >= metaCalculada ? 'atingida' :
-          projecaoMensalCalc >= metaCalculada ? 'acima' : 'abaixo';
+        // 7. Determinar status (com tolerância ±5pp)
+        const statusMeta: 'acima' | 'abaixo' | 'atingida' | 'noritmo' = 
+          percentualRealizado >= 100 ? 'atingida' :
+          diferencaRitmo >= 5 ? 'acima' :
+          diferencaRitmo >= -5 ? 'noritmo' : 'abaixo';
+        
+        // 8. Preparar labels de meses usados
+        const mesesUsados = temHistoricoSazonal
+          ? anosUsados.map(ano => `${format(now, "MMM", { locale: ptBR })}/${String(ano).slice(-2)}`)
+          : [
+              format(subMonths(now, 1), "MMM/yy", { locale: ptBR }),
+              format(subMonths(now, 2), "MMM/yy", { locale: ptBR }),
+              format(subMonths(now, 3), "MMM/yy", { locale: ptBR }),
+            ];
 
         const metaAutomatica: MetaAutomatica = {
+          mediaBase,
           media3Meses,
           percentualCrescimento: percentualCrescimento * 100,
           metaCalculada,
-          mesesUsados: [
-            format(subMonths(now, 1), "MMM/yy", { locale: ptBR }),
-            format(subMonths(now, 2), "MMM/yy", { locale: ptBR }),
-            format(subMonths(now, 3), "MMM/yy", { locale: ptBR }),
-          ],
-          temHistorico: mesesComDados.length >= 1, // Permitir com pelo menos 1 mês
+          mesesUsados,
+          temHistorico: mesesComDados.length >= 1 || temHistoricoSazonal,
+          temHistoricoSazonal,
+          anosUsados,
+          faturamentosPorAno,
+          percentualEsperadoHoje,
+          percentualRealizado,
+          diferencaRitmo,
+          curvaDisponivel,
           faturamentoAtualMes: faturamentoAtualAcumulado,
-          percentualAtingido: percentualAtingidoMeta,
+          percentualAtingido: percentualRealizado,
           diferencaPrevisao,
           statusMeta,
         };

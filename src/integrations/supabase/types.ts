@@ -124,6 +124,42 @@ export type Database = {
         }
         Relationships: []
       }
+      curvas_mensais: {
+        Row: {
+          anos_considerados: number | null
+          created_at: string | null
+          dia: number
+          id: string
+          mes: number
+          percentual_esperado: number
+          total_faturamento_base: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          anos_considerados?: number | null
+          created_at?: string | null
+          dia: number
+          id?: string
+          mes: number
+          percentual_esperado: number
+          total_faturamento_base?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          anos_considerados?: number | null
+          created_at?: string | null
+          dia?: number
+          id?: string
+          mes?: number
+          percentual_esperado?: number
+          total_faturamento_base?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       estoque_itens: {
         Row: {
           categoria: string
@@ -981,9 +1017,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_curva_mes: {
+        Args: { p_mes: number; p_user_id: string }
+        Returns: {
+          dia: number
+          faturamento_acumulado: number
+          percentual_acumulado: number
+        }[]
+      }
       get_faturamento_periodo: {
         Args: { p_fim: string; p_inicio: string; p_user_id: string }
         Returns: number
+      }
+      get_media_mes_anos_anteriores: {
+        Args: { p_limite_anos?: number; p_mes: number; p_user_id: string }
+        Returns: {
+          anos_usados: number[]
+          faturamentos_por_ano: Json
+          media_faturamento: number
+        }[]
       }
       get_my_profile: {
         Args: never
