@@ -1,61 +1,76 @@
 
+## Plano: Corrigir Imagens do Card "Estoque Crítico" no Dashboard
 
-## Plano: Corrigir Modal "Ajustar Estoque" Cortado no Mobile
+### Problema Identificado
+As imagens do card "Estoque Crítico" não estão carregando porque o código usa `<img src={item.imagem_url}>` diretamente, mas as imagens no bucket `lotes` do Supabase Storage requerem **URLs assinadas** para acesso.
 
-### Problema Atual
-O modal usa `grid-cols-3` com `gap-4` e `px-6` de padding, o que não cabe em telas de celular. A coluna "Diferença" está sendo cortada.
+### Diagnóstico Técnico
 
-### Solução
-Aplicar o padrão responsivo já estabelecido no projeto: **Drawer (Bottom Sheet) no mobile + Dialog no desktop**.
+| Aspecto | Situação Atual | Situação Correta |
+|---------|---------------|------------------|
+| Renderização | `<img src={item.imagem_url}>` | Usar `LotImage` component |
+| URL da imagem | Path relativo (ex: `user_id/produtos/file.jpg`) | URL assinada via `useSignedUrl` |
+| Bucket | `lotes` (privado) | Mesmo bucket, mas com signed URL |
 
-### Alterações no Arquivo
-
-**`src/components/estoque/AjusteEstoqueModal.tsx`**
-
-| Área | Problema | Correção |
-|------|----------|----------|
-| Componente raiz | Sempre usa Dialog | Usar Drawer no mobile, Dialog no desktop |
-| Container | `px-6` muito largo | `px-4 sm:px-6` |
-| Grid 3 colunas | Colunas muito estreitas | Reduzir gap para `gap-2 sm:gap-4` |
-| Input fonte | Pode causar zoom no iOS | Adicionar `text-base md:text-sm` |
-| Altura | Fixa no mobile | Drawer com `h-[85vh]` |
-
-### Estrutura de Código
-
+### Exemplo do Path no Banco
 ```
-// Padrão responsivo
-const isMobile = useIsMobile();
-
-if (isMobile) {
-  return <Drawer>...</Drawer>  // Bottom Sheet
-} else {
-  return <Dialog>...</Dialog>  // Modal centralizado
-}
+imagem_url: "7dc239f2-8183-4bd8-b5c4-f40c37dc6052/produtos/23784106-b3ec-43ee-a795-a8ae09be075e.jpeg"
 ```
 
-### Mudanças CSS Principais
+Este path precisa ser convertido em signed URL antes de ser usado no `<img>`.
 
-```css
-/* Container */
-px-4 sm:px-6
+### Solução Proposta
 
-/* Grid de quantidades */
-grid-cols-3 gap-2 sm:gap-4
+Substituir a renderização direta da imagem pelo componente `LotImage` que já existe no projeto e resolve automaticamente a URL assinada:
 
-/* Texto do input - previne zoom iOS */
-text-base sm:text-2xl
+**Arquivo**: `src/pages/Dashboard.tsx`
 
-/* Padding das colunas */
-p-2 sm:p-4
+**Antes (linha 669-670)**:
+```tsx
+{item.imagem_url ? (
+  <img src={item.imagem_url} alt={item.nome} className="w-full h-full object-cover" />
+) : (
+  <Package size={18} className="text-muted-foreground" />
+)}
 ```
+
+**Depois**:
+```tsx
+<LotImage
+  src={item.imagem_url}
+  alt={item.nome}
+  className="w-full h-full object-cover"
+/>
+```
+
+### Alterações Necessárias
+
+1. **Import do componente** (no topo do arquivo):
+   ```tsx
+   import { LotImage } from '@/components/production/LotImage';
+   ```
+
+2. **Substituir o bloco de imagem** (linhas 669-670):
+   - Remover a tag `<img>` condicional
+   - Usar `LotImage` que já trata internamente:
+     - URLs assinadas via `useSignedUrl`
+     - Placeholder quando não há imagem
+     - Loading state
+
+### Por que usar `LotImage`?
+
+O componente `LotImage` já é utilizado em outros locais do projeto (Estoque, Produção) e:
+- Chama `useSignedUrl` internamente para obter URL assinada
+- Usa cache de URLs para evitar chamadas repetidas
+- Mostra placeholder quando não há imagem ou enquanto carrega
+- Usa `LazyImage` para carregamento otimizado
 
 ### Resultado Esperado
 
-- Mobile: Bottom Sheet ocupando 85% da tela, todas as 3 colunas visíveis
-- Desktop: Modal centralizado como antes
-- Input com fonte 16px para evitar zoom automático no iOS
+- Imagens dos produtos com estoque crítico serão exibidas corretamente
+- Mantém consistência visual com outros cards do sistema
+- Carregamento lazy para performance
 
 ### Arquivos Impactados
 
-1. `src/components/estoque/AjusteEstoqueModal.tsx` - Refatorar para padrão responsivo
-
+1. `src/pages/Dashboard.tsx` - Adicionar import e substituir renderização de imagem
