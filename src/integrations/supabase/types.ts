@@ -404,6 +404,45 @@ export type Database = {
         }
         Relationships: []
       }
+      metas_mensais: {
+        Row: {
+          ano: number
+          created_at: string | null
+          faturamento_realizado: number | null
+          id: string
+          media_base: number
+          mes: number
+          percentual_crescimento: number
+          updated_at: string | null
+          user_id: string
+          valor_meta: number
+        }
+        Insert: {
+          ano: number
+          created_at?: string | null
+          faturamento_realizado?: number | null
+          id?: string
+          media_base?: number
+          mes: number
+          percentual_crescimento?: number
+          updated_at?: string | null
+          user_id: string
+          valor_meta?: number
+        }
+        Update: {
+          ano?: number
+          created_at?: string | null
+          faturamento_realizado?: number | null
+          id?: string
+          media_base?: number
+          mes?: number
+          percentual_crescimento?: number
+          updated_at?: string | null
+          user_id?: string
+          valor_meta?: number
+        }
+        Relationships: []
+      }
       pedido_itens: {
         Row: {
           created_at: string
@@ -942,6 +981,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_faturamento_periodo: {
+        Args: { p_fim: string; p_inicio: string; p_user_id: string }
+        Returns: number
+      }
       get_my_profile: {
         Args: never
         Returns: {

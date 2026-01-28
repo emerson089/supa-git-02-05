@@ -97,6 +97,10 @@ export interface MetaAutomatica {
   metaCalculada: number;         // Média × (1 + %)
   mesesUsados: string[];         // Lista de meses usados no cálculo
   temHistorico: boolean;         // Se há dados suficientes
+  faturamentoAtualMes: number;   // Faturamento acumulado do mês atual
+  percentualAtingido: number;    // % atingido (faturamento / meta)
+  diferencaPrevisao: number;     // Previsão - Meta
+  statusMeta: 'acima' | 'abaixo' | 'atingida'; // Status baseado na previsão
 }
 
 export interface FaturamentoDiaSemana {
@@ -310,6 +314,10 @@ export function useDashboardData(
       metaCalculada: 0,
       mesesUsados: [],
       temHistorico: false,
+      faturamentoAtualMes: 0,
+      percentualAtingido: 0,
+      diferencaPrevisao: 0,
+      statusMeta: 'abaixo',
     },
     faturamentoDiaSemana: [],
   });
@@ -368,10 +376,8 @@ export function useDashboardData(
           pedidosMesAnoPassadoCompleto,
           pedidosMesAnoPassadoAteDia,
           pedidosMesAtualAcumulado,
-          // NOVO: Faturamento últimos 3 meses
-          faturamentoMes1,
-          faturamentoMes2,
-          faturamentoMes3,
+          // NOVO: Pedidos PAGO dos últimos 4 meses para calcular média (usando COALESCE paid_at/created_at)
+          pedidosUltimos4Meses,
         ] = await Promise.all([
           // Pedidos período atual (inclui paid_at para agrupamento correto)
           supabase
@@ -449,32 +455,15 @@ export function useDashboardData(
             .gte("created_at", inicioMesAtual.toISOString())
             .lte("created_at", now.toISOString()),
 
-          // NOVO: Faturamento mês 1 (mês passado)
+          // NOVO: Buscar todos os pedidos PAGO dos últimos 4 meses para calcular média com COALESCE
+          // Isso permite usar paid_at OU created_at como fallback
           supabase
             .from("pedidos")
-            .select("valor_total")
+            .select("valor_total, paid_at, created_at")
             .eq("user_id", user.id)
             .eq("status_pagamento", "PAGO")
-            .gte("paid_at", mes1Inicio.toISOString())
-            .lte("paid_at", mes1Fim.toISOString()),
-
-          // NOVO: Faturamento mês 2
-          supabase
-            .from("pedidos")
-            .select("valor_total")
-            .eq("user_id", user.id)
-            .eq("status_pagamento", "PAGO")
-            .gte("paid_at", mes2Inicio.toISOString())
-            .lte("paid_at", mes2Fim.toISOString()),
-
-          // NOVO: Faturamento mês 3
-          supabase
-            .from("pedidos")
-            .select("valor_total")
-            .eq("user_id", user.id)
-            .eq("status_pagamento", "PAGO")
-            .gte("paid_at", mes3Inicio.toISOString())
-            .lte("paid_at", mes3Fim.toISOString()),
+            .gte("created_at", subMonths(startOfMonth(now), 4).toISOString())
+            .lt("created_at", startOfMonth(now).toISOString()),
         ]);
 
         // Calculate KPIs
@@ -656,18 +645,49 @@ export function useDashboardData(
           : 0;
 
         // NOVO: Calcular Meta Automática (média 3 meses)
-        const somaMeses = [
-          (faturamentoMes1.data || []).reduce((s, p) => s + (p.valor_total || 0), 0),
-          (faturamentoMes2.data || []).reduce((s, p) => s + (p.valor_total || 0), 0),
-          (faturamentoMes3.data || []).reduce((s, p) => s + (p.valor_total || 0), 0),
-        ];
+        // Agrupar pedidos dos últimos 4 meses por mês usando COALESCE(paid_at, created_at)
+        const pedidosHistorico = pedidosUltimos4Meses.data || [];
+        const faturamentoPorMes: Record<string, number> = {};
+        
+        pedidosHistorico.forEach(p => {
+          const dataEfetiva = p.paid_at || p.created_at;
+          const mesAno = format(parseISO(dataEfetiva), "yyyy-MM");
+          faturamentoPorMes[mesAno] = (faturamentoPorMes[mesAno] || 0) + (p.valor_total || 0);
+        });
 
+        // Pegar os 3 meses anteriores ao mês atual
+        const meses3anteriores = [
+          format(subMonths(now, 1), "yyyy-MM"),
+          format(subMonths(now, 2), "yyyy-MM"),
+          format(subMonths(now, 3), "yyyy-MM"),
+        ];
+        
+        const somaMeses = meses3anteriores.map(m => faturamentoPorMes[m] || 0);
         const mesesComDados = somaMeses.filter(v => v > 0);
         const media3Meses = mesesComDados.length > 0 
           ? mesesComDados.reduce((a, b) => a + b, 0) / mesesComDados.length 
           : 0;
 
         const metaCalculada = media3Meses * (1 + percentualCrescimento);
+
+        // Calcular campos adicionais para a interface atualizada
+        const percentualAtingidoMeta = metaCalculada > 0 
+          ? (faturamentoAtualAcumulado / metaCalculada) * 100 
+          : 0;
+        
+        // Previsão será calculada abaixo, então calculamos a diferença depois
+        const diasDecorridosCalc = getDate(now);
+        const diasTotaisCalc = getDaysInMonth(now);
+        const mediaDiariaCalc = diasDecorridosCalc > 0 
+          ? faturamentoAtualAcumulado / diasDecorridosCalc 
+          : 0;
+        const projecaoMensalCalc = mediaDiariaCalc * diasTotaisCalc;
+        
+        const diferencaPrevisao = projecaoMensalCalc - metaCalculada;
+        
+        const statusMeta: 'acima' | 'abaixo' | 'atingida' = 
+          faturamentoAtualAcumulado >= metaCalculada ? 'atingida' :
+          projecaoMensalCalc >= metaCalculada ? 'acima' : 'abaixo';
 
         const metaAutomatica: MetaAutomatica = {
           media3Meses,
@@ -678,7 +698,11 @@ export function useDashboardData(
             format(subMonths(now, 2), "MMM/yy", { locale: ptBR }),
             format(subMonths(now, 3), "MMM/yy", { locale: ptBR }),
           ],
-          temHistorico: mesesComDados.length >= 2,
+          temHistorico: mesesComDados.length >= 1, // Permitir com pelo menos 1 mês
+          faturamentoAtualMes: faturamentoAtualAcumulado,
+          percentualAtingido: percentualAtingidoMeta,
+          diferencaPrevisao,
+          statusMeta,
         };
 
         // NOVO: Calcular Previsão Mensal

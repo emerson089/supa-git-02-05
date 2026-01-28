@@ -543,7 +543,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* NOVO: Card de Meta Automática + Previsão Mensal */}
+        {/* NOVO: Card de Meta Automática + Faturamento + Previsão (3 colunas) */}
         <div className="mb-6">
           <Card className="neu-card border-primary/20 shadow-lg bg-gradient-to-br from-card to-primary/5">
             <CardContent className="p-4 sm:p-6">
@@ -551,13 +551,14 @@ export default function Dashboard() {
                 <div className="flex flex-col sm:flex-row gap-4">
                   <Skeleton className="h-24 flex-1" />
                   <Skeleton className="h-24 flex-1" />
+                  <Skeleton className="h-24 flex-1" />
                 </div>
               ) : (
                 <>
                   <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
-                    {/* Meta Automática */}
+                    {/* Meta Mensal Calculada */}
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <Target size={18} className="text-primary" />
                         <h3 className="text-sm font-semibold">Meta Mensal</h3>
                         {data.metaAutomatica.temHistorico ? (
@@ -594,12 +595,16 @@ export default function Dashboard() {
                                   Aplicado sobre a média dos últimos 3 meses
                                 </p>
                               </div>
+                              {data.metaAutomatica.temHistorico && (
+                                <p className="text-[10px] text-muted-foreground border-t pt-2">
+                                  Base: {data.metaAutomatica.mesesUsados.join(', ')}
+                                </p>
+                              )}
                               <Button 
                                 size="sm" 
                                 className="w-full h-8"
                                 onClick={() => {
                                   setMetaConfigOpen(false);
-                                  // Force refetch by toggling excluirCancelados (workaround)
                                   window.location.reload();
                                 }}
                               >
@@ -613,9 +618,26 @@ export default function Dashboard() {
                         {formatCurrency(data.metaAutomatica.metaCalculada)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {data.metaAutomatica.temHistorico 
-                          ? `Base: ${data.metaAutomatica.mesesUsados.join(', ')}`
-                          : 'Configure uma meta manualmente'
+                        Média base: {formatCurrency(data.metaAutomatica.media3Meses)}
+                      </p>
+                    </div>
+
+                    {/* Faturamento Atual */}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Banknote size={18} className="text-emerald-500" />
+                        <h3 className="text-sm font-semibold">Faturamento Atual</h3>
+                      </div>
+                      <p className="text-2xl font-bold text-foreground">
+                        {formatCurrency(data.metaAutomatica.faturamentoAtualMes)}
+                      </p>
+                      <p className={cn(
+                        "text-xs font-semibold",
+                        data.metaAutomatica.percentualAtingido >= 100 ? "text-emerald-600" : "text-muted-foreground"
+                      )}>
+                        {data.metaAutomatica.metaCalculada > 0 
+                          ? `${data.metaAutomatica.percentualAtingido.toFixed(1)}% da meta`
+                          : 'Meta não definida'
                         }
                       </p>
                     </div>
@@ -623,49 +645,78 @@ export default function Dashboard() {
                     {/* Previsão Mensal */}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <TrendingUp size={18} className="text-emerald-500" />
+                        <TrendingUp size={18} className="text-blue-500" />
                         <h3 className="text-sm font-semibold">Previsão Mensal</h3>
                       </div>
                       <p className={cn(
                         "text-2xl font-bold",
-                        data.previsaoMensal.acimaOuAbaixo === 'acima' ? "text-emerald-600" : 
-                        data.previsaoMensal.acimaOuAbaixo === 'abaixo' ? "text-amber-600" : "text-foreground"
+                        data.metaAutomatica.statusMeta === 'atingida' || data.metaAutomatica.statusMeta === 'acima' 
+                          ? "text-emerald-600" 
+                          : "text-amber-600"
                       )}>
                         {formatCurrency(data.previsaoMensal.projecaoMensal)}
                       </p>
-                      <div className="flex items-center gap-2 text-xs flex-wrap">
-                        <span className="text-muted-foreground">
-                          Ritmo: {formatCurrency(data.previsaoMensal.mediaDiaria)}/dia
-                        </span>
-                        {data.metaAutomatica.metaCalculada > 0 && (
-                          <span className={cn(
-                            "font-semibold",
-                            data.previsaoMensal.acimaOuAbaixo === 'acima' ? "text-emerald-600" : "text-amber-600"
-                          )}>
-                            {data.previsaoMensal.variacaoVsMeta > 0 ? '+' : ''}
-                            {data.previsaoMensal.variacaoVsMeta.toFixed(1)}% vs. meta
-                          </span>
-                        )}
-                      </div>
+                      <p className={cn(
+                        "text-xs font-semibold",
+                        data.metaAutomatica.diferencaPrevisao >= 0 ? "text-emerald-600" : "text-amber-600"
+                      )}>
+                        {data.metaAutomatica.metaCalculada > 0 
+                          ? `${data.metaAutomatica.diferencaPrevisao >= 0 ? '+' : ''}${formatCurrency(data.metaAutomatica.diferencaPrevisao)} vs. meta`
+                          : `Ritmo: ${formatCurrency(data.previsaoMensal.mediaDiaria)}/dia`
+                        }
+                      </p>
                     </div>
                   </div>
                   
-                  {/* Barra de progresso - Faturado vs Meta */}
+                  {/* Barra de Progresso */}
                   {data.metaAutomatica.metaCalculada > 0 && (
                     <div className="mt-4">
                       <Progress 
-                        value={Math.min((data.metaYoY.faturamentoAtualAcumulado / data.metaAutomatica.metaCalculada) * 100, 100)} 
+                        value={Math.min(data.metaAutomatica.percentualAtingido, 100)} 
                         className={cn(
-                          "h-2",
-                          (data.metaYoY.faturamentoAtualAcumulado / data.metaAutomatica.metaCalculada) >= 0.8 ? "[&>div]:bg-emerald-500" :
-                          (data.metaYoY.faturamentoAtualAcumulado / data.metaAutomatica.metaCalculada) >= 0.5 ? "[&>div]:bg-amber-500" :
+                          "h-3",
+                          data.metaAutomatica.percentualAtingido >= 100 ? "[&>div]:bg-emerald-500" :
+                          data.metaAutomatica.percentualAtingido >= 70 ? "[&>div]:bg-amber-500" : 
                           "[&>div]:bg-primary"
                         )}
                       />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatCurrency(data.metaYoY.faturamentoAtualAcumulado)} de {formatCurrency(data.metaAutomatica.metaCalculada)} 
-                        {' '}({((data.metaYoY.faturamentoAtualAcumulado / data.metaAutomatica.metaCalculada) * 100).toFixed(1)}%)
-                        {' '} • Dia {data.previsaoMensal.diasDecorridos} de {data.previsaoMensal.diasTotais}
+                      <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+                        <span>Dia {data.previsaoMensal.diasDecorridos} de {data.previsaoMensal.diasTotais}</span>
+                        <span>Ritmo: {formatCurrency(data.previsaoMensal.mediaDiaria)}/dia</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Indicador Visual de Status */}
+                  {data.metaAutomatica.metaCalculada > 0 && (
+                    <div className={cn(
+                      "mt-4 p-3 rounded-lg",
+                      data.metaAutomatica.statusMeta === 'atingida' ? "bg-emerald-100 dark:bg-emerald-900/20" :
+                      data.metaAutomatica.statusMeta === 'acima' ? "bg-blue-100 dark:bg-blue-900/20" :
+                      "bg-amber-100 dark:bg-amber-900/20"
+                    )}>
+                      <p className={cn(
+                        "text-sm font-medium",
+                        data.metaAutomatica.statusMeta === 'atingida' ? "text-emerald-700 dark:text-emerald-400" :
+                        data.metaAutomatica.statusMeta === 'acima' ? "text-blue-700 dark:text-blue-400" : 
+                        "text-amber-700 dark:text-amber-400"
+                      )}>
+                        {data.metaAutomatica.statusMeta === 'atingida' 
+                          ? '🎉 Meta atingida!'
+                          : data.metaAutomatica.statusMeta === 'acima'
+                            ? '✅ No ritmo para bater a meta'
+                            : '⚠️ Ritmo abaixo da meta'
+                        }
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Mensagem quando não há histórico */}
+                  {!data.metaAutomatica.temHistorico && (
+                    <div className="mt-4 p-3 rounded-lg bg-muted/50">
+                      <p className="text-sm text-muted-foreground">
+                        📊 A meta será calculada automaticamente com base na média de faturamento dos últimos 3 meses. 
+                        Continue registrando pedidos pagos para gerar o histórico.
                       </p>
                     </div>
                   )}
