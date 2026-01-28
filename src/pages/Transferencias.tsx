@@ -459,7 +459,7 @@ export default function Transferencias() {
               <CardContent className="p-2 sm:p-3">
                 <div className="flex items-center gap-1">
                   <DollarSign className="h-3 w-3 text-emerald-600" />
-                  <p className="text-[10px] sm:text-xs text-muted-foreground">Valor (Venda)</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Valor (em estoque)</p>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Info className={cn("h-3 w-3 cursor-help", itensSemPreco > 0 ? "text-amber-500" : "text-muted-foreground")} />
