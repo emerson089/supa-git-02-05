@@ -38,7 +38,6 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
 interface ItemTransferencia {
   itemId: string;
   nome: string;
@@ -46,17 +45,32 @@ interface ItemTransferencia {
   quantidade: number;
   disponivelOrigem: number;
 }
-
 export default function Transferencias() {
   const isMobile = useIsMobile();
-  const { isAdmin, isGerente, isVendedor } = useRole();
-  const { getProdutosAcabados } = useEstoque();
-  const { locais, estoquePorLocal, isLoading: isLoadingLocais } = useDisponivelCentral();
-  const { data: transferencias, isLoading: isLoadingTransferencias } = useTransferencias('transferencia');
+  const {
+    isAdmin,
+    isGerente,
+    isVendedor
+  } = useRole();
+  const {
+    getProdutosAcabados
+  } = useEstoque();
+  const {
+    locais,
+    estoquePorLocal,
+    isLoading: isLoadingLocais
+  } = useDisponivelCentral();
+  const {
+    data: transferencias,
+    isLoading: isLoadingTransferencias
+  } = useTransferencias('transferencia');
   const criarTransferencia = useCriarTransferencia();
-  
+
   // Hook para obter locais permitidos do usuário
-  const { data: userLocations = [], isLoading: isLoadingUserLocations } = useUserLocations();
+  const {
+    data: userLocations = [],
+    isLoading: isLoadingUserLocations
+  } = useUserLocations();
 
   // Estados para gestão de estoque local
   const [activeTab, setActiveTab] = useState('estoque');
@@ -80,7 +94,6 @@ export default function Transferencias() {
   const [itensTransferencia, setItensTransferencia] = useState<ItemTransferencia[]>([]);
   const [searchProdutos, setSearchProdutos] = useState('');
   const [lastAddedItemId, setLastAddedItemId] = useState<string | null>(null);
-
   const quantidadeInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const produtosAcabados = getProdutosAcabados();
 
@@ -90,7 +103,7 @@ export default function Transferencias() {
     if (isVendedor) {
       // Vendedor: buscar primeiro local permitido (priorizar loja, depois banca)
       const allowedLocations = userLocations.filter(ul => ul.canView);
-      
+
       // Tentar primeiro uma 'loja', depois 'banca', depois qualquer outro
       const priorityOrder: Array<'loja' | 'banca' | 'central'> = ['loja', 'banca', 'central'];
       for (const tipo of priorityOrder) {
@@ -99,60 +112,61 @@ export default function Transferencias() {
           return locais.find(l => l.id === found.localId) || null;
         }
       }
-      
+
       // Fallback: usar primeiro local permitido
       if (allowedLocations.length > 0) {
         return locais.find(l => l.id === allowedLocations[0].localId) || null;
       }
-      
       return null;
     }
-    
+
     // Admin/Gerente: usar qualquer loja ou banca
     return locais.find(l => l.tipo === 'loja' || l.tipo === 'banca') || null;
   }, [locais, isVendedor, userLocations]);
-  
   const lojaId = selectedLocal?.id || null;
   const lojaNome = selectedLocal?.nome || 'Local';
-  
+
   // Verificar permissões para o local atual
   const locationAccess = useHasLocationAccess(lojaId);
   const canAdjustStock = isAdmin || isGerente || locationAccess.canAdjustStock;
   const canEditPrice = isAdmin || isGerente || locationAccess.canEditPrice;
-  
+
   // Verificar se vendedor tem acesso configurado
   const vendedorSemAcesso = isVendedor && userLocations.length === 0 && !isLoadingUserLocations;
 
   // Buscar estoque detalhado da loja
-  const { data: estoqueDetalhado = [], isLoading: isLoadingEstoqueDetalhado } = useEstoqueDetalhadoPorLocal(lojaId);
-  
+  const {
+    data: estoqueDetalhado = [],
+    isLoading: isLoadingEstoqueDetalhado
+  } = useEstoqueDetalhadoPorLocal(lojaId);
+
   // Buscar vendas desde última contagem
-  const { data: vendasData } = useVendasDesdeContagem(lojaId);
+  const {
+    data: vendasData
+  } = useVendasDesdeContagem(lojaId);
 
   // Filtrar produtos do estoque local
   const estoqueFiltrado = useMemo(() => {
     if (!debouncedSearchEstoque.trim()) return estoqueDetalhado;
     const termo = debouncedSearchEstoque.toLowerCase();
-    return estoqueDetalhado.filter(item =>
-      item.itemNome.toLowerCase().includes(termo) ||
-      item.itemCodigo.toLowerCase().includes(termo)
-    );
+    return estoqueDetalhado.filter(item => item.itemNome.toLowerCase().includes(termo) || item.itemCodigo.toLowerCase().includes(termo));
   }, [estoqueDetalhado, debouncedSearchEstoque]);
 
   // Totais do estoque local
-  const totalPecasLocal = useMemo(() => 
-    estoqueDetalhado.reduce((sum, item) => sum + item.quantidade, 0),
-    [estoqueDetalhado]
-  );
+  const totalPecasLocal = useMemo(() => estoqueDetalhado.reduce((sum, item) => sum + item.quantidade, 0), [estoqueDetalhado]);
   const totalModelosLocal = estoqueDetalhado.length;
 
   // MVP: Valor do estoque (venda) - usando precoExibido (local > base)
-  const { valorEstoqueVenda, itensComPreco, itensSemPreco, itensComPrecoLocal } = useMemo(() => {
+  const {
+    valorEstoqueVenda,
+    itensComPreco,
+    itensSemPreco,
+    itensComPrecoLocal
+  } = useMemo(() => {
     let total = 0;
     let comPreco = 0;
     let semPreco = 0;
     let comPrecoLocal = 0;
-    
     estoqueDetalhado.forEach(item => {
       if (item.precoExibido && item.precoExibido > 0) {
         total += item.quantidade * item.precoExibido;
@@ -164,12 +178,11 @@ export default function Transferencias() {
         semPreco++;
       }
     });
-    
-    return { 
-      valorEstoqueVenda: total, 
-      itensComPreco: comPreco, 
+    return {
+      valorEstoqueVenda: total,
+      itensComPreco: comPreco,
       itensSemPreco: semPreco,
-      itensComPrecoLocal: comPrecoLocal 
+      itensComPrecoLocal: comPrecoLocal
     };
   }, [estoqueDetalhado]);
 
@@ -177,18 +190,13 @@ export default function Transferencias() {
   const locaisOrigem = useMemo(() => {
     return locais.filter(l => l.tipo === 'central' || l.tipo === 'loja');
   }, [locais]);
-
   const locaisDestino = useMemo(() => {
     const filtered = locais.filter(l => l.tipo === 'central' || l.tipo === 'loja');
     return filtered.filter(l => l.id !== origemId);
   }, [locais, origemId]);
 
   // Locais disponíveis para exibição de resumo
-  const locaisDisponiveis = useMemo(() => 
-    locais.filter(l => l.tipo === 'central' || l.tipo === 'loja'),
-    [locais]
-  );
-
+  const locaisDisponiveis = useMemo(() => locais.filter(l => l.tipo === 'central' || l.tipo === 'loja'), [locais]);
   const getDisponivelNoLocal = (itemId: string, localId: string): number => {
     const estoque = estoquePorLocal.find(e => e.itemId === itemId && e.localId === localId);
     if (!estoque) return 0;
@@ -210,7 +218,6 @@ export default function Transferencias() {
       return dispB - dispA;
     });
   }, [produtosAcabados, origemId, searchProdutos, estoquePorLocal]);
-
   useEffect(() => {
     if (lastAddedItemId) {
       setTimeout(() => {
@@ -229,17 +236,14 @@ export default function Transferencias() {
     setItemSelecionado(item);
     setShowAjusteModal(true);
   };
-
   const handleHistorico = (item: EstoqueLocalDetalhado) => {
     setItemSelecionado(item);
     setShowHistoricoModal(true);
   };
-
   const handleZerar = (item: EstoqueLocalDetalhado) => {
     setItemSelecionado(item);
     setShowZerarModal(true);
   };
-
   const handleEditarPreco = (item: EstoqueLocalDetalhado) => {
     setItemSelecionado(item);
     setShowEditarPrecoModal(true);
@@ -265,72 +269,80 @@ export default function Transferencias() {
   };
 
   // Handlers de transferência
-  const handleAddItemTransferencia = (produto: { id: string; nome: string; imagemUrl?: string | null }) => {
+  const handleAddItemTransferencia = (produto: {
+    id: string;
+    nome: string;
+    imagemUrl?: string | null;
+  }) => {
     if (!origemId) {
       toast.error('Selecione o local de origem primeiro');
       return;
     }
-
     const disponivel = getDisponivelNoLocal(produto.id, origemId);
     if (disponivel <= 0) {
       toast.error('Produto sem estoque disponível no local de origem');
       return;
     }
-
     const existing = itensTransferencia.find(i => i.itemId === produto.id);
     if (existing) {
       toast.error('Produto já adicionado');
       return;
     }
-
     setItensTransferencia(prev => [...prev, {
       itemId: produto.id,
       nome: produto.nome,
       imagemUrl: produto.imagemUrl || null,
       quantidade: 1,
-      disponivelOrigem: disponivel,
+      disponivelOrigem: disponivel
     }]);
     setLastAddedItemId(produto.id);
   };
-
   const handleQuantidadeChange = (itemId: string, value: string) => {
     const numValue = parseInt(value, 10);
     setItensTransferencia(prev => prev.map(item => {
       if (item.itemId === itemId) {
         if (value === '' || isNaN(numValue)) {
-          return { ...item, quantidade: 0 };
+          return {
+            ...item,
+            quantidade: 0
+          };
         }
         const novaQtd = Math.max(1, Math.min(item.disponivelOrigem, numValue));
-        return { ...item, quantidade: novaQtd };
+        return {
+          ...item,
+          quantidade: novaQtd
+        };
       }
       return item;
     }));
   };
-
   const handleQuantidadeBlur = (itemId: string) => {
     setItensTransferencia(prev => prev.map(item => {
       if (item.itemId === itemId) {
         const qtd = Math.max(1, Math.min(item.disponivelOrigem, item.quantidade || 1));
-        return { ...item, quantidade: qtd };
+        return {
+          ...item,
+          quantidade: qtd
+        };
       }
       return item;
     }));
   };
-
   const handleUpdateQuantidade = (itemId: string, delta: number) => {
     setItensTransferencia(prev => prev.map(item => {
       if (item.itemId === itemId) {
         const novaQtd = Math.max(1, Math.min(item.disponivelOrigem, item.quantidade + delta));
-        return { ...item, quantidade: novaQtd };
+        return {
+          ...item,
+          quantidade: novaQtd
+        };
       }
       return item;
     }));
   };
-
   const handleRemoveItem = (itemId: string) => {
     setItensTransferencia(prev => prev.filter(i => i.itemId !== itemId));
   };
-
   const handleCriarTransferencia = async () => {
     if (!origemId || !destinoId) {
       toast.error('Selecione origem e destino');
@@ -344,15 +356,14 @@ export default function Transferencias() {
       toast.error('Adicione ao menos um item');
       return;
     }
-
     try {
       await criarTransferencia.mutateAsync({
         origemId,
         destinoId,
         itens: itensTransferencia.map(i => ({
           itemId: i.itemId,
-          quantidade: i.quantidade,
-        })),
+          quantidade: i.quantidade
+        }))
       });
       toast.success('Transferência realizada com sucesso!');
       setShowNovaTransferencia(false);
@@ -363,7 +374,6 @@ export default function Transferencias() {
       toast.error(error.message || 'Erro ao criar transferência');
     }
   };
-
   const handleOpenModal = () => {
     setSearchProdutos('');
     setLastAddedItemId(null);
@@ -372,37 +382,31 @@ export default function Transferencias() {
     setDestinoId('');
     setShowNovaTransferencia(true);
   };
-
   const handleOrigemChange = (newOrigemId: string) => {
     setOrigemId(newOrigemId);
     setItensTransferencia(prev => prev.map(item => ({
       ...item,
       disponivelOrigem: getDisponivelNoLocal(item.itemId, newOrigemId),
-      quantidade: Math.min(item.quantidade, getDisponivelNoLocal(item.itemId, newOrigemId)),
+      quantidade: Math.min(item.quantidade, getDisponivelNoLocal(item.itemId, newOrigemId))
     })).filter(item => item.disponivelOrigem > 0));
   };
-
   const totalPecas = itensTransferencia.reduce((sum, i) => sum + i.quantidade, 0);
-
   const getLocalNome = (localId: string) => {
     return locais.find(l => l.id === localId)?.nome || 'Desconhecido';
   };
 
   // Seção: Estoque do Local
-  const renderEstoqueLocalSection = () => (
-    <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
+  const renderEstoqueLocalSection = () => <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
       {/* Header do Estoque */}
       <div className={cn("shrink-0", isMobile ? "px-3 pt-2 pb-3" : "pb-4")}>
         {/* Alerta para vendedor sem acesso configurado */}
-        {vendedorSemAcesso && (
-          <Alert variant="destructive" className="mb-4">
+        {vendedorSemAcesso && <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Acesso não configurado</AlertTitle>
             <AlertDescription>
               Seu usuário ainda não possui acesso a nenhum local. Entre em contato com um administrador para configurar suas permissões.
             </AlertDescription>
-          </Alert>
-        )}
+          </Alert>}
         
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -410,29 +414,15 @@ export default function Transferencias() {
             <h2 className="font-semibold truncate">{lojaNome}</h2>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => setShowRelatorioSaidasModal(true)}
-              disabled={!lojaId}
-            >
+            <Button size="sm" variant="outline" onClick={() => setShowRelatorioSaidasModal(true)} disabled={!lojaId}>
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">Saídas</span>
             </Button>
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={handleExportarPDF}
-              disabled={!lojaId || estoqueDetalhado.length === 0}
-            >
+            <Button size="sm" variant="outline" onClick={handleExportarPDF} disabled={!lojaId || estoqueDetalhado.length === 0}>
               <FileDown className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">PDF</span>
             </Button>
-            <Button 
-              size="sm" 
-              onClick={() => setShowAdicionarModal(true)}
-              disabled={!lojaId}
-            >
+            <Button size="sm" onClick={() => setShowAdicionarModal(true)} disabled={!lojaId}>
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">Adicionar</span>
             </Button>
@@ -476,22 +466,18 @@ export default function Transferencias() {
                     </TooltipTrigger>
                     <TooltipContent side="top" className="max-w-[250px]">
                       <div className="text-xs space-y-1">
-                        {itensSemPreco > 0 && (
-                          <p className="text-amber-600">{itensSemPreco} modelo(s) sem preço.</p>
-                        )}
-                        {itensComPrecoLocal > 0 && (
-                          <p className="text-amber-600">{itensComPrecoLocal} modelo(s) com preço local diferenciado.</p>
-                        )}
+                        {itensSemPreco > 0 && <p className="text-amber-600">{itensSemPreco} modelo(s) sem preço.</p>}
+                        {itensComPrecoLocal > 0 && <p className="text-amber-600">{itensComPrecoLocal} modelo(s) com preço local diferenciado.</p>}
                         <p className="text-muted-foreground">Calculado usando preço local quando disponível, senão preço base.</p>
                       </div>
                     </TooltipContent>
                   </Tooltip>
                 </div>
                 <p className="text-lg sm:text-xl font-bold text-emerald-600">
-                  {valorEstoqueVenda > 0 
-                    ? `R$ ${valorEstoqueVenda.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-                    : '—'
-                  }
+                  {valorEstoqueVenda > 0 ? `R$ ${valorEstoqueVenda.toLocaleString('pt-BR', {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0
+                })}` : '—'}
                 </p>
               </CardContent>
             </Card>
@@ -523,64 +509,43 @@ export default function Transferencias() {
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <ClipboardCheck className="h-4 w-4 text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
-                    {vendasData?.dataContagem ? (
-                      <>
+                    {vendasData?.dataContagem ? <>
                         <p className="text-xs font-medium">Desde última contagem</p>
                         <p className="text-[10px] text-muted-foreground">
-                          {format(new Date(vendasData.dataContagem), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                          {format(new Date(vendasData.dataContagem), "dd/MM 'às' HH:mm", {
+                        locale: ptBR
+                      })}
                         </p>
-                      </>
-                    ) : (
-                      <>
+                      </> : <>
                         <p className="text-xs font-medium text-muted-foreground">Nenhuma contagem</p>
                         <p className="text-[10px] text-muted-foreground">Registre para acompanhar vendas</p>
-                      </>
-                    )}
+                      </>}
                   </div>
                 </div>
                 
-                {vendasData?.dataContagem ? (
-                  <div className="flex items-center gap-3">
+                {vendasData?.dataContagem ? <div className="flex items-center gap-3">
                     <div className="text-right">
                       <p className="text-sm font-bold">{vendasData.pecasVendidas} peças</p>
-                      {vendasData.valorVendido > 0 && (
-                        <p className="text-xs text-emerald-600">
-                          R$ {vendasData.valorVendido.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
-                        </p>
-                      )}
+                      {vendasData.valorVendido > 0 && <p className="text-xs text-emerald-600">
+                          R$ {vendasData.valorVendido.toLocaleString('pt-BR', {
+                      minimumFractionDigits: 0
+                    })}
+                        </p>}
                     </div>
                     <div className="flex flex-col gap-1">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="h-7 text-xs px-2"
-                        onClick={() => setShowNovaContagemModal(true)}
-                      >
+                      <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setShowNovaContagemModal(true)}>
                         <Plus className="h-3 w-3 mr-1" />
                         Nova
                       </Button>
-                      <Button 
-                        size="sm" 
-                        variant="ghost" 
-                        className="h-7 text-xs px-2"
-                        onClick={() => setShowHistoricoContagensModal(true)}
-                      >
+                      <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => setShowHistoricoContagensModal(true)}>
                         <History className="h-3 w-3 mr-1" />
                         Ver
                       </Button>
                     </div>
-                  </div>
-                ) : (
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => setShowNovaContagemModal(true)}
-                    disabled={estoqueDetalhado.length === 0}
-                  >
+                  </div> : <Button size="sm" variant="outline" onClick={() => setShowNovaContagemModal(true)} disabled={estoqueDetalhado.length === 0}>
                     <Plus className="h-4 w-4 mr-1" />
                     Nova Contagem
-                  </Button>
-                )}
+                  </Button>}
               </div>
             </CardContent>
           </Card>
@@ -589,50 +554,28 @@ export default function Transferencias() {
         {/* Busca */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome ou código..."
-            value={searchEstoque}
-            onChange={(e) => setSearchEstoque(e.target.value)}
-            className="pl-9"
-          />
+          <Input placeholder="Buscar por nome ou código..." value={searchEstoque} onChange={e => setSearchEstoque(e.target.value)} className="pl-9" />
         </div>
       </div>
 
       {/* Lista de produtos */}
       <ScrollArea className="flex-1 w-full">
         <div className={cn("space-y-2 w-full", isMobile ? "px-3 pb-4" : "pb-4")}>
-          {isLoadingEstoqueDetalhado ? (
-            <div className="flex items-center justify-center py-12">
+          {isLoadingEstoqueDetalhado ? <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : estoqueFiltrado.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            </div> : estoqueFiltrado.length === 0 ? <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Package className="h-12 w-12 mb-3 opacity-50" />
               <p className="font-medium">Nenhum produto no estoque</p>
               <p className="text-sm mt-1">
                 {searchEstoque ? 'Tente outra busca' : 'Adicione produtos para começar'}
               </p>
-            </div>
-          ) : (
-            estoqueFiltrado.map((item) => (
-              <ProdutoEstoqueLocalCard
-                key={item.id}
-                item={item}
-                onAjustar={canAdjustStock ? handleAjustar : undefined}
-                onHistorico={handleHistorico}
-                onZerar={canAdjustStock ? handleZerar : undefined}
-                onEditarPreco={canEditPrice ? handleEditarPreco : undefined}
-              />
-            ))
-          )}
+            </div> : estoqueFiltrado.map(item => <ProdutoEstoqueLocalCard key={item.id} item={item} onAjustar={canAdjustStock ? handleAjustar : undefined} onHistorico={handleHistorico} onZerar={canAdjustStock ? handleZerar : undefined} onEditarPreco={canEditPrice ? handleEditarPreco : undefined} />)}
         </div>
       </ScrollArea>
-    </div>
-  );
+    </div>;
 
   // Seção: Histórico de Transferências
-  const renderHistoricoTransferenciasSection = () => (
-    <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
+  const renderHistoricoTransferenciasSection = () => <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
       {/* Header do Histórico */}
       <div className={cn("shrink-0", isMobile ? "px-3 pt-2 pb-3" : "pb-4")}>
         <div className="flex items-center justify-between gap-2 mb-3">
@@ -649,22 +592,12 @@ export default function Transferencias() {
         {/* Cards de resumo */}
         <div className="grid grid-cols-2 gap-2">
           {locaisDisponiveis.map(local => {
-            const total = estoquePorLocal
-              .filter(e => e.localId === local.id)
-              .reduce((sum, e) => sum + e.quantidade, 0);
-            return (
-              <Card key={local.id}>
+          const total = estoquePorLocal.filter(e => e.localId === local.id).reduce((sum, e) => sum + e.quantidade, 0);
+          return <Card key={local.id}>
                 <CardContent className="p-3">
                   <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "p-1.5 rounded-md",
-                      local.tipo === 'central' ? "bg-blue-500/10" : "bg-emerald-500/10"
-                    )}>
-                      {local.tipo === 'central' ? (
-                        <Box className="h-4 w-4 text-blue-600" />
-                      ) : (
-                        <Store className="h-4 w-4 text-emerald-600" />
-                      )}
+                    <div className={cn("p-1.5 rounded-md", local.tipo === 'central' ? "bg-blue-500/10" : "bg-emerald-500/10")}>
+                      {local.tipo === 'central' ? <Box className="h-4 w-4 text-blue-600" /> : <Store className="h-4 w-4 text-emerald-600" />}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs text-muted-foreground truncate">{local.nome}</p>
@@ -672,35 +605,28 @@ export default function Transferencias() {
                     </div>
                   </div>
                 </CardContent>
-              </Card>
-            );
-          })}
+              </Card>;
+        })}
         </div>
       </div>
 
       {/* Lista de transferências */}
       <ScrollArea className="flex-1 w-full">
         <div className={cn("space-y-2 w-full", isMobile ? "px-3 pb-4" : "pb-4")}>
-          {(!transferencias || transferencias.length === 0) ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          {!transferencias || transferencias.length === 0 ? <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <ArrowLeftRight className="h-12 w-12 mb-3 opacity-50" />
               <p className="font-medium">Nenhuma transferência</p>
               <p className="text-sm mt-1">Transferências entre locais aparecerão aqui</p>
-            </div>
-          ) : (
-            transferencias.map(t => (
-              <Card key={t.id}>
+            </div> : transferencias.map(t => <Card key={t.id}>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <Badge variant="outline" className={cn(
-                      "text-xs",
-                      t.status === 'concluida' && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                      t.status === 'cancelada' && "bg-red-50 text-red-700 border-red-200"
-                    )}>
+                    <Badge variant="outline" className={cn("text-xs", t.status === 'concluida' && "bg-emerald-50 text-emerald-700 border-emerald-200", t.status === 'cancelada' && "bg-red-50 text-red-700 border-red-200")}>
                       {t.status === 'concluida' ? 'Concluída' : 'Cancelada'}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {format(new Date(t.dataSaida), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      {format(new Date(t.dataSaida), "dd/MM/yyyy HH:mm", {
+                  locale: ptBR
+                })}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
@@ -709,47 +635,34 @@ export default function Transferencias() {
                     <span className="font-medium truncate">{getLocalNome(t.localDestinoId)}</span>
                   </div>
                 </CardContent>
-              </Card>
-            ))
-          )}
+              </Card>)}
         </div>
       </ScrollArea>
-    </div>
-  );
+    </div>;
 
   // Early return for loading state - placed after render functions are defined
   if (isLoadingLocais || isLoadingTransferencias || isLoadingUserLocations) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+    return <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="min-h-screen bg-background flex max-w-full overflow-x-hidden">
+  return <div className="min-h-screen bg-background flex max-w-full overflow-x-hidden">
       {isMobile && <MobileHeader title="Estoque por Local" />}
       {!isMobile && <AppSidebar />}
 
-      <main className={cn(
-        "flex-1 flex flex-col h-screen overflow-y-auto overflow-x-hidden w-full max-w-full",
-        isMobile && "pt-14 pb-20"
-      )}>
+      <main className={cn("flex-1 flex flex-col h-screen overflow-y-auto overflow-x-hidden w-full max-w-full", isMobile && "pt-14 pb-20")}>
         {/* Header - Desktop */}
-        {!isMobile && (
-          <header className="px-6 py-4 border-b border-border bg-card/50 shrink-0">
+        {!isMobile && <header className="px-6 py-4 border-b border-border bg-card/50 shrink-0">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Estoque por Local</h1>
+              <h1 className="text-2xl font-bold text-foreground">ESTOQUE POR LOCAL</h1>
               <p className="text-sm text-muted-foreground mt-1">
                 Gestão de estoque por local de armazenamento
               </p>
             </div>
-          </header>
-        )}
+          </header>}
 
         {/* Conteúdo - Mobile: Tabs, Desktop: Layout dividido */}
-        {isMobile ? (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+        {isMobile ? <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
             <TabsList className="mx-4 mt-2 grid w-auto grid-cols-2 shrink-0">
               <TabsTrigger value="estoque" className="gap-1.5">
                 <Store className="h-4 w-4" />
@@ -768,89 +681,43 @@ export default function Transferencias() {
             <TabsContent value="historico" className="flex-1 overflow-hidden mt-0">
               {renderHistoricoTransferenciasSection()}
             </TabsContent>
-          </Tabs>
-        ) : (
-          <div className="flex-1 grid grid-cols-2 gap-6 p-6 overflow-hidden">
+          </Tabs> : <div className="flex-1 grid grid-cols-2 gap-6 p-6 overflow-hidden">
             <div className="border rounded-xl p-4 overflow-hidden flex flex-col bg-card">
               {renderEstoqueLocalSection()}
             </div>
             <div className="border rounded-xl p-4 overflow-hidden flex flex-col bg-card">
               {renderHistoricoTransferenciasSection()}
             </div>
-          </div>
-        )}
+          </div>}
       </main>
 
       {isMobile && <BottomNavigation />}
 
       {/* Modal de Ajuste de Estoque */}
-      <AjusteEstoqueModal
-        open={showAjusteModal}
-        onOpenChange={setShowAjusteModal}
-        item={itemSelecionado}
-      />
+      <AjusteEstoqueModal open={showAjusteModal} onOpenChange={setShowAjusteModal} item={itemSelecionado} />
 
       {/* Modal de Adicionar Produto */}
-      {lojaId && (
-        <AdicionarProdutoLocalModal
-          open={showAdicionarModal}
-          onOpenChange={setShowAdicionarModal}
-          localId={lojaId}
-          localNome={lojaNome}
-        />
-      )}
+      {lojaId && <AdicionarProdutoLocalModal open={showAdicionarModal} onOpenChange={setShowAdicionarModal} localId={lojaId} localNome={lojaNome} />}
 
       {/* Modal de Histórico de Movimentações */}
-      <HistoricoMovimentacoesModal
-        open={showHistoricoModal}
-        onOpenChange={setShowHistoricoModal}
-        item={itemSelecionado}
-      />
+      <HistoricoMovimentacoesModal open={showHistoricoModal} onOpenChange={setShowHistoricoModal} item={itemSelecionado} />
 
       {/* Modal de Zerar Estoque */}
-      <ZerarEstoqueModal
-        open={showZerarModal}
-        onOpenChange={setShowZerarModal}
-        item={itemSelecionado}
-      />
+      <ZerarEstoqueModal open={showZerarModal} onOpenChange={setShowZerarModal} item={itemSelecionado} />
 
       {/* Modal de Editar Preço Local */}
-      {itemSelecionado && lojaId && (
-        <EditarPrecoLocalModal
-          open={showEditarPrecoModal}
-          onClose={() => setShowEditarPrecoModal(false)}
-          item={{
-            itemId: itemSelecionado.itemId,
-            itemNome: itemSelecionado.itemNome,
-            itemImagemUrl: itemSelecionado.itemImagemUrl,
-            itemPrecoUnitario: itemSelecionado.itemPrecoUnitario,
-          }}
-          localId={lojaId}
-          localNome={lojaNome}
-          precoLocal={itemSelecionado.precoLocal}
-        />
-      )}
+      {itemSelecionado && lojaId && <EditarPrecoLocalModal open={showEditarPrecoModal} onClose={() => setShowEditarPrecoModal(false)} item={{
+      itemId: itemSelecionado.itemId,
+      itemNome: itemSelecionado.itemNome,
+      itemImagemUrl: itemSelecionado.itemImagemUrl,
+      itemPrecoUnitario: itemSelecionado.itemPrecoUnitario
+    }} localId={lojaId} localNome={lojaNome} precoLocal={itemSelecionado.precoLocal} />}
 
       {/* Modal Nova Contagem */}
-      {lojaId && (
-        <NovaContagemModal
-          open={showNovaContagemModal}
-          onOpenChange={setShowNovaContagemModal}
-          localId={lojaId}
-          localNome={lojaNome}
-          itensEstoque={estoqueDetalhado}
-        />
-      )}
+      {lojaId && <NovaContagemModal open={showNovaContagemModal} onOpenChange={setShowNovaContagemModal} localId={lojaId} localNome={lojaNome} itensEstoque={estoqueDetalhado} />}
 
       {/* Modal Histórico de Contagens */}
-      {lojaId && (
-        <HistoricoContagensModal
-          open={showHistoricoContagensModal}
-          onOpenChange={setShowHistoricoContagensModal}
-          localId={lojaId}
-          localNome={lojaNome}
-        />
-      )}
+      {lojaId && <HistoricoContagensModal open={showHistoricoContagensModal} onOpenChange={setShowHistoricoContagensModal} localId={lojaId} localNome={lojaNome} />}
       <Dialog open={showNovaTransferencia} onOpenChange={setShowNovaTransferencia}>
         <DialogContent className="w-[96vw] max-w-[720px] max-h-[85vh] overflow-hidden flex flex-col p-0">
           <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
@@ -862,45 +729,34 @@ export default function Transferencias() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-sm font-medium mb-2 block">De:</Label>
-                <Select 
-                  value={origemId} 
-                  onValueChange={handleOrigemChange}
-                >
+                <Select value={origemId} onValueChange={handleOrigemChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione origem" />
                   </SelectTrigger>
                   <SelectContent>
-                    {locaisOrigem.map(local => (
-                      <SelectItem key={local.id} value={local.id}>
+                    {locaisOrigem.map(local => <SelectItem key={local.id} value={local.id}>
                         {local.nome}
-                      </SelectItem>
-                    ))}
+                      </SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-sm font-medium mb-2 block">Para:</Label>
-                <Select 
-                  value={destinoId} 
-                  onValueChange={setDestinoId}
-                >
+                <Select value={destinoId} onValueChange={setDestinoId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione destino" />
                   </SelectTrigger>
                   <SelectContent>
-                    {locaisDestino.map(local => (
-                      <SelectItem key={local.id} value={local.id}>
+                    {locaisDestino.map(local => <SelectItem key={local.id} value={local.id}>
                         {local.nome}
-                      </SelectItem>
-                    ))}
+                      </SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             {/* Seção: Produtos Disponíveis */}
-            {origemId && (
-              <div className="rounded-xl border bg-muted/30 p-4">
+            {origemId && <div className="rounded-xl border bg-muted/30 p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Package className="h-4 w-4 text-primary" />
                   <span className="text-sm font-semibold">Produtos Disponíveis</span>
@@ -911,39 +767,17 @@ export default function Transferencias() {
 
                 <div className="relative mb-3">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar produto..."
-                    value={searchProdutos}
-                    onChange={(e) => setSearchProdutos(e.target.value)}
-                    className="pl-9 h-9"
-                  />
+                  <Input placeholder="Buscar produto..." value={searchProdutos} onChange={e => setSearchProdutos(e.target.value)} className="pl-9 h-9" />
                 </div>
 
                 <ScrollArea className="h-48">
                   <div className="space-y-2 pr-2">
                     {produtosFiltrados.map(produto => {
-                      const disponivel = getDisponivelNoLocal(produto.id, origemId);
-                      const jaAdicionado = itensTransferencia.some(i => i.itemId === produto.id);
-                      
-                      return (
-                        <div 
-                          key={produto.id}
-                          className={cn(
-                            "flex items-center gap-3 p-2 rounded-lg border bg-background transition-colors",
-                            jaAdicionado 
-                              ? "border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20" 
-                              : disponivel > 0 
-                                ? "hover:bg-muted/50 cursor-pointer hover:border-primary/30"
-                                : "opacity-40"
-                          )}
-                          onClick={() => !jaAdicionado && disponivel > 0 && handleAddItemTransferencia(produto)}
-                        >
+                  const disponivel = getDisponivelNoLocal(produto.id, origemId);
+                  const jaAdicionado = itensTransferencia.some(i => i.itemId === produto.id);
+                  return <div key={produto.id} className={cn("flex items-center gap-3 p-2 rounded-lg border bg-background transition-colors", jaAdicionado ? "border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20" : disponivel > 0 ? "hover:bg-muted/50 cursor-pointer hover:border-primary/30" : "opacity-40")} onClick={() => !jaAdicionado && disponivel > 0 && handleAddItemTransferencia(produto)}>
                           <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0 border">
-                            <LotImage 
-                              src={produto.imagemUrl} 
-                              alt={produto.nome}
-                              className="w-full h-full object-cover"
-                            />
+                            <LotImage src={produto.imagemUrl} alt={produto.nome} className="w-full h-full object-cover" />
                           </div>
 
                           <div className="flex-1 min-w-0">
@@ -953,73 +787,42 @@ export default function Transferencias() {
                             </p>
                           </div>
 
-                          {!jaAdicionado && disponivel > 0 && (
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
-                              className="h-8 w-8 shrink-0 text-primary hover:bg-primary/10"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddItemTransferencia(produto);
-                              }}
-                            >
+                          {!jaAdicionado && disponivel > 0 && <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary hover:bg-primary/10" onClick={e => {
+                      e.stopPropagation();
+                      handleAddItemTransferencia(produto);
+                    }}>
                               <Plus size={16} />
-                            </Button>
-                          )}
-                          {jaAdicionado && (
-                            <div className="h-8 w-8 shrink-0 flex items-center justify-center">
+                            </Button>}
+                          {jaAdicionado && <div className="h-8 w-8 shrink-0 flex items-center justify-center">
                               <Check size={16} className="text-emerald-600" />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {produtosFiltrados.length === 0 && (
-                      <div className="py-8 text-center text-muted-foreground text-sm">
+                            </div>}
+                        </div>;
+                })}
+                    {produtosFiltrados.length === 0 && <div className="py-8 text-center text-muted-foreground text-sm">
                         {searchProdutos ? 'Nenhum produto encontrado' : 'Nenhum produto disponível'}
-                      </div>
-                    )}
+                      </div>}
                   </div>
                 </ScrollArea>
-              </div>
-            )}
+              </div>}
 
             {/* Seção: Itens para Transferir */}
-            <div className={cn(
-              "rounded-xl border p-4 transition-colors",
-              itensTransferencia.length > 0 
-                ? "border-primary/30 bg-primary/5" 
-                : "bg-muted/20"
-            )}>
+            <div className={cn("rounded-xl border p-4 transition-colors", itensTransferencia.length > 0 ? "border-primary/30 bg-primary/5" : "bg-muted/20")}>
               <div className="flex items-center gap-2 mb-3">
                 <ArrowRight className="h-4 w-4 text-primary" />
                 <span className="text-sm font-semibold">Itens para Transferir</span>
-                {itensTransferencia.length > 0 && (
-                  <Badge className="ml-auto">
+                {itensTransferencia.length > 0 && <Badge className="ml-auto">
                     {totalPecas} peças
-                  </Badge>
-                )}
+                  </Badge>}
               </div>
 
-              {itensTransferencia.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground text-sm">
+              {itensTransferencia.length === 0 ? <div className="py-8 text-center text-muted-foreground text-sm">
                   <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>Nenhum item selecionado</p>
                   <p className="text-xs mt-1">Selecione produtos da lista acima</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {itensTransferencia.map(item => (
-                    <div 
-                      key={item.itemId}
-                      className="flex items-center gap-3 p-3 rounded-lg border bg-background"
-                    >
+                </div> : <div className="space-y-2">
+                  {itensTransferencia.map(item => <div key={item.itemId} className="flex items-center gap-3 p-3 rounded-lg border bg-background">
                       <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0 border">
-                        <LotImage 
-                          src={item.imagemUrl} 
-                          alt={item.nome}
-                          className="w-full h-full object-cover"
-                        />
+                        <LotImage src={item.imagemUrl} alt={item.nome} className="w-full h-full object-cover" />
                       </div>
 
                       <div className="flex-1 min-w-0">
@@ -1030,62 +833,32 @@ export default function Transferencias() {
                       </div>
 
                       <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-8 w-8"
-                          onClick={() => handleUpdateQuantidade(item.itemId, -1)}
-                          disabled={item.quantidade <= 1}
-                        >
+                        <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleUpdateQuantidade(item.itemId, -1)} disabled={item.quantidade <= 1}>
                           <Minus size={14} />
                         </Button>
                         
-                        <Input
-                          ref={el => {
-                            if (el) {
-                              quantidadeInputRefs.current.set(item.itemId, el);
-                            } else {
-                              quantidadeInputRefs.current.delete(item.itemId);
-                            }
-                          }}
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          value={item.quantidade || ''}
-                          onChange={e => handleQuantidadeChange(item.itemId, e.target.value.replace(/\D/g, ''))}
-                          onBlur={() => handleQuantidadeBlur(item.itemId)}
-                          onFocus={(e) => e.target.select()}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.currentTarget.blur();
-                            }
-                          }}
-                          className="w-14 h-8 text-center font-medium"
-                        />
+                        <Input ref={el => {
+                    if (el) {
+                      quantidadeInputRefs.current.set(item.itemId, el);
+                    } else {
+                      quantidadeInputRefs.current.delete(item.itemId);
+                    }
+                  }} type="text" inputMode="numeric" pattern="[0-9]*" value={item.quantidade || ''} onChange={e => handleQuantidadeChange(item.itemId, e.target.value.replace(/\D/g, ''))} onBlur={() => handleQuantidadeBlur(item.itemId)} onFocus={e => e.target.select()} onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                  }} className="w-14 h-8 text-center font-medium" />
                         
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-8 w-8"
-                          onClick={() => handleUpdateQuantidade(item.itemId, 1)}
-                          disabled={item.quantidade >= item.disponivelOrigem}
-                        >
+                        <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleUpdateQuantidade(item.itemId, 1)} disabled={item.quantidade >= item.disponivelOrigem}>
                           <Plus size={14} />
                         </Button>
                         
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                          onClick={() => handleRemoveItem(item.itemId)}
-                        >
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleRemoveItem(item.itemId)}>
                           <X size={14} />
                         </Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    </div>)}
+                </div>}
             </div>
           </div>
 
@@ -1100,15 +873,8 @@ export default function Transferencias() {
               <Button variant="outline" onClick={() => setShowNovaTransferencia(false)}>
                 Cancelar
               </Button>
-              <Button 
-                onClick={handleCriarTransferencia}
-                disabled={!origemId || !destinoId || itensTransferencia.length === 0 || criarTransferencia.isPending}
-              >
-                {criarTransferencia.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <ArrowRight className="h-4 w-4 mr-2" />
-                )}
+              <Button onClick={handleCriarTransferencia} disabled={!origemId || !destinoId || itensTransferencia.length === 0 || criarTransferencia.isPending}>
+                {criarTransferencia.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ArrowRight className="h-4 w-4 mr-2" />}
                 Transferir
               </Button>
             </div>
@@ -1117,20 +883,9 @@ export default function Transferencias() {
       </Dialog>
 
       {/* Componente de impressão - modo preview ou oculto */}
-      <PrintEstoqueLocal 
-        itens={estoqueDetalhado} 
-        localNome={lojaNome}
-        showPreview={showPDFPreview}
-        onClose={handleClosePreview}
-        onPrint={handlePrint}
-      />
+      <PrintEstoqueLocal itens={estoqueDetalhado} localNome={lojaNome} showPreview={showPDFPreview} onClose={handleClosePreview} onPrint={handlePrint} />
 
       {/* Modal de Relatório de Saídas */}
-      <RelatorioSaidasModal
-        open={showRelatorioSaidasModal}
-        onOpenChange={setShowRelatorioSaidasModal}
-        localIdInicial={lojaId || undefined}
-      />
-    </div>
-  );
+      <RelatorioSaidasModal open={showRelatorioSaidasModal} onOpenChange={setShowRelatorioSaidasModal} localIdInicial={lojaId || undefined} />
+    </div>;
 }
