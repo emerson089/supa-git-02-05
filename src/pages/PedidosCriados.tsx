@@ -22,56 +22,11 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { InlineStatusSelect } from '@/components/pedidos/InlineStatusSelect';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  statusPagamentoOptions,
-  statusPedidoOptions,
-  statusEntregaOptions,
-} from '@/components/pedidos/StatusSelector';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from '@/components/ui/pagination';
-import { 
-  Search, 
-  Plus, 
-  Eye, 
-  Trash2, 
-  ShoppingBag,
-  DollarSign,
-  Package,
-  MapPin,
-  Phone,
-  Bus,
-  MoreHorizontal,
-  ArrowUpDown,
-  FileText,
-  Pencil,
-  Calendar as CalendarIcon,
-  X,
-  Download,
-  Upload,
-  Loader2,
-  RefreshCw
-} from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { statusPagamentoOptions, statusPedidoOptions, statusEntregaOptions } from '@/components/pedidos/StatusSelector';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Search, Plus, Eye, Trash2, ShoppingBag, DollarSign, Package, MapPin, Phone, Bus, MoreHorizontal, ArrowUpDown, FileText, Pencil, Calendar as CalendarIcon, X, Download, Upload, Loader2, RefreshCw } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay, parse, subDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -79,28 +34,9 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -111,18 +47,16 @@ const statusPagamentoColors: Record<string, string> = {
   'CANCELADO': 'bg-red-100 text-red-700 border-red-300',
   'INCOMPLETO': 'bg-purple-100 text-purple-700 border-purple-300',
   'PEND. ENTREGA': 'bg-blue-100 text-blue-700 border-blue-300',
-  'GOLPE CANCELADO': 'bg-zinc-900 text-white border-zinc-900',
+  'GOLPE CANCELADO': 'bg-zinc-900 text-white border-zinc-900'
 };
-
 const statusPedidoColors: Record<string, string> = {
   'SEPARADO': 'bg-emerald-100 text-emerald-700 border-emerald-300',
   'NÃO SEPARADO': 'bg-amber-100 text-amber-700 border-amber-300',
   'AMANHÃ': 'bg-blue-100 text-blue-700 border-blue-300',
   'INCOMPLETO': 'bg-purple-100 text-purple-700 border-purple-300',
   'CANCELADO': 'bg-red-100 text-red-700 border-red-300',
-  'GOLPE CANCELADO': 'bg-zinc-900 text-white border-zinc-900',
+  'GOLPE CANCELADO': 'bg-zinc-900 text-white border-zinc-900'
 };
-
 const statusEntregaColors: Record<string, string> = {
   'ENTREGUE': 'bg-emerald-100 text-emerald-700 border-emerald-300',
   'RETIRADA': 'bg-blue-100 text-blue-700 border-blue-300',
@@ -130,9 +64,8 @@ const statusEntregaColors: Record<string, string> = {
   'PEND. ENTREGA': 'bg-blue-100 text-blue-700 border-blue-300',
   'NÃO ENTREGOU': 'bg-red-100 text-red-700 border-red-300',
   'ENTREGOU ERRADO': 'bg-red-100 text-red-700 border-red-300',
-  'CANCELADO': 'bg-red-100 text-red-700 border-red-300',
+  'CANCELADO': 'bg-red-100 text-red-700 border-red-300'
 };
-
 type SortField = 'created_at' | 'valor_total';
 type SortDirection = 'asc' | 'desc';
 
@@ -157,21 +90,22 @@ const loadPersistedFilters = (): PersistedFilters => {
     filterStatusPedido: 'all',
     filterStatusEntrega: 'all',
     filterModelo: '',
-    searchTerm: '',
+    searchTerm: ''
   };
-  
   try {
     const stored = localStorage.getItem(FILTERS_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      return { ...defaultFilters, ...parsed };
+      return {
+        ...defaultFilters,
+        ...parsed
+      };
     }
   } catch (error) {
     console.error('Erro ao carregar filtros do localStorage:', error);
     // Remove dados corrompidos
     localStorage.removeItem(FILTERS_STORAGE_KEY);
   }
-  
   return defaultFilters;
 };
 
@@ -183,30 +117,35 @@ const savePersistedFilters = (filters: PersistedFilters): void => {
     console.error('Erro ao salvar filtros no localStorage:', error);
   }
 };
-
 export default function PedidosCriados() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const { removePedido, updatePedido, getPedidoById } = usePedidos();
-  const { itens: estoqueItens, updateItem: updateEstoqueItem } = useEstoque();
+  const {
+    removePedido,
+    updatePedido,
+    getPedidoById
+  } = usePedidos();
+  const {
+    itens: estoqueItens,
+    updateItem: updateEstoqueItem
+  } = useEstoque();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   // Carregar filtros persistidos uma única vez
   const [persistedFilters] = useState(() => loadPersistedFilters());
-  
   const [searchTerm, setSearchTerm] = useState(persistedFilters.searchTerm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedPedido, setSelectedPedido] = useState<PedidoPaginatedDB | null>(null);
   const [editingPedidoId, setEditingPedidoId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
-  
+
   // Date filters - carregar do localStorage ou usar HOJE como default
   const [startDate, setStartDate] = useState<Date | undefined>(() => {
     if (persistedFilters.startDate) return new Date(persistedFilters.startDate);
@@ -218,7 +157,7 @@ export default function PedidosCriados() {
     // Default: HOJE se não houver filtro persistido
     return new Date();
   });
-  
+
   // Advanced filters - priorizar URL sobre localStorage
   const [filterStatusPagamento, setFilterStatusPagamento] = useState(() => {
     const urlStatus = searchParams.get('status');
@@ -231,16 +170,20 @@ export default function PedidosCriados() {
   const [filterStatusPedido, setFilterStatusPedido] = useState(persistedFilters.filterStatusPedido);
   const [filterStatusEntrega, setFilterStatusEntrega] = useState(persistedFilters.filterStatusEntrega);
   const [filterModelo, setFilterModelo] = useState(persistedFilters.filterModelo);
-  
+
   // CSV import modal
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
-  
-  const { user } = useAuth();
+  const {
+    user
+  } = useAuth();
 
   // Use paginated hook for data
-  const { data: paginatedResult, isLoading } = usePedidosPaginated({
+  const {
+    data: paginatedResult,
+    isLoading
+  } = usePedidosPaginated({
     page: currentPage,
     pageSize,
     search: searchTerm,
@@ -255,7 +198,9 @@ export default function PedidosCriados() {
   });
 
   // Use totals hook for summary cards
-  const { data: totals } = usePedidosTotals({
+  const {
+    data: totals
+  } = usePedidosTotals({
     search: searchTerm,
     statusPagamento: filterStatusPagamento,
     statusPedido: filterStatusPedido,
@@ -264,7 +209,6 @@ export default function PedidosCriados() {
     endDate,
     modeloFilter: filterModelo
   });
-
   const pedidosList = paginatedResult?.data || [];
   const totalPages = paginatedResult?.totalPages || 0;
   const totalCount = paginatedResult?.count || 0;
@@ -283,7 +227,7 @@ export default function PedidosCriados() {
       filterStatusPedido,
       filterStatusEntrega,
       filterModelo,
-      searchTerm,
+      searchTerm
     });
   }, [startDate, endDate, filterStatusPagamento, filterStatusPedido, filterStatusEntrega, filterModelo, searchTerm]);
 
@@ -291,7 +235,6 @@ export default function PedidosCriados() {
   const handleFilterChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) => {
     setter(value);
   };
-
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -304,85 +247,74 @@ export default function PedidosCriados() {
   // Função para estornar estoque (devolver peças ao estoque)
   const estornarEstoque = (pedido: Pedido): number => {
     let totalEstornado = 0;
-    
     for (const item of pedido.itens) {
       // Encontrar o produto no estoque pelo nome
-      const produtoEstoque = estoqueItens.find(
-        p => p.tipo === 'acabado' && 
-        (p.id === item.produtoId || p.nome.toLowerCase() === item.produtoNome.toLowerCase())
-      );
-      
+      const produtoEstoque = estoqueItens.find(p => p.tipo === 'acabado' && (p.id === item.produtoId || p.nome.toLowerCase() === item.produtoNome.toLowerCase()));
       if (produtoEstoque) {
         const novaQuantidade = produtoEstoque.quantidade + item.quantidade;
-        updateEstoqueItem(produtoEstoque.id, { 
+        updateEstoqueItem(produtoEstoque.id, {
           quantidade: novaQuantidade
         });
         totalEstornado += item.quantidade;
       }
     }
-    
     return totalEstornado;
   };
 
   // Função para subtrair estoque ao descancelar pedido
-  const subtrairEstoque = async (pedido: Pedido): Promise<{ sucesso: boolean; mensagem: string }> => {
+  const subtrairEstoque = async (pedido: Pedido): Promise<{
+    sucesso: boolean;
+    mensagem: string;
+  }> => {
     const itensIndisponiveis: string[] = [];
-    
+
     // Verificar disponibilidade primeiro
     for (const item of pedido.itens) {
-      const produtoEstoque = estoqueItens.find(
-        p => p.tipo === 'acabado' && 
-        (p.id === item.produtoId || p.nome.toLowerCase() === item.produtoNome.toLowerCase())
-      );
-      
+      const produtoEstoque = estoqueItens.find(p => p.tipo === 'acabado' && (p.id === item.produtoId || p.nome.toLowerCase() === item.produtoNome.toLowerCase()));
       if (!produtoEstoque || produtoEstoque.quantidade < item.quantidade) {
         const disponivel = produtoEstoque?.quantidade || 0;
-        itensIndisponiveis.push(
-          `${item.produtoNome}: necessário ${item.quantidade}, disponível ${disponivel}`
-        );
+        itensIndisponiveis.push(`${item.produtoNome}: necessário ${item.quantidade}, disponível ${disponivel}`);
       }
     }
-    
     if (itensIndisponiveis.length > 0) {
       return {
         sucesso: false,
         mensagem: `Estoque insuficiente:\n${itensIndisponiveis.join('\n')}`
       };
     }
-    
+
     // Subtrair do estoque
     for (const item of pedido.itens) {
-      const produtoEstoque = estoqueItens.find(
-        p => p.tipo === 'acabado' && 
-        (p.id === item.produtoId || p.nome.toLowerCase() === item.produtoNome.toLowerCase())
-      );
-      
+      const produtoEstoque = estoqueItens.find(p => p.tipo === 'acabado' && (p.id === item.produtoId || p.nome.toLowerCase() === item.produtoNome.toLowerCase()));
       if (produtoEstoque) {
         const novaQuantidade = produtoEstoque.quantidade - item.quantidade;
-        updateEstoqueItem(produtoEstoque.id, { quantidade: novaQuantidade });
+        updateEstoqueItem(produtoEstoque.id, {
+          quantidade: novaQuantidade
+        });
       }
     }
-    
-    return { sucesso: true, mensagem: '' };
+    return {
+      sucesso: true,
+      mensagem: ''
+    };
   };
 
   // Handle inline status update with cancellation automation and stock reversal
   const handleStatusUpdate = async (pedidoId: string, field: 'statusPagamento' | 'statusPedido' | 'statusEntrega', value: string) => {
     const pedido = getPedidoById(pedidoId);
     if (!pedido) return;
-    
-    const updates: Partial<Pedido> = { [field]: value };
-    
+    const updates: Partial<Pedido> = {
+      [field]: value
+    };
+
     // CASO ESPECIAL: GOLPE CANCELADO selecionado na coluna Pedido - preenche automaticamente os outros
     if (field === 'statusPedido' && value === 'GOLPE CANCELADO') {
       updates.statusPagamento = 'GOLPE CANCELADO';
       updates.statusEntrega = 'CANCELADO'; // Entrega não tem GOLPE CANCELADO, usa CANCELADO
-      
+
       // Verificar se precisa estornar estoque
-      const estavaCancelado = pedido.statusPagamento === 'CANCELADO' || pedido.statusPedido === 'CANCELADO' || 
-                              pedido.statusPagamento === 'GOLPE CANCELADO' || pedido.statusPedido === 'GOLPE CANCELADO';
+      const estavaCancelado = pedido.statusPagamento === 'CANCELADO' || pedido.statusPedido === 'CANCELADO' || pedido.statusPagamento === 'GOLPE CANCELADO' || pedido.statusPedido === 'GOLPE CANCELADO';
       const jaEstornou = pedido.estornoRealizado === true;
-      
       if (!estavaCancelado && !jaEstornou) {
         const pecasEstornadas = estornarEstoque(pedido);
         updates.estornoRealizado = true;
@@ -394,21 +326,18 @@ export default function PedidosCriados() {
       } else {
         toast.success('Status GOLPE CANCELADO aplicado a todos os campos!');
       }
-      
       updatePedido(pedidoId, updates);
       return;
     }
-    
+
     // Verificar estados
-    const estavaCancelado = pedido.statusPagamento === 'CANCELADO' || pedido.statusPedido === 'CANCELADO' ||
-                            pedido.statusPagamento === 'GOLPE CANCELADO' || pedido.statusPedido === 'GOLPE CANCELADO';
+    const estavaCancelado = pedido.statusPagamento === 'CANCELADO' || pedido.statusPedido === 'CANCELADO' || pedido.statusPagamento === 'GOLPE CANCELADO' || pedido.statusPedido === 'GOLPE CANCELADO';
     const estaCancelando = value === 'CANCELADO' || value === 'GOLPE CANCELADO';
     const jaEstornou = pedido.estornoRealizado === true;
-    
+
     // CASO 1: Descancelando (saindo de cancelado para outro status)
     if (estavaCancelado && !estaCancelando && jaEstornou) {
       const resultado = await subtrairEstoque(pedido);
-      
       if (!resultado.sucesso) {
         toast.error(resultado.mensagem, {
           description: 'Não é possível reativar este pedido sem estoque suficiente.',
@@ -416,7 +345,6 @@ export default function PedidosCriados() {
         });
         return; // Impede a mudança de status
       }
-      
       updates.estornoRealizado = false;
       toast.success(`Pedido reativado! ${pedido.totalPecas} peças subtraídas do estoque.`);
     }
@@ -424,13 +352,12 @@ export default function PedidosCriados() {
     else if (estaCancelando && !estavaCancelado && !jaEstornou) {
       const pecasEstornadas = estornarEstoque(pedido);
       updates.estornoRealizado = true;
-      
+
       // Automation: if payment status is set to CANCELADO or GOLPE CANCELADO, auto-cancel others
       if (field === 'statusPagamento') {
         updates.statusPedido = value === 'GOLPE CANCELADO' ? 'GOLPE CANCELADO' : 'CANCELADO';
         updates.statusEntrega = 'CANCELADO';
       }
-      
       if (pecasEstornadas > 0) {
         toast.success(`Pedido cancelado e ${pecasEstornadas} peças retornaram ao estoque com sucesso`);
       } else {
@@ -439,7 +366,6 @@ export default function PedidosCriados() {
     } else {
       toast.success('Status atualizado com sucesso!');
     }
-    
     updatePedido(pedidoId, updates);
   };
   // Removed client-side filtering - now handled by server-side pagination
@@ -450,7 +376,6 @@ export default function PedidosCriados() {
       currency: 'BRL'
     }).format(value);
   };
-
   const handleDelete = () => {
     if (deleteId) {
       removePedido(deleteId);
@@ -458,19 +383,16 @@ export default function PedidosCriados() {
       toast.success('Pedido excluído com sucesso!');
     }
   };
-
   const getModelosResumo = (pedido: PedidoPaginatedDB) => {
     const itens = pedido.pedido_itens || [];
     if (itens.length === 0) return '-';
     if (itens.length === 1) return itens[0].produto_nome;
     return `${itens[0].produto_nome} +${itens.length - 1}`;
   };
-
   const clearDateFilters = () => {
     setStartDate(undefined);
     setEndDate(undefined);
   };
-  
   const clearAllFilters = () => {
     setSearchTerm('');
     setStartDate(undefined);
@@ -491,7 +413,6 @@ export default function PedidosCriados() {
     setFilterStatusPedido('all');
     setFilterStatusEntrega('all');
     setFilterModelo('');
-    
     switch (filter) {
       case 'hoje':
         setStartDate(new Date());
@@ -530,31 +451,22 @@ export default function PedidosCriados() {
     const hoje = new Date();
     const ontem = subDays(hoje, 1);
     const seteDiasAtras = subDays(hoje, 6);
-    
+
     // Verificar se é "Hoje"
-    if (startDate && endDate && 
-        format(startDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') &&
-        format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') &&
-        filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
       return 'hoje';
     }
-    
+
     // Verificar se é "Ontem"
-    if (startDate && endDate && 
-        format(startDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') &&
-        format(endDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') &&
-        filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') && filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
       return 'ontem';
     }
-    
+
     // Verificar se é "Últimos 7 dias"
-    if (startDate && endDate && 
-        format(startDate, 'yyyy-MM-dd') === format(seteDiasAtras, 'yyyy-MM-dd') &&
-        format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') &&
-        filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(seteDiasAtras, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
       return '7dias';
     }
-    
+
     // Verificar filtros de status
     if (!startDate && !endDate) {
       if (filterStatusEntrega === 'PEND. ENTREGA' && filterStatusPagamento === 'all' && filterStatusPedido === 'all') {
@@ -567,24 +479,23 @@ export default function PedidosCriados() {
         return 'naoSeparado';
       }
     }
-    
     return null;
   };
-
   const activeQuickFilter = getActiveQuickFilter();
 
   // Função de refresh manual
   const handleRefreshData = async () => {
     setIsRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
-    await queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
+    await queryClient.invalidateQueries({
+      queryKey: ['pedidos-paginated']
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ['pedidos-totals']
+    });
     setIsRefreshing(false);
     toast.success('Dados atualizados');
   };
-
-  const hasAnyFilter = searchTerm || startDate || endDate || 
-    filterStatusPagamento !== 'all' || filterStatusPedido !== 'all' || 
-    filterStatusEntrega !== 'all' || filterModelo;
+  const hasAnyFilter = searchTerm || startDate || endDate || filterStatusPagamento !== 'all' || filterStatusPedido !== 'all' || filterStatusEntrega !== 'all' || filterModelo;
 
   // Use totals from server-side hook
   const calculatedTotals = {
@@ -592,72 +503,55 @@ export default function PedidosCriados() {
     totalPecas: totals?.totalPecas || 0,
     totalValor: totals?.totalValor || 0
   };
-
-  const hasActiveFilters = startDate || endDate || filterStatusPagamento !== 'all' || 
-    filterStatusPedido !== 'all' || filterStatusEntrega !== 'all' || filterModelo;
+  const hasActiveFilters = startDate || endDate || filterStatusPagamento !== 'all' || filterStatusPedido !== 'all' || filterStatusEntrega !== 'all' || filterModelo;
 
   // Count active filters for mobile badge
-  const activeFilterCount = [
-    startDate,
-    endDate,
-    filterStatusPagamento !== 'all' ? filterStatusPagamento : null,
-    filterStatusPedido !== 'all' ? filterStatusPedido : null,
-    filterStatusEntrega !== 'all' ? filterStatusEntrega : null,
-    filterModelo,
-  ].filter(Boolean).length;
+  const activeFilterCount = [startDate, endDate, filterStatusPagamento !== 'all' ? filterStatusPagamento : null, filterStatusPedido !== 'all' ? filterStatusPedido : null, filterStatusEntrega !== 'all' ? filterStatusEntrega : null, filterModelo].filter(Boolean).length;
 
   // PDF Generation
   const generatePDF = (pedido: PedidoPaginatedDB) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    
+
     // Header
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('DELOOKII - ERP JEANS | COMPROVANTE DE PEDIDO', pageWidth / 2, 20, { align: 'center' });
-    
+    doc.text('DELOOKII - ERP JEANS | COMPROVANTE DE PEDIDO', pageWidth / 2, 20, {
+      align: 'center'
+    });
+
     // Divider
     doc.setDrawColor(200);
     doc.line(14, 25, pageWidth - 14, 25);
-    
+
     // Client info section
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.text('DADOS DO CLIENTE', 14, 35);
-    
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    const clienteData = [
-      `Nome: ${pedido.cliente_nome}`,
-      `Telefone: ${pedido.telefone || '-'}`,
-      `Cidade/Estado: ${pedido.cidade || '-'}, ${pedido.estado || '-'}`,
-      `Excursão: ${pedido.excursao || '-'}`
-    ];
-    
+    const clienteData = [`Nome: ${pedido.cliente_nome}`, `Telefone: ${pedido.telefone || '-'}`, `Cidade/Estado: ${pedido.cidade || '-'}, ${pedido.estado || '-'}`, `Excursão: ${pedido.excursao || '-'}`];
     let yPos = 42;
     clienteData.forEach(line => {
       doc.text(line, 14, yPos);
       yPos += 6;
     });
-    
+
     // Date and time
     doc.setFont('helvetica', 'bold');
     doc.text('Data de Emissão:', pageWidth - 70, 42);
     doc.setFont('helvetica', 'normal');
-    doc.text(format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }), pageWidth - 70, 48);
-    
+    doc.text(format(new Date(), "dd/MM/yyyy 'às' HH:mm", {
+      locale: ptBR
+    }), pageWidth - 70, 48);
     doc.text('Data do Pedido:', pageWidth - 70, 56);
-    doc.text(format(new Date(pedido.created_at), "dd/MM/yyyy", { locale: ptBR }), pageWidth - 70, 62);
-    
+    doc.text(format(new Date(pedido.created_at), "dd/MM/yyyy", {
+      locale: ptBR
+    }), pageWidth - 70, 62);
+
     // Items table
     const itens = pedido.pedido_itens || [];
-    const tableData = itens.map(item => [
-      item.produto_nome,
-      formatCurrency(item.valor_unitario),
-      item.quantidade.toString(),
-      formatCurrency(item.quantidade * item.valor_unitario)
-    ]);
-    
+    const tableData = itens.map(item => [item.produto_nome, formatCurrency(item.valor_unitario), item.quantidade.toString(), formatCurrency(item.quantidade * item.valor_unitario)]);
     autoTable(doc, {
       startY: 75,
       head: [['Modelo', 'Valor Unitário', 'Qtd', 'Subtotal']],
@@ -673,34 +567,46 @@ export default function PedidosCriados() {
         cellPadding: 4
       },
       columnStyles: {
-        0: { cellWidth: 80 },
-        1: { halign: 'right' },
-        2: { halign: 'center' },
-        3: { halign: 'right', fontStyle: 'bold' }
+        0: {
+          cellWidth: 80
+        },
+        1: {
+          halign: 'right'
+        },
+        2: {
+          halign: 'center'
+        },
+        3: {
+          halign: 'right',
+          fontStyle: 'bold'
+        }
       }
     });
-    
+
     // @ts-ignore - jspdf-autotable adds this property
     const finalY = doc.lastAutoTable.finalY + 10;
-    
+
     // Totals
     doc.setFillColor(240, 240, 240);
     doc.rect(14, finalY, pageWidth - 28, 25, 'F');
-    
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.text(`Total de Peças: ${pedido.total_pecas || 0}`, 20, finalY + 10);
     doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 18);
-    
+
     // Status
     doc.setFontSize(10);
-    doc.text(`Status: ${pedido.status_pagamento} | ${pedido.status_pedido} | ${pedido.status_entrega}`, pageWidth - 20, finalY + 14, { align: 'right' });
-    
+    doc.text(`Status: ${pedido.status_pagamento} | ${pedido.status_pedido} | ${pedido.status_entrega}`, pageWidth - 20, finalY + 14, {
+      align: 'right'
+    });
+
     // Footer
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(10);
-    doc.text('Obrigado pela preferência! Delookii Jeans', pageWidth / 2, finalY + 35, { align: 'center' });
-    
+    doc.text('Obrigado pela preferência! Delookii Jeans', pageWidth / 2, finalY + 35, {
+      align: 'center'
+    });
+
     // Download
     const fileName = `Pedido_${pedido.cliente_nome.replace(/\s+/g, '_')}_${format(new Date(pedido.created_at), 'dd-MM-yyyy')}.pdf`;
     doc.save(fileName);
@@ -713,20 +619,15 @@ export default function PedidosCriados() {
       toast.error('Usuário não autenticado');
       return;
     }
-    
     setExportingCSV(true);
-    
     try {
       // Fetch all pedidos with same filters applied
       const PAGE_SIZE = 1000;
       let allPedidos: PedidoPaginatedDB[] = [];
       let from = 0;
       let hasMore = true;
-      
       while (hasMore) {
-        let query = supabase
-          .from('pedidos')
-          .select(`
+        let query = supabase.from('pedidos').select(`
             *,
             pedido_itens (
               id,
@@ -734,9 +635,10 @@ export default function PedidosCriados() {
               quantidade,
               valor_unitario
             )
-          `)
-          .order('created_at', { ascending: sortDirection === 'asc' });
-        
+          `).order('created_at', {
+          ascending: sortDirection === 'asc'
+        });
+
         // Apply filters
         if (searchTerm) {
           query = query.or(`cliente_nome.ilike.%${searchTerm}%,telefone.ilike.%${searchTerm}%,cidade.ilike.%${searchTerm}%`);
@@ -756,21 +658,18 @@ export default function PedidosCriados() {
         if (endDate) {
           query = query.lte('created_at', endOfDay(endDate).toISOString());
         }
-        
         query = query.range(from, from + PAGE_SIZE - 1);
-        
-        const { data, error } = await query;
-        
+        const {
+          data,
+          error
+        } = await query;
         if (error) throw error;
-        
         if (data && data.length > 0) {
           // Filter by model if needed (client-side)
           let filteredData = data as PedidoPaginatedDB[];
           if (filterModelo) {
             const modeloLower = filterModelo.toLowerCase();
-            filteredData = filteredData.filter(p => 
-              p.pedido_itens?.some(i => i.produto_nome.toLowerCase().includes(modeloLower))
-            );
+            filteredData = filteredData.filter(p => p.pedido_itens?.some(i => i.produto_nome.toLowerCase().includes(modeloLower)));
           }
           allPedidos = [...allPedidos, ...filteredData];
           from += PAGE_SIZE;
@@ -779,34 +678,16 @@ export default function PedidosCriados() {
           hasMore = false;
         }
       }
-      
       if (allPedidos.length === 0) {
         toast.error('Nenhum pedido encontrado para exportar');
         return;
       }
-      
       const headers = ['Data', 'Cliente', 'Telefone', 'Cidade', 'Estado', 'Itens', 'Qtd Total', 'Valor Total', 'Status Pagamento', 'Status Pedido', 'Status Entrega'];
-      
-      const rows = allPedidos.map(pedido => [
-        format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm"),
-        pedido.cliente_nome,
-        pedido.telefone || '',
-        pedido.cidade || '',
-        pedido.estado || '',
-        (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '),
-        (pedido.total_pecas || 0).toString(),
-        (pedido.valor_total || 0).toFixed(2),
-        pedido.status_pagamento || 'Pendente',
-        pedido.status_pedido || 'Nao separado',
-        pedido.status_entrega || 'Pend. Entrega'
-      ]);
-      
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))
-      ].join('\n');
-      
-      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const rows = allPedidos.map(pedido => [format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm"), pedido.cliente_nome, pedido.telefone || '', pedido.cidade || '', pedido.estado || '', (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '), (pedido.total_pecas || 0).toString(), (pedido.valor_total || 0).toFixed(2), pedido.status_pagamento || 'Pendente', pedido.status_pedido || 'Nao separado', pedido.status_entrega || 'Pend. Entrega']);
+      const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))].join('\n');
+      const blob = new Blob(['\uFEFF' + csvContent], {
+        type: 'text/csv;charset=utf-8;'
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -821,63 +702,37 @@ export default function PedidosCriados() {
       setExportingCSV(false);
     }
   };
-
-const formatNumber = (value: number) => {
-  return new Intl.NumberFormat('pt-BR').format(value);
-};
-
-
-  return (
-    <div className="min-h-screen bg-background flex overflow-hidden">
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('pt-BR').format(value);
+  };
+  return <div className="min-h-screen bg-background flex overflow-hidden">
       {/* Mobile Header */}
       {isMobile && <MobileHeader title="Vendas" />}
       
       {/* Desktop Sidebar */}
       {!isMobile && <AppSidebar />}
 
-      <main className={cn(
-        "flex-1 flex flex-col h-screen overflow-hidden",
-        isMobile && "pt-14 pb-20"
-      )}>
+      <main className={cn("flex-1 flex flex-col h-screen overflow-hidden", isMobile && "pt-14 pb-20")}>
         {/* Desktop Header */}
-        {!isMobile && (
-          <header className="px-8 py-6 flex-shrink-0">
+        {!isMobile && <header className="px-8 py-6 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Pedidos Criados</h1>
+                <h1 className="text-2xl font-bold text-foreground">PEDIDOS CRIADOS</h1>
                 <p className="text-sm text-muted-foreground mt-1">
                   Centro operacional de gestão de pedidos
                 </p>
               </div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={handleRefreshData}
-                disabled={isRefreshing}
-                title="Atualizar dados"
-              >
+              <Button variant="ghost" size="icon" onClick={handleRefreshData} disabled={isRefreshing} title="Atualizar dados">
                 <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
               </Button>
             </div>
-          </header>
-        )}
+          </header>}
 
         {/* Content */}
-        <div className={cn(
-          "flex-1 overflow-y-auto pb-8",
-          isMobile ? "px-4" : "px-8"
-        )}>
+        <div className={cn("flex-1 overflow-y-auto pb-8", isMobile ? "px-4" : "px-8")}>
           <div className="max-w-full space-y-4">
             {/* Summary Cards - Mobile uses compact 3-column layout */}
-            {isMobile ? (
-              <MobileSummaryCards
-                totalPedidos={calculatedTotals.totalPedidos}
-                totalValor={calculatedTotals.totalValor}
-                totalPecas={calculatedTotals.totalPecas}
-                filterModelo={filterModelo}
-              />
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {isMobile ? <MobileSummaryCards totalPedidos={calculatedTotals.totalPedidos} totalValor={calculatedTotals.totalValor} totalPecas={calculatedTotals.totalPecas} filterModelo={filterModelo} /> : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="neu-card p-5 flex items-center gap-4">
                   <div className="p-3 rounded-xl bg-primary/10 shadow-inner">
                     <ShoppingBag className="h-6 w-6 text-primary" />
@@ -885,11 +740,9 @@ const formatNumber = (value: number) => {
                   <div>
                     <p className="text-sm text-muted-foreground">Total de Pedidos</p>
                     <p className="text-2xl font-bold text-primary">{formatNumber(calculatedTotals.totalPedidos)}</p>
-                    {filterModelo && (
-                      <Badge variant="outline" className="text-xs text-primary border-primary mt-1">
+                    {filterModelo && <Badge variant="outline" className="text-xs text-primary border-primary mt-1">
                         Modelo: "{filterModelo}"
-                      </Badge>
-                    )}
+                      </Badge>}
                   </div>
                 </div>
 
@@ -912,150 +765,60 @@ const formatNumber = (value: number) => {
                     <p className="text-2xl font-bold text-primary">{formatNumber(calculatedTotals.totalPecas)}</p>
                   </div>
                 </div>
-              </div>
-            )}
+              </div>}
 
             {/* Quick Filter Shortcuts */}
-            <div className={cn(
-              "flex gap-2 overflow-x-auto pb-1 scrollbar-hide",
-              isMobile ? "-mx-4 px-4" : ""
-            )}>
-              <Button
-                variant={activeQuickFilter === 'hoje' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => applyQuickFilter('hoje')}
-                className={cn(
-                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
-                  activeQuickFilter === 'hoje' && "bg-primary text-primary-foreground"
-                )}
-              >
+            <div className={cn("flex gap-2 overflow-x-auto pb-1 scrollbar-hide", isMobile ? "-mx-4 px-4" : "")}>
+              <Button variant={activeQuickFilter === 'hoje' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('hoje')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'hoje' && "bg-primary text-primary-foreground")}>
                 Hoje
               </Button>
-              <Button
-                variant={activeQuickFilter === 'ontem' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => applyQuickFilter('ontem')}
-                className={cn(
-                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
-                  activeQuickFilter === 'ontem' && "bg-primary text-primary-foreground"
-                )}
-              >
+              <Button variant={activeQuickFilter === 'ontem' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('ontem')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'ontem' && "bg-primary text-primary-foreground")}>
                 Ontem
               </Button>
-              <Button
-                variant={activeQuickFilter === '7dias' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => applyQuickFilter('7dias')}
-                className={cn(
-                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
-                  activeQuickFilter === '7dias' && "bg-primary text-primary-foreground"
-                )}
-              >
+              <Button variant={activeQuickFilter === '7dias' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('7dias')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === '7dias' && "bg-primary text-primary-foreground")}>
                 Últimos 7 dias
               </Button>
-              <Button
-                variant={activeQuickFilter === 'emAberto' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => applyQuickFilter('emAberto')}
-                className={cn(
-                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
-                  activeQuickFilter === 'emAberto' && "bg-primary text-primary-foreground"
-                )}
-              >
+              <Button variant={activeQuickFilter === 'emAberto' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('emAberto')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'emAberto' && "bg-primary text-primary-foreground")}>
                 Em aberto
               </Button>
-              <Button
-                variant={activeQuickFilter === 'pendPagamento' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => applyQuickFilter('pendPagamento')}
-                className={cn(
-                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
-                  activeQuickFilter === 'pendPagamento' && "bg-primary text-primary-foreground"
-                )}
-              >
+              <Button variant={activeQuickFilter === 'pendPagamento' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('pendPagamento')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'pendPagamento' && "bg-primary text-primary-foreground")}>
                 Pend. Pagamento
               </Button>
-              <Button
-                variant={activeQuickFilter === 'naoSeparado' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => applyQuickFilter('naoSeparado')}
-                className={cn(
-                  "rounded-full whitespace-nowrap text-xs h-8 px-3",
-                  activeQuickFilter === 'naoSeparado' && "bg-primary text-primary-foreground"
-                )}
-              >
+              <Button variant={activeQuickFilter === 'naoSeparado' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('naoSeparado')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'naoSeparado' && "bg-primary text-primary-foreground")}>
                 Não separado
               </Button>
-              {hasAnyFilter && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAllFilters}
-                  className="rounded-full whitespace-nowrap text-xs h-8 px-3 text-muted-foreground hover:text-foreground"
-                >
+              {hasAnyFilter && <Button variant="ghost" size="sm" onClick={clearAllFilters} className="rounded-full whitespace-nowrap text-xs h-8 px-3 text-muted-foreground hover:text-foreground">
                   <X className="h-3 w-3 mr-1" />
                   Limpar
-                </Button>
-              )}
+                </Button>}
             </div>
 
             {/* Filters and Actions Bar */}
-            {isMobile ? (
-              /* Mobile Filters */
-              <div className="space-y-3">
+            {isMobile ? (/* Mobile Filters */
+          <div className="space-y-3">
                 {/* Search */}
                 <div className="relative w-full">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar cliente..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 h-11 rounded-xl neu-input border-0 bg-background"
-                  />
+                  <Input placeholder="Buscar cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-11 rounded-xl neu-input border-0 bg-background" />
                 </div>
                 
                 {/* Filters Sheet + New Order Button */}
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <MobileFiltersSheet
-                      filterStatusPagamento={filterStatusPagamento}
-                      filterStatusPedido={filterStatusPedido}
-                      filterStatusEntrega={filterStatusEntrega}
-                      filterModelo={filterModelo}
-                      startDate={startDate}
-                      endDate={endDate}
-                      onFilterStatusPagamentoChange={setFilterStatusPagamento}
-                      onFilterStatusPedidoChange={setFilterStatusPedido}
-                      onFilterStatusEntregaChange={setFilterStatusEntrega}
-                      onFilterModeloChange={setFilterModelo}
-                      onStartDateChange={setStartDate}
-                      onEndDateChange={setEndDate}
-                      onClearAll={clearAllFilters}
-                      activeCount={activeFilterCount}
-                    />
+                    <MobileFiltersSheet filterStatusPagamento={filterStatusPagamento} filterStatusPedido={filterStatusPedido} filterStatusEntrega={filterStatusEntrega} filterModelo={filterModelo} startDate={startDate} endDate={endDate} onFilterStatusPagamentoChange={setFilterStatusPagamento} onFilterStatusPedidoChange={setFilterStatusPedido} onFilterStatusEntregaChange={setFilterStatusEntrega} onFilterModeloChange={setFilterModelo} onStartDateChange={setStartDate} onEndDateChange={setEndDate} onClearAll={clearAllFilters} activeCount={activeFilterCount} />
                   </div>
-                  <Button
-                    onClick={() => navigate('/pedidos/novo')}
-                    className="h-11 px-4 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-medium gap-2"
-                  >
+                  <Button onClick={() => navigate('/pedidos/novo')} className="h-11 px-4 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-medium gap-2">
                     <Plus className="h-4 w-4" />
                     Novo
                   </Button>
                 </div>
-              </div>
-            ) : (
-              /* Desktop Filters */
-              <div className="neu-card p-4">
+              </div>) : (/* Desktop Filters */
+          <div className="neu-card p-4">
                 <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
                   {/* Search */}
                   <div className="relative flex-1 w-full lg:max-w-xs">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar cliente, ID ou status..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 h-11 rounded-xl neu-input border-0 bg-background"
-                    />
+                    <Input placeholder="Buscar cliente, ID ou status..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-11 rounded-xl neu-input border-0 bg-background" />
                   </div>
 
                   {/* Status Filters */}
@@ -1066,9 +829,7 @@ const formatNumber = (value: number) => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos Pagamentos</SelectItem>
-                        {statusPagamentoOptions.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
+                        {statusPagamentoOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     
@@ -1078,9 +839,7 @@ const formatNumber = (value: number) => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos Pedidos</SelectItem>
-                        {statusPedidoOptions.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
+                        {statusPedidoOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     
@@ -1090,9 +849,7 @@ const formatNumber = (value: number) => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todas Entregas</SelectItem>
-                        {statusEntregaOptions.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
+                        {statusEntregaOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1100,34 +857,20 @@ const formatNumber = (value: number) => {
                   {/* Modelo Filter */}
                   <div className="relative w-full lg:w-40">
                     <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Modelo..."
-                      value={filterModelo}
-                      onChange={(e) => setFilterModelo(e.target.value)}
-                      className="pl-10 h-11 rounded-xl neu-input border-0 bg-background"
-                    />
+                    <Input placeholder="Modelo..." value={filterModelo} onChange={e => setFilterModelo(e.target.value)} className="pl-10 h-11 rounded-xl neu-input border-0 bg-background" />
                   </div>
 
                   {/* Date Range Filter */}
                   <div className="flex items-center gap-2">
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="h-11 rounded-xl neu-button border-0 bg-background gap-2"
-                        >
+                        <Button variant="outline" className="h-11 rounded-xl neu-button border-0 bg-background gap-2">
                           <CalendarIcon className="h-4 w-4" />
                           {startDate ? format(startDate, "dd/MM/yy") : "Início"}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 z-50" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={startDate}
-                          onSelect={setStartDate}
-                          initialFocus
-                          className="pointer-events-auto"
-                        />
+                        <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus className="pointer-events-auto" />
                       </PopoverContent>
                     </Popover>
 
@@ -1135,35 +878,20 @@ const formatNumber = (value: number) => {
 
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="h-11 rounded-xl neu-button border-0 bg-background gap-2"
-                        >
+                        <Button variant="outline" className="h-11 rounded-xl neu-button border-0 bg-background gap-2">
                           <CalendarIcon className="h-4 w-4" />
                           {endDate ? format(endDate, "dd/MM/yy") : "Fim"}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 z-50" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={endDate}
-                          onSelect={setEndDate}
-                          initialFocus
-                          className="pointer-events-auto"
-                        />
+                        <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus className="pointer-events-auto" />
                       </PopoverContent>
                     </Popover>
 
-                    {hasAnyFilter && (
-                      <Button
-                        variant="ghost"
-                        onClick={clearAllFilters}
-                        className="h-11 rounded-xl hover:bg-destructive/10 hover:text-destructive gap-2"
-                      >
+                    {hasAnyFilter && <Button variant="ghost" onClick={clearAllFilters} className="h-11 rounded-xl hover:bg-destructive/10 hover:text-destructive gap-2">
                         <X className="h-4 w-4" />
                         Limpar
-                      </Button>
-                    )}
+                      </Button>}
                   </div>
                 </div>
                 
@@ -1171,47 +899,31 @@ const formatNumber = (value: number) => {
                 <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border/50 items-center justify-between">
                   {/* CSV and Clear Buttons */}
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setClearDataModalOpen(true)}
-                      className="h-10 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 gap-2"
-                    >
+                    <Button variant="outline" onClick={() => setClearDataModalOpen(true)} className="h-10 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 gap-2">
                       <Trash2 className="h-4 w-4" />
                       Limpar Dados
                     </Button>
                     
-                    <Button
-                      variant="outline"
-                      onClick={exportCSV}
-                      className="h-10 rounded-xl neu-button border-0 bg-background gap-2"
-                    >
+                    <Button variant="outline" onClick={exportCSV} className="h-10 rounded-xl neu-button border-0 bg-background gap-2">
                       <Download className="h-4 w-4" />
                       Exportar CSV
                     </Button>
                     
-                    <Button
-                      variant="outline"
-                      onClick={() => setImportModalOpen(true)}
-                      className="h-10 rounded-xl neu-button border-0 bg-background gap-2"
-                    >
+                    <Button variant="outline" onClick={() => setImportModalOpen(true)} className="h-10 rounded-xl neu-button border-0 bg-background gap-2">
                       <Upload className="h-4 w-4" />
                       Importar CSV
                     </Button>
                   </div>
 
                   {/* New Order Button */}
-                  <Button
-                    onClick={() => navigate('/pedidos/novo')}
-                    className="h-10 px-5 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-medium gap-2"
-                  >
+                  <Button onClick={() => navigate('/pedidos/novo')} className="h-10 px-5 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-medium gap-2">
                     <Plus className="h-4 w-4" />
                     Novo Pedido
                   </Button>
                 </div>
 
                 {/* Filtered Totals Panel */}
-                {hasActiveFilters && (
-                  <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap items-center gap-6 text-sm">
+                {hasActiveFilters && <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap items-center gap-6 text-sm">
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4 text-primary" />
                       <span className="text-muted-foreground">Total de Peças Filtrado:</span>
@@ -1222,56 +934,32 @@ const formatNumber = (value: number) => {
                       <span className="text-muted-foreground">Valor Total Filtrado:</span>
                       <span className="font-bold text-emerald-600">{formatCurrency(calculatedTotals.totalValor)}</span>
                     </div>
-                    {filterModelo && (
-                      <Badge variant="outline" className="text-xs border-primary text-primary">
+                    {filterModelo && <Badge variant="outline" className="text-xs border-primary text-primary">
                         Filtrando modelo: "{filterModelo}"
-                      </Badge>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+                      </Badge>}
+                  </div>}
+              </div>)}
 
             {/* Orders - Mobile Cards or Desktop Table */}
-            {isLoading ? (
-              <div className="neu-card p-4 flex items-center justify-center py-12">
+            {isLoading ? <div className="neu-card p-4 flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <span className="ml-2 text-muted-foreground">Carregando pedidos...</span>
-              </div>
-            ) : pedidosList.length === 0 ? (
-              <div className="neu-card p-4 text-center py-12">
+              </div> : pedidosList.length === 0 ? <div className="neu-card p-4 text-center py-12">
                 <ShoppingBag className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-foreground">Nenhum pedido encontrado</h3>
                 <p className="text-muted-foreground mb-4">
                   {hasAnyFilter ? 'Nenhum pedido com os filtros selecionados' : 'Crie seu primeiro pedido para começar'}
                 </p>
-              </div>
-            ) : isMobile ? (
-              /* Mobile: Card List */
-              <div className="space-y-3">
-                {pedidosList.map((pedido) => (
-                  <MobileOrderCard
-                    key={pedido.id}
-                    pedido={pedido}
-                    onView={() => setSelectedPedido(pedido)}
-                    onEdit={() => setEditingPedidoId(pedido.id)}
-                    onDelete={() => setDeleteId(pedido.id)}
-                    onGeneratePDF={() => generatePDF(pedido)}
-                    onStatusUpdate={(field, value) => handleStatusUpdate(pedido.id, field, value)}
-                  />
-                ))}
-              </div>
-            ) : (
-              /* Desktop: Table */
-              <div className="neu-card p-4 overflow-hidden">
+              </div> : isMobile ? (/* Mobile: Card List */
+          <div className="space-y-3">
+                {pedidosList.map(pedido => <MobileOrderCard key={pedido.id} pedido={pedido} onView={() => setSelectedPedido(pedido)} onEdit={() => setEditingPedidoId(pedido.id)} onDelete={() => setDeleteId(pedido.id)} onGeneratePDF={() => generatePDF(pedido)} onStatusUpdate={(field, value) => handleStatusUpdate(pedido.id, field, value)} />)}
+              </div>) : (/* Desktop: Table */
+          <div className="neu-card p-4 overflow-hidden">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
                         <TableRow className="border-b-2 border-border/50 hover:bg-transparent">
-                          <TableHead 
-                            className="text-xs font-bold text-foreground uppercase tracking-wider cursor-pointer hover:text-primary transition-colors py-3"
-                            onClick={() => handleSort('created_at')}
-                          >
+                          <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider cursor-pointer hover:text-primary transition-colors py-3" onClick={() => handleSort('created_at')}>
                             <div className="flex items-center gap-1">
                               Data
                               <ArrowUpDown className="h-3 w-3" />
@@ -1286,10 +974,7 @@ const formatNumber = (value: number) => {
                           <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
                             Qtd
                           </TableHead>
-                          <TableHead 
-                            className="text-xs font-bold text-foreground uppercase tracking-wider cursor-pointer hover:text-primary transition-colors py-3"
-                            onClick={() => handleSort('valor_total')}
-                          >
+                          <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider cursor-pointer hover:text-primary transition-colors py-3" onClick={() => handleSort('valor_total')}>
                             <div className="flex items-center gap-1">
                               Valor
                               <ArrowUpDown className="h-3 w-3" />
@@ -1310,13 +995,11 @@ const formatNumber = (value: number) => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {pedidosList.map((pedido) => (
-                          <TableRow 
-                            key={pedido.id} 
-                            className="group border-0 transition-all duration-200 hover:shadow-[inset_0_2px_8px_rgba(0,0,0,0.06)] rounded-xl"
-                          >
+                        {pedidosList.map(pedido => <TableRow key={pedido.id} className="group border-0 transition-all duration-200 hover:shadow-[inset_0_2px_8px_rgba(0,0,0,0.06)] rounded-xl">
                             <TableCell className="py-2.5 text-sm text-muted-foreground font-medium">
-                              {format(new Date(pedido.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                              {format(new Date(pedido.created_at), "dd/MM/yyyy", {
+                        locale: ptBR
+                      })}
                             </TableCell>
                             <TableCell className="py-2.5">
                               <span className="font-semibold text-foreground text-sm">{pedido.cliente_nome}</span>
@@ -1331,127 +1014,85 @@ const formatNumber = (value: number) => {
                               <span className="font-bold text-emerald-600 text-sm">{formatCurrency(pedido.valor_total || 0)}</span>
                             </TableCell>
                             <TableCell className="py-2.5">
-                              <InlineStatusSelect
-                                options={statusPagamentoOptions}
-                                value={pedido.status_pagamento || 'PENDENTE'}
-                                onChange={(value) => handleStatusUpdate(pedido.id, 'statusPagamento', value)}
-                              />
+                              <InlineStatusSelect options={statusPagamentoOptions} value={pedido.status_pagamento || 'PENDENTE'} onChange={value => handleStatusUpdate(pedido.id, 'statusPagamento', value)} />
                             </TableCell>
                             <TableCell className="py-2.5">
-                              <InlineStatusSelect
-                                options={statusPedidoOptions}
-                                value={pedido.status_pedido || 'NÃO SEPARADO'}
-                                onChange={(value) => handleStatusUpdate(pedido.id, 'statusPedido', value)}
-                              />
+                              <InlineStatusSelect options={statusPedidoOptions} value={pedido.status_pedido || 'NÃO SEPARADO'} onChange={value => handleStatusUpdate(pedido.id, 'statusPedido', value)} />
                             </TableCell>
                             <TableCell className="py-2.5">
-                              <InlineStatusSelect
-                                options={statusEntregaOptions}
-                                value={pedido.status_entrega || 'PEND. ENTREGA'}
-                                onChange={(value) => handleStatusUpdate(pedido.id, 'statusEntrega', value)}
-                              />
+                              <InlineStatusSelect options={statusEntregaOptions} value={pedido.status_entrega || 'PEND. ENTREGA'} onChange={value => handleStatusUpdate(pedido.id, 'statusEntrega', value)} />
                             </TableCell>
                             <TableCell className="py-2.5 text-right">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                                  >
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="neu-card border-0 rounded-xl shadow-lg z-50">
-                                  <DropdownMenuItem 
-                                    onClick={() => setSelectedPedido(pedido)}
-                                    className="gap-2 cursor-pointer"
-                                  >
+                                  <DropdownMenuItem onClick={() => setSelectedPedido(pedido)} className="gap-2 cursor-pointer">
                                     <Eye className="h-4 w-4" />
                                     Ver Detalhes
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onClick={() => setEditingPedidoId(pedido.id)}
-                                    className="gap-2 cursor-pointer"
-                                  >
+                                  <DropdownMenuItem onClick={() => setEditingPedidoId(pedido.id)} className="gap-2 cursor-pointer">
                                     <Pencil className="h-4 w-4" />
                                     Editar
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onClick={() => generatePDF(pedido)}
-                                    className="gap-2 cursor-pointer"
-                                  >
+                                  <DropdownMenuItem onClick={() => generatePDF(pedido)} className="gap-2 cursor-pointer">
                                     <FileText className="h-4 w-4" />
                                     Gerar PDF
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onClick={() => setDeleteId(pedido.id)}
-                                    className="gap-2 cursor-pointer text-destructive focus:text-destructive"
-                                  >
+                                  <DropdownMenuItem onClick={() => setDeleteId(pedido.id)} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
                                     <Trash2 className="h-4 w-4" />
                                     Excluir
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </TableCell>
-                          </TableRow>
-                        ))}
+                          </TableRow>)}
                       </TableBody>
                     </Table>
                   </div>
 
                   {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50">
+                  {totalPages > 1 && <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50">
                       <div className="text-sm text-muted-foreground">
                         Mostrando {currentPage * pageSize + 1} - {Math.min((currentPage + 1) * pageSize, totalCount)} de {totalCount} pedidos
                       </div>
                       <Pagination>
                         <PaginationContent>
                           <PaginationItem>
-                            <PaginationPrevious 
-                              onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-                              className={currentPage === 0 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                            />
+                            <PaginationPrevious onClick={() => setCurrentPage(p => Math.max(0, p - 1))} className={currentPage === 0 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} />
                           </PaginationItem>
                           
                           {/* Page numbers */}
-                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            let pageNum;
-                            if (totalPages <= 5) {
-                              pageNum = i;
-                            } else if (currentPage < 3) {
-                              pageNum = i;
-                            } else if (currentPage > totalPages - 4) {
-                              pageNum = totalPages - 5 + i;
-                            } else {
-                              pageNum = currentPage - 2 + i;
-                            }
-                            return (
-                              <PaginationItem key={pageNum}>
-                                <PaginationLink
-                                  onClick={() => setCurrentPage(pageNum)}
-                                  isActive={currentPage === pageNum}
-                                  className="cursor-pointer"
-                                >
+                          {Array.from({
+                    length: Math.min(5, totalPages)
+                  }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i;
+                    } else if (currentPage < 3) {
+                      pageNum = i;
+                    } else if (currentPage > totalPages - 4) {
+                      pageNum = totalPages - 5 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return <PaginationItem key={pageNum}>
+                                <PaginationLink onClick={() => setCurrentPage(pageNum)} isActive={currentPage === pageNum} className="cursor-pointer">
                                   {pageNum + 1}
                                 </PaginationLink>
-                              </PaginationItem>
-                            );
-                          })}
+                              </PaginationItem>;
+                  })}
 
                           <PaginationItem>
-                            <PaginationNext 
-                              onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-                              className={currentPage >= totalPages - 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                            />
+                            <PaginationNext onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} className={currentPage >= totalPages - 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} />
                           </PaginationItem>
                         </PaginationContent>
                       </Pagination>
-                    </div>
-                  )}
-                </div>
-              )}
+                    </div>}
+                </div>)}
           </div>
         </div>
       </main>
@@ -1470,10 +1111,7 @@ const formatNumber = (value: number) => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl border-0">Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive hover:bg-destructive/90 rounded-xl"
-            >
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90 rounded-xl">
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1494,8 +1132,7 @@ const formatNumber = (value: number) => {
             </DialogTitle>
           </DialogHeader>
 
-          {selectedPedido && (
-            <div className="space-y-6 mt-4">
+          {selectedPedido && <div className="space-y-6 mt-4">
               {/* Cliente Info */}
               <div className="neu-card p-4 rounded-xl">
                 <h3 className="font-semibold text-foreground mb-3">Informações do Cliente</h3>
@@ -1526,7 +1163,9 @@ const formatNumber = (value: number) => {
                   <div>
                     <p className="text-muted-foreground">Data de Criação</p>
                     <p className="font-medium text-foreground">
-                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy", {
+                    locale: ptBR
+                  })}
                     </p>
                   </div>
                   <div>
@@ -1554,8 +1193,7 @@ const formatNumber = (value: number) => {
               <div className="neu-card p-4 rounded-xl">
                 <h3 className="font-semibold text-foreground mb-3">Itens do Pedido</h3>
                 <div className="space-y-2">
-                  {(selectedPedido.pedido_itens || []).map((item, index) => (
-                    <div key={item.id || index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
+                  {(selectedPedido.pedido_itens || []).map((item, index) => <div key={item.id || index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                       <div>
                         <p className="font-medium text-foreground">{item.produto_nome || 'Produto'}</p>
                         <p className="text-sm text-muted-foreground">
@@ -1565,8 +1203,7 @@ const formatNumber = (value: number) => {
                       <p className="font-bold text-emerald-600">
                         {formatCurrency(item.quantidade * item.valor_unitario)}
                       </p>
-                    </div>
-                  ))}
+                    </div>)}
                 </div>
               </div>
 
@@ -1581,36 +1218,33 @@ const formatNumber = (value: number) => {
                   <p className="text-xl font-bold text-emerald-600">{formatCurrency(selectedPedido.valor_total || 0)}</p>
                 </div>
               </div>
-            </div>
-          )}
+            </div>}
         </DialogContent>
       </Dialog>
 
       {/* Edit Pedido Modal */}
-      <EditPedidoModalWrapper 
-        pedidoId={editingPedidoId} 
-        onClose={() => setEditingPedidoId(null)} 
-      />
+      <EditPedidoModalWrapper pedidoId={editingPedidoId} onClose={() => setEditingPedidoId(null)} />
 
       {/* Import CSV Modal */}
-      <ImportPedidosCSVModal 
-        open={importModalOpen} 
-        onOpenChange={setImportModalOpen} 
-      />
+      <ImportPedidosCSVModal open={importModalOpen} onOpenChange={setImportModalOpen} />
 
       {/* Clear Data Modal */}
-      <ClearPedidosDataModal 
-        open={clearDataModalOpen} 
-        onOpenChange={setClearDataModalOpen} 
-      />
-    </div>
-  );
+      <ClearPedidosDataModal open={clearDataModalOpen} onOpenChange={setClearDataModalOpen} />
+    </div>;
 }
 
 // Wrapper component to fetch pedido data for editing
-function EditPedidoModalWrapper({ pedidoId, onClose }: { pedidoId: string | null; onClose: () => void }) {
-  const { data: pedidoDB, isLoading } = usePedidoById(pedidoId || undefined);
-
+function EditPedidoModalWrapper({
+  pedidoId,
+  onClose
+}: {
+  pedidoId: string | null;
+  onClose: () => void;
+}) {
+  const {
+    data: pedidoDB,
+    isLoading
+  } = usePedidoById(pedidoId || undefined);
   if (!pedidoId) return null;
 
   // Transform data to modal format
@@ -1624,15 +1258,8 @@ function EditPedidoModalWrapper({ pedidoId, onClose }: { pedidoId: string | null
       produto_id: item.produto_id,
       produto_nome: item.produto_nome,
       quantidade: item.quantidade,
-      valor_unitario: item.valor_unitario,
-    })),
+      valor_unitario: item.valor_unitario
+    }))
   } : null;
-
-  return (
-    <EditPedidoModal
-      pedido={pedidoData}
-      open={!!pedidoId && !isLoading}
-      onClose={onClose}
-    />
-  );
+  return <EditPedidoModal pedido={pedidoData} open={!!pedidoId && !isLoading} onClose={onClose} />;
 }
