@@ -24,45 +24,24 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 const emptyCliente = {
   nome: '',
   telefone: '',
   cidade: '',
   estado: '',
-  excursao: '',
+  excursao: ''
 };
-
 type Ordenacao = 'nome' | 'recente';
 type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'inativo' | 'risco' | 'pendente';
-
 const PAGE_SIZE = 24;
-
 function formatCurrency(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
 }
 
 // Memoized client card component for performance
@@ -71,7 +50,7 @@ const ClienteCard = memo(function ClienteCard({
   stats,
   isMobile,
   onEdit,
-  onDelete,
+  onDelete
 }: {
   cliente: ClientePaginatedDB;
   stats: ClienteCRMBatchStats | undefined;
@@ -91,47 +70,32 @@ const ClienteCard = memo(function ClienteCard({
     cidade: cliente.cidade,
     estado: cliente.estado,
     excursao: cliente.excursao,
-    dataCadastro,
+    dataCadastro
   };
 
   // Convert stats for WhatsAppButton
   const statsForWhatsApp = stats ? {
     ...stats,
-    clienteId: stats.clienteId,
+    clienteId: stats.clienteId
   } : undefined;
-
-  return (
-    <div className="neu-card p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group relative">
+  return <div className="neu-card p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group relative">
       {/* Status Badge and Risk Alert */}
       <div className="absolute top-4 right-4 flex items-center gap-2">
-        {isRisk && (
-          <div className="w-7 h-7 rounded-full bg-destructive/10 flex items-center justify-center" title="Histórico de cancelamentos">
+        {isRisk && <div className="w-7 h-7 rounded-full bg-destructive/10 flex items-center justify-center" title="Histórico de cancelamentos">
             <AlertTriangle size={14} className="text-destructive" />
-          </div>
-        )}
-        {status && (
-          <Badge className={cn("text-xs px-2 py-0.5", status.color)}>
+          </div>}
+        {status && <Badge className={cn("text-xs px-2 py-0.5", status.color)}>
             {status.label}
-          </Badge>
-        )}
+          </Badge>}
       </div>
 
       {/* Action Buttons */}
-      <div className={cn(
-        "absolute top-12 right-4 flex gap-2 transition-opacity z-50",
-        isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-      )}>
+      <div className={cn("absolute top-12 right-4 flex gap-2 transition-opacity z-50", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
         <WhatsAppButton cliente={clienteForWhatsApp} stats={statsForWhatsApp} />
-        <button
-          onClick={() => onEdit(cliente)}
-          className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors"
-        >
+        <button onClick={() => onEdit(cliente)} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors">
           <Pencil size={14} className="text-muted-foreground hover:text-primary" />
         </button>
-        <button
-          onClick={() => onDelete(cliente)}
-          className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors"
-        >
+        <button onClick={() => onDelete(cliente)} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors">
           <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
         </button>
       </div>
@@ -189,50 +153,39 @@ const ClienteCard = memo(function ClienteCard({
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
           <Calendar size={14} />
-          {stats?.ultimaCompra ? (
-            <>
+          {stats?.ultimaCompra ? <>
               <span>Última Compra ({format(stats.ultimaCompra, "dd/MM/yy")}):</span>
               <span className="font-semibold text-foreground">
                 {formatCurrency(stats.ultimoPedidoValor || 0)}
               </span>
-              {stats.ultimoPedidoStatus && (
-                <Badge 
-                  className={cn(
-                    "text-xs border-0",
-                    stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' 
-                      ? "bg-green-100 text-green-700" 
-                      : stats.ultimoPedidoStatus.toUpperCase() === 'PENDENTE'
-                      ? "bg-yellow-100 text-yellow-700"
-                      : stats.ultimoPedidoStatus.toUpperCase() === 'CANCELADO'
-                      ? "bg-red-100 text-red-700"
-                      : "bg-secondary text-secondary-foreground"
-                  )}
-                >
+              {stats.ultimoPedidoStatus && <Badge className={cn("text-xs border-0", stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' ? "bg-green-100 text-green-700" : stats.ultimoPedidoStatus.toUpperCase() === 'PENDENTE' ? "bg-yellow-100 text-yellow-700" : stats.ultimoPedidoStatus.toUpperCase() === 'CANCELADO' ? "bg-red-100 text-red-700" : "bg-secondary text-secondary-foreground")}>
                   {stats.ultimoPedidoStatus}
-                </Badge>
-              )}
-            </>
-          ) : (
-            <span>Nenhuma compra registrada</span>
-          )}
+                </Badge>}
+            </> : <span>Nenhuma compra registrada</span>}
         </div>
       </div>
-    </div>
-  );
+    </div>;
 });
-
 export default function Clientes() {
   const isMobile = useIsMobile();
-  const { user } = useAuth();
-  const { addCliente, updateCliente, removeCliente } = useClientesContext();
-  const { data: crmData } = useClientesCRM();
-  
+  const {
+    user
+  } = useAuth();
+  const {
+    addCliente,
+    updateCliente,
+    removeCliente
+  } = useClientesContext();
+  const {
+    data: crmData
+  } = useClientesCRM();
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(0);
   const [busca, setBusca] = useState('');
   const [ordenacao, setOrdenacao] = useState<Ordenacao>('nome');
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('todos');
-  
+
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -244,15 +197,22 @@ export default function Clientes() {
 
   // CRM filter for VIP/Frequente/Inativo/Risco/Pendente
   const crmFilterStatus = filtroStatus !== 'todos' ? filtroStatus : null;
-  const { data: crmFilterIds, isLoading: crmFilterLoading } = useClientesCRMFilter(crmFilterStatus);
+  const {
+    data: crmFilterIds,
+    isLoading: crmFilterLoading
+  } = useClientesCRMFilter(crmFilterStatus);
 
   // Paginated query - now with filterByIds for CRM filters (filter BEFORE pagination)
-  const { data: paginatedData, isLoading: paginatedLoading, isFetching } = useClientesPaginated({
+  const {
+    data: paginatedData,
+    isLoading: paginatedLoading,
+    isFetching
+  } = useClientesPaginated({
     page: currentPage,
     pageSize: PAGE_SIZE,
     search: busca,
     ordenacao,
-    filterByIds: filtroStatus !== 'todos' ? crmFilterIds : null,
+    filterByIds: filtroStatus !== 'todos' ? crmFilterIds : null
   });
 
   // No need for client-side filtering - the query already filters by IDs
@@ -264,7 +224,10 @@ export default function Clientes() {
   }, [filteredClientes]);
 
   // Fetch CRM stats only for visible clients
-  const { data: crmBatchStats, isLoading: crmBatchLoading } = useClientesCRMBatch(visibleClienteIds);
+  const {
+    data: crmBatchStats,
+    isLoading: crmBatchLoading
+  } = useClientesCRMBatch(visibleClienteIds);
 
   // Calculate CRM metrics from global data
   const crmMetrics = useMemo(() => {
@@ -272,7 +235,7 @@ export default function Clientes() {
       totalClientes: paginatedData?.count || 0,
       ticketMedio: crmData?.metrics.ticketMedio || 0,
       ltvMedio: crmData?.metrics.ltvMedio || 0,
-      taxaRetencao: crmData?.metrics.taxaRetencao || 0,
+      taxaRetencao: crmData?.metrics.taxaRetencao || 0
     };
   }, [paginatedData?.count, crmData?.metrics]);
 
@@ -286,23 +249,19 @@ export default function Clientes() {
     setBusca(value);
     setCurrentPage(0);
   }, []);
-
   const handleFiltroChange = useCallback((filtro: FiltroStatus) => {
     setFiltroStatus(filtro);
     setCurrentPage(0);
   }, []);
-
   const handleOrdenacaoChange = useCallback((ord: Ordenacao) => {
     setOrdenacao(ord);
     setCurrentPage(0);
   }, []);
-
   const handleOpenNew = useCallback(() => {
     setEditingCliente(null);
     setFormData(emptyCliente);
     setModalOpen(true);
   }, []);
-
   const handleOpenEdit = useCallback((cliente: ClientePaginatedDB) => {
     setEditingCliente(cliente);
     setFormData({
@@ -310,11 +269,10 @@ export default function Clientes() {
       telefone: cliente.telefone,
       cidade: cliente.cidade,
       estado: cliente.estado,
-      excursao: cliente.excursao,
+      excursao: cliente.excursao
     });
     setModalOpen(true);
   }, []);
-
   const handleSave = async () => {
     const result = ClienteSchema.safeParse(formData);
     if (!result.success) {
@@ -322,14 +280,13 @@ export default function Clientes() {
       toast.error(firstError);
       return;
     }
-
     try {
       const validData = {
         nome: result.data.nome,
         telefone: result.data.telefone,
         cidade: result.data.cidade,
         estado: result.data.estado,
-        excursao: result.data.excursao,
+        excursao: result.data.excursao
       };
       if (editingCliente) {
         await updateCliente(editingCliente.id, validData);
@@ -338,7 +295,6 @@ export default function Clientes() {
         await addCliente(validData);
         toast.success('Cliente cadastrado com sucesso!');
       }
-
       setModalOpen(false);
       setFormData(emptyCliente);
       setEditingCliente(null);
@@ -346,12 +302,10 @@ export default function Clientes() {
       toast.error('Erro ao salvar cliente');
     }
   };
-
   const handleDeleteClick = useCallback((cliente: ClientePaginatedDB) => {
     setClienteToDelete(cliente);
     setDeleteDialogOpen(true);
   }, []);
-
   const handleConfirmDelete = async () => {
     if (clienteToDelete) {
       try {
@@ -364,30 +318,23 @@ export default function Clientes() {
       }
     }
   };
-
   const handleExportCSV = async () => {
     if (!user?.id) {
       toast.error('Usuário não autenticado.');
       return;
     }
-
     try {
       // Fetch all clients for export (paginated internally)
       let allClientes: ClientePaginatedDB[] = [];
       let from = 0;
       const batchSize = 1000;
       let hasMore = true;
-
       while (hasMore) {
-        const { data, error } = await supabase
-          .from('clientes')
-          .select('id, nome, telefone, cidade, estado, excursao, created_at, user_id')
-          .eq('user_id', user.id)
-          .order('nome')
-          .range(from, from + batchSize - 1);
-
+        const {
+          data,
+          error
+        } = await supabase.from('clientes').select('id, nome, telefone, cidade, estado, excursao, created_at, user_id').eq('user_id', user.id).order('nome').range(from, from + batchSize - 1);
         if (error) throw error;
-
         if (data && data.length > 0) {
           allClientes = [...allClientes, ...data];
           from += batchSize;
@@ -396,33 +343,19 @@ export default function Clientes() {
           hasMore = false;
         }
       }
-
       if (allClientes.length === 0) {
         toast.error('Não há clientes para exportar.');
         return;
       }
-
       const headers = ['Nome', 'Telefone', 'Cidade', 'Estado', 'Excursão', 'Data Cadastro', 'Hora Cadastro'];
-      const csvRows = [
-        headers.join(','),
-        ...allClientes.map(c => {
-          const createdAt = new Date(c.created_at);
-          return [
-            c.nome, 
-            c.telefone, 
-            c.cidade, 
-            c.estado, 
-            c.excursao,
-            format(createdAt, 'dd/MM/yyyy'),
-            format(createdAt, 'HH:mm:ss')
-          ]
-            .map(field => `"${(field || '').replace(/"/g, '""')}"`)
-            .join(',');
-        })
-      ];
-
+      const csvRows = [headers.join(','), ...allClientes.map(c => {
+        const createdAt = new Date(c.created_at);
+        return [c.nome, c.telefone, c.cidade, c.estado, c.excursao, format(createdAt, 'dd/MM/yyyy'), format(createdAt, 'HH:mm:ss')].map(field => `"${(field || '').replace(/"/g, '""')}"`).join(',');
+      })];
       const csvContent = csvRows.join('\n');
-      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob(['\ufeff' + csvContent], {
+        type: 'text/csv;charset=utf-8;'
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -431,7 +364,6 @@ export default function Clientes() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
       toast.success('Lista de clientes exportada com sucesso!');
     } catch (error) {
       console.error('Export error:', error);
@@ -444,54 +376,35 @@ export default function Clientes() {
   const totalPages = paginatedData?.totalPages || 1;
   const fromItem = totalCount === 0 ? 0 : currentPage * PAGE_SIZE + 1;
   const toItem = Math.min((currentPage + 1) * PAGE_SIZE, totalCount);
-
-  const isLoading = paginatedLoading || (filtroStatus !== 'todos' && crmFilterLoading);
-
-  return (
-    <div className="flex min-h-screen bg-background">
+  const isLoading = paginatedLoading || filtroStatus !== 'todos' && crmFilterLoading;
+  return <div className="flex min-h-screen bg-background">
       {/* Mobile Header */}
       {isMobile && <MobileHeader title="Clientes" />}
       
       {/* Sidebar - Desktop only */}
       {!isMobile && <AppSidebar />}
       
-      <main className={cn(
-        "flex-1 p-6 lg:p-8 overflow-auto",
-        isMobile && "pt-20 pb-24"
-      )}>
+      <main className={cn("flex-1 p-6 lg:p-8 overflow-auto", isMobile && "pt-20 pb-24")}>
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Clientes</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold text-foreground">CLIENTES</h1>
             <p className="text-muted-foreground mt-1">Painel CRM - Gerencie sua base de clientes</p>
           </div>
           <div className="flex gap-3 flex-wrap">
-            <Button 
-              onClick={() => setClearDataModalOpen(true)}
-              variant="outline"
-              className="h-11 px-5 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 transition-colors"
-            >
+            <Button onClick={() => setClearDataModalOpen(true)} variant="outline" className="h-11 px-5 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 transition-colors">
               <AlertTriangle size={18} className="mr-2" />
               <span className="hidden sm:inline">Limpar Dados</span>
             </Button>
-            <Button 
-              onClick={handleExportCSV}
-              className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg"
-            >
+            <Button onClick={handleExportCSV} className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg">
               <Download size={18} className="mr-2" />
               <span className="hidden sm:inline">Exportar</span>
             </Button>
-            <Button 
-              onClick={() => setImportModalOpen(true)}
-              className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg"
-            >
+            <Button onClick={() => setImportModalOpen(true)} className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg">
               <FileSpreadsheet size={18} className="mr-2" />
               <span className="hidden sm:inline">Importar</span>
             </Button>
-            <Button 
-              onClick={handleOpenNew}
-              className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg"
-            >
+            <Button onClick={handleOpenNew} className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg">
               <Plus size={18} className="mr-2" />
               <span className="hidden sm:inline">Novo Cliente</span>
             </Button>
@@ -559,23 +472,16 @@ export default function Clientes() {
         <div className="neu-card p-4 mb-4 rounded-2xl">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-            <Input
-              placeholder="Buscar por nome, telefone, cidade ou excursão..."
-              value={busca}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="h-12 pl-12 rounded-xl neu-input border-0 bg-background text-base"
-            />
-            {isFetching && (
-              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+            <Input placeholder="Buscar por nome, telefone, cidade ou excursão..." value={busca} onChange={e => handleSearchChange(e.target.value)} className="h-12 pl-12 rounded-xl neu-input border-0 bg-background text-base" />
+            {isFetching && <div className="absolute right-4 top-1/2 -translate-y-1/2">
                 <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            )}
+              </div>}
           </div>
         </div>
 
         {/* Filters and Sorting */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <Select value={ordenacao} onValueChange={(v) => handleOrdenacaoChange(v as Ordenacao)}>
+          <Select value={ordenacao} onValueChange={v => handleOrdenacaoChange(v as Ordenacao)}>
             <SelectTrigger className="w-full sm:w-[200px] h-10 rounded-xl">
               <SelectValue placeholder="Ordenar por" />
             </SelectTrigger>
@@ -586,86 +492,42 @@ export default function Clientes() {
           </Select>
           
           <div className="flex gap-2 flex-wrap">
-            {(['todos', 'vip', 'frequente', 'inativo', 'risco', 'pendente'] as FiltroStatus[]).map((filtro) => (
-              <Button
-                key={filtro}
-                size="sm"
-                variant={filtroStatus === filtro ? 'default' : 'outline'}
-                onClick={() => handleFiltroChange(filtro)}
-                className={cn(
-                  "rounded-xl h-10 px-4",
-                  filtroStatus === filtro && "bg-primary text-primary-foreground",
-                  filtro === 'pendente' && filtroStatus !== filtro && "border-yellow-400 text-yellow-700"
-                )}
-              >
+            {(['todos', 'vip', 'frequente', 'inativo', 'risco', 'pendente'] as FiltroStatus[]).map(filtro => <Button key={filtro} size="sm" variant={filtroStatus === filtro ? 'default' : 'outline'} onClick={() => handleFiltroChange(filtro)} className={cn("rounded-xl h-10 px-4", filtroStatus === filtro && "bg-primary text-primary-foreground", filtro === 'pendente' && filtroStatus !== filtro && "border-yellow-400 text-yellow-700")}>
                 {filtro === 'todos' && 'Todos'}
                 {filtro === 'vip' && '⭐ VIP'}
                 {filtro === 'frequente' && '🔵 Frequentes'}
                 {filtro === 'inativo' && '⚪ Inativos'}
                 {filtro === 'risco' && '⚠️ Risco'}
                 {filtro === 'pendente' && '🟡 Pendentes'}
-              </Button>
-            ))}
+              </Button>)}
           </div>
         </div>
 
         {/* Pagination Info */}
         <div className="flex items-center justify-between mb-4">
           <span className="text-sm text-muted-foreground">
-            {totalCount > 0 ? (
-              <>Mostrando <span className="font-medium text-foreground">{fromItem}-{toItem}</span> de <span className="font-medium text-foreground">{totalCount.toLocaleString()}</span> clientes</>
-            ) : (
-              'Nenhum cliente encontrado'
-            )}
+            {totalCount > 0 ? <>Mostrando <span className="font-medium text-foreground">{fromItem}-{toItem}</span> de <span className="font-medium text-foreground">{totalCount.toLocaleString()}</span> clientes</> : 'Nenhum cliente encontrado'}
           </span>
           
-          {totalPages > 1 && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-                disabled={currentPage === 0 || isLoading}
-                className="h-9 px-3 rounded-xl"
-              >
+          {totalPages > 1 && <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={currentPage === 0 || isLoading} className="h-9 px-3 rounded-xl">
                 <ChevronLeft size={16} className="mr-1" />
                 Anterior
               </Button>
               <span className="text-sm text-muted-foreground px-2">
                 {currentPage + 1} / {totalPages}
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={currentPage >= totalPages - 1 || isLoading}
-                className="h-9 px-3 rounded-xl"
-              >
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={currentPage >= totalPages - 1 || isLoading} className="h-9 px-3 rounded-xl">
                 Próxima
                 <ChevronRight size={16} className="ml-1" />
               </Button>
-            </div>
-          )}
+            </div>}
         </div>
 
         {/* Clients Grid */}
-        {isLoading ? (
-          <ClienteGridSkeleton count={PAGE_SIZE} />
-        ) : filteredClientes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filteredClientes.map((cliente) => (
-              <ClienteCard
-                key={cliente.id}
-                cliente={cliente}
-                stats={getClienteStats(cliente.id)}
-                isMobile={isMobile}
-                onEdit={handleOpenEdit}
-                onDelete={handleDeleteClick}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="neu-card p-12 rounded-2xl text-center">
+        {isLoading ? <ClienteGridSkeleton count={PAGE_SIZE} /> : filteredClientes.length > 0 ? <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {filteredClientes.map(cliente => <ClienteCard key={cliente.id} cliente={cliente} stats={getClienteStats(cliente.id)} isMobile={isMobile} onEdit={handleOpenEdit} onDelete={handleDeleteClick} />)}
+          </div> : <div className="neu-card p-12 rounded-2xl text-center">
             <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-4">
               <User size={32} className="text-muted-foreground" />
             </div>
@@ -675,37 +537,22 @@ export default function Clientes() {
             <p className="text-muted-foreground">
               Tente ajustar os termos da busca ou os filtros.
             </p>
-          </div>
-        )}
+          </div>}
 
         {/* Bottom Pagination */}
-        {totalPages > 1 && !isLoading && (
-          <div className="flex items-center justify-center gap-2 mt-6">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-              disabled={currentPage === 0}
-              className="h-9 px-3 rounded-xl"
-            >
+        {totalPages > 1 && !isLoading && <div className="flex items-center justify-center gap-2 mt-6">
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={currentPage === 0} className="h-9 px-3 rounded-xl">
               <ChevronLeft size={16} className="mr-1" />
               Anterior
             </Button>
             <span className="text-sm text-muted-foreground px-4">
               Página {currentPage + 1} de {totalPages}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-              disabled={currentPage >= totalPages - 1}
-              className="h-9 px-3 rounded-xl"
-            >
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={currentPage >= totalPages - 1} className="h-9 px-3 rounded-xl">
               Próxima
               <ChevronRight size={16} className="ml-1" />
             </Button>
-          </div>
-        )}
+          </div>}
       </main>
 
       {/* Modal de Criar/Editar */}
@@ -720,73 +567,50 @@ export default function Clientes() {
           <div className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label htmlFor="nome">Nome</Label>
-              <Input
-                id="nome"
-                value={formData.nome}
-                onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
-                className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                placeholder="Nome do cliente"
-              />
+              <Input id="nome" value={formData.nome} onChange={e => setFormData(prev => ({
+              ...prev,
+              nome: e.target.value
+            }))} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" placeholder="Nome do cliente" />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="telefone">Telefone</Label>
-              <Input
-                id="telefone"
-                value={formData.telefone}
-                onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
-                className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                placeholder="(00) 00000-0000"
-              />
+              <Input id="telefone" value={formData.telefone} onChange={e => setFormData(prev => ({
+              ...prev,
+              telefone: e.target.value
+            }))} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" placeholder="(00) 00000-0000" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="cidade">Cidade</Label>
-                <Input
-                  id="cidade"
-                  value={formData.cidade}
-                  onChange={(e) => setFormData(prev => ({ ...prev, cidade: e.target.value }))}
-                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                  placeholder="Cidade"
-                />
+                <Input id="cidade" value={formData.cidade} onChange={e => setFormData(prev => ({
+                ...prev,
+                cidade: e.target.value
+              }))} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" placeholder="Cidade" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="estado">Estado</Label>
-                <Input
-                  id="estado"
-                  value={formData.estado}
-                  onChange={(e) => setFormData(prev => ({ ...prev, estado: e.target.value }))}
-                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                  placeholder="UF"
-                  maxLength={2}
-                />
+                <Input id="estado" value={formData.estado} onChange={e => setFormData(prev => ({
+                ...prev,
+                estado: e.target.value
+              }))} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" placeholder="UF" maxLength={2} />
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="excursao">Excursão</Label>
-              <Input
-                id="excursao"
-                value={formData.excursao}
-                onChange={(e) => setFormData(prev => ({ ...prev, excursao: e.target.value }))}
-                className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                placeholder="Nome da excursão"
-              />
+              <Input id="excursao" value={formData.excursao} onChange={e => setFormData(prev => ({
+              ...prev,
+              excursao: e.target.value
+            }))} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" placeholder="Nome da excursão" />
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setModalOpen(false)}
-                className="flex-1 h-11 rounded-xl border-0 text-muted-foreground hover:text-foreground"
-              >
+              <Button variant="outline" onClick={() => setModalOpen(false)} className="flex-1 h-11 rounded-xl border-0 text-muted-foreground hover:text-foreground">
                 Cancelar
               </Button>
-              <Button
-                onClick={handleSave}
-                className="flex-1 h-11 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground"
-              >
+              <Button onClick={handleSave} className="flex-1 h-11 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground">
                 {editingCliente ? 'Salvar Alterações' : 'Cadastrar'}
               </Button>
             </div>
@@ -813,10 +637,7 @@ export default function Clientes() {
             <AlertDialogCancel className="h-10 rounded-xl border-0 text-muted-foreground hover:text-foreground">
               Cancelar
             </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className="h-10 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-            >
+            <AlertDialogAction onClick={handleConfirmDelete} className="h-10 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground">
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -825,6 +646,5 @@ export default function Clientes() {
       
       {/* Bottom Navigation */}
       <BottomNavigation />
-    </div>
-  );
+    </div>;
 }
