@@ -59,6 +59,7 @@ export function useEstoqueDetalhadoPorLocal(localId: string | null) {
       if (!localId || !user?.id) return [];
 
       // 1. Buscar estoque com dados do item
+      // Query SEM filtro user_id - RLS controla acesso via has_location_access()
       const { data, error } = await supabase
         .from('estoque_por_local')
         .select(`
@@ -75,17 +76,15 @@ export function useEstoqueDetalhadoPorLocal(localId: string | null) {
           )
         `)
         .eq('local_id', localId)
-        .eq('user_id', user.id)
         .gt('quantidade', 0);
 
       if (error) throw error;
 
-      // 2. Buscar preços por local
+      // 2. Buscar preços por local - RLS controla acesso
       const { data: precosLocal, error: precosError } = await supabase
         .from('precos_por_local')
         .select('item_id, preco_venda')
-        .eq('local_id', localId)
-        .eq('user_id', user.id);
+        .eq('local_id', localId);
 
       if (precosError) {
         console.warn('Erro ao buscar preços por local:', precosError);
@@ -346,12 +345,12 @@ export function useHistoricoMovimentacoesItem(itemId: string | null, localId: st
     queryFn: async (): Promise<MovimentacaoHistorico[]> => {
       if (!itemId || !localId || !user?.id) return [];
 
+      // Query SEM filtro user_id - RLS controla acesso via local_id
       const { data, error } = await supabase
         .from('estoque_movimentacoes')
         .select('id, created_at, tipo, quantidade, estoque_antes, estoque_depois, motivo')
         .eq('item_id', itemId)
         .eq('local_id', localId)
-        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -380,31 +379,40 @@ export function useProdutosDisponiveis(localId: string | null) {
     queryFn: async () => {
       if (!localId || !user?.id) return [];
 
-      // 1. Buscar local "central"
+      // 1. Primeiro buscar o dono do local destino (para vendedores acessarem o Central do admin)
+      const { data: localInfo, error: localInfoError } = await supabase
+        .from('estoque_locais')
+        .select('id, user_id')
+        .eq('id', localId)
+        .single();
+
+      if (localInfoError) throw localInfoError;
+      
+      const ownerUserId = localInfo?.user_id;
+
+      // 2. Buscar local "central" do DONO do local (não do usuário logado)
       const { data: localCentral } = await supabase
         .from('estoque_locais')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerUserId)
         .eq('tipo', 'central')
         .maybeSingle();
 
-      // 2. Buscar todos os itens do usuário
+      // 3. Buscar todos os itens do DONO (RLS controla acesso)
       const { data: itens, error: itensError } = await supabase
         .from('estoque_itens')
         .select('id, nome, categoria, imagem_url, preco_unitario')
-        .eq('user_id', user.id)
         .order('nome');
 
       if (itensError) throw itensError;
 
-      // 3. Buscar estoque no Central (incluindo quantidade_reservada para calcular disponível)
+      // 4. Buscar estoque no Central (RLS controla acesso)
       let estoqueCentralMap = new Map<string, { quantidade: number; reservada: number }>();
       if (localCentral) {
         const { data: estoqueCentral } = await supabase
           .from('estoque_por_local')
           .select('item_id, quantidade, quantidade_reservada')
-          .eq('local_id', localCentral.id)
-          .eq('user_id', user.id);
+          .eq('local_id', localCentral.id);
 
         estoqueCentralMap = new Map(
           (estoqueCentral || []).map(item => [
@@ -417,12 +425,11 @@ export function useProdutosDisponiveis(localId: string | null) {
         );
       }
 
-      // 4. Buscar quais já estão no local destino
+      // 5. Buscar quais já estão no local destino (RLS controla acesso)
       const { data: jaNoLocal, error: localError } = await supabase
         .from('estoque_por_local')
         .select('item_id, quantidade')
-        .eq('local_id', localId)
-        .eq('user_id', user.id);
+        .eq('local_id', localId);
 
       if (localError) throw localError;
 
