@@ -28,65 +28,77 @@ import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { getSignedUrl, getImageAsBase64 } from '@/utils/imageUtils';
 import jsPDF from 'jspdf';
-
 const PAGE_SIZE = 24;
-
-const statusConfig: Record<StatusEstoque, { label: string; color: string }> = {
-  disponivel: { label: 'Disponível', color: 'bg-emerald-100 text-emerald-700' },
-  em_producao: { label: 'Em Produção', color: 'bg-blue-100 text-blue-700' },
-  reservado: { label: 'Reservado', color: 'bg-amber-100 text-amber-700' },
-  baixo_estoque: { label: 'Baixo Estoque', color: 'bg-red-100 text-red-700' },
+const statusConfig: Record<StatusEstoque, {
+  label: string;
+  color: string;
+}> = {
+  disponivel: {
+    label: 'Disponível',
+    color: 'bg-emerald-100 text-emerald-700'
+  },
+  em_producao: {
+    label: 'Em Produção',
+    color: 'bg-blue-100 text-blue-700'
+  },
+  reservado: {
+    label: 'Reservado',
+    color: 'bg-amber-100 text-amber-700'
+  },
+  baixo_estoque: {
+    label: 'Baixo Estoque',
+    color: 'bg-red-100 text-red-700'
+  }
 };
-
 const categoriasMateriaPrima = ['Tecido', 'Aviamentos', 'Acessórios', 'Embalagem'];
 
 // Component for product image with signed URL support
-function ProductImage({ imagemUrl, nome }: { imagemUrl?: string; nome: string }) {
-  const { signedUrl, loading } = useSignedUrl(imagemUrl);
-  
+function ProductImage({
+  imagemUrl,
+  nome
+}: {
+  imagemUrl?: string;
+  nome: string;
+}) {
+  const {
+    signedUrl,
+    loading
+  } = useSignedUrl(imagemUrl);
   if (!imagemUrl) {
-    return (
-      <div className="p-2 rounded-lg bg-primary/10">
+    return <div className="p-2 rounded-lg bg-primary/10">
         <Package size={20} className="text-primary" />
-      </div>
-    );
+      </div>;
   }
-  
   if (loading) {
-    return (
-      <div className="w-12 h-12 rounded-lg bg-muted/50 animate-pulse" />
-    );
+    return <div className="w-12 h-12 rounded-lg bg-muted/50 animate-pulse" />;
   }
-  
-  return (
-    <div className="w-12 h-12 rounded-lg overflow-hidden shadow-[inset_1px_1px_3px_hsl(var(--muted)/0.4)] border border-border/30">
-      <img 
-        src={signedUrl || imagemUrl} 
-        alt={nome}
-        className="w-full h-full object-cover"
-      />
-    </div>
-  );
+  return <div className="w-12 h-12 rounded-lg overflow-hidden shadow-[inset_1px_1px_3px_hsl(var(--muted)/0.4)] border border-border/30">
+      <img src={signedUrl || imagemUrl} alt={nome} className="w-full h-full object-cover" />
+    </div>;
 }
-
 const SCROLL_KEY = 'estoque_scroll';
-
 export default function Estoque() {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
-  const { itens, addItem, updateItem, removeItem, getMateriasPrimas, getProdutosAcabados } = useEstoque();
+  const {
+    itens,
+    addItem,
+    updateItem,
+    removeItem,
+    getMateriasPrimas,
+    getProdutosAcabados
+  } = useEstoque();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   // URL params para persistir busca, filtros e paginação
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get('q') || '';
-  const activeTab = (searchParams.get('tab') as 'materia_prima' | 'produto_acabado') || 'produto_acabado';
-  const filtroRapido = (searchParams.get('filtro') as FiltroRapido) || 'todos';
+  const activeTab = searchParams.get('tab') as 'materia_prima' | 'produto_acabado' || 'produto_acabado';
+  const filtroRapido = searchParams.get('filtro') as FiltroRapido || 'todos';
   const currentPage = parseInt(searchParams.get('page') || '0', 10);
-  
+
   // Ref para restaurar scroll
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<ItemEstoque | null>(null);
@@ -108,7 +120,7 @@ export default function Estoque() {
     unidade: 'metros',
     quantidadeMinima: '',
     precoUnitario: '',
-    localizacao: '',
+    localizacao: ''
   });
 
   // Modal para Novo Modelo Acabado
@@ -123,7 +135,7 @@ export default function Estoque() {
     quantidade: 0,
     precoVenda: 0,
     imagemUrl: '',
-    imagemPreview: '',
+    imagemPreview: ''
   });
 
   // Modal para importação CSV
@@ -133,20 +145,22 @@ export default function Estoque() {
   const tipoEstoque = activeTab === 'materia_prima' ? 'materia-prima' : 'acabado';
 
   // Hook paginado para buscar itens
-  const { 
-    data: paginatedData, 
+  const {
+    data: paginatedData,
     isLoading: isPaginatedLoading,
-    isFetching: isPaginatedFetching,
+    isFetching: isPaginatedFetching
   } = useEstoqueItensPaginated({
     page: currentPage,
     pageSize: PAGE_SIZE,
     search,
     tipo: tipoEstoque,
-    filtroRapido,
+    filtroRapido
   });
 
   // Métricas agregadas para os cards de resumo
-  const { data: metrics } = useEstoqueMetrics(tipoEstoque);
+  const {
+    data: metrics
+  } = useEstoqueMetrics(tipoEstoque);
 
   // Helper para atualizar URL params (persistência)
   const updateParams = (updates: Record<string, string | undefined>) => {
@@ -158,28 +172,40 @@ export default function Estoque() {
         newParams.set(key, value);
       }
     });
-    setSearchParams(newParams, { replace: true });
+    setSearchParams(newParams, {
+      replace: true
+    });
   };
 
   // Handlers que atualizam URL params
   const handleFilterChange = (newFiltro: FiltroRapido) => {
-    updateParams({ filtro: newFiltro === 'todos' ? undefined : newFiltro, page: '0' });
+    updateParams({
+      filtro: newFiltro === 'todos' ? undefined : newFiltro,
+      page: '0'
+    });
   };
-
   const handleTabChange = (tab: 'materia_prima' | 'produto_acabado') => {
-    updateParams({ tab, page: '0' });
+    updateParams({
+      tab,
+      page: '0'
+    });
   };
-
   const handleSearchChange = (value: string) => {
-    updateParams({ q: value || undefined, page: '0' });
+    updateParams({
+      q: value || undefined,
+      page: '0'
+    });
   };
-
   const handlePageChange = (page: number) => {
-    updateParams({ page: page.toString() });
+    updateParams({
+      page: page.toString()
+    });
   };
-
   const handleClearSearch = () => {
-    updateParams({ q: undefined, page: '0' });
+    updateParams({
+      q: undefined,
+      page: '0'
+    });
   };
 
   // Salvar posição de scroll ao sair da rota
@@ -205,10 +231,18 @@ export default function Estoque() {
   // Função de refresh manual
   const handleRefreshData = async () => {
     setIsRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
-    await queryClient.invalidateQueries({ queryKey: ['estoque-itens-paginated'] });
-    await queryClient.invalidateQueries({ queryKey: ['estoque-metrics'] });
-    await queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+    await queryClient.invalidateQueries({
+      queryKey: ['estoque-itens']
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ['estoque-itens-paginated']
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ['estoque-metrics']
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ['estoque-por-local']
+    });
     setIsRefreshing(false);
     toast.success('Dados atualizados');
   };
@@ -219,25 +253,12 @@ export default function Estoque() {
       toast.error('Não há modelos para exportar.');
       return;
     }
-
     const headers = ['Nome', 'Categoria', 'Quantidade', 'Unidade', 'Preço Unitário', 'Localização'];
-    
-    const csvRows = [
-      headers.join(','),
-      ...itensFiltrados.map(item => 
-        [
-          item.nome,
-          item.categoria,
-          item.quantidade.toString(),
-          item.unidade,
-          (item.precoUnitario || 0).toFixed(2),
-          item.localizacao || ''
-        ].map(field => `"${(field || '').replace(/"/g, '""')}"`).join(',')
-      )
-    ];
-
+    const csvRows = [headers.join(','), ...itensFiltrados.map(item => [item.nome, item.categoria, item.quantidade.toString(), item.unidade, (item.precoUnitario || 0).toFixed(2), item.localizacao || ''].map(field => `"${(field || '').replace(/"/g, '""')}"`).join(','))];
     const csvContent = csvRows.join('\n');
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\ufeff' + csvContent], {
+      type: 'text/csv;charset=utf-8;'
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -246,7 +267,6 @@ export default function Estoque() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-
     toast.success(`${itensFiltrados.length} modelos exportados com sucesso!`);
   };
 
@@ -256,20 +276,21 @@ export default function Estoque() {
       toast.error('Não há modelos para exportar.');
       return;
     }
-
     toast.info('Gerando PDF com imagens... Isso pode levar alguns segundos.');
-    
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      
+
       // Title
       doc.setFontSize(18);
-      doc.text('Catálogo de Modelos', pageWidth / 2, 20, { align: 'center' });
+      doc.text('Catálogo de Modelos', pageWidth / 2, 20, {
+        align: 'center'
+      });
       doc.setFontSize(10);
-      doc.text(`Exportado em: ${new Date().toLocaleDateString('pt-BR')} - ${itensFiltrados.length} modelos`, pageWidth / 2, 28, { align: 'center' });
-      
+      doc.text(`Exportado em: ${new Date().toLocaleDateString('pt-BR')} - ${itensFiltrados.length} modelos`, pageWidth / 2, 28, {
+        align: 'center'
+      });
       let yPosition = 45;
       const itemsPerRow = 3;
       const cardWidth = 55;
@@ -277,22 +298,21 @@ export default function Estoque() {
       const imageHeight = 38;
       const margin = 15;
       const spacing = 5;
-      
       for (let i = 0; i < itensFiltrados.length; i++) {
         const item = itensFiltrados[i];
         const col = i % itemsPerRow;
-        const xPosition = margin + (col * (cardWidth + spacing));
-        
+        const xPosition = margin + col * (cardWidth + spacing);
+
         // New page if needed
         if (i > 0 && col === 0 && yPosition + cardHeight > pageHeight - 20) {
           doc.addPage();
           yPosition = 20;
         }
-        
+
         // Draw card background
         doc.setFillColor(245, 245, 245);
         doc.roundedRect(xPosition, yPosition, cardWidth, cardHeight, 3, 3, 'F');
-        
+
         // Fetch and add image
         if (item.imagemUrl) {
           try {
@@ -312,28 +332,27 @@ export default function Estoque() {
           doc.rect(xPosition + 2, yPosition + 2, cardWidth - 4, imageHeight, 'F');
           doc.setFontSize(8);
           doc.setTextColor(150, 150, 150);
-          doc.text('Sem imagem', xPosition + cardWidth / 2, yPosition + imageHeight / 2 + 2, { align: 'center' });
+          doc.text('Sem imagem', xPosition + cardWidth / 2, yPosition + imageHeight / 2 + 2, {
+            align: 'center'
+          });
         }
-        
+
         // Product data
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(7);
         const nome = item.nome.length > 30 ? item.nome.substring(0, 30) + '...' : item.nome;
         doc.text(nome, xPosition + 2, yPosition + imageHeight + 8);
-        
         doc.setFontSize(6);
         doc.setTextColor(100, 100, 100);
         doc.text(`Qtd: ${item.quantidade} ${item.unidade}`, xPosition + 2, yPosition + imageHeight + 14);
-        
         doc.setTextColor(0, 128, 0);
         doc.text(`R$ ${(item.precoUnitario || 0).toFixed(2)}`, xPosition + 2, yPosition + imageHeight + 20);
-        
+
         // Next row
         if (col === itemsPerRow - 1) {
           yPosition += cardHeight + spacing;
         }
       }
-      
       doc.save(`modelos_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
       toast.success(`${itensFiltrados.length} modelos exportados em PDF!`);
     } catch (error) {
@@ -341,7 +360,6 @@ export default function Estoque() {
       toast.error('Erro ao gerar PDF. Tente novamente.');
     }
   };
-
   const materiasPrimas = getMateriasPrimas();
   const produtosAcabados = getProdutosAcabados();
 
@@ -360,7 +378,6 @@ export default function Estoque() {
   // Calcular range de paginação
   const fromItem = totalCount > 0 ? currentPage * PAGE_SIZE + 1 : 0;
   const toItem = Math.min((currentPage + 1) * PAGE_SIZE, totalCount);
-
   const handleOpenModal = (item?: any) => {
     if (item) {
       // Find the full item from context for proper editing
@@ -374,7 +391,7 @@ export default function Estoque() {
           unidade: fullItem.unidade,
           quantidadeMinima: fullItem.quantidadeMinima ?? 0,
           precoUnitario: fullItem.precoUnitario ?? 0,
-          localizacao: fullItem.localizacao ?? '',
+          localizacao: fullItem.localizacao ?? ''
         });
       } else {
         // Use the passed item data (for paginated items)
@@ -386,7 +403,7 @@ export default function Estoque() {
           unidade: item.unidade,
           quantidadeMinima: item.quantidadeMinima ?? 0,
           precoUnitario: item.precoUnitario ?? 0,
-          localizacao: item.localizacao ?? '',
+          localizacao: item.localizacao ?? ''
         });
       }
     } else {
@@ -398,19 +415,17 @@ export default function Estoque() {
         unidade: 'metros',
         quantidadeMinima: 0,
         precoUnitario: 0,
-        localizacao: '',
+        localizacao: ''
       });
     }
     setShowModal(true);
   };
-
   const handleDeleteClick = (item: any) => {
     // Find the full item from context for proper deletion
     const fullItem = itens.find(i => i.id === item.id);
     setItemToDelete(fullItem || item);
     setShowDeleteModal(true);
   };
-
   const handleSave = () => {
     // Validate with Zod schema
     const result = EstoqueItemSchema.safeParse(formData);
@@ -434,16 +449,15 @@ export default function Estoque() {
       unidade: formData.unidade,
       quantidadeMinima: formData.quantidadeMinima === '' ? 0 : Number(formData.quantidadeMinima),
       precoUnitario: formData.precoUnitario === '' ? 0 : Number(formData.precoUnitario),
-      localizacao: formData.localizacao,
+      localizacao: formData.localizacao
     };
-
     if (editingItem) {
       // Para produtos acabados, atualiza apenas nome, quantidade e localização
       if (editingItem.tipo === 'acabado') {
         updateItem(editingItem.id, {
           nome: dataToSave.nome,
           quantidade: dataToSave.quantidade,
-          localizacao: dataToSave.localizacao,
+          localizacao: dataToSave.localizacao
         });
       } else {
         updateItem(editingItem.id, dataToSave);
@@ -452,45 +466,40 @@ export default function Estoque() {
     } else {
       addItem({
         ...dataToSave,
-        tipo: 'materia_prima',
+        tipo: 'materia_prima'
       });
       toast.success('Item adicionado ao estoque!');
     }
     setShowModal(false);
   };
-
-
   const handleConfirmDelete = () => {
     if (itemToDelete) {
       const itemId = itemToDelete.id;
-      
+
       // Fechar modal IMEDIATAMENTE para feedback instantâneo
       setShowDeleteModal(false);
       setItemToDelete(null);
-      
+
       // Executar exclusão em background (optimistic update já remove da lista)
-      removeItem(itemId)
-        .then(() => {
-          toast.success('Item removido do estoque');
-        })
-        .catch((error: any) => {
-          toast.error(error.message || 'Erro ao excluir item');
-          // Rollback automático no onError do mutation
-        });
+      removeItem(itemId).then(() => {
+        toast.success('Item removido do estoque');
+      }).catch((error: any) => {
+        toast.error(error.message || 'Erro ao excluir item');
+        // Rollback automático no onError do mutation
+      });
     }
   };
-
   const handleStartEditPrice = (item: ItemEstoque) => {
     setEditingPriceId(item.id);
     setEditingPriceValue(item.precoUnitario);
   };
-
   const handleSavePrice = (itemId: string) => {
-    updateItem(itemId, { precoUnitario: editingPriceValue });
+    updateItem(itemId, {
+      precoUnitario: editingPriceValue
+    });
     setEditingPriceId(null);
     toast.success('Preço atualizado!');
   };
-
   const handleCancelEditPrice = () => {
     setEditingPriceId(null);
     setEditingPriceValue(0);
@@ -499,25 +508,26 @@ export default function Estoque() {
   // Handler para atualizar imagem de produto existente
   const handleProductImageUpdate = async (productId: string, file: File) => {
     if (!file) return;
-    
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Você precisa estar autenticado');
         return;
       }
-
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/produtos/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('lotes')
-        .upload(filePath, file);
-
+      const {
+        error: uploadError
+      } = await supabase.storage.from('lotes').upload(filePath, file);
       if (uploadError) throw uploadError;
-
-      updateItem(productId, { imagemUrl: filePath });
+      updateItem(productId, {
+        imagemUrl: filePath
+      });
       toast.success('Imagem atualizada com sucesso!');
     } catch {
       toast.error('Erro ao atualizar imagem');
@@ -529,7 +539,6 @@ export default function Estoque() {
     // Buscar a maior referência numérica existente
     let maxRef = 0;
     const produtosAcabadosExistentes = itens.filter(item => item.tipo === 'acabado');
-    
     produtosAcabadosExistentes.forEach(item => {
       // Procura padrão " - NNN" no final do nome
       const match = item.nome.match(/ - (\d{3})$/);
@@ -538,21 +547,19 @@ export default function Estoque() {
         if (num > maxRef) maxRef = num;
       }
     });
-    
+
     // Próxima referência: max + 1, formatada com 3 dígitos
     const nextRef = String(maxRef + 1).padStart(3, '0');
-    
     setNovoModeloForm({
       nome: '',
       referencia: nextRef,
       quantidade: 0,
       precoVenda: 0,
       imagemUrl: '',
-      imagemPreview: '',
+      imagemPreview: ''
     });
     setShowNovoModeloModal(true);
   };
-
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -560,7 +567,10 @@ export default function Estoque() {
     // Preview local
     const reader = new FileReader();
     reader.onloadend = () => {
-      setNovoModeloForm(prev => ({ ...prev, imagemPreview: reader.result as string }));
+      setNovoModeloForm(prev => ({
+        ...prev,
+        imagemPreview: reader.result as string
+      }));
     };
     reader.readAsDataURL(file);
 
@@ -568,23 +578,26 @@ export default function Estoque() {
     setUploadingImage(true);
     try {
       // Get current user for user-specific path (required by storage RLS)
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Você precisa estar autenticado para enviar imagens.');
         return;
       }
-
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/produtos/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('lotes')
-        .upload(filePath, file);
-
+      const {
+        error: uploadError
+      } = await supabase.storage.from('lotes').upload(filePath, file);
       if (uploadError) throw uploadError;
-
-      setNovoModeloForm(prev => ({ ...prev, imagemUrl: filePath }));
+      setNovoModeloForm(prev => ({
+        ...prev,
+        imagemUrl: filePath
+      }));
       toast.success('Imagem carregada!');
     } catch {
       toast.error('Erro ao carregar imagem');
@@ -592,7 +605,6 @@ export default function Estoque() {
       setUploadingImage(false);
     }
   };
-
   const handleSaveNovoModelo = () => {
     // Validate with Zod schema
     const result = NovoModeloAcabadoSchema.safeParse(novoModeloForm);
@@ -603,15 +615,8 @@ export default function Estoque() {
     }
 
     // Verificar se já existe um produto com o mesmo nome/referência
-    const nomeCompleto = novoModeloForm.referencia 
-      ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` 
-      : novoModeloForm.nome;
-    
-    const produtoExistente = itens.find(
-      item => item.tipo === 'acabado' && 
-        item.nome.toLowerCase() === nomeCompleto.toLowerCase()
-    );
-
+    const nomeCompleto = novoModeloForm.referencia ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` : novoModeloForm.nome;
+    const produtoExistente = itens.find(item => item.tipo === 'acabado' && item.nome.toLowerCase() === nomeCompleto.toLowerCase());
     if (produtoExistente) {
       setProdutoDuplicado(produtoExistente);
       setShowDuplicadoModal(true);
@@ -621,55 +626,47 @@ export default function Estoque() {
     // Criar novo produto
     criarNovoModeloAcabado(nomeCompleto, false);
   };
-
   const criarNovoModeloAcabado = (nomeCompleto: string, somarQuantidade: boolean) => {
     if (somarQuantidade && produtoDuplicado) {
       // Somar à quantidade existente
-        updateItem(produtoDuplicado.id, {
-          quantidade: produtoDuplicado.quantidade + novoModeloForm.quantidade,
-          precoUnitario: novoModeloForm.precoVenda || (produtoDuplicado.precoUnitario ?? 0),
-          imagemUrl: novoModeloForm.imagemUrl || produtoDuplicado.imagemUrl || undefined,
+      updateItem(produtoDuplicado.id, {
+        quantidade: produtoDuplicado.quantidade + novoModeloForm.quantidade,
+        precoUnitario: novoModeloForm.precoVenda || (produtoDuplicado.precoUnitario ?? 0),
+        imagemUrl: novoModeloForm.imagemUrl || produtoDuplicado.imagemUrl || undefined
       });
-        toast.success(`Quantidade somada ao produto existente!`);
-      } else {
-        // Criar novo
-        addItem({
-          nome: nomeCompleto,
-          tipo: 'acabado',
-          categoria: 'Modelo Manual',
-          quantidade: novoModeloForm.quantidade,
-          unidade: 'peças',
-          quantidadeMinima: 0,
-          precoUnitario: novoModeloForm.precoVenda,
-          localizacao: 'Estoque Produção',
-          imagemUrl: novoModeloForm.imagemUrl,
+      toast.success(`Quantidade somada ao produto existente!`);
+    } else {
+      // Criar novo
+      addItem({
+        nome: nomeCompleto,
+        tipo: 'acabado',
+        categoria: 'Modelo Manual',
+        quantidade: novoModeloForm.quantidade,
+        unidade: 'peças',
+        quantidadeMinima: 0,
+        precoUnitario: novoModeloForm.precoVenda,
+        localizacao: 'Estoque Produção',
+        imagemUrl: novoModeloForm.imagemUrl
       });
       toast.success('Modelo adicionado ao estoque!');
     }
-
     setShowNovoModeloModal(false);
     setShowDuplicadoModal(false);
     setProdutoDuplicado(null);
   };
-
-  return (
-    <div className="min-h-screen bg-background flex overflow-hidden">
+  return <div className="min-h-screen bg-background flex overflow-hidden">
       {/* Mobile Header */}
       {isMobile && <MobileHeader title="Estoque" />}
       
       {/* Sidebar - Desktop only */}
       {!isMobile && <AppSidebar />}
 
-      <main className={cn(
-        "flex-1 flex flex-col h-screen overflow-hidden",
-        isMobile && "pt-14 pb-20"
-      )}>
+      <main className={cn("flex-1 flex flex-col h-screen overflow-hidden", isMobile && "pt-14 pb-20")}>
         {/* Header - Desktop only */}
-        {!isMobile && (
-          <header className="px-6 py-4 border-b border-border bg-card/50">
+        {!isMobile && <header className="px-6 py-4 border-b border-border bg-card/50">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Controle de Estoque</h1>
+                <h1 className="text-2xl font-bold text-foreground">CONTROLE DE ESTOQUE</h1>
                 <p className="text-sm text-muted-foreground mt-1">
                   {itens.length} itens cadastrados
                 </p>
@@ -677,81 +674,45 @@ export default function Estoque() {
 
               <div className="flex items-center gap-4">
                 {/* Botão de Refresh */}
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={handleRefreshData}
-                  disabled={isRefreshing}
-                  title="Atualizar dados"
-                >
+                <Button variant="ghost" size="icon" onClick={handleRefreshData} disabled={isRefreshing} title="Atualizar dados">
                   <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
                 </Button>
 
                 {/* Alerta de baixo estoque */}
-                {itensAlerta > 0 && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                {itensAlerta > 0 && <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
                     <AlertTriangle size={16} className="text-amber-600" />
                     <span className="text-sm text-amber-700 font-medium">
                       {itensAlerta} itens com estoque baixo
                     </span>
-                  </div>
-                )}
+                  </div>}
 
                 {/* Search */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                  <Input
-                    placeholder="Buscar item..."
-                    value={search}
-                    onChange={e => handleSearchChange(e.target.value)}
-                    className="pl-10 pr-8 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                  />
-                  {search && (
-                    <button
-                      onClick={handleClearSearch}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted"
-                      title="Limpar busca"
-                    >
+                  <Input placeholder="Buscar item..." value={search} onChange={e => handleSearchChange(e.target.value)} className="pl-10 pr-8 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+                  {search && <button onClick={handleClearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted" title="Limpar busca">
                       <X size={14} className="text-muted-foreground" />
-                    </button>
-                  )}
+                    </button>}
                 </div>
               </div>
             </div>
-          </header>
-        )}
+          </header>}
         
         {/* Mobile Search */}
-        {isMobile && (
-          <div className="px-4 py-3">
+        {isMobile && <div className="px-4 py-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-              <Input
-                placeholder="Buscar item..."
-                value={search}
-                onChange={e => handleSearchChange(e.target.value)}
-                className="pl-10 pr-8 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-              />
-              {search && (
-                <button
-                  onClick={handleClearSearch}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted"
-                  title="Limpar busca"
-                >
+              <Input placeholder="Buscar item..." value={search} onChange={e => handleSearchChange(e.target.value)} className="pl-10 pr-8 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+              {search && <button onClick={handleClearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted" title="Limpar busca">
                   <X size={14} className="text-muted-foreground" />
-                </button>
-              )}
+                </button>}
             </div>
-          </div>
-        )}
+          </div>}
 
         {/* Content */}
         <div ref={scrollContainerRef} className={cn("flex-1 overflow-auto", isMobile ? "p-4" : "p-6")}>
           {/* Metrics Cards */}
-          <div className={cn(
-            "grid gap-3 mb-4",
-            isMobile ? "grid-cols-3" : "grid-cols-4"
-          )}>
+          <div className={cn("grid gap-3 mb-4", isMobile ? "grid-cols-3" : "grid-cols-4")}>
             <Card className="p-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-lg bg-primary/10">
@@ -771,7 +732,9 @@ export default function Estoque() {
                 <div className="min-w-0">
                   <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Valor Total</p>
                   <p className="font-bold text-sm sm:text-lg text-emerald-600">
-                    {isMobile ? `${(valorTotal / 1000).toFixed(1)}k` : `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                    {isMobile ? `${(valorTotal / 1000).toFixed(1)}k` : `R$ ${valorTotal.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2
+                  })}`}
                   </p>
                 </div>
               </div>
@@ -787,8 +750,7 @@ export default function Estoque() {
                 </div>
               </div>
             </Card>
-            {!isMobile && (
-              <Card className="p-3">
+            {!isMobile && <Card className="p-3">
                 <div className="flex items-center gap-2">
                   <div className="p-2 rounded-lg bg-red-500/10">
                     <PackageX className="h-4 w-4 text-red-600" />
@@ -798,41 +760,19 @@ export default function Estoque() {
                     <p className="font-bold text-lg text-red-600">{itensEsgotados}</p>
                   </div>
                 </div>
-              </Card>
-            )}
+              </Card>}
           </div>
 
           {/* Quick Filters */}
           <div className="flex gap-2 mb-4 flex-wrap">
-            <Button
-              variant={filtroRapido === 'todos' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleFilterChange('todos')}
-              className="h-8"
-            >
+            <Button variant={filtroRapido === 'todos' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('todos')} className="h-8">
               Ver Todos
             </Button>
-            <Button
-              variant={filtroRapido === 'esgotado' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleFilterChange('esgotado')}
-              className={cn(
-                "h-8 gap-1",
-                filtroRapido === 'esgotado' ? "bg-red-600 hover:bg-red-700" : "text-red-600 border-red-200 hover:bg-red-50"
-              )}
-            >
+            <Button variant={filtroRapido === 'esgotado' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('esgotado')} className={cn("h-8 gap-1", filtroRapido === 'esgotado' ? "bg-red-600 hover:bg-red-700" : "text-red-600 border-red-200 hover:bg-red-50")}>
               <div className="w-2 h-2 rounded-full bg-red-500" />
               Esgotados ({itensEsgotados})
             </Button>
-            <Button
-              variant={filtroRapido === 'baixo' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleFilterChange('baixo')}
-              className={cn(
-                "h-8 gap-1",
-                filtroRapido === 'baixo' ? "bg-amber-600 hover:bg-amber-700" : "text-amber-600 border-amber-200 hover:bg-amber-50"
-              )}
-            >
+            <Button variant={filtroRapido === 'baixo' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('baixo')} className={cn("h-8 gap-1", filtroRapido === 'baixo' ? "bg-amber-600 hover:bg-amber-700" : "text-amber-600 border-amber-200 hover:bg-amber-50")}>
               <div className="w-2 h-2 rounded-full bg-amber-500" />
               Estoque Baixo ({itensAlerta})
             </Button>
@@ -840,57 +780,26 @@ export default function Estoque() {
 
           <Tabs value={activeTab} onValueChange={v => handleTabChange(v as 'materia_prima' | 'produto_acabado')}>
             {/* Mobile: Scrollable tabs */}
-            {isMobile ? (
-              <ScrollArea className="w-full mb-4">
+            {isMobile ? <ScrollArea className="w-full mb-4">
                 <div className="flex gap-2 pb-2">
-                  <button
-                    onClick={() => handleTabChange('materia_prima')}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap",
-                      "border text-sm font-medium",
-                      activeTab === 'materia_prima'
-                        ? "bg-primary/10 text-primary border-primary/30 shadow-sm"
-                        : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
-                    )}
-                  >
+                  <button onClick={() => handleTabChange('materia_prima')} className={cn("flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap", "border text-sm font-medium", activeTab === 'materia_prima' ? "bg-primary/10 text-primary border-primary/30 shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted")}>
                     <Layers className="h-4 w-4 shrink-0" />
                     <span>Matéria-Prima</span>
-                    <span className={cn(
-                      "inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold",
-                      activeTab === 'materia_prima'
-                        ? "bg-primary/20 text-primary"
-                        : "bg-muted text-muted-foreground"
-                    )}>
+                    <span className={cn("inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold", activeTab === 'materia_prima' ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
                       {materiasPrimas.length}
                     </span>
                   </button>
-                  <button
-                    onClick={() => handleTabChange('produto_acabado')}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap",
-                      "border text-sm font-medium",
-                      activeTab === 'produto_acabado'
-                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 shadow-sm"
-                        : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
-                    )}
-                  >
+                  <button onClick={() => handleTabChange('produto_acabado')} className={cn("flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap", "border text-sm font-medium", activeTab === 'produto_acabado' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted")}>
                     <PackageCheck className="h-4 w-4 shrink-0" />
                     <span>Produtos</span>
-                    <span className={cn(
-                      "inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold",
-                      activeTab === 'produto_acabado'
-                        ? "bg-emerald-500/20 text-emerald-600"
-                        : "bg-muted text-muted-foreground"
-                    )}>
+                    <span className={cn("inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold", activeTab === 'produto_acabado' ? "bg-emerald-500/20 text-emerald-600" : "bg-muted text-muted-foreground")}>
                       {produtosAcabados.length}
                     </span>
                   </button>
                 </div>
                 <ScrollBar orientation="horizontal" className="h-2" />
-              </ScrollArea>
-            ) : (
-              /* Desktop: Original tabs */
-              <div className="flex items-center justify-between mb-6">
+              </ScrollArea> : (/* Desktop: Original tabs */
+          <div className="flex items-center justify-between mb-6">
                 <TabsList className="shadow-[3px_3px_6px_hsl(var(--muted)/0.3),-3px_-3px_6px_hsl(var(--background))] bg-muted/30">
                   <TabsTrigger value="materia_prima" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
                     <Layers size={16} />
@@ -902,14 +811,10 @@ export default function Estoque() {
                   </TabsTrigger>
                 </TabsList>
 
-                {activeTab === 'produto_acabado' && (
-                  <div className="flex items-center gap-3">
+                {activeTab === 'produto_acabado' && <div className="flex items-center gap-3">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="outline"
-                          className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50"
-                        >
+                        <Button variant="outline" className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
                           <Download size={18} />
                           Exportar Modelos
                           <ChevronDown size={14} />
@@ -926,90 +831,36 @@ export default function Estoque() {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button 
-                      onClick={() => setShowImportModal(true)}
-                      variant="outline"
-                      className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50"
-                    >
+                    <Button onClick={() => setShowImportModal(true)} variant="outline" className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
                       <FileSpreadsheet size={18} />
                       Importar Lista de Modelos
                     </Button>
-                    <Button 
-                      onClick={handleOpenNovoModelo} 
-                      className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]"
-                    >
+                    <Button onClick={handleOpenNovoModelo} className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]">
                       <Plus size={18} />
                       Novo Modelo Acabado
                     </Button>
-                  </div>
-                )}
-                {activeTab === 'materia_prima' && (
-                  <Button 
-                    onClick={() => handleOpenModal()} 
-                    className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]"
-                  >
+                  </div>}
+                {activeTab === 'materia_prima' && <Button onClick={() => handleOpenModal()} className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]">
                     <Plus size={18} />
                     Novo Item
-                  </Button>
-                )}
-              </div>
-            )}
+                  </Button>}
+              </div>)}
 
             <TabsContent value={activeTab} className="mt-0">
-              <div className={cn(
-                "grid gap-3",
-                isMobile 
-                  ? "grid-cols-1" 
-                  : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-              )}>
-                {itensFiltrados.map(item => (
-                  item.tipo === 'acabado' ? (
-                    isMobile ? (
-                      <MobileProductCard
-                        key={item.id}
-                        item={{
-                          id: item.id,
-                          nome: item.nome,
-                          categoria: item.categoria,
-                          quantidade: item.quantidade,
-                          precoUnitario: item.precoUnitario,
-                          imagemUrl: item.imagemUrl,
-                          localizacao: item.localizacao,
-                          tipo: item.tipo,
-                        }}
-                        editingPriceId={editingPriceId}
-                        editingPrice={editingPriceValue.toString()}
-                        onEditPrice={(id, price) => {
-                          setEditingPriceId(id);
-                          setEditingPriceValue(price);
-                        }}
-                        onSavePrice={handleSavePrice}
-                        onCancelEditPrice={handleCancelEditPrice}
-                        onPriceChange={(v) => setEditingPriceValue(Number(v))}
-                        onEdit={handleOpenModal}
-                        onDelete={handleDeleteClick}
-                        onImageUpdate={handleProductImageUpdate}
-                      />
-                    ) : (
-                      <ProductCard
-                        key={item.id}
-                        item={item}
-                        editingPriceId={editingPriceId}
-                        editingPriceValue={editingPriceValue}
-                        onEditPrice={handleStartEditPrice}
-                        onSavePrice={handleSavePrice}
-                        onCancelEditPrice={handleCancelEditPrice}
-                        onPriceValueChange={setEditingPriceValue}
-                        onEdit={handleOpenModal}
-                        onDelete={handleDeleteClick}
-                        onImageUpdate={handleProductImageUpdate}
-                      />
-                    )
-                  ) : (
-                    <Card
-                      key={item.id}
-                      className="overflow-hidden shadow-soft border border-border/50 bg-card rounded-2xl"
-                    >
+              <div className={cn("grid gap-3", isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6")}>
+                {itensFiltrados.map(item => item.tipo === 'acabado' ? isMobile ? <MobileProductCard key={item.id} item={{
+                id: item.id,
+                nome: item.nome,
+                categoria: item.categoria,
+                quantidade: item.quantidade,
+                precoUnitario: item.precoUnitario,
+                imagemUrl: item.imagemUrl,
+                localizacao: item.localizacao,
+                tipo: item.tipo
+              }} editingPriceId={editingPriceId} editingPrice={editingPriceValue.toString()} onEditPrice={(id, price) => {
+                setEditingPriceId(id);
+                setEditingPriceValue(price);
+              }} onSavePrice={handleSavePrice} onCancelEditPrice={handleCancelEditPrice} onPriceChange={v => setEditingPriceValue(Number(v))} onEdit={handleOpenModal} onDelete={handleDeleteClick} onImageUpdate={handleProductImageUpdate} /> : <ProductCard key={item.id} item={item} editingPriceId={editingPriceId} editingPriceValue={editingPriceValue} onEditPrice={handleStartEditPrice} onSavePrice={handleSavePrice} onCancelEditPrice={handleCancelEditPrice} onPriceValueChange={setEditingPriceValue} onEdit={handleOpenModal} onDelete={handleDeleteClick} onImageUpdate={handleProductImageUpdate} /> : <Card key={item.id} className="overflow-hidden shadow-soft border border-border/50 bg-card rounded-2xl">
                       <CardContent className={cn("p-6", isMobile && "p-4")}>
                         {/* Two column layout */}
                         <div className="flex gap-4 mb-4 pb-4 border-b border-border/30">
@@ -1018,26 +869,17 @@ export default function Estoque() {
                           
                           {/* Right: Main info */}
                           <div className="flex-1 min-w-0">
-                            <h3 className={cn(
-                              "font-bold text-foreground",
-                              isMobile ? "text-sm line-clamp-2" : "text-lg truncate"
-                            )}>{item.nome}</h3>
+                            <h3 className={cn("font-bold text-foreground", isMobile ? "text-sm line-clamp-2" : "text-lg truncate")}>{item.nome}</h3>
                             <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mt-1">{item.categoria}</p>
                           </div>
                           
                           {/* Calculate status based on quantity */}
                           {(() => {
-                            const status: StatusEstoque = item.quantidade === 0 
-                              ? 'baixo_estoque' 
-                              : item.quantidade <= 20 
-                                ? 'baixo_estoque' 
-                                : 'disponivel';
-                            return (
-                              <Badge className={statusConfig[status].color + " h-fit shrink-0"}>
+                      const status: StatusEstoque = item.quantidade === 0 ? 'baixo_estoque' : item.quantidade <= 20 ? 'baixo_estoque' : 'disponivel';
+                      return <Badge className={statusConfig[status].color + " h-fit shrink-0"}>
                                 {statusConfig[status].label}
-                              </Badge>
-                            );
-                          })()}
+                              </Badge>;
+                    })()}
                         </div>
 
                         {/* Technical data - clean aligned layout */}
@@ -1063,100 +905,56 @@ export default function Estoque() {
                         </div>
 
                         <div className="flex gap-3 mt-5 pt-4 border-t border-border/30">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 gap-1.5 h-10"
-                            onClick={() => handleOpenModal(item)}
-                          >
+                          <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-10" onClick={() => handleOpenModal(item)}>
                             <Edit size={14} />
                             Editar
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-destructive hover:text-destructive h-10 px-3"
-                            onClick={() => handleDeleteClick(item)}
-                          >
+                          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive h-10 px-3" onClick={() => handleDeleteClick(item)}>
                             <Trash2 size={14} />
                           </Button>
                         </div>
                       </CardContent>
-                    </Card>
-                  )
-                ))}
+                    </Card>)}
 
-                {itensFiltrados.length === 0 && !isPaginatedLoading && (
-                  <div className="col-span-full text-center py-12 text-muted-foreground">
-                    {search
-                      ? 'Nenhum item encontrado para a busca.'
-                      : activeTab === 'materia_prima'
-                      ? 'Nenhuma matéria-prima cadastrada.'
-                      : 'Nenhum produto acabado no estoque.'}
-                  </div>
-                )}
+                {itensFiltrados.length === 0 && !isPaginatedLoading && <div className="col-span-full text-center py-12 text-muted-foreground">
+                    {search ? 'Nenhum item encontrado para a busca.' : activeTab === 'materia_prima' ? 'Nenhuma matéria-prima cadastrada.' : 'Nenhum produto acabado no estoque.'}
+                  </div>}
 
-                {isPaginatedLoading && (
-                  <div className="col-span-full text-center py-12 text-muted-foreground">
+                {isPaginatedLoading && <div className="col-span-full text-center py-12 text-muted-foreground">
                     Carregando...
-                  </div>
-                )}
+                  </div>}
               </div>
 
               {/* Paginação */}
-              {totalCount > 0 && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t">
+              {totalCount > 0 && <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t">
                   <span className="text-sm text-muted-foreground">
                     Mostrando {fromItem}-{toItem} de {totalCount} itens
                   </span>
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange(Math.max(0, currentPage - 1))}
-                      disabled={currentPage === 0 || isPaginatedFetching}
-                      className="gap-1"
-                    >
+                    <Button variant="outline" size="sm" onClick={() => handlePageChange(Math.max(0, currentPage - 1))} disabled={currentPage === 0 || isPaginatedFetching} className="gap-1">
                       <ChevronLeft className="h-4 w-4" />
                       Anterior
                     </Button>
                     <span className="text-sm text-muted-foreground px-2">
                       Página {currentPage + 1} de {totalPages}
                     </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange(Math.min(totalPages - 1, currentPage + 1))}
-                      disabled={currentPage >= totalPages - 1 || isPaginatedFetching}
-                      className="gap-1"
-                    >
+                    <Button variant="outline" size="sm" onClick={() => handlePageChange(Math.min(totalPages - 1, currentPage + 1))} disabled={currentPage >= totalPages - 1 || isPaginatedFetching} className="gap-1">
                       Próxima
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
-                </div>
-              )}
+                </div>}
             </TabsContent>
           </Tabs>
         </div>
 
         {/* Mobile FAB for adding items */}
-        {isMobile && activeTab === 'produto_acabado' && (
-          <Button
-            onClick={handleOpenNovoModelo}
-            className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90"
-          >
+        {isMobile && activeTab === 'produto_acabado' && <Button onClick={handleOpenNovoModelo} className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90">
             <Plus size={24} />
-          </Button>
-        )}
-        {isMobile && activeTab === 'materia_prima' && (
-          <Button
-            onClick={() => handleOpenModal()}
-            className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90"
-          >
+          </Button>}
+        {isMobile && activeTab === 'materia_prima' && <Button onClick={() => handleOpenModal()} className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90">
             <Plus size={24} />
-          </Button>
-        )}
+          </Button>}
       </main>
 
       {/* Modal de Novo/Editar Item */}
@@ -1172,44 +970,38 @@ export default function Estoque() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="nome">Nome do Item</Label>
-              <Input
-                id="nome"
-                value={formData.nome}
-                onChange={e => setFormData({ ...formData, nome: e.target.value })}
-                placeholder="Ex: Jeans Azul Escuro"
-                className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-              />
+              <Input id="nome" value={formData.nome} onChange={e => setFormData({
+              ...formData,
+              nome: e.target.value
+            })} placeholder="Ex: Jeans Azul Escuro" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
             </div>
 
             {/* Campos apenas para matéria-prima */}
-            {(!editingItem || editingItem.tipo === 'materia-prima') && (
-              <>
+            {(!editingItem || editingItem.tipo === 'materia-prima') && <>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="categoria">Categoria</Label>
-                    <Select
-                      value={formData.categoria}
-                      onValueChange={v => setFormData({ ...formData, categoria: v })}
-                    >
+                    <Select value={formData.categoria} onValueChange={v => setFormData({
+                  ...formData,
+                  categoria: v
+                })}>
                       <SelectTrigger className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0">
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent>
-                        {categoriasMateriaPrima.map(cat => (
-                          <SelectItem key={cat} value={cat}>
+                        {categoriasMateriaPrima.map(cat => <SelectItem key={cat} value={cat}>
                             {cat}
-                          </SelectItem>
-                        ))}
+                          </SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="unidade">Unidade</Label>
-                    <Select
-                      value={formData.unidade}
-                      onValueChange={v => setFormData({ ...formData, unidade: v })}
-                    >
+                    <Select value={formData.unidade} onValueChange={v => setFormData({
+                  ...formData,
+                  unidade: v
+                })}>
                       <SelectTrigger className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0">
                         <SelectValue />
                       </SelectTrigger>
@@ -1227,84 +1019,58 @@ export default function Estoque() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="quantidade">Quantidade</Label>
-                    <Input
-                      id="quantidade"
-                      type="number"
-                      value={formData.quantidade}
-                      onChange={e => setFormData({ ...formData, quantidade: e.target.value === '' ? '' : Number(e.target.value) })}
-                      min={0}
-                      className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                    />
+                    <Input id="quantidade" type="number" value={formData.quantidade} onChange={e => setFormData({
+                  ...formData,
+                  quantidade: e.target.value === '' ? '' : Number(e.target.value)
+                })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="quantidadeMinima">Qtd. Mínima</Label>
-                    <Input
-                      id="quantidadeMinima"
-                      type="number"
-                      value={formData.quantidadeMinima}
-                      onChange={e => setFormData({ ...formData, quantidadeMinima: e.target.value === '' ? '' : Number(e.target.value) })}
-                      min={0}
-                      className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                    />
+                    <Input id="quantidadeMinima" type="number" value={formData.quantidadeMinima} onChange={e => setFormData({
+                  ...formData,
+                  quantidadeMinima: e.target.value === '' ? '' : Number(e.target.value)
+                })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="precoUnitario">Preço Unitário (R$)</Label>
-                    <Input
-                      id="precoUnitario"
-                      type="number"
-                      step="0.01"
-                      value={formData.precoUnitario}
-                      onChange={e => setFormData({ ...formData, precoUnitario: e.target.value === '' ? '' : Number(e.target.value) })}
-                      min={0}
-                      className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                    />
+                    <Input id="precoUnitario" type="number" step="0.01" value={formData.precoUnitario} onChange={e => setFormData({
+                  ...formData,
+                  precoUnitario: e.target.value === '' ? '' : Number(e.target.value)
+                })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="localizacao">Localização</Label>
-                    <Input
-                      id="localizacao"
-                      value={formData.localizacao}
-                      onChange={e => setFormData({ ...formData, localizacao: e.target.value })}
-                      placeholder="Ex: Prateleira A1"
-                      className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                    />
+                    <Input id="localizacao" value={formData.localizacao} onChange={e => setFormData({
+                  ...formData,
+                  localizacao: e.target.value
+                })} placeholder="Ex: Prateleira A1" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
                   </div>
                 </div>
-              </>
-            )}
+              </>}
 
             {/* Campos para produtos acabados */}
-            {editingItem?.tipo === 'acabado' && (
-              <>
+            {editingItem?.tipo === 'acabado' && <>
                 <div className="space-y-2">
                   <Label htmlFor="quantidade">Quantidade (peças)</Label>
-                  <Input
-                    id="quantidade"
-                    type="number"
-                    value={formData.quantidade}
-                    onChange={e => setFormData({ ...formData, quantidade: e.target.value === '' ? '' : Number(e.target.value) })}
-                    min={0}
-                    className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                  />
+                  <Input id="quantidade" type="number" value={formData.quantidade} onChange={e => setFormData({
+                ...formData,
+                quantidade: e.target.value === '' ? '' : Number(e.target.value)
+              })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="localizacao">Localização</Label>
-                  <Input
-                    id="localizacao"
-                    value={formData.localizacao}
-                    onChange={e => setFormData({ ...formData, localizacao: e.target.value })}
-                    placeholder="Ex: Estoque Produção"
-                    className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                  />
+                  <Input id="localizacao" value={formData.localizacao} onChange={e => setFormData({
+                ...formData,
+                localizacao: e.target.value
+              })} placeholder="Ex: Estoque Produção" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
                 </div>
-              </>
-            )}
+              </>}
           </div>
 
           <DialogFooter>
@@ -1331,8 +1097,7 @@ export default function Estoque() {
             </DialogDescription>
           </DialogHeader>
 
-          {itemToDelete && (
-            <div className="py-4">
+          {itemToDelete && <div className="py-4">
               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))]">
                 <ProductImage imagemUrl={itemToDelete.imagemUrl} nome={itemToDelete.nome} />
                 <div>
@@ -1342,8 +1107,7 @@ export default function Estoque() {
                   </p>
                 </div>
               </div>
-            </div>
-          )}
+            </div>}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
@@ -1374,62 +1138,37 @@ export default function Estoque() {
             {/* Upload de Imagem */}
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Imagem do Produto</Label>
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="relative w-full h-32 rounded-xl bg-background shadow-[inset_3px_3px_8px_hsl(var(--muted)/0.4),inset_-3px_-3px_8px_hsl(var(--background))] border border-border/30 cursor-pointer hover:border-primary/50 transition-colors flex items-center justify-center overflow-hidden group"
-              >
-                {novoModeloForm.imagemPreview ? (
-                  <>
-                    <img 
-                      src={novoModeloForm.imagemPreview} 
-                      alt="Preview" 
-                      className="w-full h-full object-cover"
-                    />
+              <div onClick={() => fileInputRef.current?.click()} className="relative w-full h-32 rounded-xl bg-background shadow-[inset_3px_3px_8px_hsl(var(--muted)/0.4),inset_-3px_-3px_8px_hsl(var(--background))] border border-border/30 cursor-pointer hover:border-primary/50 transition-colors flex items-center justify-center overflow-hidden group">
+                {novoModeloForm.imagemPreview ? <>
+                    <img src={novoModeloForm.imagemPreview} alt="Preview" className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <span className="text-white text-sm font-medium">Trocar imagem</span>
                     </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    {uploadingImage ? (
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-                    ) : (
-                      <>
+                  </> : <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    {uploadingImage ? <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /> : <>
                         <ImagePlus size={32} className="text-muted-foreground/50" />
                         <span className="text-xs uppercase tracking-wider">Clique para adicionar</span>
-                      </>
-                    )}
-                  </div>
-                )}
+                      </>}
+                  </div>}
               </div>
-              <input 
-                type="file" 
-                ref={fileInputRef}
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
+              <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
             </div>
 
             {/* Nome e Referência */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Nome do Modelo</Label>
-                <Input
-                  value={novoModeloForm.nome}
-                  onChange={e => setNovoModeloForm({ ...novoModeloForm, nome: e.target.value })}
-                  placeholder="Ex: Short Jeans"
-                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                />
+                <Input value={novoModeloForm.nome} onChange={e => setNovoModeloForm({
+                ...novoModeloForm,
+                nome: e.target.value
+              })} placeholder="Ex: Short Jeans" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Referência</Label>
-                <Input
-                  value={novoModeloForm.referencia}
-                  onChange={e => setNovoModeloForm({ ...novoModeloForm, referencia: e.target.value })}
-                  placeholder="Ex: 164"
-                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                />
+                <Input value={novoModeloForm.referencia} onChange={e => setNovoModeloForm({
+                ...novoModeloForm,
+                referencia: e.target.value
+              })} placeholder="Ex: 164" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
                 <span className="text-[10px] text-muted-foreground">
                   Sugestão automática. Edite para usar referência existente.
                 </span>
@@ -1440,26 +1179,17 @@ export default function Estoque() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Quantidade Inicial</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={novoModeloForm.quantidade === 0 ? '' : novoModeloForm.quantidade}
-                  onChange={e => setNovoModeloForm({ ...novoModeloForm, quantidade: e.target.value === '' ? 0 : Number(e.target.value) })}
-                  placeholder="0"
-                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                />
+                <Input type="number" min={1} value={novoModeloForm.quantidade === 0 ? '' : novoModeloForm.quantidade} onChange={e => setNovoModeloForm({
+                ...novoModeloForm,
+                quantidade: e.target.value === '' ? 0 : Number(e.target.value)
+              })} placeholder="0" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Preço de Venda (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  value={novoModeloForm.precoVenda === 0 ? '' : novoModeloForm.precoVenda}
-                  onChange={e => setNovoModeloForm({ ...novoModeloForm, precoVenda: e.target.value === '' ? 0 : Number(e.target.value) })}
-                  placeholder="0.00"
-                  className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                />
+                <Input type="number" step="0.01" min={0} value={novoModeloForm.precoVenda === 0 ? '' : novoModeloForm.precoVenda} onChange={e => setNovoModeloForm({
+                ...novoModeloForm,
+                precoVenda: e.target.value === '' ? 0 : Number(e.target.value)
+              })} placeholder="0.00" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
               </div>
             </div>
           </div>
@@ -1468,11 +1198,7 @@ export default function Estoque() {
             <Button variant="outline" onClick={() => setShowNovoModeloModal(false)}>
               Cancelar
             </Button>
-            <Button 
-              onClick={handleSaveNovoModelo}
-              disabled={uploadingImage}
-              className="gap-2 bg-gradient-to-r from-primary to-primary/80"
-            >
+            <Button onClick={handleSaveNovoModelo} disabled={uploadingImage} className="gap-2 bg-gradient-to-r from-primary to-primary/80">
               <Check size={16} />
               Adicionar ao Estoque
             </Button>
@@ -1493,8 +1219,7 @@ export default function Estoque() {
             </DialogDescription>
           </DialogHeader>
 
-          {produtoDuplicado && (
-            <div className="py-4">
+          {produtoDuplicado && <div className="py-4">
               <div className="flex items-center gap-3 p-4 rounded-xl bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))]">
                 <ProductImage imagemUrl={produtoDuplicado.imagemUrl} nome={produtoDuplicado.nome} />
                 <div className="flex-1">
@@ -1512,38 +1237,22 @@ export default function Estoque() {
                   Você está tentando adicionar <strong>{novoModeloForm.quantidade} peças</strong>.
                 </p>
               </div>
-            </div>
-          )}
+            </div>}
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowDuplicadoModal(false)}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={() => setShowDuplicadoModal(false)} className="flex-1">
               Cancelar
             </Button>
-            <Button 
-              onClick={() => {
-                const nomeCompleto = novoModeloForm.referencia 
-                  ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` 
-                  : novoModeloForm.nome;
-                criarNovoModeloAcabado(nomeCompleto + ` (${Date.now()})`, false);
-              }}
-              variant="outline"
-              className="flex-1"
-            >
+            <Button onClick={() => {
+            const nomeCompleto = novoModeloForm.referencia ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` : novoModeloForm.nome;
+            criarNovoModeloAcabado(nomeCompleto + ` (${Date.now()})`, false);
+          }} variant="outline" className="flex-1">
               Criar Novo Registro
             </Button>
-            <Button 
-              onClick={() => {
-                const nomeCompleto = novoModeloForm.referencia 
-                  ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` 
-                  : novoModeloForm.nome;
-                criarNovoModeloAcabado(nomeCompleto, true);
-              }}
-              className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500"
-            >
+            <Button onClick={() => {
+            const nomeCompleto = novoModeloForm.referencia ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` : novoModeloForm.nome;
+            criarNovoModeloAcabado(nomeCompleto, true);
+          }} className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500">
               Somar Quantidade
             </Button>
           </DialogFooter>
@@ -1551,13 +1260,9 @@ export default function Estoque() {
       </Dialog>
 
       {/* Modal de Importação CSV */}
-      <ImportModelosCSVModal 
-        open={showImportModal} 
-        onOpenChange={setShowImportModal} 
-      />
+      <ImportModelosCSVModal open={showImportModal} onOpenChange={setShowImportModal} />
       
       {/* Bottom Navigation */}
       <BottomNavigation />
-    </div>
-  );
+    </div>;
 }
