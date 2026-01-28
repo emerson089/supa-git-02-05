@@ -84,22 +84,36 @@ export default function Transferencias() {
   const quantidadeInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const produtosAcabados = getProdutosAcabados();
 
-  // Encontrar local da loja - para vendedor, usar o local permitido
-  const lojaLocal = useMemo(() => {
+  // Encontrar local - para vendedor, usar o primeiro local permitido
+  // Prioridade: loja > banca > central
+  const selectedLocal = useMemo(() => {
     if (isVendedor) {
-      // Vendedor: usar primeiro local tipo 'loja' permitido
-      const allowedLoja = userLocations.find(ul => ul.localTipo === 'loja' && ul.canView);
-      if (allowedLoja) {
-        return locais.find(l => l.id === allowedLoja.localId) || null;
+      // Vendedor: buscar primeiro local permitido (priorizar loja, depois banca)
+      const allowedLocations = userLocations.filter(ul => ul.canView);
+      
+      // Tentar primeiro uma 'loja', depois 'banca', depois qualquer outro
+      const priorityOrder: Array<'loja' | 'banca' | 'central'> = ['loja', 'banca', 'central'];
+      for (const tipo of priorityOrder) {
+        const found = allowedLocations.find(ul => ul.localTipo === tipo);
+        if (found) {
+          return locais.find(l => l.id === found.localId) || null;
+        }
       }
+      
+      // Fallback: usar primeiro local permitido
+      if (allowedLocations.length > 0) {
+        return locais.find(l => l.id === allowedLocations[0].localId) || null;
+      }
+      
       return null;
     }
-    // Admin/Gerente: usar qualquer loja
-    return locais.find(l => l.tipo === 'loja') || null;
+    
+    // Admin/Gerente: usar qualquer loja ou banca
+    return locais.find(l => l.tipo === 'loja' || l.tipo === 'banca') || null;
   }, [locais, isVendedor, userLocations]);
   
-  const lojaId = lojaLocal?.id || null;
-  const lojaNome = lojaLocal?.nome || 'Loja';
+  const lojaId = selectedLocal?.id || null;
+  const lojaNome = selectedLocal?.nome || 'Local';
   
   // Verificar permissões para o local atual
   const locationAccess = useHasLocationAccess(lojaId);
