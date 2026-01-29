@@ -8,6 +8,7 @@ const ALLOWED_ORIGINS = [
   'https://lovable.dev',
   'https://denim-flow-master.lovable.app',
   'https://id-preview--daf59025-1007-41d6-9df6-d2c77da6cb3c.lovable.app',
+  'https://daf59025-1007-41d6-9df6-d2c77da6cb3c.lovableproject.com',
 ];
 
 function getCorsHeaders(req: Request): Record<string, string> {
@@ -43,33 +44,31 @@ serve(async (req) => {
       );
     }
 
-    const token = authHeader.replace('Bearer ', '');
-
     // Create Supabase clients
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false }
+      global: { headers: { Authorization: authHeader } }
     });
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false }
     });
 
-    // Validate JWT and get caller info
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getUser(token);
+    // Get current user - this properly validates the JWT
+    const { data: { user: caller }, error: userError } = await supabaseAuth.auth.getUser();
     
-    if (claimsError || !claimsData.user) {
-      console.log('Invalid token:', claimsError?.message);
+    if (userError || !caller) {
+      console.log('Invalid token:', userError?.message);
       return new Response(
         JSON.stringify({ success: false, error: 'Token inválido ou expirado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const callerUserId = claimsData.user.id;
+    const callerUserId = caller.id;
     console.log('Caller user ID:', callerUserId);
 
     // Check if caller is admin
@@ -115,7 +114,18 @@ serve(async (req) => {
 
     console.log('Deleting user:', userId);
 
-    // 1. Delete from user_roles
+    // 1. Delete from user_locations first (to avoid FK constraint)
+    const { error: locationsDeleteError } = await supabaseAdmin
+      .from('user_locations')
+      .delete()
+      .eq('user_id', userId);
+
+    if (locationsDeleteError) {
+      console.log('Error deleting user_locations:', locationsDeleteError.message);
+      // Continue anyway, might not have locations
+    }
+
+    // 2. Delete from user_roles
     const { error: rolesDeleteError } = await supabaseAdmin
       .from('user_roles')
       .delete()
@@ -126,7 +136,7 @@ serve(async (req) => {
       // Continue anyway, role might not exist
     }
 
-    // 2. Delete from profiles
+    // 3. Delete from profiles
     const { error: profileDeleteError } = await supabaseAdmin
       .from('profiles')
       .delete()
@@ -137,7 +147,7 @@ serve(async (req) => {
       // Continue anyway, profile might not exist
     }
 
-    // 3. Delete from auth.users
+    // 4. Delete from auth.users
     const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (authDeleteError) {
