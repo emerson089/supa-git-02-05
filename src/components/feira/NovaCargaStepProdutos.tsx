@@ -33,6 +33,8 @@ interface NovaCargaStepProdutosProps {
   onClose: () => void;
   getDisponivelCentral: (itemId: string) => number;
   formatCurrency: (value: number) => string;
+  titulo?: string;
+  onTituloChange?: (value: string) => void;
 }
 
 export function NovaCargaStepProdutos({
@@ -45,6 +47,8 @@ export function NovaCargaStepProdutos({
   onClose,
   getDisponivelCentral,
   formatCurrency,
+  titulo,
+  onTituloChange,
 }: NovaCargaStepProdutosProps) {
   const [produtoSelecionado, setProdutoSelecionado] = useState<string | null>(null);
   const [quantidadeSelecionada, setQuantidadeSelecionada] = useState(1);
@@ -101,6 +105,21 @@ export function NovaCargaStepProdutos({
           Fechar
         </Button>
       </div>
+
+      {/* Campo de título da carga */}
+      {onTituloChange && (
+        <div className="px-4 py-3 border-b bg-muted/20 shrink-0">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5 block">
+            Título da carga (opcional)
+          </label>
+          <Input
+            placeholder="Ex: Alfaiataria, Jeans..."
+            value={titulo || ''}
+            onChange={(e) => onTituloChange(e.target.value)}
+            className="bg-background h-10 text-base"
+          />
+        </div>
+      )}
 
       {/* Campo de busca fixo */}
       <div className="px-4 py-3 border-b bg-muted/30 shrink-0">

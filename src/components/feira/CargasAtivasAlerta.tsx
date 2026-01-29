@@ -61,6 +61,11 @@ export function CargasAtivasAlerta({
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
                   <div className="flex items-center gap-1.5">
                     <Clock size={14} className="text-primary shrink-0" />
+                    {carga.observacoes ? (
+                      <span className="text-sm font-semibold text-primary truncate max-w-[120px] sm:max-w-none">
+                        "{carga.observacoes}"
+                      </span>
+                    ) : null}
                     <span className="text-sm font-medium">
                       {format(new Date(carga.dataSaida), "HH:mm")}
                     </span>
