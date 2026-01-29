@@ -1,60 +1,97 @@
 
-## Plano: Corrigir Exclusão de Modelos Bloqueada por Status "Estornada"
 
-### Problema Identificado
-O erro "violates foreign key constraint transferencia_itens_item_id_fkey" ocorre porque a lógica de limpeza antes da exclusão não considera transferências com status `estornada`.
+## Plano: Adicionar Título às Cargas de Feira
 
-### Análise Técnica
+### Objetivo
+Permitir que o usuário defina um título/nome para cada carga (ex: "Alfaiataria", "Jeans") para facilitar a identificação no histórico e nas cargas em andamento.
 
-**Arquivo**: `src/hooks/useEstoqueData.ts`
+### Abordagem Técnica
+Utilizar o campo `observacoes` já existente na tabela `transferencias` como título da carga. Isso evita alterações no banco de dados e aproveita a estrutura existente.
 
-**Lógica Atual (linha 398-400)**:
-```typescript
-const itensParaDeletar = itensParaLimpar?.filter((i: any) => 
-  i.transferencias?.deleted_at !== null || i.transferencias?.status === 'concluida'
-) || [];
+### Alterações Necessárias
+
+#### 1. Componente de Seleção de Produtos - `NovaCargaStepProdutos.tsx`
+Adicionar um campo de Input para o título da carga no header, antes da busca de produtos.
+
+| Mudança | Descrição |
+|---------|-----------|
+| Nova prop `titulo` | Valor atual do título |
+| Nova prop `onTituloChange` | Callback para atualizar o título |
+| Input de título | Campo opcional no topo do modal |
+
+#### 2. Componente Bottom Sheet Mobile - `NovaCargaBottomSheet.tsx`
+Mostrar o título no header quando definido.
+
+#### 3. Página Feira - `Feira.tsx`
+- Adicionar estado `tituloCarga`
+- Passar o título para o `useCriarCargaFeira` via campo `observacoes`
+- Resetar título após criação bem-sucedida
+
+#### 4. Alerta de Cargas Ativas - `CargasAtivasAlerta.tsx`
+- Exibir o título (observacoes) antes ou no lugar do horário quando disponível
+- Layout: `"Alfaiataria" 18:35 • 284 pç • R$ 11.787,00`
+
+#### 5. Histórico Agrupado - `HistoricoAgrupado.tsx`
+- Exibir o título nas linhas de cargas concluídas
+
+#### 6. Detalhes da Carga - `DetalhesCargaModal.tsx`
+- Mostrar o título no cabeçalho do modal
+
+### Fluxo de Uso
+
+```text
+1. Usuário clica em "+ Nova Carga"
+2. Modal abre com campo "Título da carga (opcional)"
+   Placeholder: "Ex: Alfaiataria, Jeans..."
+3. Usuário digita "Alfaiataria" 
+4. Seleciona os produtos
+5. Confirma criação
+6. Na lista de "Cargas em Andamento":
+   "Alfaiataria" 18:35 • 284 pç • R$ 11.787,00
 ```
 
-**Problema**: Transferências com status `estornada` ou `cancelada` não são incluídas na limpeza, deixando registros órfãos em `transferencia_itens` que bloqueiam a exclusão do item.
+### UI/UX Mobile
 
-### Status de Transferências no Sistema
-
-| Status | Pode excluir item? | Motivo |
-|--------|-------------------|--------|
-| `em_andamento` | Não | Carga ativa, precisa finalizar/estornar primeiro |
-| `concluida` | Sim | Histórico pode ser limpo |
-| `estornada` | Sim | Carga já foi revertida, histórico pode ser limpo |
-| `cancelada` | Sim | Carga cancelada, histórico pode ser limpo |
-| `deleted_at != null` | Sim | Soft-deleted, histórico pode ser limpo |
-
-### Solução
-
-Expandir o filtro para incluir todos os status que permitem limpeza do histórico:
-
-**Código Corrigido**:
-```typescript
-// Filtrar itens que podem ser deletados 
-// (concluídas, estornadas, canceladas ou soft-deleted)
-const itensParaDeletar = itensParaLimpar?.filter((i: any) => 
-  i.transferencias?.deleted_at !== null || 
-  i.transferencias?.status === 'concluida' ||
-  i.transferencias?.status === 'estornada' ||
-  i.transferencias?.status === 'cancelada'
-) || [];
+```
+┌──────────────────────────────────────┐
+│ 🚚 Nova Carga                     X  │
+├──────────────────────────────────────┤
+│ Título da carga (opcional)           │
+│ ┌──────────────────────────────────┐ │
+│ │ Ex: Alfaiataria, Jeans...        │ │
+│ └──────────────────────────────────┘ │
+├──────────────────────────────────────┤
+│ 🔍 Buscar produto...                 │
+├──────────────────────────────────────┤
+│ Produtos (42)                        │
+├──────────────────────────────────────┤
+│ ... lista de produtos ...            │
+└──────────────────────────────────────┘
 ```
 
-### Alteração Necessária
+### Exibição no Alerta de Cargas Ativas
 
-**Arquivo**: `src/hooks/useEstoqueData.ts`
-- **Linhas**: 397-400
-- **Mudança**: Adicionar `estornada` e `cancelada` à condição de filtro
+**Com título:**
+```
+⏰ "Alfaiataria" 18:35  284 peças  R$ 11.787,00  [Editar] [PDF] [Retorno]
+```
 
-### Resultado Esperado
-
-- Modelos com transferências estornadas/canceladas poderão ser excluídos normalmente
-- A limpeza do histórico acontecerá automaticamente antes da exclusão
-- Modelos com cargas `em_andamento` continuarão bloqueados (comportamento correto)
+**Sem título:**
+```
+⏰ 18:35  284 peças  R$ 11.787,00  [Editar] [PDF] [Retorno]
+```
 
 ### Arquivos Impactados
 
-1. `src/hooks/useEstoqueData.ts` - Linha 398-400
+| Arquivo | Tipo de Alteração |
+|---------|------------------|
+| `src/pages/Feira.tsx` | Adicionar estado e passar para criação |
+| `src/components/feira/NovaCargaStepProdutos.tsx` | Adicionar campo de título |
+| `src/components/feira/NovaCargaBottomSheet.tsx` | Mostrar título no header |
+| `src/components/feira/CargasAtivasAlerta.tsx` | Exibir título nas cargas |
+| `src/components/feira/HistoricoAgrupado.tsx` | Exibir título no histórico |
+| `src/components/feira/DetalhesCargaModal.tsx` | Mostrar título no modal |
+
+### Sem Alterações no Banco de Dados
+O campo `observacoes` (text, nullable) já existe na tabela `transferencias` e será reutilizado como título.
+
