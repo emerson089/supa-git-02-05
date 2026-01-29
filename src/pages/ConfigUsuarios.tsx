@@ -49,6 +49,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { UserLocationManager } from '@/components/usuarios/UserLocationManager';
+import { MobileUserCard } from '@/components/usuarios/MobileUserCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { 
@@ -215,23 +216,25 @@ export default function ConfigUsuarios() {
       <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
         {isMobile && <MobileHeader title="Gestão de Usuários" />}
         
-        <div className="max-w-6xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Users className="h-6 w-6" />
-                Gestão de Usuários
-              </h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                Gerencie os usuários e suas permissões
-              </p>
+        <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
+          {/* Header - Hidden on mobile, shown in MobileHeader */}
+          {!isMobile && (
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                  <Users className="h-6 w-6" />
+                  Gestão de Usuários
+                </h1>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Gerencie os usuários e suas permissões
+                </p>
+              </div>
+              <Button onClick={() => setIsCreating(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Novo Usuário
+              </Button>
             </div>
-            <Button onClick={() => setIsCreating(true)}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Novo Usuário
-            </Button>
-          </div>
+          )}
 
           {/* Search */}
           <div className="relative">
@@ -240,60 +243,91 @@ export default function ConfigUsuarios() {
               placeholder="Buscar por nome, email ou role..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 text-base md:text-sm"
             />
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Stats - Compact on mobile */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle>
+              <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
+                <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Total</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{users.length}</div>
+              <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+                <div className="text-xl md:text-2xl font-bold">{users.length}</div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Ativos</CardTitle>
+              <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
+                <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Ativos</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
+              <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+                <div className="text-xl md:text-2xl font-bold text-green-600">
                   {users.filter(u => u.status === 'ativo').length}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Admins</CardTitle>
+              <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
+                <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Admins</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
+              <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+                <div className="text-xl md:text-2xl font-bold">
                   {users.filter(u => u.role === 'admin').length}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Inativos</CardTitle>
+              <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
+                <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Inativos</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
+              <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+                <div className="text-xl md:text-2xl font-bold text-red-600">
                   {users.filter(u => u.status === 'inativo').length}
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Users Table */}
-          <Card>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
+          {/* Users List */}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : isMobile ? (
+            /* Mobile: Card-based layout */
+            <div className="space-y-3">
+              {filteredUsers.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    {searchQuery ? 'Nenhum usuário encontrado' : 'Nenhum usuário cadastrado'}
+                  </CardContent>
+                </Card>
               ) : (
+                filteredUsers.map((user) => (
+                  <MobileUserCard
+                    key={user.id}
+                    user={user}
+                    isCurrentUser={user.user_id === currentUserProfile?.user_id}
+                    isTogglingStatus={togglingUserId === user.user_id}
+                    isResettingPassword={resettingUserId === user.user_id}
+                    onEditRole={() => {
+                      setSelectedUser(user);
+                      setNewUserRole(user.role || 'vendedor');
+                      setIsEditingRole(true);
+                    }}
+                    onToggleStatus={() => handleToggleStatus(user)}
+                    onResetPassword={() => handleResetPassword(user)}
+                    onDelete={() => setConfirmDeleteUser(user)}
+                    onConfigureLocations={user.role === 'vendedor' ? () => setLocationManagerUser(user) : undefined}
+                  />
+                ))
+              )}
+            </div>
+          ) : (
+            /* Desktop: Table layout */
+            <Card>
+              <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -302,7 +336,7 @@ export default function ConfigUsuarios() {
                         <TableHead>Email</TableHead>
                         <TableHead>Role</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="hidden md:table-cell">Último Acesso</TableHead>
+                        <TableHead>Último Acesso</TableHead>
                         <TableHead className="w-[50px]"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -333,7 +367,7 @@ export default function ConfigUsuarios() {
                                 {user.status === 'ativo' ? 'Ativo' : 'Inativo'}
                               </Badge>
                             </TableCell>
-                            <TableCell className="hidden md:table-cell text-muted-foreground">
+                            <TableCell className="text-muted-foreground">
                               {user.last_sign_in_at 
                                 ? format(new Date(user.last_sign_in_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
                                 : 'Nunca'}
@@ -365,58 +399,58 @@ export default function ConfigUsuarios() {
                                       Configurar Locais
                                     </DropdownMenuItem>
                                   )}
-                                                  <DropdownMenuItem
-                                                    onClick={() => handleToggleStatus(user)}
-                                                    disabled={
-                                                      user.user_id === currentUserProfile?.user_id ||
-                                                      togglingUserId === user.user_id
-                                                    }
-                                                  >
-                                                    {togglingUserId === user.user_id ? (
-                                                      <>
-                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                        {user.status === 'ativo' ? 'Desativando...' : 'Ativando...'}
-                                                      </>
-                                                    ) : user.status === 'ativo' ? (
-                                                      <>
-                                                        <Ban className="h-4 w-4 mr-2" />
-                                                        Desativar
-                                                      </>
-                                                    ) : (
-                                                      <>
-                                                        <CheckCircle className="h-4 w-4 mr-2" />
-                                                        Ativar
-                                                      </>
-                                                    )}
-                                                  </DropdownMenuItem>
-                                                  <DropdownMenuItem
-                                                    onClick={() => handleResetPassword(user)}
-                                                    disabled={
-                                                      user.user_id === currentUserProfile?.user_id ||
-                                                      resettingUserId === user.user_id
-                                                    }
-                                                  >
-                                                    {resettingUserId === user.user_id ? (
-                                                      <>
-                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                        Resetando...
-                                                      </>
-                                                    ) : (
-                                                      <>
-                                                         <Key className="h-4 w-4 mr-2" />
-                                                         Resetar Senha
-                                                       </>
-                                                     )}
-                                                   </DropdownMenuItem>
-                                                   <DropdownMenuSeparator />
-                                                   <DropdownMenuItem
-                                                     onClick={() => setConfirmDeleteUser(user)}
-                                                     disabled={user.user_id === currentUserProfile?.user_id}
-                                                     className="text-destructive focus:text-destructive"
-                                                   >
-                                                     <Trash2 className="h-4 w-4 mr-2" />
-                                                     Excluir
-                                                   </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleToggleStatus(user)}
+                                    disabled={
+                                      user.user_id === currentUserProfile?.user_id ||
+                                      togglingUserId === user.user_id
+                                    }
+                                  >
+                                    {togglingUserId === user.user_id ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        {user.status === 'ativo' ? 'Desativando...' : 'Ativando...'}
+                                      </>
+                                    ) : user.status === 'ativo' ? (
+                                      <>
+                                        <Ban className="h-4 w-4 mr-2" />
+                                        Desativar
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle className="h-4 w-4 mr-2" />
+                                        Ativar
+                                      </>
+                                    )}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleResetPassword(user)}
+                                    disabled={
+                                      user.user_id === currentUserProfile?.user_id ||
+                                      resettingUserId === user.user_id
+                                    }
+                                  >
+                                    {resettingUserId === user.user_id ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        Resetando...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Key className="h-4 w-4 mr-2" />
+                                        Resetar Senha
+                                      </>
+                                    )}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => setConfirmDeleteUser(user)}
+                                    disabled={user.user_id === currentUserProfile?.user_id}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Excluir
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </TableCell>
@@ -426,17 +460,28 @@ export default function ConfigUsuarios() {
                     </TableBody>
                   </Table>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
 
       {isMobile && <BottomNavigation />}
 
+      {/* FAB for adding user on mobile */}
+      {isMobile && (
+        <Button
+          onClick={() => setIsCreating(true)}
+          size="lg"
+          className="fixed bottom-20 right-4 h-14 w-14 rounded-full shadow-lg z-40"
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
+
       {/* Create User Dialog */}
       <Dialog open={isCreating} onOpenChange={setIsCreating}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Novo Usuário</DialogTitle>
             <DialogDescription>
@@ -452,6 +497,7 @@ export default function ConfigUsuarios() {
                 value={newUserNome}
                 onChange={(e) => setNewUserNome(e.target.value)}
                 disabled={submitting}
+                className="text-base md:text-sm"
               />
             </div>
             <div className="space-y-2">
@@ -463,6 +509,7 @@ export default function ConfigUsuarios() {
                 value={newUserEmail}
                 onChange={(e) => setNewUserEmail(e.target.value)}
                 disabled={submitting}
+                className="text-base md:text-sm"
               />
             </div>
             <div className="space-y-2">
@@ -472,7 +519,7 @@ export default function ConfigUsuarios() {
                 onValueChange={(value) => setNewUserRole(value as AppRole)}
                 disabled={submitting}
               >
-                <SelectTrigger>
+                <SelectTrigger className="text-base md:text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -483,11 +530,11 @@ export default function ConfigUsuarios() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreating(false)} disabled={submitting}>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setIsCreating(false)} disabled={submitting} className="w-full sm:w-auto">
               Cancelar
             </Button>
-            <Button onClick={handleCreateUser} disabled={submitting}>
+            <Button onClick={handleCreateUser} disabled={submitting} className="w-full sm:w-auto">
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Criar Usuário
             </Button>
@@ -497,7 +544,7 @@ export default function ConfigUsuarios() {
 
       {/* Edit Role Dialog */}
       <Dialog open={isEditingRole} onOpenChange={setIsEditingRole}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Alterar Role</DialogTitle>
             <DialogDescription>
@@ -513,7 +560,7 @@ export default function ConfigUsuarios() {
                 onValueChange={(value) => setNewUserRole(value as AppRole)}
                 disabled={submitting}
               >
-                <SelectTrigger>
+                <SelectTrigger className="text-base md:text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -524,11 +571,11 @@ export default function ConfigUsuarios() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditingRole(false)} disabled={submitting}>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setIsEditingRole(false)} disabled={submitting} className="w-full sm:w-auto">
               Cancelar
             </Button>
-            <Button onClick={handleUpdateRole} disabled={submitting}>
+            <Button onClick={handleUpdateRole} disabled={submitting} className="w-full sm:w-auto">
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Salvar
             </Button>
@@ -538,7 +585,7 @@ export default function ConfigUsuarios() {
 
       {/* Temp Password Dialog */}
       <Dialog open={!!showTempPassword} onOpenChange={() => setShowTempPassword(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Senha Temporária</DialogTitle>
             <DialogDescription>
@@ -547,11 +594,12 @@ export default function ConfigUsuarios() {
           </DialogHeader>
           <div className="py-4">
             <div className="flex items-center gap-2 p-4 bg-muted rounded-lg">
-              <code className="flex-1 text-lg font-mono">{showTempPassword}</code>
+              <code className="flex-1 text-lg font-mono break-all">{showTempPassword}</code>
               <Button 
                 variant="outline" 
                 size="icon"
                 onClick={() => copyToClipboard(showTempPassword || '')}
+                className="flex-shrink-0"
               >
                 <Copy className="h-4 w-4" />
               </Button>
@@ -561,7 +609,7 @@ export default function ConfigUsuarios() {
             </p>
           </div>
           <DialogFooter>
-            <Button onClick={() => setShowTempPassword(null)}>
+            <Button onClick={() => setShowTempPassword(null)} className="w-full sm:w-auto">
               Entendi
             </Button>
           </DialogFooter>
@@ -580,12 +628,12 @@ export default function ConfigUsuarios() {
               Esta ação não pode ser desfeita. Todos os dados do usuário serão removidos.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={!!deletingUserId}>Cancelar</AlertDialogCancel>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel disabled={!!deletingUserId} className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteUser}
               disabled={!!deletingUserId}
-              className="bg-destructive hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90 w-full sm:w-auto"
             >
               {deletingUserId ? (
                 <>

@@ -45,23 +45,23 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
-    // Validate JWT using getClaims
-    const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+    // Client with user token to verify identity
+    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } }
     });
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    // Get current user - this properly validates the JWT
+    const { data: { user: caller }, error: userError } = await supabaseUser.auth.getUser();
     
-    if (claimsError || !claimsData?.claims) {
-      console.error('Failed to validate token:', claimsError);
+    if (userError || !caller) {
+      console.error('Failed to validate token:', userError);
       return new Response(
         JSON.stringify({ error: 'Usuário não autenticado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const callerId = claimsData.claims.sub as string;
+    const callerId = caller.id;
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 

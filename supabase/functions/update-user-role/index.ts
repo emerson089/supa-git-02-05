@@ -50,19 +50,18 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } }
     });
 
-    // Validate JWT using getClaims
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token);
+    // Get current user - this properly validates the JWT
+    const { data: { user: caller }, error: userError } = await supabaseUser.auth.getUser();
     
-    if (claimsError || !claimsData?.claims) {
-      console.error('Failed to validate token:', claimsError);
+    if (userError || !caller) {
+      console.error('Failed to validate token:', userError);
       return new Response(
         JSON.stringify({ error: 'Usuário não autenticado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const callerId = claimsData.claims.sub as string;
+    const callerId = caller.id;
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
