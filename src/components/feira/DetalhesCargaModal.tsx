@@ -104,7 +104,14 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5 text-primary" />
-              Detalhes da Carga
+              {carga.observacoes ? (
+                <span>
+                  <span className="text-primary">"{carga.observacoes}"</span>
+                  <span className="text-muted-foreground font-normal text-sm ml-2">• Carga</span>
+                </span>
+              ) : (
+                'Detalhes da Carga'
+              )}
             </DialogTitle>
             <Badge className={statusConfig.className}>
               <StatusIcon className="h-3 w-3 mr-1" />

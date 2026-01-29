@@ -193,6 +193,11 @@ export function HistoricoAgrupado({ historico, onVerDetalhes, onExcluirCarga, on
                       >
                         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                           <StatusIcon size={16} className={cn(statusConfig.iconClass, 'flex-shrink-0')} />
+                          {carga.observacoes && (
+                            <span className="text-sm font-semibold text-primary truncate max-w-[100px] sm:max-w-[150px]">
+                              "{carga.observacoes}"
+                            </span>
+                          )}
                           <span className="text-sm font-medium">{horario}</span>
                           <Badge
                             variant={statusConfig.variant}

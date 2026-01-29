@@ -25,6 +25,7 @@ interface NovaCargaBottomSheetProps {
   onCriarCarga: () => void;
   isPending: boolean;
   formatCurrency: (value: number) => string;
+  titulo?: string;
 }
 
 export function NovaCargaBottomSheet({
@@ -34,6 +35,7 @@ export function NovaCargaBottomSheet({
   onCriarCarga,
   isPending,
   formatCurrency,
+  titulo,
 }: NovaCargaBottomSheetProps) {
   const [open, setOpen] = useState(false);
   
@@ -87,7 +89,14 @@ export function NovaCargaBottomSheet({
           <DrawerTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <ShoppingBag className="h-5 w-5 text-primary" />
-              Carrinho ({qtdItens} {qtdItens === 1 ? 'item' : 'itens'})
+              {titulo ? (
+                <span>
+                  <span className="text-primary">"{titulo}"</span>
+                  <span className="text-muted-foreground font-normal text-sm ml-1">({qtdItens})</span>
+                </span>
+              ) : (
+                <>Carrinho ({qtdItens} {qtdItens === 1 ? 'item' : 'itens'})</>
+              )}
             </span>
             <span className="text-sm font-normal text-muted-foreground">
               {totalPecas} pç

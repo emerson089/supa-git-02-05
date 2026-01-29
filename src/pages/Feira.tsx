@@ -105,6 +105,7 @@ export default function Feira() {
   const [cargaCorrigirRetorno, setCargaCorrigirRetorno] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaEditar, setCargaEditar] = useState<TransferenciaComItensHistorico | null>(null);
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
+  const [tituloCarga, setTituloCarga] = useState('');
   const [buscaProduto, setBuscaProduto] = useState('');
   const [itensRetorno, setItensRetorno] = useState<{
     itemId: string;
@@ -136,7 +137,7 @@ export default function Feira() {
   // Fechar modal - manter itens selecionados para persistência
   const handleCloseNovaCarga = () => {
     setShowNovaCarga(false);
-    // Não limpa itensCarga para persistir ao reabrir
+    // Não limpa itensCarga e tituloCarga para persistir ao reabrir
     setBuscaProduto('');
   };
 
@@ -286,13 +287,15 @@ export default function Feira() {
     // Fechar modal IMEDIATAMENTE para feedback instantâneo
     handleCloseNovaCarga();
 
-    // Executar criação em background
+    // Executar criação em background com título como observacoes
     criarCarga.mutate({
-      itens: itensParaCriar
+      itens: itensParaCriar,
+      observacoes: tituloCarga.trim() || undefined
     }, {
       onSuccess: () => {
         toast.success('Carga criada com sucesso!');
         setItensCarga([]); // Limpar apenas após criar com sucesso
+        setTituloCarga(''); // Limpar título após sucesso
       },
       onError: (error: any) => {
         toast.error(error.message || 'Erro ao criar carga');
@@ -825,10 +828,10 @@ export default function Feira() {
       {/* Modal Nova Carga - Mobile uses new components, Desktop uses Dialog */}
       {isMobile ? <Sheet open={showNovaCarga} onOpenChange={open => !open && handleCloseNovaCarga()}>
           <SheetContent side="bottom" className="h-[95vh] flex flex-col p-0 rounded-t-2xl [&>button]:hidden relative">
-            <NovaCargaStepProdutos produtos={produtosFiltrados} itensCarga={itensCarga} isLoading={isRefetchingEstoque} buscaProduto={buscaProduto} onBuscaChange={setBuscaProduto} onAddItem={handleAddItemCarga} onClose={handleCloseNovaCarga} getDisponivelCentral={getDisponivelCentral} formatCurrency={formatCurrency} />
+            <NovaCargaStepProdutos produtos={produtosFiltrados} itensCarga={itensCarga} isLoading={isRefetchingEstoque} buscaProduto={buscaProduto} onBuscaChange={setBuscaProduto} onAddItem={handleAddItemCarga} onClose={handleCloseNovaCarga} getDisponivelCentral={getDisponivelCentral} formatCurrency={formatCurrency} titulo={tituloCarga} onTituloChange={setTituloCarga} />
             
             {/* FAB do carrinho - agora dentro do Sheet */}
-            <NovaCargaBottomSheet itensCarga={itensCarga} onUpdateQtd={handleSetQuantidadeCarga} onRemoveItem={handleRemoveItemCarga} onCriarCarga={handleCriarCarga} isPending={criarCarga.isPending} formatCurrency={formatCurrency} />
+            <NovaCargaBottomSheet itensCarga={itensCarga} onUpdateQtd={handleSetQuantidadeCarga} onRemoveItem={handleRemoveItemCarga} onCriarCarga={handleCriarCarga} isPending={criarCarga.isPending} formatCurrency={formatCurrency} titulo={tituloCarga} />
             
             {/* Bottom Bar fixa - agora dentro do Sheet */}
             <NovaCargaBottomBar qtdItens={itensCarga.length} totalPecas={totalCarga} valorTotal={formatCurrency(valorCarga)} onCriarCarga={handleCriarCarga} isPending={criarCarga.isPending} disabled={itensCarga.length === 0} />
@@ -843,6 +846,14 @@ export default function Feira() {
             </DialogHeader>
 
             <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+              {/* Campo de título da carga (Desktop) */}
+              <div className="px-4 py-3 border-b bg-muted/20">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5 block">
+                  Título da carga (opcional)
+                </label>
+                <Input placeholder="Ex: Alfaiataria, Jeans..." value={tituloCarga} onChange={e => setTituloCarga(e.target.value)} className="bg-background h-10" />
+              </div>
+
               {/* Campo de Busca */}
               <div className="px-4 py-3 border-b bg-muted/30">
                 <div className="relative">
