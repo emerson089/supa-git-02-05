@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, subDays, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileDown, FileSpreadsheet, Loader2, Calendar, Filter, TrendingDown, DollarSign, Package } from 'lucide-react';
+import { FileDown, FileSpreadsheet, Loader2, Calendar, Filter, TrendingDown, DollarSign, Package, Search, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -39,10 +39,12 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import {
   useRelatorioSaidas,
   useLocaisParaFiltro,
+  useModelosParaFiltro,
   FiltrosSaidas,
   TIPOS_SAIDA,
   TIPO_LABELS,
 } from '@/hooks/useRelatorioSaidas';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { generateRelatorioSaidasPDF } from '@/utils/generateRelatorioSaidasPDF';
 import { generateRelatorioSaidasExcel } from '@/utils/generateRelatorioSaidasExcel';
 
@@ -62,10 +64,16 @@ export function RelatorioSaidasModal({
   const [dataFinal, setDataFinal] = useState<Date>(new Date());
   const [localId, setLocalId] = useState<string>(localIdInicial || 'todos');
   const [tiposSelecionados, setTiposSelecionados] = useState<string[]>([]);
+  const [modelosSelecionados, setModelosSelecionados] = useState<{ id: string; nome: string; categoria: string }[]>([]);
+  const [modeloBusca, setModeloBusca] = useState('');
   const [filtrosAplicados, setFiltrosAplicados] = useState<FiltrosSaidas | null>(null);
+
+  // Debounce para busca de modelos
+  const modeloBuscaDebounced = useDebouncedValue(modeloBusca, 300);
 
   // Queries
   const { data: locais } = useLocaisParaFiltro();
+  const { data: modelosDisponiveis, isLoading: isLoadingModelos } = useModelosParaFiltro(modeloBuscaDebounced);
   const { data, isLoading, isFetching } = useRelatorioSaidas(filtrosAplicados);
 
   const saidas = data?.saidas || [];
@@ -84,6 +92,7 @@ export function RelatorioSaidasModal({
       dataFinal,
       localId: localId !== 'todos' ? localId : undefined,
       tiposMovimento: tiposSelecionados.length > 0 ? tiposSelecionados : undefined,
+      modeloIds: modelosSelecionados.length > 0 ? modelosSelecionados.map(m => m.id) : undefined,
     });
   };
 
@@ -105,6 +114,22 @@ export function RelatorioSaidasModal({
       filtros: filtrosAplicados,
       localNomeFiltro,
     });
+  };
+
+  // Toggle modelo selecionado
+  const handleToggleModelo = (modelo: { id: string; nome: string; categoria: string }) => {
+    setModelosSelecionados(prev => {
+      const isSelected = prev.some(m => m.id === modelo.id);
+      if (isSelected) {
+        return prev.filter(m => m.id !== modelo.id);
+      }
+      return [...prev, modelo];
+    });
+  };
+
+  // Limpar modelos selecionados
+  const handleLimparModelos = () => {
+    setModelosSelecionados([]);
   };
 
   // Exportar Excel/CSV
@@ -152,7 +177,7 @@ export function RelatorioSaidasModal({
             Filtros
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {/* Data Inicial */}
             <div className="space-y-1.5">
               <Label className="text-xs">Data Inicial</Label>
@@ -243,6 +268,108 @@ export function RelatorioSaidasModal({
                         </label>
                       </div>
                     ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Modelos */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Modelos</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    {modelosSelecionados.length === 0
+                      ? 'Todos os modelos'
+                      : `${modelosSelecionados.length} modelo(s)`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72" align="start">
+                  <div className="space-y-3">
+                    {/* Campo de busca */}
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar modelo..."
+                        value={modeloBusca}
+                        onChange={(e) => setModeloBusca(e.target.value)}
+                        className="pl-8 h-9"
+                      />
+                    </div>
+
+                    {/* Lista de modelos */}
+                    <ScrollArea className="h-[200px]">
+                      {isLoadingModelos ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : modelosDisponiveis && modelosDisponiveis.length > 0 ? (
+                        <div className="space-y-1">
+                          {modelosDisponiveis.map(modelo => {
+                            const isSelected = modelosSelecionados.some(m => m.id === modelo.id);
+                            return (
+                              <div
+                                key={modelo.id}
+                                className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer"
+                                onClick={() => handleToggleModelo(modelo)}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => handleToggleModelo(modelo)}
+                                />
+                                <span className="text-sm truncate flex-1">
+                                  {modelo.nome}
+                                  {modelo.categoria && (
+                                    <span className="text-muted-foreground ml-1">- {modelo.categoria}</span>
+                                  )}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground text-center py-4">
+                          {modeloBusca.length > 0 && modeloBusca.length < 2
+                            ? 'Digite ao menos 2 caracteres'
+                            : 'Nenhum modelo encontrado'}
+                        </div>
+                      )}
+                    </ScrollArea>
+
+                    {/* Modelos selecionados e botão limpar */}
+                    {modelosSelecionados.length > 0 && (
+                      <div className="border-t pt-2 space-y-2">
+                        <div className="flex flex-wrap gap-1">
+                          {modelosSelecionados.slice(0, 3).map(modelo => (
+                            <Badge key={modelo.id} variant="secondary" className="text-xs">
+                              {truncateText(modelo.nome, 15)}
+                              <button
+                                className="ml-1 hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleModelo(modelo);
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                          {modelosSelecionados.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{modelosSelecionados.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full h-7 text-xs"
+                          onClick={handleLimparModelos}
+                        >
+                          Limpar seleção
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </PopoverContent>
               </Popover>

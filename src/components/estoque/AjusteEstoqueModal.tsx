@@ -31,7 +31,9 @@ interface AjusteEstoqueModalProps {
 }
 
 export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueModalProps) {
+  const [estoqueAtualEditavel, setEstoqueAtualEditavel] = useState('');
   const [novaQuantidade, setNovaQuantidade] = useState('');
+  const [novoEstoqueManualmenteAlterado, setNovoEstoqueManualmenteAlterado] = useState(false);
   const [motivo, setMotivo] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
@@ -40,7 +42,9 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
 
   useEffect(() => {
     if (open && item) {
+      setEstoqueAtualEditavel(String(item.quantidade));
       setNovaQuantidade(String(item.quantidade));
+      setNovoEstoqueManualmenteAlterado(false);
       setMotivo('');
     }
   }, [open, item]);
@@ -56,13 +60,30 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
 
   if (!item) return null;
 
+  const estoqueAtualInt = parseInt(estoqueAtualEditavel) || 0;
   const novaQtd = parseInt(novaQuantidade) || 0;
-  const diferenca = novaQtd - item.quantidade;
+  const diferenca = novaQtd - estoqueAtualInt;
   const isEntrada = diferenca > 0;
   const isSaida = diferenca < 0;
   const semAlteracao = diferenca === 0;
 
-  const isValid = novaQtd >= 0 && motivo.trim().length >= 3 && !semAlteracao;
+  const isValid = novaQtd >= 0 && estoqueAtualInt >= 0 && motivo.trim().length >= 3 && !semAlteracao;
+
+  const handleEstoqueAtualChange = (value: string) => {
+    const cleanValue = value.replace(/\D/g, '');
+    setEstoqueAtualEditavel(cleanValue);
+    
+    // Sincronizar novoEstoque se ainda não foi alterado manualmente
+    if (!novoEstoqueManualmenteAlterado) {
+      setNovaQuantidade(cleanValue);
+    }
+  };
+
+  const handleNovoEstoqueChange = (value: string) => {
+    const cleanValue = value.replace(/\D/g, '');
+    setNovaQuantidade(cleanValue);
+    setNovoEstoqueManualmenteAlterado(true);
+  };
 
   const handleSalvar = async () => {
     if (!isValid || !item) return;
@@ -106,10 +127,25 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
 
       {/* Ajuste de Quantidade */}
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        {/* Estoque Atual */}
-        <div className="text-center p-2 sm:p-4 rounded-lg bg-muted/30 border">
-          <p className="text-[10px] sm:text-xs text-muted-foreground mb-1">Estoque Atual</p>
-          <p className="text-xl sm:text-2xl font-bold">{item.quantidade}</p>
+        {/* Estoque Atual - Editável */}
+        <div className="text-center">
+          <Label htmlFor="estoque-atual" className="text-[10px] sm:text-xs text-muted-foreground mb-1 block">
+            Estoque Atual
+          </Label>
+          <Input
+            ref={inputRef}
+            id="estoque-atual"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={estoqueAtualEditavel}
+            onChange={(e) => handleEstoqueAtualChange(e.target.value)}
+            onFocus={(e) => e.target.select()}
+            className={cn(
+              "text-base sm:text-2xl font-bold text-center h-12 sm:h-14",
+              estoqueAtualInt < 0 && "border-destructive"
+            )}
+          />
         </div>
 
         {/* Novo Estoque */}
@@ -118,16 +154,12 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
             Novo Estoque
           </Label>
           <Input
-            ref={inputRef}
             id="nova-quantidade"
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
             value={novaQuantidade}
-            onChange={(e) => {
-              const value = e.target.value.replace(/\D/g, '');
-              setNovaQuantidade(value);
-            }}
+            onChange={(e) => handleNovoEstoqueChange(e.target.value)}
             onFocus={(e) => e.target.select()}
             className={cn(
               "text-base sm:text-2xl font-bold text-center h-12 sm:h-14",
