@@ -7,6 +7,7 @@ export interface FiltrosSaidas {
   dataFinal: Date;
   localId?: string;
   tiposMovimento?: string[];
+  modeloIds?: string[];
 }
 
 export interface SaidaDetalhada {
@@ -96,6 +97,11 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       // Filtrar por local se especificado
       if (filtros.localId) {
         query = query.eq('local_id', filtros.localId);
+      }
+
+      // Filtrar por modelos se especificado
+      if (filtros.modeloIds && filtros.modeloIds.length > 0) {
+        query = query.in('item_id', filtros.modeloIds);
       }
 
       const { data: movimentacoes, error } = await query;
@@ -220,5 +226,34 @@ export function useLocaisParaFiltro() {
       return data || [];
     },
     enabled: !!user,
+  });
+}
+
+export function useModelosParaFiltro(searchTerm: string) {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['modelos-para-filtro', user?.id, searchTerm],
+    queryFn: async () => {
+      if (!user) return [];
+
+      let query = supabase
+        .from('estoque_itens')
+        .select('id, nome, categoria')
+        .eq('user_id', user.id)
+        .order('nome')
+        .limit(50);
+
+      if (searchTerm.trim()) {
+        query = query.or(`nome.ilike.%${searchTerm}%,categoria.ilike.%${searchTerm}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user && (searchTerm.length >= 2 || searchTerm === ''),
+    staleTime: 30000,
   });
 }
