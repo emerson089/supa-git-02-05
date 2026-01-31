@@ -132,6 +132,16 @@ const NovoPedido = () => {
     });
   }, [items, getProdutosAcabados]);
 
+  // Calcular quantidade de modelos únicos
+  const quantidadeModelos = useMemo(() => {
+    const modelosUnicos = new Set(
+      items
+        .filter(item => item.produtoId)
+        .map(item => item.produtoId)
+    );
+    return modelosUnicos.size;
+  }, [items]);
+
   // Item handlers
   const handleAddItem = useCallback(() => {
     const newId = crypto.randomUUID();
@@ -338,7 +348,7 @@ const NovoPedido = () => {
             <ItensPedidoCard items={items} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
 
             {/* Resumo Card */}
-            <ResumoCard totalPecas={totalPecas} valorItens={valorItens} taxaExcursao={taxaExcursao} nomeExcursao={excursao} valorTotal={valorTotal} onLimpar={handleLimpar} onCriarPedido={handleCriarPedido} isLoading={isLoading} disabled={hasEstoqueInsuficiente} />
+            <ResumoCard totalPecas={totalPecas} valorItens={valorItens} taxaExcursao={taxaExcursao} nomeExcursao={excursao} valorTotal={valorTotal} quantidadeModelos={quantidadeModelos} onLimpar={handleLimpar} onCriarPedido={handleCriarPedido} isLoading={isLoading} disabled={hasEstoqueInsuficiente} />
           </div>
         </div>
       </main>
