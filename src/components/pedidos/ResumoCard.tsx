@@ -34,21 +34,21 @@ export function ResumoCard({
       {/* Métricas em grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 lg:gap-8 mb-6">
         {/* Quantidade total de peças */}
-        <div>
-          <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
             Quantidade total de peças
           </p>
-          <p className="text-2xl lg:text-3xl font-bold text-primary">
+          <p className="text-2xl font-semibold leading-tight text-primary">
             {totalPecas} <span className="text-sm font-normal text-muted-foreground">peças</span>
           </p>
         </div>
 
         {/* Quantidade de modelos */}
-        <div>
-          <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
             Quantidade de modelos
           </p>
-          <p className="text-2xl lg:text-3xl font-bold text-violet-600">
+          <p className="text-2xl font-semibold leading-tight text-violet-600">
             {quantidadeModelos} <span className="text-sm font-normal text-muted-foreground">
               {quantidadeModelos === 1 ? 'modelo' : 'modelos'}
             </span>
@@ -56,33 +56,33 @@ export function ResumoCard({
         </div>
 
         {/* Subtotal dos itens */}
-        <div>
-          <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
             Subtotal dos itens
           </p>
-          <p className="text-xl lg:text-2xl font-semibold text-foreground">
+          <p className="text-2xl font-semibold leading-tight text-foreground">
             {formatCurrency(valorItens)}
           </p>
         </div>
 
         {/* Taxa Excursão - condicional */}
         {taxaExcursao > 0 && (
-          <div>
-            <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
               Taxa Excursão {nomeExcursao && <span className="normal-case">({nomeExcursao})</span>}
             </p>
-            <p className="text-xl lg:text-2xl font-semibold text-amber-600">
+            <p className="text-2xl font-semibold leading-tight text-amber-600">
               + {formatCurrency(taxaExcursao)}
             </p>
           </div>
         )}
 
         {/* Valor total do pedido */}
-        <div>
-          <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
             Valor total do pedido
           </p>
-          <p className="text-2xl lg:text-3xl font-bold text-emerald-600">
+          <p className="text-2xl font-semibold leading-tight text-emerald-600">
             {formatCurrency(valorTotal)}
           </p>
         </div>
