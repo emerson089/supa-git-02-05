@@ -608,17 +608,41 @@ export default function PedidosCriados() {
     // @ts-ignore - jspdf-autotable adds this property
     const finalY = doc.lastAutoTable.finalY + 10;
 
-    // Totals
+    // Calculate quantity of unique models
+    const modelosUnicos = new Set(
+      itens.filter(item => item.produto_id).map(item => item.produto_id)
+    );
+    const quantidadeModelos = modelosUnicos.size;
+    const taxaExcursao = pedido.taxa_excursao || 0;
+    const subtotalItens = itens.reduce((acc, item) => acc + (item.quantidade * item.valor_unitario), 0);
+
+    // Totals - altura dinâmica baseada na presença de taxa
+    const boxHeight = taxaExcursao > 0 ? 35 : 25;
     doc.setFillColor(240, 240, 240);
-    doc.rect(14, finalY, pageWidth - 28, 25, 'F');
+    doc.rect(14, finalY, pageWidth - 28, boxHeight, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
+    
+    // Linha 1: Peças e Modelos
     doc.text(`Total de Peças: ${pedido.total_pecas || 0}`, 20, finalY + 10);
-    doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 18);
+    doc.text(`Quantidade de Modelos: ${quantidadeModelos}`, pageWidth / 2, finalY + 10);
+    
+    // Linha 2: Subtotal e Taxa (se houver)
+    if (taxaExcursao > 0) {
+      doc.text(`Subtotal dos Itens: ${formatCurrency(subtotalItens)}`, 20, finalY + 18);
+      doc.text(`Taxa Excursão: + ${formatCurrency(taxaExcursao)}`, pageWidth / 2, finalY + 18);
+      // Linha 3: Valor Total
+      doc.setFontSize(12);
+      doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 28);
+    } else {
+      // Valor Total na linha 2
+      doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 18);
+    }
 
-    // Status
+    // Status - posição ajustada baseada na altura do box
+    const statusY = taxaExcursao > 0 ? finalY + 20 : finalY + 14;
     doc.setFontSize(10);
-    doc.text(`Status: ${pedido.status_pagamento} | ${pedido.status_pedido} | ${pedido.status_entrega}`, pageWidth - 20, finalY + 14, {
+    doc.text(`Status: ${pedido.status_pagamento} | ${pedido.status_pedido} | ${pedido.status_entrega}`, pageWidth - 20, statusY, {
       align: 'right'
     });
 
@@ -1233,14 +1257,65 @@ export default function PedidosCriados() {
               </div>
 
               {/* Totals */}
-              <div className="flex justify-between items-center p-4 neu-card rounded-xl">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total de Peças</p>
-                  <p className="text-xl font-bold text-primary">{selectedPedido.total_pecas || 0} peças</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Valor Total</p>
-                  <p className="text-xl font-bold text-emerald-600">{formatCurrency(selectedPedido.valor_total || 0)}</p>
+              <div className="neu-card p-4 rounded-xl">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {/* Total de Peças */}
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                      Total de Peças
+                    </p>
+                    <p className="text-2xl font-semibold leading-tight text-primary">
+                      {selectedPedido.total_pecas || 0} <span className="text-sm font-normal text-muted-foreground">peças</span>
+                    </p>
+                  </div>
+                  
+                  {/* Quantidade de Modelos */}
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                      Qtd de Modelos
+                    </p>
+                    <p className="text-2xl font-semibold leading-tight text-violet-600">
+                      {(() => {
+                        const modelosUnicos = new Set(
+                          (selectedPedido.pedido_itens || [])
+                            .filter(item => item.produto_id)
+                            .map(item => item.produto_id)
+                        );
+                        return modelosUnicos.size;
+                      })()} <span className="text-sm font-normal text-muted-foreground">
+                        {(() => {
+                          const modelosUnicos = new Set(
+                            (selectedPedido.pedido_itens || [])
+                              .filter(item => item.produto_id)
+                              .map(item => item.produto_id)
+                          );
+                          return modelosUnicos.size === 1 ? 'modelo' : 'modelos';
+                        })()}
+                      </span>
+                    </p>
+                  </div>
+                  
+                  {/* Taxa Excursão (condicional) */}
+                  {(selectedPedido.taxa_excursao || 0) > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                        Taxa Excursão
+                      </p>
+                      <p className="text-2xl font-semibold leading-tight text-amber-600">
+                        + {formatCurrency(selectedPedido.taxa_excursao || 0)}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Valor Total */}
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                      Valor Total
+                    </p>
+                    <p className="text-2xl font-semibold leading-tight text-emerald-600">
+                      {formatCurrency(selectedPedido.valor_total || 0)}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>}

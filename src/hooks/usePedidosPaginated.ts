@@ -12,6 +12,8 @@ export interface PedidoPaginatedDB {
   estado: string | null;
   telefone: string | null;
   excursao: string | null;
+  excursao_id: string | null;
+  taxa_excursao: number | null;
   status: string | null;
   status_pagamento: string | null;
   status_pedido: string | null;
