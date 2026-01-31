@@ -1,265 +1,202 @@
 
 
-## Plano: Correção Global de Scroll em Dropdowns
+## Plano: Filtros Multi-Seleção em Pedidos Criados
 
-### Diagnóstico do Problema
+### Objetivo
 
-O problema de scroll afeta múltiplos componentes do sistema:
+Permitir que o usuário selecione **múltiplos valores** em cada filtro de status (Pagamento, Pedido, Entrega), em vez de apenas um valor por vez.
 
-1. **`SelectContent`** em `src/components/ui/select.tsx`:
-   - Usa `overflow-hidden` no container principal
-   - O Viewport do Radix Select não tem estilos de scroll adequados
-   - Depende de ScrollUpButton/ScrollDownButton para navegação em vez de scroll nativo
-
-2. **`PopoverContent`** com listas customizadas:
-   - Containers internos não têm `onWheel` para prevenir propagação
-   - Quando dentro de modais com `overflow-hidden`, eventos de wheel são bloqueados
-
-3. **`DropdownMenuContent`** em `src/components/ui/dropdown-menu.tsx`:
-   - Similar ao SelectContent, usa `overflow-hidden`
+**Exemplo de uso:**
+- Selecionar "PENDENTE" + "INCOMPLETO" no Status Pagamento
+- Selecionar "NÃO SEPARADO" + "AMANHÃ" no Status Pedido
 
 ---
 
-## Solução
+## Alterações Necessárias
 
-### 1. Corrigir SelectContent (Base UI Component)
+### 1. Mudança no Tipo de Estado
 
-**Arquivo**: `src/components/ui/select.tsx`
+| Antes | Depois |
+|-------|--------|
+| `filterStatusPagamento: string` | `filterStatusPagamento: string[]` |
+| `filterStatusPedido: string` | `filterStatusPedido: string[]` |
+| `filterStatusEntrega: string` | `filterStatusEntrega: string[]` |
 
-**Alterações no SelectContent**:
+**Valor padrão:** `[]` (array vazio = "Todos")
 
-| Mudança | Antes | Depois |
-|---------|-------|--------|
-| Container overflow | `overflow-hidden` | `overflow-auto` |
-| Viewport scroll | `p-1` | `p-1 max-h-[300px] overflow-y-auto` |
-| Wheel event | Não tratado | `onWheel={(e) => e.stopPropagation()}` |
+---
 
-**Código Proposto**:
+### 2. Componente Multi-Select (Novo)
 
-```tsx
-const SelectContent = React.forwardRef<
-  React.ElementRef<typeof SelectPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
-  <SelectPrimitive.Portal>
-    <SelectPrimitive.Content
-      ref={ref}
-      className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md ...",
-        className,
-      )}
-      position={position}
-      {...props}
-    >
-      <SelectScrollUpButton />
-      <SelectPrimitive.Viewport
-        className={cn(
-          "p-1 max-h-[300px] overflow-y-auto",
-          position === "popper" && "..."
-        )}
-        onWheel={(e) => e.stopPropagation()}
-      >
-        {children}
-      </SelectPrimitive.Viewport>
-      <SelectScrollDownButton />
-    </SelectPrimitive.Content>
-  </SelectPrimitive.Portal>
-));
+Criar componente reutilizável `StatusMultiSelect` que:
+
+- Exibe checkboxes para cada opção
+- Mostra contador de selecionados no trigger (ex: "2 selecionados")
+- Permite selecionar/desselecionar todos
+- Usa Popover com lista de Checkbox
+
+**Interface proposta:**
+
+```text
+┌─────────────────────────────────┐
+│ Pagamento        ▼              │
+│ 2 selecionados                  │
+└─────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│ ☐ Selecionar todos              │
+├─────────────────────────────────┤
+│ ☑ PENDENTE                      │
+│ ☐ PAGO                          │
+│ ☑ INCOMPLETO                    │
+│ ☐ CANCELADO                     │
+│ ☐ PEND. ENTREGA                 │
+│ ☐ GOLPE CANCELADO               │
+└─────────────────────────────────┘
 ```
 
 ---
 
-### 2. Corrigir DropdownMenuContent (Base UI Component)
+### 3. Alterações nos Hooks de Dados
 
-**Arquivo**: `src/components/ui/dropdown-menu.tsx`
+**`usePedidosPaginated.ts`**
 
-**Alterações similares**:
-
-```tsx
-const DropdownMenuContent = React.forwardRef<
-  React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
-  <DropdownMenuPrimitive.Portal>
-    <DropdownMenuPrimitive.Content
-      ref={ref}
-      sideOffset={sideOffset}
-      className={cn(
-        "z-50 min-w-[8rem] max-h-[300px] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md ...",
-        className,
-      )}
-      onWheel={(e) => e.stopPropagation()}
-      {...props}
-    />
-  </DropdownMenuPrimitive.Portal>
-));
+- Mudar interface `PaginatedParams`:
+```typescript
+statusPagamento?: string[];  // Antes: string
+statusPedido?: string[];     // Antes: string  
+statusEntrega?: string[];    // Antes: string
 ```
 
----
-
-### 3. Corrigir PopoverContent (Base UI Component)
-
-**Arquivo**: `src/components/ui/popover.tsx`
-
-**Alterações**:
-
-```tsx
-const PopoverContent = React.forwardRef<
-  React.ElementRef<typeof PopoverPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = "center", sideOffset = 4, ...props }, ref) => (
-  <PopoverPrimitive.Portal>
-    <PopoverPrimitive.Content
-      ref={ref}
-      align={align}
-      sideOffset={sideOffset}
-      className={cn(
-        "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none ...",
-        className,
-      )}
-      onWheel={(e) => e.stopPropagation()}
-      {...props}
-    />
-  </PopoverPrimitive.Portal>
-));
-```
-
----
-
-### 4. Adicionar Componente ScrollableList Reutilizável
-
-**Novo arquivo**: `src/components/ui/scrollable-list.tsx`
-
-Criar componente wrapper para listas scrolláveis dentro de popovers:
-
-```tsx
-interface ScrollableListProps {
-  children: React.ReactNode;
-  maxHeight?: number;
-  className?: string;
+- Mudar lógica de filtro:
+```typescript
+// Antes (single)
+if (params.statusPagamento && params.statusPagamento !== 'all') {
+  query = query.eq('status_pagamento', params.statusPagamento);
 }
 
-export function ScrollableList({ 
-  children, 
-  maxHeight = 280,
-  className 
-}: ScrollableListProps) {
-  return (
-    <div 
-      className={cn(
-        "overflow-y-auto overscroll-contain",
-        className
-      )}
-      style={{ maxHeight }}
-      onWheel={(e) => e.stopPropagation()}
-    >
-      {children}
-    </div>
-  );
+// Depois (multi)
+if (params.statusPagamento && params.statusPagamento.length > 0) {
+  query = query.in('status_pagamento', params.statusPagamento);
 }
 ```
 
----
+**`usePedidosTotals.ts`**
 
-### 5. Atualizar RelatorioSaidasModal
-
-**Arquivo**: `src/components/estoque/RelatorioSaidasModal.tsx`
-
-**Alterações no container de modelos (linha 349)**:
-
-Atual:
-```tsx
-<div className="max-h-[200px] overflow-y-auto border rounded-md">
-```
-
-Proposto:
-```tsx
-<div 
-  className="max-h-[280px] overflow-y-auto border rounded-md overscroll-contain"
-  onWheel={(e) => e.stopPropagation()}
->
-```
-
-**Alterações no container de tipos de ajuste (linha 450)**:
-
-Atual:
-```tsx
-<div className="max-h-[200px] overflow-y-auto space-y-1">
-```
-
-Proposto:
-```tsx
-<div 
-  className="max-h-[280px] overflow-y-auto space-y-1 overscroll-contain"
-  onWheel={(e) => e.stopPropagation()}
->
-```
+- Mesmas alterações de interface e lógica
 
 ---
 
-### 6. Atualizar AjusteEstoqueModal
+### 4. Alterações na Página PedidosCriados.tsx
 
-**Arquivo**: `src/components/estoque/AjusteEstoqueModal.tsx`
+**Estados:**
 
-O Select de Tipo de Ajuste já usa o componente base que será corrigido globalmente.
+```typescript
+// Antes
+const [filterStatusPagamento, setFilterStatusPagamento] = useState('all');
 
----
+// Depois  
+const [filterStatusPagamento, setFilterStatusPagamento] = useState<string[]>([]);
+```
 
-### 7. Adicionar CSS Global para Overscroll
+**Persistência no localStorage:**
 
-**Arquivo**: `src/index.css`
-
-Adicionar regra global:
-
-```css
-/* Enable wheel scroll in dropdowns and popovers */
-[data-radix-popper-content-wrapper] {
-  pointer-events: auto !important;
-}
-
-/* Ensure scrollable containers work properly */
-.scrollable-dropdown {
-  max-height: 300px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+```typescript
+interface PersistedFilters {
+  filterStatusPagamento: string[];  // Antes: string
+  filterStatusPedido: string[];     // Antes: string
+  filterStatusEntrega: string[];    // Antes: string
+  // ... outros campos mantidos
 }
 ```
 
+**Quick Filters:**
+
+Ajustar para trabalhar com arrays:
+```typescript
+// Antes
+setFilterStatusPagamento('PENDENTE');
+
+// Depois
+setFilterStatusPagamento(['PENDENTE']);
+```
+
+**UI dos filtros:**
+
+Substituir os `Select` por `StatusMultiSelect`:
+```tsx
+// Antes
+<Select value={filterStatusPagamento} onValueChange={setFilterStatusPagamento}>
+
+// Depois
+<StatusMultiSelect
+  label="Pagamento"
+  options={statusPagamentoOptions}
+  selected={filterStatusPagamento}
+  onSelectionChange={setFilterStatusPagamento}
+/>
+```
+
 ---
 
-## Resumo de Arquivos Impactados
+### 5. Alterações no MobileFiltersSheet
 
-| Arquivo | Tipo | Alteração |
-|---------|------|-----------|
-| `src/components/ui/select.tsx` | Base Component | Adicionar scroll no Viewport + onWheel |
-| `src/components/ui/dropdown-menu.tsx` | Base Component | Adicionar max-height, overflow, onWheel |
-| `src/components/ui/popover.tsx` | Base Component | Adicionar onWheel no Content |
-| `src/components/ui/scrollable-list.tsx` | Novo | Componente reutilizável para listas |
-| `src/components/estoque/RelatorioSaidasModal.tsx` | Modal | Aplicar onWheel nos containers de lista |
-| `src/index.css` | Global | Adicionar estilos para overscroll |
+Mesmas alterações de UI, substituindo `Select` por `StatusMultiSelect`.
 
 ---
 
-## Testes de Validação
+### 6. Exportação CSV
 
-Após implementação, testar:
+Ajustar a query de exportação para usar `.in()` quando filtros multi-seleção estiverem ativos.
 
-| Componente | Cenário | Esperado |
-|------------|---------|----------|
-| Select de Local (RelatorioSaidasModal) | Scroll com roda do mouse | Lista rola normalmente |
-| Select de Tipo de Ajuste (AjusteEstoqueModal) | Scroll com trackpad | Lista rola suavemente |
-| Multi-select de Modelos (PopoverContent) | Scroll com mouse wheel | Lista rola sem afetar modal pai |
-| DropdownMenu de ações | Mobile swipe | Lista rola corretamente |
-| Qualquer dropdown dentro de Dialog | Scroll em lista longa | Não propaga para o modal |
+---
+
+## Arquivos Impactados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/pedidos/StatusMultiSelect.tsx` | **Novo** - Componente multi-select |
+| `src/pages/PedidosCriados.tsx` | Estados, UI, quick filters, persistência |
+| `src/hooks/usePedidosPaginated.ts` | Interface e lógica de filtro |
+| `src/hooks/usePedidosTotals.ts` | Interface e lógica de filtro |
+| `src/components/pedidos/MobileFiltersSheet.tsx` | Props e UI |
+
+---
+
+## Comportamento do Multi-Select
+
+| Seleção | Trigger mostra | Query no banco |
+|---------|----------------|----------------|
+| Nenhum | "Todos Pagamentos" | Sem filtro (retorna todos) |
+| 1 item | "PENDENTE" | `.eq('status_pagamento', 'PENDENTE')` |
+| 2+ itens | "2 selecionados" | `.in('status_pagamento', ['PENDENTE', 'PAGO'])` |
+| Todos | "Todos Pagamentos" | Sem filtro (otimização) |
+
+---
+
+## Migração de Dados (localStorage)
+
+Para compatibilidade com filtros antigos salvos (string), a função `loadPersistedFilters` deve converter:
+
+```typescript
+// Se valor antigo for string, converter para array
+if (typeof parsed.filterStatusPagamento === 'string') {
+  parsed.filterStatusPagamento = 
+    parsed.filterStatusPagamento === 'all' ? [] : [parsed.filterStatusPagamento];
+}
+```
 
 ---
 
 ## Critérios de Aceite
 
-- Todos os dropdowns/selects permitem scroll com roda do mouse
-- Scroll com trackpad funciona em todos os componentes
-- Mobile swipe funciona em listas dentro de drawers
-- Modal pai não rola quando scrollando dentro de dropdown
-- Layout existente não é afetado
-- Altura máxima de 280-320px aplicada consistentemente
+- Cada filtro de status permite selecionar múltiplos valores
+- Trigger mostra quantidade de selecionados
+- "Nenhum selecionado" = todos os registros (sem filtro)
+- Quick filters continuam funcionando
+- Persistência no localStorage funciona
+- Contagem de filtros ativos reflete corretamente
+- Exportação CSV respeita multi-seleção
+- Mobile e desktop funcionam corretamente
 
