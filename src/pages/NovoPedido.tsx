@@ -344,11 +344,11 @@ const NovoPedido = () => {
 
             {/* Status padrão: PENDENTE, NÃO SEPARADO, NÃO ENTREGUE - configurável apenas ao editar pedido */}
 
-            {/* Items Card */}
-            <ItensPedidoCard items={items} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
-
-            {/* Resumo Card */}
+            {/* Resumo Card - agora acima dos itens */}
             <ResumoCard totalPecas={totalPecas} valorItens={valorItens} taxaExcursao={taxaExcursao} nomeExcursao={excursao} valorTotal={valorTotal} quantidadeModelos={quantidadeModelos} onLimpar={handleLimpar} onCriarPedido={handleCriarPedido} isLoading={isLoading} disabled={hasEstoqueInsuficiente} />
+
+            {/* Items Card - agora abaixo do resumo */}
+            <ItensPedidoCard items={items} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
           </div>
         </div>
       </main>
