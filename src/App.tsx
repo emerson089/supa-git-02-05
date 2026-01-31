@@ -21,6 +21,7 @@ import Auth from "./pages/Auth";
 import AlterarSenha from "./pages/AlterarSenha";
 import ConfigUsuarios from "./pages/ConfigUsuarios";
 import ConfigTiposAjuste from "./pages/ConfigTiposAjuste";
+import ConfigExcursoes from "./pages/ConfigExcursoes";
 import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 
@@ -68,6 +69,14 @@ function App() {
                       element={
                         <ProtectedRoute allowedRoles={['admin', 'gerente']}>
                           <ConfigTiposAjuste />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/excursoes"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <ConfigExcursoes />
                         </ProtectedRoute>
                       }
                     />

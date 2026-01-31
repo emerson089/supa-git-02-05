@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useClientesContext } from '@/contexts/ClientesContext';
+import { useExcursoesAtivas } from '@/hooks/useExcursoes';
 import { cn } from '@/lib/utils';
 
 interface ClienteInfoCardProps {
@@ -12,11 +13,15 @@ interface ClienteInfoCardProps {
   estado: string;
   telefone: string;
   excursao: string;
+  excursaoId: string | null;
+  taxaExcursao: number;
   onClienteChange: (clienteId: string) => void;
   onCidadeChange: (value: string) => void;
   onEstadoChange: (value: string) => void;
   onTelefoneChange: (value: string) => void;
   onExcursaoChange: (value: string) => void;
+  onExcursaoIdChange: (value: string | null) => void;
+  onTaxaExcursaoChange: (value: number) => void;
   onAddCliente: () => void;
 }
 
@@ -26,20 +31,31 @@ export function ClienteInfoCard({
   estado,
   telefone,
   excursao,
+  excursaoId,
+  taxaExcursao,
   onClienteChange,
   onCidadeChange,
   onEstadoChange,
   onTelefoneChange,
   onExcursaoChange,
+  onExcursaoIdChange,
+  onTaxaExcursaoChange,
   onAddCliente,
 }: ClienteInfoCardProps) {
   const { clientes, getClienteById } = useClientesContext();
+  const { data: excursoesAtivas } = useExcursoesAtivas();
   
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Estado para o combobox de excursão
+  const [isExcursaoOpen, setIsExcursaoOpen] = useState(false);
+  const [excursaoSearchTerm, setExcursaoSearchTerm] = useState('');
+  const excursaoInputRef = useRef<HTMLInputElement>(null);
+  const excursaoDropdownRef = useRef<HTMLDivElement>(null);
 
   // Debounce de 300ms
   useEffect(() => {
@@ -58,12 +74,33 @@ export function ClienteInfoCard({
     return clientes.filter(c => c.nome.toLowerCase().includes(term));
   }, [clientes, debouncedSearch]);
 
-  // Fechar dropdown ao clicar fora
+  // Filtrar excursões ativas
+  const filteredExcursoes = useMemo(() => {
+    if (!excursaoSearchTerm.trim()) {
+      return excursoesAtivas || [];
+    }
+    const term = excursaoSearchTerm.toLowerCase();
+    return (excursoesAtivas || []).filter(e => e.nome.toLowerCase().includes(term));
+  }, [excursoesAtivas, excursaoSearchTerm]);
+
+  // Fechar dropdown de cliente ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         setSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fechar dropdown de excursão ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (excursaoDropdownRef.current && !excursaoDropdownRef.current.contains(event.target as Node)) {
+        setIsExcursaoOpen(false);
+        setExcursaoSearchTerm('');
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -77,6 +114,12 @@ export function ClienteInfoCard({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isExcursaoOpen && excursaoInputRef.current) {
+      excursaoInputRef.current.focus();
+    }
+  }, [isExcursaoOpen]);
+
   const handleClienteSelect = (id: string) => {
     onClienteChange(id);
     const selectedCliente = getClienteById(id);
@@ -85,14 +128,42 @@ export function ClienteInfoCard({
       onEstadoChange(selectedCliente.estado);
       onTelefoneChange(selectedCliente.telefone);
       onExcursaoChange(selectedCliente.excursao);
+      
+      // Buscar taxa da excursão cadastrada
+      const excursaoMatch = excursoesAtivas?.find(e => 
+        e.nome.toLowerCase() === selectedCliente.excursao.toLowerCase()
+      );
+      if (excursaoMatch) {
+        onExcursaoIdChange(excursaoMatch.id);
+        onTaxaExcursaoChange(excursaoMatch.taxa);
+      } else {
+        onExcursaoIdChange(null);
+        onTaxaExcursaoChange(0);
+      }
     } else {
       onCidadeChange('');
       onEstadoChange('');
       onTelefoneChange('');
       onExcursaoChange('');
+      onExcursaoIdChange(null);
+      onTaxaExcursaoChange(0);
     }
     setIsOpen(false);
     setSearchTerm('');
+  };
+
+  const handleExcursaoSelect = (excursaoItem: { id: string; nome: string; taxa: number } | null) => {
+    if (excursaoItem) {
+      onExcursaoChange(excursaoItem.nome);
+      onExcursaoIdChange(excursaoItem.id);
+      onTaxaExcursaoChange(excursaoItem.taxa);
+    } else {
+      onExcursaoChange('');
+      onExcursaoIdChange(null);
+      onTaxaExcursaoChange(0);
+    }
+    setIsExcursaoOpen(false);
+    setExcursaoSearchTerm('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -105,7 +176,21 @@ export function ClienteInfoCard({
     }
   };
 
+  const handleExcursaoKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && filteredExcursoes.length > 0) {
+      e.preventDefault();
+      handleExcursaoSelect(filteredExcursoes[0]);
+    } else if (e.key === 'Escape') {
+      setIsExcursaoOpen(false);
+      setExcursaoSearchTerm('');
+    }
+  };
+
   const selectedCliente = getClienteById(clienteId);
+
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
 
   return (
     <div className="neu-card p-7">
@@ -222,8 +307,8 @@ export function ClienteInfoCard({
           />
         </div>
 
-        {/* Row 2: Telefone + Excursão */}
-        <div className="lg:col-span-6 space-y-2">
+        {/* Row 2: Telefone + Excursão + Taxa */}
+        <div className="lg:col-span-4 space-y-2">
           <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Telefone
           </Label>
@@ -236,17 +321,99 @@ export function ClienteInfoCard({
           />
         </div>
 
-        <div className="lg:col-span-6 space-y-2">
+        <div className="lg:col-span-5 space-y-2">
           <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Excursão
           </Label>
-          <Input
-            value={excursao}
-            onChange={(e) => onExcursaoChange(e.target.value)}
-            placeholder="Nome da excursão"
-            className="h-12 rounded-xl neu-input border-0 bg-background"
-            readOnly
-          />
+          {/* Combobox de Excursão */}
+          <div className="relative" ref={excursaoDropdownRef}>
+            <div
+              className={cn(
+                "h-12 rounded-xl neu-input border-0 bg-background flex items-center cursor-pointer transition-all",
+                isExcursaoOpen && "ring-2 ring-primary/30"
+              )}
+              onClick={() => setIsExcursaoOpen(true)}
+            >
+              {isExcursaoOpen ? (
+                <div className="flex items-center w-full px-4 gap-2">
+                  <Search size={16} className="text-muted-foreground/60 flex-shrink-0" />
+                  <input
+                    ref={excursaoInputRef}
+                    type="text"
+                    value={excursaoSearchTerm}
+                    onChange={(e) => setExcursaoSearchTerm(e.target.value)}
+                    onKeyDown={handleExcursaoKeyDown}
+                    placeholder="Digite para buscar..."
+                    className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground placeholder:text-muted-foreground/60"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-between w-full px-4">
+                  <span className={cn(
+                    "text-sm truncate",
+                    excursao ? "text-foreground font-medium" : "text-muted-foreground"
+                  )}>
+                    {excursao || "Selecione uma excursão"}
+                  </span>
+                  <ChevronDown size={16} className="text-muted-foreground flex-shrink-0" />
+                </div>
+              )}
+            </div>
+
+            {/* Dropdown de excursões */}
+            {isExcursaoOpen && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto">
+                {/* Opção para limpar */}
+                {excursao && (
+                  <div
+                    className="px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors border-b border-border/50"
+                    onClick={() => handleExcursaoSelect(null)}
+                  >
+                    <span className="text-sm text-muted-foreground italic">
+                      Remover excursão
+                    </span>
+                  </div>
+                )}
+                {filteredExcursoes.length === 0 ? (
+                  <div className="py-4 px-4 text-center text-muted-foreground text-sm">
+                    {excursaoSearchTerm ? 'Nenhuma excursão encontrada' : 'Nenhuma excursão cadastrada'}
+                  </div>
+                ) : (
+                  filteredExcursoes.map((exc) => (
+                    <div
+                      key={exc.id}
+                      className={cn(
+                        "px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors flex justify-between items-center",
+                        exc.id === excursaoId && "bg-primary/10"
+                      )}
+                      onClick={() => handleExcursaoSelect(exc)}
+                    >
+                      <span className="text-sm font-medium text-foreground">
+                        {exc.nome}
+                      </span>
+                      <span className="text-sm font-semibold text-emerald-600">
+                        {formatCurrency(exc.taxa)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="lg:col-span-3 space-y-2">
+          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Taxa Excursão
+          </Label>
+          <div className="h-12 rounded-xl neu-input border-0 bg-background flex items-center px-4">
+            <span className={cn(
+              "text-sm font-semibold",
+              taxaExcursao > 0 ? "text-emerald-600" : "text-muted-foreground"
+            )}>
+              {formatCurrency(taxaExcursao)}
+            </span>
+          </div>
         </div>
       </div>
     </div>

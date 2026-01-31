@@ -17,6 +17,8 @@ export interface Pedido {
   estado: string;
   telefone: string;
   excursao: string;
+  excursaoId: string | null;
+  taxaExcursao: number;
   status: string;
   statusPagamento: string;
   statusPedido: string;
@@ -52,6 +54,8 @@ function transformDBToContext(pedidoDB: PedidoDB): Pedido {
     estado: pedidoDB.estado || '',
     telefone: pedidoDB.telefone || '',
     excursao: pedidoDB.excursao || '',
+    excursaoId: pedidoDB.excursao_id || null,
+    taxaExcursao: Number(pedidoDB.taxa_excursao) || 0,
     status: pedidoDB.status || 'Pendente',
     statusPagamento: pedidoDB.status_pagamento || 'Pendente',
     statusPedido: pedidoDB.status_pedido || 'Pendente',
@@ -89,6 +93,8 @@ export function PedidosProvider({ children }: { children: ReactNode }) {
       estado: pedidoData.estado,
       telefone: pedidoData.telefone,
       excursao: pedidoData.excursao,
+      excursao_id: pedidoData.excursaoId || null,
+      taxa_excursao: pedidoData.taxaExcursao || 0,
       status: pedidoData.status,
       status_pagamento: pedidoData.statusPagamento,
       status_pedido: pedidoData.statusPedido,
