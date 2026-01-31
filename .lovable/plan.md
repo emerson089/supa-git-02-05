@@ -1,319 +1,255 @@
 
 
-## Plano: Melhorias no Sistema de Estoque
+## Plano: Corrigir Duplicatas e Implementar CRUD de Tipos de Ajuste
 
-### Resumo das Alterações
-Quatro melhorias solicitadas:
-1. **Filtro de Modelos (Relatório de Saídas)**: Rolagem com mouse e botão "Selecionar todos"
-2. **Tipos de Ajuste de Estoque**: Padronização com tabela de tipos
-3. **Filtro por Tipo de Ajuste no Relatório**: Novo filtro condicional
-4. **Histórico de Movimentações**: Estado vazio informativo e lista detalhada
+### Diagnóstico do Problema
+
+**Causa raiz identificada**: Os tipos de ajuste foram criados em duplicidade no banco de dados. A função `useCriarTiposPadrao()` foi chamada múltiplas vezes (provavelmente em sessões diferentes ou por race condition), inserindo os mesmos 6 tipos padrão duas vezes para o mesmo usuário.
+
+**Evidência no banco**:
+| nome | count |
+|------|-------|
+| Bonificação / Brinde | 2 |
+| Devolução de cliente | 2 |
+| Erro de lançamento | 2 |
+| Inventário / Conferência física | 2 |
+| Outro | 2 |
+| Perda / Avaria | 2 |
 
 ---
 
-## 1. Filtro de Modelos - Melhorias de UX
+## Solução em 3 Partes
 
-### Arquivo Impactado
-- `src/components/estoque/RelatorioSaidasModal.tsx`
+### Parte 1: Correção no Banco de Dados
 
-### Alterações
+**Migração SQL necessária:**
+
+1. **Remover registros duplicados** (manter apenas o mais antigo por nome/user)
+2. **Criar constraint UNIQUE** em `(user_id, nome)` para impedir futuras duplicações
+3. **Corrigir a função de criação de tipos padrão** para usar `ON CONFLICT DO NOTHING`
+
+```sql
+-- 1. Remover duplicados mantendo o registro mais antigo por (user_id, nome)
+DELETE FROM tipos_ajuste_estoque
+WHERE id NOT IN (
+  SELECT DISTINCT ON (user_id, nome) id
+  FROM tipos_ajuste_estoque
+  ORDER BY user_id, nome, created_at ASC
+);
+
+-- 2. Adicionar constraint UNIQUE para evitar duplicações futuras
+ALTER TABLE tipos_ajuste_estoque
+ADD CONSTRAINT unique_tipo_ajuste_per_user UNIQUE (user_id, nome);
+```
+
+---
+
+### Parte 2: Ajustes no Frontend (Hooks)
+
+**Arquivo**: `src/hooks/useTiposAjuste.ts`
 
 | Mudança | Descrição |
 |---------|-----------|
-| max-height + overflow | Adicionar `max-h-[200px] overflow-y-auto` no container da lista |
-| Botão "Selecionar todos" | Exibir quando houver busca com 2+ resultados filtrados |
-| Contador | Melhorar exibição de modelos selecionados |
+| `useCriarTiposPadrao` | Usar `upsert` com `onConflict: 'user_id,nome'` ou `INSERT ... ON CONFLICT DO NOTHING` |
+| Hooks de CRUD | Adicionar hooks para criar, editar, desativar e excluir tipos |
 
-### UI Proposta
+**Novos hooks a implementar:**
 
-```
-┌────────────────────────────────────────┐
-│  🔍 alfa                               │
-├────────────────────────────────────────┤
-│  [Selecionar todos (6)]                │
-├────────────────────────────────────────┤
-│  ☐ Calça Alfaiataria Cinza - 900      │ ← max-height: 200px
-│  ☑ Calça Alfaiataria Marrom - 800     │   overflow-y: auto
-│  ☐ Calça Alfaiataria Mom - 886        │   scroll via mouse/trackpad
-│  ...                                   │
-└────────────────────────────────────────┘
-│  2 modelo(s) selecionado(s)            │
-│  [Limpar seleção]                      │
-└────────────────────────────────────────┘
+```typescript
+// Criar novo tipo
+export function useCriarTipoAjuste()
+
+// Editar nome do tipo
+export function useEditarTipoAjuste()
+
+// Desativar tipo (soft delete)
+export function useDesativarTipoAjuste()
+
+// Excluir tipo (hard delete - só se não usado)
+export function useExcluirTipoAjuste()
+
+// Verificar se tipo está em uso
+export function useTipoAjusteEmUso(tipoId: string)
 ```
 
 ---
 
-## 2. Tipos de Ajuste de Estoque
+### Parte 3: Nova Tela de Configurações
 
-### Alterações no Banco de Dados
+**Rota**: `/configuracoes/tipos-ajuste`
 
-**Nova Tabela: `tipos_ajuste_estoque`**
+**Acesso**: Apenas `admin` e `gerente`
 
-| Coluna | Tipo | Nullable | Default |
-|--------|------|----------|---------|
-| id | uuid | No | gen_random_uuid() |
-| user_id | uuid | No | - |
-| nome | text | No | - |
-| ativo | boolean | No | true |
-| created_at | timestamp | No | now() |
+**Localização no menu**: Adicionar item "Tipos de Ajuste" no sidebar, abaixo de "Usuários" em Configurações
 
-**Dados Iniciais Sugeridos:**
-- Inventário / Conferência física
-- Perda / Avaria
-- Erro de lançamento
-- Bonificação / Brinde
-- Devolução de cliente
-- Outro
+#### Interface da Tela
 
-**Alteração na Tabela `estoque_movimentacoes`**
-
-| Coluna Nova | Tipo | Nullable |
-|-------------|------|----------|
-| tipo_ajuste_id | uuid | Yes |
-
-**RLS Policies:**
-- SELECT: user_id = auth.uid()
-- INSERT/UPDATE/DELETE: user_id = auth.uid()
-
-### Arquivos Impactados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useEstoquePorLocalGerenciamento.ts` | Adicionar hook `useTiposAjuste()` e passar `tipo_ajuste_id` na mutation |
-| `src/components/estoque/AjusteEstoqueModal.tsx` | Substituir textarea por Select de tipos + campo observação opcional |
-
-### Nova Interface do Modal Ajustar Estoque
-
+```text
+┌────────────────────────────────────────────────────────────────────┐
+│ ⚙️ Tipos de Ajuste                           [+ Novo Tipo]         │
+├────────────────────────────────────────────────────────────────────┤
+│ 🔍 Buscar tipo...                                                  │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ Inventário / Conferência física          🟢 Ativo    [⋮]    │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ Perda / Avaria                           🟢 Ativo    [⋮]    │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ Erro de lançamento                       🟢 Ativo    [⋮]    │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ Bonificação / Brinde                     🟢 Ativo    [⋮]    │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ Devolução (antigo)                       ⚪ Inativo  [⋮]    │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
 ```
+
+#### Menu de Ações (⋮)
+
+- **Editar nome** → Abre modal de edição
+- **Desativar** → Define `ativo = false` (ação padrão)
+- **Reativar** (se inativo) → Define `ativo = true`
+- **Excluir permanentemente** → Só habilitado se não houver uso em `estoque_movimentacoes`
+
+#### Modal de Criação/Edição
+
+```text
 ┌────────────────────────────────────────┐
-│ Ajustar Estoque                     X  │
+│ ➕ Novo Tipo de Ajuste              X  │
 ├────────────────────────────────────────┤
-│ [Imagem] Short Alfaiataria - 163       │
-│          Cód: Modelo Manual • R$ 25.00 │
-├────────────────────────────────────────┤
-│  Estoque Atual    Novo Estoque   Dif.  │
-│  [    11    ]     [    11    ]    0    │
-├────────────────────────────────────────┤
-│ Tipo de Ajuste *                       │
-│ ┌──────────────────────────────────┐   │
-│ │ Selecione o tipo...          ▼  │   │
-│ └──────────────────────────────────┘   │
 │                                        │
-│ Observação (opcional)                  │
-│ ┌──────────────────────────────────┐   │
-│ │ Detalhe adicional se necessário  │   │
-│ └──────────────────────────────────┘   │
+│ Nome do Tipo *                         │
+│ ┌────────────────────────────────────┐ │
+│ │ Ex: Devolução ao fornecedor       │ │
+│ └────────────────────────────────────┘ │
+│                                        │
+│ ⚠️ Este nome já existe               │ ← (validação em tempo real)
+│                                        │
 ├────────────────────────────────────────┤
 │               [Cancelar] [Salvar]      │
 └────────────────────────────────────────┘
 ```
 
-### Validação
-- Bloquear salvamento se `tipo_ajuste_id` não estiver selecionado
-- Observação passa a ser opcional
+#### Modal de Exclusão
 
----
-
-## 3. Filtro por Tipo de Ajuste no Relatório
-
-### Comportamento
-- O filtro só aparece quando "Ajuste/Venda" estiver selecionado no Tipo de Saída
-- Multi-select com os tipos cadastrados na tabela `tipos_ajuste_estoque`
-- Aplicar `.in('tipo_ajuste_id', [ids])` na query
-
-### Arquivos Impactados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useRelatorioSaidas.ts` | Adicionar `tipoAjusteIds?: string[]` ao filtro e à query; hook `useTiposAjusteParaFiltro()` |
-| `src/components/estoque/RelatorioSaidasModal.tsx` | Adicionar filtro condicional de tipos de ajuste |
-
-### UI Proposta
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ Data Inicial   Data Final   Local        Tipo Saída     Modelos        │
-│ [01/01/2026]   [31/01/26]   [Loja ▼]     [Ajuste  ▼]   [3 modelo(s)]   │
-├─────────────────────────────────────────────────────────────────────────┤
-│ Tipo de Ajuste (visível apenas quando Tipo Saída = Ajuste)              │
-│ ┌─────────────────────────────────────────────────────────────────┐     │
-│ │ Inventário, Perda                                           ▼  │     │
-│ └─────────────────────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 4. Histórico de Movimentações - Melhorias
-
-### Arquivo Impactado
-- `src/components/estoque/HistoricoMovimentacoesModal.tsx`
-- `src/hooks/useEstoquePorLocalGerenciamento.ts`
-
-### Estado Vazio Melhorado
-
-```
+```text
 ┌────────────────────────────────────────┐
-│ Histórico de Movimentações          X  │
-├────────────────────────────────────────┤
-│ [Imagem] Short Alfaiataria - 163       │
-│          Cód: Modelo Manual            │
-│          Local: Loja Parque das Feiras │
+│ 🗑️ Excluir Tipo de Ajuste           X  │
 ├────────────────────────────────────────┤
 │                                        │
-│         📦                             │
+│ Deseja excluir permanentemente o tipo  │
+│ "Perda / Avaria"?                      │
 │                                        │
-│  Nenhuma movimentação encontrada       │
-│  nos últimos 90 dias                   │
-│                                        │
-│  Possíveis causas:                     │
-│  • Este item não teve movimentação     │
-│    neste período                       │
-│  • O local selecionado não tem         │
-│    histórico para este item            │
-│                                        │
-│  ┌──────────────────┐  ┌────────────┐  │
-│  │Buscar desde início│  │ Atualizar │  │
-│  └──────────────────┘  └────────────┘  │
+│ ⚠️ Este tipo está em uso em 15        │
+│ movimentações e não pode ser excluído. │
+│ Utilize "Desativar" como alternativa.  │
 │                                        │
 ├────────────────────────────────────────┤
-│                           [Fechar]     │
+│           [Cancelar] [Desativar]       │
+└────────────────────────────────────────┘
+
+-- OU se não estiver em uso --
+
+┌────────────────────────────────────────┐
+│ 🗑️ Excluir Tipo de Ajuste           X  │
+├────────────────────────────────────────┤
+│                                        │
+│ Deseja excluir permanentemente o tipo  │
+│ "Teste"?                               │
+│                                        │
+│ ✅ Este tipo não está em uso e pode    │
+│ ser excluído com segurança.            │
+│                                        │
+├────────────────────────────────────────┤
+│           [Cancelar] [Excluir]         │
 └────────────────────────────────────────┘
 ```
 
-### Lista Detalhada de Movimentações
+---
 
-Cada card de movimentação mostrará:
+## Arquivos a Serem Criados/Modificados
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ 📅 31/01/2026 14:35                            🏷️ Ajuste Saída │
-├────────────────────────────────────────────────────────────────┤
-│ Quantidade: -5 peças                                           │
-│ Saldo: 16 → 11                                                 │
-│                                                                │
-│ 📍 Loja Parque das Feiras                                      │
-│ 📋 Tipo: Inventário                                            │
-│ 💬 Obs: Conferência física realizada                           │
-│ 👤 Usuário: admin@empresa.com                                  │
-└────────────────────────────────────────────────────────────────┘
-```
+### Novos Arquivos
 
-### Dados Adicionais na Query
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/pages/ConfigTiposAjuste.tsx` | Tela CRUD de tipos de ajuste |
 
-Alterar `useHistoricoMovimentacoesItem` para incluir:
-- `tipo_ajuste_id` → join com `tipos_ajuste_estoque.nome`
-- Local origem/destino (para transferências)
-- `transferencia_id` como referência
-- Ordenar por `created_at DESC`
+### Arquivos Modificados
 
-### Interface MovimentacaoHistorico Expandida
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useTiposAjuste.ts` | Adicionar hooks de CRUD, corrigir `useCriarTiposPadrao` |
+| `src/components/layout/AppSidebar.tsx` | Adicionar item "Tipos de Ajuste" no menu |
+| `src/components/layout/BottomNavigation.tsx` | Adicionar acesso mobile se necessário |
+| `src/App.tsx` | Adicionar rota `/configuracoes/tipos-ajuste` |
 
-```typescript
-interface MovimentacaoHistorico {
-  id: string;
-  createdAt: string;
-  tipo: string;
-  quantidade: number;
-  estoqueAntes: number | null;
-  estoqueDepois: number | null;
-  motivo: string | null;
-  // Novos campos:
-  tipoAjusteId: string | null;
-  tipoAjusteNome: string | null;
-  localNome: string | null;
-  localDestinoNome: string | null;
-  transferenciaId: string | null;
-}
-```
+### Migração SQL
 
-### Parâmetros do Hook
+```sql
+-- Remover duplicados
+DELETE FROM tipos_ajuste_estoque
+WHERE id NOT IN (
+  SELECT DISTINCT ON (user_id, nome) id
+  FROM tipos_ajuste_estoque
+  ORDER BY user_id, nome, created_at ASC
+);
 
-Adicionar parâmetro opcional `semLimite?: boolean` para permitir buscar todo o histórico:
-
-```typescript
-export function useHistoricoMovimentacoesItem(
-  itemId: string | null, 
-  localId: string | null,
-  semLimite?: boolean
-)
+-- Constraint UNIQUE
+ALTER TABLE tipos_ajuste_estoque
+ADD CONSTRAINT unique_tipo_ajuste_per_user UNIQUE (user_id, nome);
 ```
 
 ---
 
-## Resumo de Alterações
+## Fluxo de Validação
 
-### Banco de Dados (Migração)
+### Ao Criar Novo Tipo
 
-```sql
--- 1. Criar tabela tipos_ajuste_estoque
-CREATE TABLE public.tipos_ajuste_estoque (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  nome TEXT NOT NULL,
-  ativo BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+1. Frontend: Trim do nome, verificar se não está vazio
+2. Frontend: Verificar duplicidade antes de enviar (busca local)
+3. Backend: Constraint UNIQUE impede inserção duplicada
+4. Se erro de constraint: Mostrar mensagem "Este nome já existe"
 
--- 2. Habilitar RLS
-ALTER TABLE public.tipos_ajuste_estoque ENABLE ROW LEVEL SECURITY;
+### Ao Editar Tipo
 
--- 3. Policies
-CREATE POLICY "Users can read own tipos_ajuste" 
-  ON public.tipos_ajuste_estoque FOR SELECT 
-  USING (auth.uid() = user_id);
+1. Mesma validação de trim e duplicidade
+2. Não permitir editar para um nome já existente
 
-CREATE POLICY "Users can insert own tipos_ajuste" 
-  ON public.tipos_ajuste_estoque FOR INSERT 
-  WITH CHECK (auth.uid() = user_id);
+### Ao Desativar Tipo
 
-CREATE POLICY "Users can update own tipos_ajuste" 
-  ON public.tipos_ajuste_estoque FOR UPDATE 
-  USING (auth.uid() = user_id);
+1. Define `ativo = false`
+2. Tipo continua aparecendo em movimentações antigas no histórico
+3. Tipo não aparece mais nos selects de "Ajustar Estoque" e "Filtro do Relatório"
 
-CREATE POLICY "Users can delete own tipos_ajuste" 
-  ON public.tipos_ajuste_estoque FOR DELETE 
-  USING (auth.uid() = user_id);
+### Ao Excluir Tipo
 
--- 4. Adicionar coluna em estoque_movimentacoes
-ALTER TABLE public.estoque_movimentacoes 
-  ADD COLUMN tipo_ajuste_id UUID REFERENCES public.tipos_ajuste_estoque(id);
-```
-
-### Arquivos Frontend
-
-| Arquivo | Tipo de Alteração |
-|---------|-------------------|
-| `src/components/estoque/RelatorioSaidasModal.tsx` | Scroll na lista, botão "Selecionar todos", filtro tipo ajuste condicional |
-| `src/components/estoque/AjusteEstoqueModal.tsx` | Substituir motivo por select de tipo + observação opcional |
-| `src/components/estoque/HistoricoMovimentacoesModal.tsx` | Estado vazio informativo, cards detalhados com mais informações |
-| `src/hooks/useRelatorioSaidas.ts` | Adicionar `tipoAjusteIds` ao filtro, hook `useTiposAjusteParaFiltro` |
-| `src/hooks/useEstoquePorLocalGerenciamento.ts` | Hook `useTiposAjuste`, expandir query do histórico, parâmetro `semLimite` |
+1. Verificar se há uso em `estoque_movimentacoes.tipo_ajuste_id`
+2. Se houver uso: Bloquear exclusão, sugerir desativar
+3. Se não houver uso: Permitir DELETE definitivo
 
 ---
 
 ## Critérios de Aceite
 
-### Filtro de Modelos
-- ✅ Lista rola com mouse/trackpad
-- ✅ Botão "Selecionar todos" aparece quando há busca com 2+ resultados
-- ✅ Contador de modelos selecionados
-
-### Tipos de Ajuste
-- ✅ Tabela `tipos_ajuste_estoque` criada com RLS
-- ✅ Select obrigatório no modal Ajustar Estoque
-- ✅ Observação opcional
-- ✅ Bloqueia salvamento sem tipo
-
-### Filtro no Relatório
-- ✅ Aparece somente quando Tipo Saída = Ajuste
-- ✅ Multi-select dos tipos cadastrados
-- ✅ Query filtra por `tipo_ajuste_id`
-
-### Histórico de Movimentações
-- ✅ Estado vazio mostra período, possíveis causas e botões de ação
-- ✅ Cards mostram todos os detalhes (data, tipo, quantidade, saldo, local, motivo, usuário)
-- ✅ Ordenado por mais recente
-- ✅ Botão "Buscar desde início" funciona
+- ✅ Duplicatas removidas do banco de dados
+- ✅ Constraint UNIQUE impede novas duplicações
+- ✅ Cada tipo aparece apenas uma vez nos selects
+- ✅ Tela CRUD funcional em `/configuracoes/tipos-ajuste`
+- ✅ CRUD: Listar, criar, editar nome, desativar, excluir
+- ✅ Validação de duplicidade no frontend e backend
+- ✅ Tipos inativos não aparecem nos selects
+- ✅ Histórico continua mostrando tipos mesmo se inativos
+- ✅ Exclusão só permitida se tipo não estiver em uso
+- ✅ Funcionalidades existentes não quebradas
 
