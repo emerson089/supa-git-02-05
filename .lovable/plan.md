@@ -1,103 +1,175 @@
 
 
-## Plano: Adicionar Indicador de Quantidade de Modelos
+## Plano: Reorganizar Layout da Pagina Novo Pedido
 
 ### Objetivo
 
-Exibir no card de resumo do pedido a quantidade de modelos diferentes selecionados, por exemplo: **"Quantidade de modelos: 2"**
+Trocar a posicao do card de Resumo para ficar acima do card de Itens do Pedido, e melhorar o layout do Resumo para que as informacoes fiquem bem alinhadas lado a lado em uma unica linha.
 
 ---
 
-### Alteracao Necessaria
+### Alteracoes Necessarias
 
-**Arquivo:** `src/components/pedidos/ResumoCard.tsx`
+#### 1. Arquivo: `src/pages/NovoPedido.tsx`
 
-#### 1. Adicionar nova prop
+**Inverter a ordem dos componentes:**
 
-```typescript
-interface ResumoCardProps {
-  totalPecas: number;
-  valorItens: number;
-  taxaExcursao: number;
-  nomeExcursao?: string;
-  valorTotal: number;
-  quantidadeModelos: number;  // <-- NOVA PROP
-  onLimpar: () => void;
-  onCriarPedido: () => void;
-  isLoading?: boolean;
-  disabled?: boolean;
-}
+Atual (linhas 347-351):
+```tsx
+{/* Items Card */}
+<ItensPedidoCard ... />
+
+{/* Resumo Card */}
+<ResumoCard ... />
 ```
 
-#### 2. Adicionar indicador visual no card
+Novo:
+```tsx
+{/* Resumo Card - agora acima dos itens */}
+<ResumoCard ... />
 
-Inserir entre "Quantidade total de pecas" e "Subtotal dos itens":
+{/* Items Card - agora abaixo do resumo */}
+<ItensPedidoCard ... />
+```
+
+---
+
+#### 2. Arquivo: `src/components/pedidos/ResumoCard.tsx`
+
+**Reorganizar layout usando CSS Grid para melhor alinhamento:**
+
+Estrutura atual (flex com wrap):
+```
+[Qtd Pecas] [Qtd Modelos] [Subtotal] [Taxa] [Total]
+                    (pode quebrar linha em telas menores)
+```
+
+Nova estrutura (grid organizado):
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│  QTD TOTAL     QTD MODELOS    SUBTOTAL       TAXA           VALOR TOTAL   │
+│  DE PECAS                     DOS ITENS      EXCURSAO       DO PEDIDO     │
+│                                                                            │
+│  26 pecas      2 modelos      R$ 720,00      + R$ 10,00     R$ 730,00    │
+│                                                                            │
+│                                              [Limpar]  [Criar Pedido]     │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+Mudancas no componente:
+
+1. Usar `grid grid-cols-5` em desktop para alinhar todas as 5 metricas lado a lado
+2. Em mobile usar `grid grid-cols-2` para adaptar
+3. Botoes ficam abaixo das metricas, alinhados a direita
+4. Quando nao tiver taxa de excursao, ajustar grid para 4 colunas
+
+---
+
+### Codigo do Novo Layout
 
 ```tsx
-<div>
-  <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
-    Quantidade de modelos
-  </p>
-  <p className="text-3xl font-bold text-violet-600">
-    {quantidadeModelos} <span className="text-base font-normal text-muted-foreground">
-      {quantidadeModelos === 1 ? 'modelo' : 'modelos'}
-    </span>
-  </p>
+<div className="neu-card p-7">
+  {/* Metricas em grid */}
+  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 lg:gap-8 mb-6">
+    {/* Quantidade total de pecas */}
+    <div>
+      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+        Quantidade total de pecas
+      </p>
+      <p className="text-2xl lg:text-3xl font-bold text-primary">
+        {totalPecas} <span className="text-sm font-normal text-muted-foreground">pecas</span>
+      </p>
+    </div>
+    
+    {/* Quantidade de modelos */}
+    <div>
+      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+        Quantidade de modelos
+      </p>
+      <p className="text-2xl lg:text-3xl font-bold text-violet-600">
+        {quantidadeModelos} <span className="text-sm font-normal text-muted-foreground">
+          {quantidadeModelos === 1 ? 'modelo' : 'modelos'}
+        </span>
+      </p>
+    </div>
+    
+    {/* Subtotal dos itens */}
+    <div>
+      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+        Subtotal dos itens
+      </p>
+      <p className="text-xl lg:text-2xl font-semibold text-foreground">
+        {formatCurrency(valorItens)}
+      </p>
+    </div>
+    
+    {/* Taxa Excursao - condicional */}
+    {taxaExcursao > 0 && (
+      <div>
+        <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+          Taxa Excursao {nomeExcursao && <span className="normal-case">({nomeExcursao})</span>}
+        </p>
+        <p className="text-xl lg:text-2xl font-semibold text-amber-600">
+          + {formatCurrency(taxaExcursao)}
+        </p>
+      </div>
+    )}
+    
+    {/* Valor total do pedido */}
+    <div>
+      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+        Valor total do pedido
+      </p>
+      <p className="text-2xl lg:text-3xl font-bold text-emerald-600">
+        {formatCurrency(valorTotal)}
+      </p>
+    </div>
+  </div>
+  
+  {/* Botoes alinhados a direita */}
+  <div className="flex items-center justify-end gap-4 pt-4 border-t border-border/30">
+    <Button variant="outline" onClick={onLimpar}>
+      Limpar Formulario
+    </Button>
+    <Button onClick={onCriarPedido} disabled={isLoading || disabled}>
+      {isLoading ? 'Criando...' : disabled ? 'Estoque Insuficiente' : 'Criar Pedido'}
+    </Button>
+  </div>
 </div>
 ```
 
 ---
 
-**Arquivo:** `src/pages/NovoPedido.tsx`
-
-#### 3. Calcular quantidade de modelos
-
-Adicionar calculo que conta itens com `produtoId` preenchido:
-
-```typescript
-const quantidadeModelos = useMemo(() => {
-  const modelosUnicos = new Set(
-    items
-      .filter(item => item.produtoId) // apenas itens com produto selecionado
-      .map(item => item.produtoId)
-  );
-  return modelosUnicos.size;
-}, [items]);
-```
-
-#### 4. Passar para o componente
-
-```tsx
-<ResumoCard
-  totalPecas={totalPecas}
-  valorItens={valorItens}
-  taxaExcursao={taxaExcursao}
-  nomeExcursao={excursaoNome}
-  valorTotal={valorTotal}
-  quantidadeModelos={quantidadeModelos}  // <-- NOVA PROP
-  onLimpar={handleLimpar}
-  onCriarPedido={handleCriarPedido}
-  isLoading={isCreating}
-  disabled={hasEstoqueInsuficiente}
-/>
-```
-
----
-
-### Resultado Visual
+### Resultado Visual Esperado
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
+│  Cliente Info Card                                                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  Cliente Insights Card                                                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  RESUMO (agora acima)                                                        │
 │                                                                              │
-│  QUANTIDADE TOTAL    QUANTIDADE DE      SUBTOTAL DOS    TAXA EXCURSAO       │
-│  DE PECAS            MODELOS            ITENS           (cabanas turismo)   │
+│  QTD PECAS    QTD MODELOS    SUBTOTAL        TAXA           VALOR TOTAL    │
+│  26 pecas     2 modelos      R$ 720,00       + R$ 10,00     R$ 730,00      │
 │                                                                              │
-│  24 pecas            2 modelos          R$ 720,00       + R$ 10,00          │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│                                              [Limpar]  [Criar Pedido]       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ITENS DO PEDIDO (agora abaixo)                               [+ Adicionar] │
 │                                                                              │
-│                                         VALOR TOTAL DO PEDIDO               │
-│                                         R$ 730,00                           │
-│                                                                              │
-│                                    [Limpar Formulario] [Criar Pedido]       │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │  Short alfa. botoes todas cores - 170    12    R$ 30    R$ 360,00  [X] │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │  Short cinto encapado - 160              12    R$ 30    R$ 360,00  [X] │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -107,6 +179,6 @@ const quantidadeModelos = useMemo(() => {
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/pedidos/ResumoCard.tsx` | Adicionar prop `quantidadeModelos` e exibir no card |
-| `src/pages/NovoPedido.tsx` | Calcular e passar `quantidadeModelos` para o componente |
+| `src/pages/NovoPedido.tsx` | Inverter ordem: ResumoCard antes de ItensPedidoCard |
+| `src/components/pedidos/ResumoCard.tsx` | Reorganizar layout com grid para melhor alinhamento |
 
