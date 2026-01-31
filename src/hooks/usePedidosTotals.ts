@@ -5,9 +5,9 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 export interface TotalsParams {
   search?: string;
-  statusPagamento?: string;
-  statusPedido?: string;
-  statusEntrega?: string;
+  statusPagamento?: string[];
+  statusPedido?: string[];
+  statusEntrega?: string[];
   startDate?: Date;
   endDate?: Date;
   modeloFilter?: string;
@@ -49,15 +49,15 @@ export function usePedidosTotals(params: TotalsParams) {
           }
         }
 
-        // Apply status filters
-        if (params.statusPagamento && params.statusPagamento !== 'all') {
-          q = q.eq('status_pagamento', params.statusPagamento);
+        // Apply status filters (multi-select)
+        if (params.statusPagamento && params.statusPagamento.length > 0) {
+          q = q.in('status_pagamento', params.statusPagamento);
         }
-        if (params.statusPedido && params.statusPedido !== 'all') {
-          q = q.eq('status_pedido', params.statusPedido);
+        if (params.statusPedido && params.statusPedido.length > 0) {
+          q = q.in('status_pedido', params.statusPedido);
         }
-        if (params.statusEntrega && params.statusEntrega !== 'all') {
-          q = q.eq('status_entrega', params.statusEntrega);
+        if (params.statusEntrega && params.statusEntrega.length > 0) {
+          q = q.in('status_entrega', params.statusEntrega);
         }
 
         // Apply date filters

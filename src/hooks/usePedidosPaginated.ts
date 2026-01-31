@@ -37,9 +37,9 @@ export interface PaginatedParams {
   page: number;
   pageSize: number;
   search?: string;
-  statusPagamento?: string;
-  statusPedido?: string;
-  statusEntrega?: string;
+  statusPagamento?: string[];
+  statusPedido?: string[];
+  statusEntrega?: string[];
   startDate?: Date;
   endDate?: Date;
   sortField?: 'created_at' | 'valor_total';
@@ -91,15 +91,15 @@ export function usePedidosPaginated(params: PaginatedParams) {
         }
       }
 
-      // Apply status filters
-      if (params.statusPagamento && params.statusPagamento !== 'all') {
-        query = query.eq('status_pagamento', params.statusPagamento);
+      // Apply status filters (multi-select)
+      if (params.statusPagamento && params.statusPagamento.length > 0) {
+        query = query.in('status_pagamento', params.statusPagamento);
       }
-      if (params.statusPedido && params.statusPedido !== 'all') {
-        query = query.eq('status_pedido', params.statusPedido);
+      if (params.statusPedido && params.statusPedido.length > 0) {
+        query = query.in('status_pedido', params.statusPedido);
       }
-      if (params.statusEntrega && params.statusEntrega !== 'all') {
-        query = query.eq('status_entrega', params.statusEntrega);
+      if (params.statusEntrega && params.statusEntrega.length > 0) {
+        query = query.in('status_entrega', params.statusEntrega);
       }
 
       // Apply date filters

@@ -13,35 +13,111 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   statusPagamentoOptions,
   statusPedidoOptions,
   statusEntregaOptions,
 } from './StatusSelector';
+import { cn } from '@/lib/utils';
 
 interface MobileFiltersSheetProps {
-  filterStatusPagamento: string;
-  filterStatusPedido: string;
-  filterStatusEntrega: string;
+  filterStatusPagamento: string[];
+  filterStatusPedido: string[];
+  filterStatusEntrega: string[];
   filterModelo: string;
   startDate?: Date;
   endDate?: Date;
-  onFilterStatusPagamentoChange: (value: string) => void;
-  onFilterStatusPedidoChange: (value: string) => void;
-  onFilterStatusEntregaChange: (value: string) => void;
+  onFilterStatusPagamentoChange: (value: string[]) => void;
+  onFilterStatusPedidoChange: (value: string[]) => void;
+  onFilterStatusEntregaChange: (value: string[]) => void;
   onFilterModeloChange: (value: string) => void;
   onStartDateChange: (date: Date | undefined) => void;
   onEndDateChange: (date: Date | undefined) => void;
   onClearAll: () => void;
   activeCount: number;
+}
+
+interface StatusOption {
+  value: string;
+  label: string;
+}
+
+function MobileMultiSelect({
+  label,
+  options,
+  selected,
+  onSelectionChange,
+}: {
+  label: string;
+  options: StatusOption[];
+  selected: string[];
+  onSelectionChange: (selected: string[]) => void;
+}) {
+  const handleToggle = (value: string) => {
+    if (selected.includes(value)) {
+      onSelectionChange(selected.filter(v => v !== value));
+    } else {
+      onSelectionChange([...selected, value]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selected.length === options.length) {
+      onSelectionChange([]);
+    } else {
+      onSelectionChange(options.map(o => o.value));
+    }
+  };
+
+  const allSelected = selected.length === options.length;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-sm font-medium">{label}</Label>
+        {selected.length > 0 && (
+          <Badge variant="secondary" className="text-xs">
+            {selected.length} selecionado{selected.length > 1 ? 's' : ''}
+          </Badge>
+        )}
+      </div>
+      <div 
+        className="border rounded-xl bg-background p-2 max-h-[180px] overflow-y-auto overscroll-contain"
+        onWheel={(e) => e.stopPropagation()}
+      >
+        {/* Select All */}
+        <div 
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-muted/50 border-b border-border/50 mb-1 pb-2"
+          onClick={handleSelectAll}
+        >
+          <Checkbox checked={allSelected} />
+          <span className="text-sm font-medium">
+            {allSelected ? 'Desselecionar todos' : 'Selecionar todos'}
+          </span>
+        </div>
+        
+        {/* Options */}
+        {options.map((option) => {
+          const isSelected = selected.includes(option.value);
+          return (
+            <div
+              key={option.value}
+              className={cn(
+                "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors",
+                isSelected && "bg-primary/5"
+              )}
+              onClick={() => handleToggle(option.value)}
+            >
+              <Checkbox checked={isSelected} />
+              <span className="text-sm">{option.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function MobileFiltersSheet({
@@ -93,53 +169,29 @@ export function MobileFiltersSheet({
         
         <ScrollArea className="h-[calc(100%-4rem)] pr-4">
           <div className="space-y-6 py-6">
-            {/* Status Pagamento */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Status Pagamento</Label>
-              <Select value={filterStatusPagamento} onValueChange={onFilterStatusPagamentoChange}>
-                <SelectTrigger className="h-11 rounded-xl neu-input border-0 bg-background">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos Pagamentos</SelectItem>
-                  {statusPagamentoOptions.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Status Pagamento - Multi-Select */}
+            <MobileMultiSelect
+              label="Status Pagamento"
+              options={statusPagamentoOptions}
+              selected={filterStatusPagamento}
+              onSelectionChange={onFilterStatusPagamentoChange}
+            />
 
-            {/* Status Pedido */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Status do Pedido</Label>
-              <Select value={filterStatusPedido} onValueChange={onFilterStatusPedidoChange}>
-                <SelectTrigger className="h-11 rounded-xl neu-input border-0 bg-background">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos Pedidos</SelectItem>
-                  {statusPedidoOptions.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Status Pedido - Multi-Select */}
+            <MobileMultiSelect
+              label="Status do Pedido"
+              options={statusPedidoOptions}
+              selected={filterStatusPedido}
+              onSelectionChange={onFilterStatusPedidoChange}
+            />
 
-            {/* Status Entrega */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Status Entrega</Label>
-              <Select value={filterStatusEntrega} onValueChange={onFilterStatusEntregaChange}>
-                <SelectTrigger className="h-11 rounded-xl neu-input border-0 bg-background">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas Entregas</SelectItem>
-                  {statusEntregaOptions.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Status Entrega - Multi-Select */}
+            <MobileMultiSelect
+              label="Status Entrega"
+              options={statusEntregaOptions}
+              selected={filterStatusEntrega}
+              onSelectionChange={onFilterStatusEntregaChange}
+            />
 
             {/* Filtro por Modelo */}
             <div className="space-y-2">
