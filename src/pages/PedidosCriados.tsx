@@ -617,39 +617,44 @@ export default function PedidosCriados() {
     const subtotalItens = itens.reduce((acc, item) => acc + (item.quantidade * item.valor_unitario), 0);
 
     // Totals - altura dinâmica baseada na presença de taxa
-    const boxHeight = taxaExcursao > 0 ? 35 : 25;
+    const boxHeight = taxaExcursao > 0 ? 38 : 28;
     doc.setFillColor(240, 240, 240);
     doc.rect(14, finalY, pageWidth - 28, boxHeight, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    
+
     // Linha 1: Peças e Modelos
     doc.text(`Total de Peças: ${pedido.total_pecas || 0}`, 20, finalY + 10);
     doc.text(`Quantidade de Modelos: ${quantidadeModelos}`, pageWidth / 2, finalY + 10);
-    
+
     // Linha 2: Subtotal e Taxa (se houver)
     if (taxaExcursao > 0) {
       doc.text(`Subtotal dos Itens: ${formatCurrency(subtotalItens)}`, 20, finalY + 18);
       doc.text(`Taxa Excursão: + ${formatCurrency(taxaExcursao)}`, pageWidth / 2, finalY + 18);
-      // Linha 3: Valor Total
+      
+      // Linha 3: Valor Total e Status
       doc.setFontSize(12);
       doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 28);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(`Status: ${pedido.status_pagamento} | ${pedido.status_pedido} | ${pedido.status_entrega}`, pageWidth - 20, finalY + 28, {
+        align: 'right'
+      });
     } else {
-      // Valor Total na linha 2
+      // Sem taxa: Valor Total e Status na linha 2
+      doc.setFontSize(12);
       doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 18);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(`Status: ${pedido.status_pagamento} | ${pedido.status_pedido} | ${pedido.status_entrega}`, pageWidth - 20, finalY + 18, {
+        align: 'right'
+      });
     }
 
-    // Status - posição ajustada baseada na altura do box
-    const statusY = taxaExcursao > 0 ? finalY + 20 : finalY + 14;
-    doc.setFontSize(10);
-    doc.text(`Status: ${pedido.status_pagamento} | ${pedido.status_pedido} | ${pedido.status_entrega}`, pageWidth - 20, statusY, {
-      align: 'right'
-    });
-
-    // Footer
+    // Footer - posição dinâmica baseada na altura do box
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(10);
-    doc.text('Obrigado pela preferência! Delookii Jeans', pageWidth / 2, finalY + 35, {
+    doc.text('Obrigado pela preferência! Delookii Jeans', pageWidth / 2, finalY + boxHeight + 10, {
       align: 'center'
     });
 
