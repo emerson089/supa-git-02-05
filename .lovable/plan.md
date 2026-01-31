@@ -1,127 +1,85 @@
 
 
-## Plano: Ajustar Exportação CSV para Corresponder às Colunas Visíveis
+## Plano: Corrigir Gráfico de Tendência de Vendas
 
-### Problema Atual
+### Problema Identificado
 
-O CSV atual exporta colunas que **não aparecem** na tabela visível:
-- Telefone
-- Cidade  
-- Estado
+O gráfico de **Tendência de Vendas** agrupa todos os pedidos em um único ponto (janeiro/2026) porque:
 
-E as colunas visíveis na tabela são:
-- **DATA** - Data do pedido
-- **CLIENTE** - Nome do cliente
-- **MODELOS** - Itens do pedido (em branco se vazio)
-- **QTD** - Quantidade total de peças
-- **VALOR** - Valor total
-- **PAGAMENTO** - Status de pagamento
-- **PEDIDO** - Status do pedido
-- **ENTREGA** - Status de entrega
+1. O código usa `paid_at` como data de referência para agrupamento
+2. O campo `paid_at` foi **preenchido retroativamente** em janeiro/2026 para todos os pedidos históricos
+3. Pedidos criados entre agosto e novembro de 2025 têm `paid_at` em janeiro/2026
+
+**Evidência do banco de dados:**
+
+| Período Selecionado | created_at | paid_at | Resultado no Gráfico |
+|---------------------|------------|---------|----------------------|
+| Ago-Nov 2025 | 2025-08-06 | 2026-01-15 | Agrupado em Jan/26 |
+| Ago-Nov 2025 | 2025-10-07 | 2026-01-15 | Agrupado em Jan/26 |
+
+Isso explica porque o usuário vê 630 pedidos concentrados em um único dia de janeiro/2026.
 
 ---
 
 ### Solução
 
-Alterar a função `exportCSV` no arquivo `src/pages/PedidosCriados.tsx` (linhas 707-708) para:
+Alterar a lógica de agrupamento do gráfico de Tendência de Vendas para usar `created_at` (data de criação do pedido) em vez de `paid_at` (data de pagamento).
 
-1. Remover colunas não visíveis (Telefone, Cidade, Estado)
-2. Manter colunas visíveis na mesma ordem da tabela
-3. Deixar em branco campos vazios (sem fallbacks)
+**Justificativa:**
+- O campo `paid_at` foi preenchido retroativamente via trigger em 2026, distorcendo dados históricos
+- Para análise de tendências, a data de criação do pedido é mais relevante
+- Os KPIs de faturamento podem continuar usando `paid_at` para métricas financeiras, mas o gráfico de tendência deve refletir a distribuição temporal real dos pedidos
 
 ---
 
 ### Alteração no Código
 
-**Linha 707 - Headers:**
-```typescript
-// Antes
-const headers = ['Data', 'Cliente', 'Telefone', 'Cidade', 'Estado', 'Itens', 'Qtd Total', 'Valor Total', 'Status Pagamento', 'Status Pedido', 'Status Entrega'];
+**Arquivo:** `src/hooks/useDashboardData.ts`
 
-// Depois
-const headers = ['Data', 'Cliente', 'Modelos', 'Qtd', 'Valor', 'Pagamento', 'Pedido', 'Entrega'];
+**Localização:** Linhas 548-574 (agrupamento de vendas)
+
+**De:**
+```typescript
+pedidosPagos.forEach(p => {
+  // Usar paid_at quando disponível (preferido), fallback para created_at
+  const dataEfetiva = p.paid_at || p.created_at;
+  const dataCompleta = parseISO(dataEfetiva);
+  // ...
+});
 ```
 
-**Linha 708 - Rows:**
+**Para:**
 ```typescript
-// Antes
-const rows = allPedidos.map(pedido => [
-  format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm"), 
-  pedido.cliente_nome, 
-  pedido.telefone || '', 
-  pedido.cidade || '', 
-  pedido.estado || '', 
-  (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '), 
-  (pedido.total_pecas || 0).toString(), 
-  (pedido.valor_total || 0).toFixed(2), 
-  pedido.status_pagamento || 'Pendente', 
-  pedido.status_pedido || 'Nao separado', 
-  pedido.status_entrega || 'Pend. Entrega'
-]);
-
-// Depois
-const rows = allPedidos.map(pedido => [
-  format(new Date(pedido.created_at), "dd/MM/yyyy"),
-  pedido.cliente_nome || '',
-  (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '),
-  pedido.total_pecas?.toString() || '',
-  pedido.valor_total?.toFixed(2) || '',
-  pedido.status_pagamento || '',
-  pedido.status_pedido || '',
-  pedido.status_entrega || ''
-]);
+pedidosPagos.forEach(p => {
+  // CORRIGIDO: Usar created_at para tendências históricas
+  // O paid_at foi preenchido retroativamente em 2026, distorcendo dados antigos
+  const dataEfetiva = p.created_at;
+  const dataCompleta = parseISO(dataEfetiva);
+  // ...
+});
 ```
 
 ---
 
-### Comparação: Antes vs Depois
-
-| Coluna no CSV (Antes) | Coluna no CSV (Depois) |
-|-----------------------|------------------------|
-| Data (com hora) | Data (sem hora, como na tabela) |
-| Cliente | Cliente |
-| Telefone | **Removido** |
-| Cidade | **Removido** |
-| Estado | **Removido** |
-| Itens | Modelos |
-| Qtd Total | Qtd |
-| Valor Total | Valor |
-| Status Pagamento | Pagamento |
-| Status Pedido | Pedido |
-| Status Entrega | Entrega |
-
----
-
-### Comportamento dos Campos Vazios
-
-| Campo | Se vazio no banco | Resultado no CSV |
-|-------|-------------------|------------------|
-| Cliente | null | Em branco |
-| Modelos | sem itens | Em branco |
-| Qtd | null | Em branco |
-| Valor | null | Em branco |
-| Pagamento | null | Em branco |
-| Pedido | null | Em branco |
-| Entrega | null | Em branco |
-
----
-
-### Arquivo Impactado
+### Arquivos Impactados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/PedidosCriados.tsx` | Linhas 707-708 - Ajustar headers e mapeamento |
+| `src/hooks/useDashboardData.ts` | Linha 553 - Usar `created_at` no agrupamento |
+
+---
+
+### Impacto da Mudança
+
+| Aspecto | Antes | Depois |
+|---------|-------|--------|
+| Gráfico Ago-Nov/2025 | Tudo em Jan/26 | Distribuído por mês correto |
+| Pedidos novos (2026+) | Funciona | Funciona |
+| KPIs de faturamento | Sem mudança | Sem mudança |
 
 ---
 
 ### Resultado Esperado
 
-O CSV exportado terá exatamente as mesmas colunas visíveis na tabela:
-
-```
-Data,Cliente,Modelos,Qtd,Valor,Pagamento,Pedido,Entrega
-12/01/2026,"Adaiane Lima","Saia Jeans Curta Cintura Alta 48...",34,1356.00,PAGO,SEPARADO,ENTREGUE
-12/01/2026,"Zuleide Santana","Calça Cargo Jeans Clara 650 - 6...",98,4176.00,PAGO,SEPARADO,ENTREGUE
-08/01/2026,"Luane Jesus","",20,828.00,PAGO,SEPARADO,ENTREGUE
-```
+O gráfico de Tendência de Vendas mostrará a distribuição correta dos pedidos ao longo do período selecionado, com pontos em agosto, setembro, outubro e novembro de 2025 (cada mês com seus pedidos reais).
 
