@@ -1,202 +1,127 @@
 
 
-## Plano: Filtros Multi-Seleção em Pedidos Criados
+## Plano: Ajustar Exportação CSV para Corresponder às Colunas Visíveis
 
-### Objetivo
+### Problema Atual
 
-Permitir que o usuário selecione **múltiplos valores** em cada filtro de status (Pagamento, Pedido, Entrega), em vez de apenas um valor por vez.
+O CSV atual exporta colunas que **não aparecem** na tabela visível:
+- Telefone
+- Cidade  
+- Estado
 
-**Exemplo de uso:**
-- Selecionar "PENDENTE" + "INCOMPLETO" no Status Pagamento
-- Selecionar "NÃO SEPARADO" + "AMANHÃ" no Status Pedido
-
----
-
-## Alterações Necessárias
-
-### 1. Mudança no Tipo de Estado
-
-| Antes | Depois |
-|-------|--------|
-| `filterStatusPagamento: string` | `filterStatusPagamento: string[]` |
-| `filterStatusPedido: string` | `filterStatusPedido: string[]` |
-| `filterStatusEntrega: string` | `filterStatusEntrega: string[]` |
-
-**Valor padrão:** `[]` (array vazio = "Todos")
+E as colunas visíveis na tabela são:
+- **DATA** - Data do pedido
+- **CLIENTE** - Nome do cliente
+- **MODELOS** - Itens do pedido (em branco se vazio)
+- **QTD** - Quantidade total de peças
+- **VALOR** - Valor total
+- **PAGAMENTO** - Status de pagamento
+- **PEDIDO** - Status do pedido
+- **ENTREGA** - Status de entrega
 
 ---
 
-### 2. Componente Multi-Select (Novo)
+### Solução
 
-Criar componente reutilizável `StatusMultiSelect` que:
+Alterar a função `exportCSV` no arquivo `src/pages/PedidosCriados.tsx` (linhas 707-708) para:
 
-- Exibe checkboxes para cada opção
-- Mostra contador de selecionados no trigger (ex: "2 selecionados")
-- Permite selecionar/desselecionar todos
-- Usa Popover com lista de Checkbox
-
-**Interface proposta:**
-
-```text
-┌─────────────────────────────────┐
-│ Pagamento        ▼              │
-│ 2 selecionados                  │
-└─────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────┐
-│ ☐ Selecionar todos              │
-├─────────────────────────────────┤
-│ ☑ PENDENTE                      │
-│ ☐ PAGO                          │
-│ ☑ INCOMPLETO                    │
-│ ☐ CANCELADO                     │
-│ ☐ PEND. ENTREGA                 │
-│ ☐ GOLPE CANCELADO               │
-└─────────────────────────────────┘
-```
+1. Remover colunas não visíveis (Telefone, Cidade, Estado)
+2. Manter colunas visíveis na mesma ordem da tabela
+3. Deixar em branco campos vazios (sem fallbacks)
 
 ---
 
-### 3. Alterações nos Hooks de Dados
+### Alteração no Código
 
-**`usePedidosPaginated.ts`**
-
-- Mudar interface `PaginatedParams`:
-```typescript
-statusPagamento?: string[];  // Antes: string
-statusPedido?: string[];     // Antes: string  
-statusEntrega?: string[];    // Antes: string
-```
-
-- Mudar lógica de filtro:
-```typescript
-// Antes (single)
-if (params.statusPagamento && params.statusPagamento !== 'all') {
-  query = query.eq('status_pagamento', params.statusPagamento);
-}
-
-// Depois (multi)
-if (params.statusPagamento && params.statusPagamento.length > 0) {
-  query = query.in('status_pagamento', params.statusPagamento);
-}
-```
-
-**`usePedidosTotals.ts`**
-
-- Mesmas alterações de interface e lógica
-
----
-
-### 4. Alterações na Página PedidosCriados.tsx
-
-**Estados:**
-
+**Linha 707 - Headers:**
 ```typescript
 // Antes
-const [filterStatusPagamento, setFilterStatusPagamento] = useState('all');
-
-// Depois  
-const [filterStatusPagamento, setFilterStatusPagamento] = useState<string[]>([]);
-```
-
-**Persistência no localStorage:**
-
-```typescript
-interface PersistedFilters {
-  filterStatusPagamento: string[];  // Antes: string
-  filterStatusPedido: string[];     // Antes: string
-  filterStatusEntrega: string[];    // Antes: string
-  // ... outros campos mantidos
-}
-```
-
-**Quick Filters:**
-
-Ajustar para trabalhar com arrays:
-```typescript
-// Antes
-setFilterStatusPagamento('PENDENTE');
+const headers = ['Data', 'Cliente', 'Telefone', 'Cidade', 'Estado', 'Itens', 'Qtd Total', 'Valor Total', 'Status Pagamento', 'Status Pedido', 'Status Entrega'];
 
 // Depois
-setFilterStatusPagamento(['PENDENTE']);
+const headers = ['Data', 'Cliente', 'Modelos', 'Qtd', 'Valor', 'Pagamento', 'Pedido', 'Entrega'];
 ```
 
-**UI dos filtros:**
-
-Substituir os `Select` por `StatusMultiSelect`:
-```tsx
+**Linha 708 - Rows:**
+```typescript
 // Antes
-<Select value={filterStatusPagamento} onValueChange={setFilterStatusPagamento}>
+const rows = allPedidos.map(pedido => [
+  format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm"), 
+  pedido.cliente_nome, 
+  pedido.telefone || '', 
+  pedido.cidade || '', 
+  pedido.estado || '', 
+  (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '), 
+  (pedido.total_pecas || 0).toString(), 
+  (pedido.valor_total || 0).toFixed(2), 
+  pedido.status_pagamento || 'Pendente', 
+  pedido.status_pedido || 'Nao separado', 
+  pedido.status_entrega || 'Pend. Entrega'
+]);
 
 // Depois
-<StatusMultiSelect
-  label="Pagamento"
-  options={statusPagamentoOptions}
-  selected={filterStatusPagamento}
-  onSelectionChange={setFilterStatusPagamento}
-/>
+const rows = allPedidos.map(pedido => [
+  format(new Date(pedido.created_at), "dd/MM/yyyy"),
+  pedido.cliente_nome || '',
+  (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '),
+  pedido.total_pecas?.toString() || '',
+  pedido.valor_total?.toFixed(2) || '',
+  pedido.status_pagamento || '',
+  pedido.status_pedido || '',
+  pedido.status_entrega || ''
+]);
 ```
 
 ---
 
-### 5. Alterações no MobileFiltersSheet
+### Comparação: Antes vs Depois
 
-Mesmas alterações de UI, substituindo `Select` por `StatusMultiSelect`.
+| Coluna no CSV (Antes) | Coluna no CSV (Depois) |
+|-----------------------|------------------------|
+| Data (com hora) | Data (sem hora, como na tabela) |
+| Cliente | Cliente |
+| Telefone | **Removido** |
+| Cidade | **Removido** |
+| Estado | **Removido** |
+| Itens | Modelos |
+| Qtd Total | Qtd |
+| Valor Total | Valor |
+| Status Pagamento | Pagamento |
+| Status Pedido | Pedido |
+| Status Entrega | Entrega |
 
 ---
 
-### 6. Exportação CSV
+### Comportamento dos Campos Vazios
 
-Ajustar a query de exportação para usar `.in()` quando filtros multi-seleção estiverem ativos.
+| Campo | Se vazio no banco | Resultado no CSV |
+|-------|-------------------|------------------|
+| Cliente | null | Em branco |
+| Modelos | sem itens | Em branco |
+| Qtd | null | Em branco |
+| Valor | null | Em branco |
+| Pagamento | null | Em branco |
+| Pedido | null | Em branco |
+| Entrega | null | Em branco |
 
 ---
 
-## Arquivos Impactados
+### Arquivo Impactado
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/pedidos/StatusMultiSelect.tsx` | **Novo** - Componente multi-select |
-| `src/pages/PedidosCriados.tsx` | Estados, UI, quick filters, persistência |
-| `src/hooks/usePedidosPaginated.ts` | Interface e lógica de filtro |
-| `src/hooks/usePedidosTotals.ts` | Interface e lógica de filtro |
-| `src/components/pedidos/MobileFiltersSheet.tsx` | Props e UI |
+| `src/pages/PedidosCriados.tsx` | Linhas 707-708 - Ajustar headers e mapeamento |
 
 ---
 
-## Comportamento do Multi-Select
+### Resultado Esperado
 
-| Seleção | Trigger mostra | Query no banco |
-|---------|----------------|----------------|
-| Nenhum | "Todos Pagamentos" | Sem filtro (retorna todos) |
-| 1 item | "PENDENTE" | `.eq('status_pagamento', 'PENDENTE')` |
-| 2+ itens | "2 selecionados" | `.in('status_pagamento', ['PENDENTE', 'PAGO'])` |
-| Todos | "Todos Pagamentos" | Sem filtro (otimização) |
+O CSV exportado terá exatamente as mesmas colunas visíveis na tabela:
 
----
-
-## Migração de Dados (localStorage)
-
-Para compatibilidade com filtros antigos salvos (string), a função `loadPersistedFilters` deve converter:
-
-```typescript
-// Se valor antigo for string, converter para array
-if (typeof parsed.filterStatusPagamento === 'string') {
-  parsed.filterStatusPagamento = 
-    parsed.filterStatusPagamento === 'all' ? [] : [parsed.filterStatusPagamento];
-}
 ```
-
----
-
-## Critérios de Aceite
-
-- Cada filtro de status permite selecionar múltiplos valores
-- Trigger mostra quantidade de selecionados
-- "Nenhum selecionado" = todos os registros (sem filtro)
-- Quick filters continuam funcionando
-- Persistência no localStorage funciona
-- Contagem de filtros ativos reflete corretamente
-- Exportação CSV respeita multi-seleção
-- Mobile e desktop funcionam corretamente
+Data,Cliente,Modelos,Qtd,Valor,Pagamento,Pedido,Entrega
+12/01/2026,"Adaiane Lima","Saia Jeans Curta Cintura Alta 48...",34,1356.00,PAGO,SEPARADO,ENTREGUE
+12/01/2026,"Zuleide Santana","Calça Cargo Jeans Clara 650 - 6...",98,4176.00,PAGO,SEPARADO,ENTREGUE
+08/01/2026,"Luane Jesus","",20,828.00,PAGO,SEPARADO,ENTREGUE
+```
 
