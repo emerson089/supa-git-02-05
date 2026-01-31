@@ -1,133 +1,45 @@
 
 
-## Plano: Adicionar Quantidade de Modelos e Taxa de Excursão no Modal e PDF
+## Plano: Corrigir Sobreposição de Texto no PDF
 
-### Objetivo
+### Diagnóstico do Problema
 
-Incluir no modal "Detalhes do Pedido" e no PDF gerado:
-- Quantidade de modelos (calculada a partir dos itens com produto_id único)
-- Taxa de Excursão (valor já salvo na tabela pedidos)
+Analisando o código e o PDF gerado, identifiquei 3 problemas:
 
----
-
-### Alterações Necessárias
-
-#### 1. Arquivo: `src/hooks/usePedidosPaginated.ts`
-
-**Adicionar campos ao tipo `PedidoPaginatedDB`:**
-
-```typescript
-export interface PedidoPaginatedDB {
-  // ... campos existentes ...
-  excursao_id: string | null;  // NOVO
-  taxa_excursao: number | null; // NOVO
-  // ...
-}
-```
+1. **Status Y Position Errada**: O status está usando `finalY + 20` quando tem taxa, mas essa posição conflita com a linha da Taxa Excursão (que está em `finalY + 18`)
+2. **Footer Position Fixa**: O footer usa `finalY + 35` fixo, mas quando tem taxa o box tem 35px de altura, então o footer deve estar em `finalY + boxHeight + 10`
+3. **Linha 2 conflitante**: Taxa Excursão e Status estão tentando ocupar a mesma linha
 
 ---
 
-#### 2. Arquivo: `src/pages/PedidosCriados.tsx`
+### Solução
 
-##### 2.1 - Adicionar função para calcular quantidade de modelos
+Reorganizar o layout do box de totais com posições bem definidas:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ Linha 1 (finalY + 10): Total Peças          Quantidade de Modelos   │
+│ Linha 2 (finalY + 18): Subtotal dos Itens   Taxa Excursão           │
+│ Linha 3 (finalY + 26): Valor Total          Status (lado direito)   │
+└──────────────────────────────────────────────────────────────────────┘
+                        (finalY + boxHeight + 8): Footer
+```
+
+---
+
+### Alterações no Arquivo
+
+**Arquivo:** `src/pages/PedidosCriados.tsx`
+
+**Linhas a modificar:** 619-654
+
+#### Código Corrigido
 
 ```typescript
-// Calcular quantidade de modelos únicos no pedido
-const calcularQuantidadeModelos = (itens: Array<{ produto_id?: string | null }>) => {
-  const modelosUnicos = new Set(
-    itens
-      .filter(item => item.produto_id)
-      .map(item => item.produto_id)
-  );
-  return modelosUnicos.size;
-};
-```
-
-##### 2.2 - Atualizar seção "Totals" no modal (linhas 1235-1245)
-
-**Antes:**
-```
-┌─────────────────────────────────────────────┐
-│  Total de Peças         Valor Total         │
-│  14 peças               R$ 460,00           │
-└─────────────────────────────────────────────┘
-```
-
-**Depois:**
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Total de Peças    Qtd Modelos    Subtotal     Taxa Excursão  │ Total  │
-│  14 peças          3 modelos      R$ 450,00    + R$ 10,00     │R$460,00│
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-Código novo para a seção de totais:
-
-```tsx
-{/* Totals - Atualizado com grid */}
-<div className="neu-card p-4 rounded-xl">
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-    {/* Total de Peças */}
-    <div className="flex flex-col gap-1">
-      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-        Total de Peças
-      </p>
-      <p className="text-2xl font-semibold leading-tight text-primary">
-        {selectedPedido.total_pecas || 0} <span className="text-sm font-normal text-muted-foreground">peças</span>
-      </p>
-    </div>
-    
-    {/* Quantidade de Modelos */}
-    <div className="flex flex-col gap-1">
-      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-        Qtd de Modelos
-      </p>
-      <p className="text-2xl font-semibold leading-tight text-violet-600">
-        {calcularQuantidadeModelos(selectedPedido.pedido_itens || [])} 
-        <span className="text-sm font-normal text-muted-foreground">
-          {calcularQuantidadeModelos(selectedPedido.pedido_itens || []) === 1 ? 'modelo' : 'modelos'}
-        </span>
-      </p>
-    </div>
-    
-    {/* Taxa Excursão (condicional) */}
-    {(selectedPedido.taxa_excursao || 0) > 0 && (
-      <div className="flex flex-col gap-1">
-        <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-          Taxa Excursão
-        </p>
-        <p className="text-2xl font-semibold leading-tight text-amber-600">
-          + {formatCurrency(selectedPedido.taxa_excursao || 0)}
-        </p>
-      </div>
-    )}
-    
-    {/* Valor Total */}
-    <div className="flex flex-col gap-1">
-      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-        Valor Total
-      </p>
-      <p className="text-2xl font-semibold leading-tight text-emerald-600">
-        {formatCurrency(selectedPedido.valor_total || 0)}
-      </p>
-    </div>
-  </div>
-</div>
-```
-
-##### 2.3 - Atualizar função `generatePDF` (linhas 534-636)
-
-Adicionar na seção de totais do PDF:
-
-```typescript
-// Totals - Atualizado com quantidade de modelos e taxa excursão
-const quantidadeModelos = calcularQuantidadeModelos(itens);
-const taxaExcursao = pedido.taxa_excursao || 0;
-const subtotalItens = itens.reduce((acc, item) => acc + (item.quantidade * item.valor_unitario), 0);
-
+// Totals - altura dinâmica baseada na presença de taxa
+const boxHeight = taxaExcursao > 0 ? 38 : 28;
 doc.setFillColor(240, 240, 240);
-doc.rect(14, finalY, pageWidth - 28, 35, 'F');
-
+doc.rect(14, finalY, pageWidth - 28, boxHeight, 'F');
 doc.setFont('helvetica', 'bold');
 doc.setFontSize(11);
 
@@ -139,42 +51,72 @@ doc.text(`Quantidade de Modelos: ${quantidadeModelos}`, pageWidth / 2, finalY + 
 if (taxaExcursao > 0) {
   doc.text(`Subtotal dos Itens: ${formatCurrency(subtotalItens)}`, 20, finalY + 18);
   doc.text(`Taxa Excursão: + ${formatCurrency(taxaExcursao)}`, pageWidth / 2, finalY + 18);
+  
+  // Linha 3: Valor Total e Status
+  doc.setFontSize(12);
+  doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 28);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(`Status: ${pedido.status_pagamento} | ${pedido.status_pedido} | ${pedido.status_entrega}`, pageWidth - 20, finalY + 28, {
+    align: 'right'
+  });
+} else {
+  // Sem taxa: Valor Total e Status na linha 2
+  doc.setFontSize(12);
+  doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 18);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(`Status: ${pedido.status_pagamento} | ${pedido.status_pedido} | ${pedido.status_entrega}`, pageWidth - 20, finalY + 18, {
+    align: 'right'
+  });
 }
 
-// Linha 3: Valor Total
-doc.setFontSize(12);
-doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 28);
+// Footer - posição dinâmica baseada na altura do box
+doc.setFont('helvetica', 'italic');
+doc.setFontSize(10);
+doc.text('Obrigado pela preferência! Delookii Jeans', pageWidth / 2, finalY + boxHeight + 10, {
+  align: 'center'
+});
 ```
 
 ---
 
 ### Resultado Visual Esperado
 
-#### Modal "Detalhes do Pedido"
-
+**Com Taxa de Excursão:**
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  TOTAL DE PEÇAS    QTD DE MODELOS    TAXA EXCURSÃO   VALOR TOTAL │
-│  14 peças          3 modelos         + R$ 10,00      R$ 460,00   │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  Total de Peças: 16               Quantidade de Modelos: 4          │
+│  Subtotal dos Itens: R$ 560,00    Taxa Excursão: + R$ 10,00         │
+│  Valor Total: R$ 570,00           Status: PENDENTE | NÃO SEP | ...  │
+└──────────────────────────────────────────────────────────────────────┘
+              Obrigado pela preferência! Delookii Jeans
 ```
 
-#### PDF Gerado
-
+**Sem Taxa de Excursão:**
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  Total de Peças: 14          Quantidade de Modelos: 3            │
-│  Subtotal dos Itens: R$ 450,00    Taxa Excursão: + R$ 10,00      │
-│  Valor Total: R$ 460,00                                          │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  Total de Peças: 16               Quantidade de Modelos: 4          │
+│  Valor Total: R$ 560,00           Status: PENDENTE | NÃO SEP | ...  │
+└──────────────────────────────────────────────────────────────────────┘
+              Obrigado pela preferência! Delookii Jeans
 ```
 
 ---
 
-### Resumo de Arquivos
+### Resumo das Mudanças
+
+| Problema | Correção |
+|----------|----------|
+| Status sobrepondo Taxa | Mover Status para a mesma linha do Valor Total (linha 3) |
+| Footer com posição fixa | Usar `finalY + boxHeight + 10` para posição dinâmica |
+| Box height insuficiente | Aumentar de 35 para 38px quando tem taxa |
+
+---
+
+### Arquivos Impactados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/usePedidosPaginated.ts` | Adicionar `taxa_excursao` e `excursao_id` ao tipo |
-| `src/pages/PedidosCriados.tsx` | Adicionar função `calcularQuantidadeModelos`, atualizar modal de detalhes e função `generatePDF` |
+| `src/pages/PedidosCriados.tsx` | Corrigir posições Y dos elementos no PDF (linhas 619-654) |
 
