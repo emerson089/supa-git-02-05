@@ -18,10 +18,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { LotImage } from '@/components/production/LotImage';
 import { useAjustarEstoqueLocal, EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
+import { useTiposAjuste, useCriarTiposPadrao } from '@/hooks/useTiposAjuste';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Loader2, AlertCircle, ArrowUp, ArrowDown } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowUp, ArrowDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AjusteEstoqueModalProps {
@@ -34,18 +42,22 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
   const [estoqueAtualEditavel, setEstoqueAtualEditavel] = useState('');
   const [novaQuantidade, setNovaQuantidade] = useState('');
   const [novoEstoqueManualmenteAlterado, setNovoEstoqueManualmenteAlterado] = useState(false);
-  const [motivo, setMotivo] = useState('');
+  const [tipoAjusteId, setTipoAjusteId] = useState<string>('');
+  const [observacao, setObservacao] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
   
   const ajustarEstoque = useAjustarEstoqueLocal();
+  const { data: tiposAjuste = [], isLoading: isLoadingTipos } = useTiposAjuste();
+  const criarTiposPadrao = useCriarTiposPadrao();
 
   useEffect(() => {
     if (open && item) {
       setEstoqueAtualEditavel(String(item.quantidade));
       setNovaQuantidade(String(item.quantidade));
       setNovoEstoqueManualmenteAlterado(false);
-      setMotivo('');
+      setTipoAjusteId('');
+      setObservacao('');
     }
   }, [open, item]);
 
@@ -58,6 +70,13 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
     }
   }, [open]);
 
+  // Criar tipos padrão se não existirem
+  useEffect(() => {
+    if (open && !isLoadingTipos && tiposAjuste.length === 0 && !criarTiposPadrao.isPending) {
+      criarTiposPadrao.mutate();
+    }
+  }, [open, isLoadingTipos, tiposAjuste.length, criarTiposPadrao]);
+
   if (!item) return null;
 
   const estoqueAtualInt = parseInt(estoqueAtualEditavel) || 0;
@@ -67,7 +86,10 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
   const isSaida = diferenca < 0;
   const semAlteracao = diferenca === 0;
 
-  const isValid = novaQtd >= 0 && estoqueAtualInt >= 0 && motivo.trim().length >= 3 && !semAlteracao;
+  // Encontrar nome do tipo selecionado para compor o motivo
+  const tipoSelecionado = tiposAjuste.find(t => t.id === tipoAjusteId);
+
+  const isValid = novaQtd >= 0 && estoqueAtualInt >= 0 && tipoAjusteId.length > 0 && !semAlteracao;
 
   const handleEstoqueAtualChange = (value: string) => {
     const cleanValue = value.replace(/\D/g, '');
@@ -88,14 +110,21 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
   const handleSalvar = async () => {
     if (!isValid || !item) return;
 
+    // Montar motivo: tipo de ajuste + observação opcional
+    let motivoFinal = tipoSelecionado?.nome || '';
+    if (observacao.trim()) {
+      motivoFinal += ` - ${observacao.trim()}`;
+    }
+
     try {
       await ajustarEstoque.mutateAsync({
         estoqueLocalId: item.id,
         itemId: item.itemId,
         localId: item.localId,
         novaQuantidade: novaQtd,
-        motivo: motivo.trim(),
+        motivo: motivoFinal,
         precoAplicado: item.precoExibido ?? item.itemPrecoUnitario ?? undefined,
+        tipoAjusteId,
       });
       onOpenChange(false);
     } catch (error) {
@@ -199,24 +228,54 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
         </div>
       </div>
 
-      {/* Motivo */}
+      {/* Tipo de Ajuste */}
       <div className="space-y-2">
-        <Label htmlFor="motivo">
-          Motivo <span className="text-destructive">*</span>
+        <Label htmlFor="tipo-ajuste">
+          Tipo de Ajuste <span className="text-destructive">*</span>
         </Label>
-        <Textarea
-          id="motivo"
-          placeholder="Ex: Conferência de estoque físico, Ajuste por inventário..."
-          value={motivo}
-          onChange={(e) => setMotivo(e.target.value)}
-          className="min-h-[80px] resize-none text-base sm:text-sm"
-        />
-        {motivo.length > 0 && motivo.length < 3 && (
-          <p className="text-xs text-destructive flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" />
-            Mínimo 3 caracteres
+        {isLoadingTipos ? (
+          <div className="flex items-center gap-2 h-10 px-3 border rounded-md bg-muted/50">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm text-muted-foreground">Carregando tipos...</span>
+          </div>
+        ) : tiposAjuste.length === 0 ? (
+          <div className="flex items-center gap-2 h-10 px-3 border rounded-md bg-muted/50">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm text-muted-foreground">Criando tipos padrão...</span>
+          </div>
+        ) : (
+          <Select value={tipoAjusteId} onValueChange={setTipoAjusteId}>
+            <SelectTrigger id="tipo-ajuste">
+              <SelectValue placeholder="Selecione o tipo de ajuste..." />
+            </SelectTrigger>
+            <SelectContent>
+              {tiposAjuste.map(tipo => (
+                <SelectItem key={tipo.id} value={tipo.id}>
+                  {tipo.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {!tipoAjusteId && !isLoadingTipos && tiposAjuste.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Selecione o tipo de ajuste para continuar
           </p>
         )}
+      </div>
+
+      {/* Observação (opcional) */}
+      <div className="space-y-2">
+        <Label htmlFor="observacao">
+          Observação <span className="text-muted-foreground text-xs">(opcional)</span>
+        </Label>
+        <Textarea
+          id="observacao"
+          placeholder="Detalhe adicional se necessário..."
+          value={observacao}
+          onChange={(e) => setObservacao(e.target.value)}
+          className="min-h-[60px] resize-none text-base sm:text-sm"
+        />
       </div>
 
       {/* Aviso */}
