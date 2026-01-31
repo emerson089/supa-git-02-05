@@ -6,6 +6,7 @@ interface ResumoCardProps {
   taxaExcursao: number;
   nomeExcursao?: string;
   valorTotal: number;
+  quantidadeModelos: number;
   onLimpar: () => void;
   onCriarPedido: () => void;
   isLoading?: boolean;
@@ -18,6 +19,7 @@ export function ResumoCard({
   taxaExcursao,
   nomeExcursao,
   valorTotal,
+  quantidadeModelos,
   onLimpar,
   onCriarPedido,
   isLoading = false,
@@ -37,6 +39,16 @@ export function ResumoCard({
               Quantidade total de peças
             </p>
             <p className="text-3xl font-bold text-primary">{totalPecas} <span className="text-base font-normal text-muted-foreground">peças</span></p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+              Quantidade de modelos
+            </p>
+            <p className="text-3xl font-bold text-violet-600">
+              {quantidadeModelos} <span className="text-base font-normal text-muted-foreground">
+                {quantidadeModelos === 1 ? 'modelo' : 'modelos'}
+              </span>
+            </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
