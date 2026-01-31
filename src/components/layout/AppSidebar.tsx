@@ -1,4 +1,4 @@
-import { Package, LayoutDashboard, Factory, Warehouse, Users, ShoppingCart, FileText, Settings, HelpCircle, LogOut, Store, ArrowLeftRight } from 'lucide-react';
+import { Package, LayoutDashboard, Factory, Warehouse, Users, ShoppingCart, FileText, Settings, HelpCircle, LogOut, Store, ArrowLeftRight, Tag } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/contexts/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -57,6 +57,11 @@ const bottomNavItems: NavItem[] = [{
   icon: <Users size={18} />,
   path: '/configuracoes/usuarios',
   roles: ['admin']
+}, {
+  label: 'Tipos de Ajuste',
+  icon: <Tag size={18} />,
+  path: '/configuracoes/tipos-ajuste',
+  roles: ['admin', 'gerente']
 }, {
   label: 'Ajuda',
   icon: <HelpCircle size={18} />,
