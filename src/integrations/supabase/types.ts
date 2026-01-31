@@ -378,6 +378,36 @@ export type Database = {
           },
         ]
       }
+      excursoes: {
+        Row: {
+          ativo: boolean
+          created_at: string | null
+          id: string
+          nome: string
+          taxa: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string | null
+          id?: string
+          nome: string
+          taxa?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string | null
+          id?: string
+          nome?: string
+          taxa?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       lote_custos_config: {
         Row: {
           created_at: string
@@ -546,6 +576,7 @@ export type Database = {
           estado: string | null
           estorno_realizado: boolean | null
           excursao: string | null
+          excursao_id: string | null
           forma_pagamento: string | null
           id: string
           observacoes: string | null
@@ -554,6 +585,7 @@ export type Database = {
           status_entrega: string | null
           status_pagamento: string | null
           status_pedido: string | null
+          taxa_excursao: number | null
           telefone: string | null
           total_pecas: number | null
           updated_at: string
@@ -568,6 +600,7 @@ export type Database = {
           estado?: string | null
           estorno_realizado?: boolean | null
           excursao?: string | null
+          excursao_id?: string | null
           forma_pagamento?: string | null
           id?: string
           observacoes?: string | null
@@ -576,6 +609,7 @@ export type Database = {
           status_entrega?: string | null
           status_pagamento?: string | null
           status_pedido?: string | null
+          taxa_excursao?: number | null
           telefone?: string | null
           total_pecas?: number | null
           updated_at?: string
@@ -590,6 +624,7 @@ export type Database = {
           estado?: string | null
           estorno_realizado?: boolean | null
           excursao?: string | null
+          excursao_id?: string | null
           forma_pagamento?: string | null
           id?: string
           observacoes?: string | null
@@ -598,6 +633,7 @@ export type Database = {
           status_entrega?: string | null
           status_pagamento?: string | null
           status_pedido?: string | null
+          taxa_excursao?: number | null
           telefone?: string | null
           total_pecas?: number | null
           updated_at?: string
@@ -610,6 +646,13 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedidos_excursao_id_fkey"
+            columns: ["excursao_id"]
+            isOneToOne: false
+            referencedRelation: "excursoes"
             referencedColumns: ["id"]
           },
         ]

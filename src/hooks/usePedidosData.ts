@@ -22,6 +22,8 @@ export interface PedidoDB {
   estado: string;
   telefone: string;
   excursao: string;
+  excursao_id: string | null;
+  taxa_excursao: number;
   status: string;
   status_pagamento: string;
   status_pedido: string;
@@ -44,6 +46,8 @@ export interface PedidoInsert {
   estado?: string;
   telefone?: string;
   excursao?: string;
+  excursao_id?: string | null;
+  taxa_excursao?: number;
   status?: string;
   status_pagamento?: string;
   status_pedido?: string;

@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useClientesContext } from '@/contexts/ClientesContext';
 import { usePedidos } from '@/contexts/PedidosContext';
 import { useEstoque } from '@/contexts/EstoqueContext';
+import { useExcursoesAtivas } from '@/hooks/useExcursoes';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,12 +40,16 @@ const NovoPedido = () => {
     updateItem
   } = useEstoque();
 
+  const { data: excursoesAtivas } = useExcursoesAtivas();
+
   // Cliente info
   const [clienteId, setClienteId] = useState('');
   const [cidade, setCidade] = useState('');
   const [estado, setEstado] = useState('');
   const [telefone, setTelefone] = useState('');
   const [excursao, setExcursao] = useState('');
+  const [excursaoId, setExcursaoId] = useState<string | null>(null);
+  const [taxaExcursao, setTaxaExcursao] = useState(0);
 
   // Status - valores fixos, não editáveis na UI
   const statusPagamento = 'PENDENTE';
@@ -69,6 +74,8 @@ const NovoPedido = () => {
         if (data.estado) setEstado(data.estado);
         if (data.telefone) setTelefone(data.telefone);
         if (data.excursao) setExcursao(data.excursao);
+        if (data.excursaoId) setExcursaoId(data.excursaoId);
+        if (data.taxaExcursao) setTaxaExcursao(data.taxaExcursao);
         if (data.items && Array.isArray(data.items)) setItems(data.items);
       } catch (e) {
         // Ignorar erro de parse
@@ -86,10 +93,12 @@ const NovoPedido = () => {
       estado,
       telefone,
       excursao,
+      excursaoId,
+      taxaExcursao,
       items
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [clienteId, cidade, estado, telefone, excursao, items, isInitialized]);
+  }, [clienteId, cidade, estado, telefone, excursao, excursaoId, taxaExcursao, items, isInitialized]);
 
   // Função para limpar o rascunho
   const clearDraft = () => localStorage.removeItem(STORAGE_KEY);
@@ -108,8 +117,9 @@ const NovoPedido = () => {
   });
 
   // Calculate totals
+  const valorItens = items.reduce((sum, item) => sum + item.quantidade * item.valorUnitario, 0);
   const totalPecas = items.reduce((sum, item) => sum + item.quantidade, 0);
-  const valorTotal = items.reduce((sum, item) => sum + item.quantidade * item.valorUnitario, 0);
+  const valorTotal = valorItens + taxaExcursao;
 
   // Verificar se há estoque insuficiente em algum item
   const hasEstoqueInsuficiente = useMemo(() => {
@@ -148,6 +158,8 @@ const NovoPedido = () => {
     setEstado('');
     setTelefone('');
     setExcursao('');
+    setExcursaoId(null);
+    setTaxaExcursao(0);
     setItems([]);
     clearDraft();
     toast.success('Formulário limpo');
@@ -217,6 +229,8 @@ const NovoPedido = () => {
         estado: estado || cliente?.estado || '',
         telefone: telefone || cliente?.telefone || '',
         excursao: excursao || cliente?.excursao || '',
+        excursaoId: excursaoId,
+        taxaExcursao: taxaExcursao,
         status: getLabel(statusPedido, statusPedidoOptions),
         statusPagamento: getLabel(statusPagamento, statusPagamentoOptions),
         statusPedido: getLabel(statusPedido, statusPedidoOptions),
@@ -268,6 +282,18 @@ const NovoPedido = () => {
       setEstado(cliente.estado);
       setTelefone(cliente.telefone);
       setExcursao(cliente.excursao);
+      
+      // Buscar taxa da excursão se existir
+      const excursaoMatch = excursoesAtivas?.find(e => 
+        e.nome.toLowerCase() === cliente.excursao.toLowerCase()
+      );
+      if (excursaoMatch) {
+        setExcursaoId(excursaoMatch.id);
+        setTaxaExcursao(excursaoMatch.taxa);
+      } else {
+        setExcursaoId(null);
+        setTaxaExcursao(0);
+      }
       setShowAddCliente(false);
       setNovoCliente({
         nome: '',
@@ -301,7 +327,7 @@ const NovoPedido = () => {
         <div className="flex-1 overflow-y-auto px-8 pb-8">
           <div className="max-w-5xl space-y-8">
             {/* Cliente Info Card */}
-            <ClienteInfoCard clienteId={clienteId} cidade={cidade} estado={estado} telefone={telefone} excursao={excursao} onClienteChange={setClienteId} onCidadeChange={setCidade} onEstadoChange={setEstado} onTelefoneChange={setTelefone} onExcursaoChange={setExcursao} onAddCliente={handleAddCliente} />
+            <ClienteInfoCard clienteId={clienteId} cidade={cidade} estado={estado} telefone={telefone} excursao={excursao} excursaoId={excursaoId} taxaExcursao={taxaExcursao} onClienteChange={setClienteId} onCidadeChange={setCidade} onEstadoChange={setEstado} onTelefoneChange={setTelefone} onExcursaoChange={setExcursao} onExcursaoIdChange={setExcursaoId} onTaxaExcursaoChange={setTaxaExcursao} onAddCliente={handleAddCliente} />
 
             {/* Insights do Cliente - Apenas para consulta interna */}
             <ClienteInsightsCard clienteId={clienteId} />
@@ -312,7 +338,7 @@ const NovoPedido = () => {
             <ItensPedidoCard items={items} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
 
             {/* Resumo Card */}
-            <ResumoCard totalPecas={totalPecas} valorTotal={valorTotal} onLimpar={handleLimpar} onCriarPedido={handleCriarPedido} isLoading={isLoading} disabled={hasEstoqueInsuficiente} />
+            <ResumoCard totalPecas={totalPecas} valorItens={valorItens} taxaExcursao={taxaExcursao} nomeExcursao={excursao} valorTotal={valorTotal} onLimpar={handleLimpar} onCriarPedido={handleCriarPedido} isLoading={isLoading} disabled={hasEstoqueInsuficiente} />
           </div>
         </div>
       </main>

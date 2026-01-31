@@ -2,6 +2,9 @@ import { Button } from '@/components/ui/button';
 
 interface ResumoCardProps {
   totalPecas: number;
+  valorItens: number;
+  taxaExcursao: number;
+  nomeExcursao?: string;
   valorTotal: number;
   onLimpar: () => void;
   onCriarPedido: () => void;
@@ -11,6 +14,9 @@ interface ResumoCardProps {
 
 export function ResumoCard({
   totalPecas,
+  valorItens,
+  taxaExcursao,
+  nomeExcursao,
   valorTotal,
   onLimpar,
   onCriarPedido,
@@ -25,13 +31,27 @@ export function ResumoCard({
     <div className="neu-card p-7">
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
         {/* Summary Stats */}
-        <div className="flex items-start gap-14">
+        <div className="flex items-start gap-8 lg:gap-14 flex-wrap">
           <div>
             <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
               Quantidade total de peças
             </p>
             <p className="text-3xl font-bold text-primary">{totalPecas} <span className="text-base font-normal text-muted-foreground">peças</span></p>
           </div>
+          <div>
+            <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+              Subtotal dos itens
+            </p>
+            <p className="text-2xl font-semibold text-foreground">{formatCurrency(valorItens)}</p>
+          </div>
+          {taxaExcursao > 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
+                Taxa Excursão {nomeExcursao && <span className="normal-case">({nomeExcursao})</span>}
+              </p>
+              <p className="text-2xl font-semibold text-amber-600">+ {formatCurrency(taxaExcursao)}</p>
+            </div>
+          )}
           <div>
             <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
               Valor total do pedido
