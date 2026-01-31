@@ -1,184 +1,170 @@
 
 
-## Plano: Reorganizar Layout da Pagina Novo Pedido
+## Plano: Padronizar Tipografia do ResumoCard
 
 ### Objetivo
 
-Trocar a posicao do card de Resumo para ficar acima do card de Itens do Pedido, e melhorar o layout do Resumo para que as informacoes fiquem bem alinhadas lado a lado em uma unica linha.
+Criar hierarquia tipográfica consistente para todos os cards de métricas do resumo do pedido, sem alterar lógica de cálculos.
 
 ---
 
-### Alteracoes Necessarias
+### Especificações Tipográficas
 
-#### 1. Arquivo: `src/pages/NovoPedido.tsx`
+| Elemento | Tamanho | Peso | Outras |
+|----------|---------|------|--------|
+| Label (título) | 12px (`text-xs`) | 500 (`font-medium`) | Uppercase, opacidade 70% |
+| Valor principal | 24px (`text-2xl`) | 600 (`font-semibold`) | line-height 1.2 |
+| Sufixo (peças, modelos) | 14px (`text-sm`) | 400 (`font-normal`) | Mesma linha que valor |
 
-**Inverter a ordem dos componentes:**
+---
 
-Atual (linhas 347-351):
+### Alterações no Arquivo
+
+**Arquivo:** `src/components/pedidos/ResumoCard.tsx`
+
+#### Problema Atual
+
 ```tsx
-{/* Items Card */}
-<ItensPedidoCard ... />
+// Quantidade de peças - usa text-2xl lg:text-3xl font-bold
+<p className="text-2xl lg:text-3xl font-bold text-primary">
+  {totalPecas} <span className="text-sm font-normal">peças</span>
+</p>
 
-{/* Resumo Card */}
-<ResumoCard ... />
+// Subtotal - usa text-xl lg:text-2xl font-semibold  
+<p className="text-xl lg:text-2xl font-semibold text-foreground">
+  {formatCurrency(valorItens)}
+</p>
+
+// Valor total - usa text-2xl lg:text-3xl font-bold
+<p className="text-2xl lg:text-3xl font-bold text-emerald-600">
+  {formatCurrency(valorTotal)}
+</p>
 ```
 
-Novo:
-```tsx
-{/* Resumo Card - agora acima dos itens */}
-<ResumoCard ... />
+#### Solução: Padronizar Todos
 
-{/* Items Card - agora abaixo do resumo */}
-<ItensPedidoCard ... />
+```tsx
+// LABELS - padrão para todos (12px, medium, uppercase, 70% opacity)
+className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider mb-1"
+
+// VALORES - padrão para todos (24px, semibold, leading-tight)
+className="text-2xl font-semibold leading-tight text-[COR]"
+
+// SUFIXOS - padrão para todos (14px, normal)
+className="text-sm font-normal text-muted-foreground"
 ```
 
 ---
 
-#### 2. Arquivo: `src/components/pedidos/ResumoCard.tsx`
+### Código Final de Cada Métrica
 
-**Reorganizar layout usando CSS Grid para melhor alinhamento:**
-
-Estrutura atual (flex com wrap):
-```
-[Qtd Pecas] [Qtd Modelos] [Subtotal] [Taxa] [Total]
-                    (pode quebrar linha em telas menores)
-```
-
-Nova estrutura (grid organizado):
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│  QTD TOTAL     QTD MODELOS    SUBTOTAL       TAXA           VALOR TOTAL   │
-│  DE PECAS                     DOS ITENS      EXCURSAO       DO PEDIDO     │
-│                                                                            │
-│  26 pecas      2 modelos      R$ 720,00      + R$ 10,00     R$ 730,00    │
-│                                                                            │
-│                                              [Limpar]  [Criar Pedido]     │
-└────────────────────────────────────────────────────────────────────────────┘
-```
-
-Mudancas no componente:
-
-1. Usar `grid grid-cols-5` em desktop para alinhar todas as 5 metricas lado a lado
-2. Em mobile usar `grid grid-cols-2` para adaptar
-3. Botoes ficam abaixo das metricas, alinhados a direita
-4. Quando nao tiver taxa de excursao, ajustar grid para 4 colunas
-
----
-
-### Codigo do Novo Layout
+#### 1. Quantidade total de peças
 
 ```tsx
-<div className="neu-card p-7">
-  {/* Metricas em grid */}
-  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 lg:gap-8 mb-6">
-    {/* Quantidade total de pecas */}
-    <div>
-      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
-        Quantidade total de pecas
-      </p>
-      <p className="text-2xl lg:text-3xl font-bold text-primary">
-        {totalPecas} <span className="text-sm font-normal text-muted-foreground">pecas</span>
-      </p>
-    </div>
-    
-    {/* Quantidade de modelos */}
-    <div>
-      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
-        Quantidade de modelos
-      </p>
-      <p className="text-2xl lg:text-3xl font-bold text-violet-600">
-        {quantidadeModelos} <span className="text-sm font-normal text-muted-foreground">
-          {quantidadeModelos === 1 ? 'modelo' : 'modelos'}
-        </span>
-      </p>
-    </div>
-    
-    {/* Subtotal dos itens */}
-    <div>
-      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
-        Subtotal dos itens
-      </p>
-      <p className="text-xl lg:text-2xl font-semibold text-foreground">
-        {formatCurrency(valorItens)}
-      </p>
-    </div>
-    
-    {/* Taxa Excursao - condicional */}
-    {taxaExcursao > 0 && (
-      <div>
-        <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
-          Taxa Excursao {nomeExcursao && <span className="normal-case">({nomeExcursao})</span>}
-        </p>
-        <p className="text-xl lg:text-2xl font-semibold text-amber-600">
-          + {formatCurrency(taxaExcursao)}
-        </p>
-      </div>
-    )}
-    
-    {/* Valor total do pedido */}
-    <div>
-      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mb-2">
-        Valor total do pedido
-      </p>
-      <p className="text-2xl lg:text-3xl font-bold text-emerald-600">
-        {formatCurrency(valorTotal)}
-      </p>
-    </div>
-  </div>
-  
-  {/* Botoes alinhados a direita */}
-  <div className="flex items-center justify-end gap-4 pt-4 border-t border-border/30">
-    <Button variant="outline" onClick={onLimpar}>
-      Limpar Formulario
-    </Button>
-    <Button onClick={onCriarPedido} disabled={isLoading || disabled}>
-      {isLoading ? 'Criando...' : disabled ? 'Estoque Insuficiente' : 'Criar Pedido'}
-    </Button>
-  </div>
+<div className="flex flex-col gap-1">
+  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+    Quantidade total de peças
+  </p>
+  <p className="text-2xl font-semibold leading-tight text-primary">
+    {totalPecas} <span className="text-sm font-normal text-muted-foreground">peças</span>
+  </p>
+</div>
+```
+
+#### 2. Quantidade de modelos
+
+```tsx
+<div className="flex flex-col gap-1">
+  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+    Quantidade de modelos
+  </p>
+  <p className="text-2xl font-semibold leading-tight text-violet-600">
+    {quantidadeModelos} <span className="text-sm font-normal text-muted-foreground">
+      {quantidadeModelos === 1 ? 'modelo' : 'modelos'}
+    </span>
+  </p>
+</div>
+```
+
+#### 3. Subtotal dos itens
+
+```tsx
+<div className="flex flex-col gap-1">
+  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+    Subtotal dos itens
+  </p>
+  <p className="text-2xl font-semibold leading-tight text-foreground">
+    {formatCurrency(valorItens)}
+  </p>
+</div>
+```
+
+#### 4. Taxa Excursão
+
+```tsx
+<div className="flex flex-col gap-1">
+  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+    Taxa Excursão {nomeExcursao && <span className="normal-case">({nomeExcursao})</span>}
+  </p>
+  <p className="text-2xl font-semibold leading-tight text-amber-600">
+    + {formatCurrency(taxaExcursao)}
+  </p>
+</div>
+```
+
+#### 5. Valor total do pedido
+
+```tsx
+<div className="flex flex-col gap-1">
+  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+    Valor total do pedido
+  </p>
+  <p className="text-2xl font-semibold leading-tight text-emerald-600">
+    {formatCurrency(valorTotal)}
+  </p>
 </div>
 ```
 
 ---
 
-### Resultado Visual Esperado
+### Resumo das Mudanças
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  Cliente Info Card                                                           │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  Cliente Insights Card                                                       │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  RESUMO (agora acima)                                                        │
-│                                                                              │
-│  QTD PECAS    QTD MODELOS    SUBTOTAL        TAXA           VALOR TOTAL    │
-│  26 pecas     2 modelos      R$ 720,00       + R$ 10,00     R$ 730,00      │
-│                                                                              │
-│  ─────────────────────────────────────────────────────────────────────────  │
-│                                              [Limpar]  [Criar Pedido]       │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  ITENS DO PEDIDO (agora abaixo)                               [+ Adicionar] │
-│                                                                              │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │  Short alfa. botoes todas cores - 170    12    R$ 30    R$ 360,00  [X] │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │  Short cinto encapado - 160              12    R$ 30    R$ 360,00  [X] │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
+| Antes | Depois |
+|-------|--------|
+| Labels com `mb-2` | Labels com `gap-1` via flex container |
+| Valores variando entre `text-xl`, `text-2xl`, `text-3xl` | Todos com `text-2xl` fixo |
+| Pesos variando entre `font-semibold` e `font-bold` | Todos com `font-semibold` |
+| Sem `leading-tight` | Todos com `leading-tight` para line-height 1.2 |
 
 ---
 
-### Resumo de Arquivos
+### Resultado Visual
 
-| Arquivo | Alteracao |
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  QUANTIDADE TOTAL     QUANTIDADE DE      SUBTOTAL DOS     TAXA EXCURSÃO    │
+│  DE PEÇAS             MODELOS            ITENS            (cabanas)        │
+│                                                                             │
+│  39 peças             2 modelos          R$ 1.080,00      + R$ 10,00       │
+│  ↑ azul               ↑ roxo             ↑ neutro         ↑ amarelo        │
+│                                                                             │
+│                       VALOR TOTAL DO PEDIDO                                 │
+│                       R$ 1.090,00                                           │
+│                       ↑ verde                                               │
+│                                                                             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│                                              [Limpar]  [Criar Pedido]      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+Todos os valores agora têm o mesmo tamanho (24px) e peso (600), criando consistência visual.
+
+---
+
+### Arquivos Impactados
+
+| Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/NovoPedido.tsx` | Inverter ordem: ResumoCard antes de ItensPedidoCard |
-| `src/components/pedidos/ResumoCard.tsx` | Reorganizar layout com grid para melhor alinhamento |
+| `src/components/pedidos/ResumoCard.tsx` | Padronizar classes CSS de tipografia |
 
