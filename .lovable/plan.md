@@ -1,255 +1,265 @@
 
 
-## Plano: Corrigir Duplicatas e Implementar CRUD de Tipos de Ajuste
+## Plano: Correção Global de Scroll em Dropdowns
 
 ### Diagnóstico do Problema
 
-**Causa raiz identificada**: Os tipos de ajuste foram criados em duplicidade no banco de dados. A função `useCriarTiposPadrao()` foi chamada múltiplas vezes (provavelmente em sessões diferentes ou por race condition), inserindo os mesmos 6 tipos padrão duas vezes para o mesmo usuário.
+O problema de scroll afeta múltiplos componentes do sistema:
 
-**Evidência no banco**:
-| nome | count |
-|------|-------|
-| Bonificação / Brinde | 2 |
-| Devolução de cliente | 2 |
-| Erro de lançamento | 2 |
-| Inventário / Conferência física | 2 |
-| Outro | 2 |
-| Perda / Avaria | 2 |
+1. **`SelectContent`** em `src/components/ui/select.tsx`:
+   - Usa `overflow-hidden` no container principal
+   - O Viewport do Radix Select não tem estilos de scroll adequados
+   - Depende de ScrollUpButton/ScrollDownButton para navegação em vez de scroll nativo
 
----
+2. **`PopoverContent`** com listas customizadas:
+   - Containers internos não têm `onWheel` para prevenir propagação
+   - Quando dentro de modais com `overflow-hidden`, eventos de wheel são bloqueados
 
-## Solução em 3 Partes
-
-### Parte 1: Correção no Banco de Dados
-
-**Migração SQL necessária:**
-
-1. **Remover registros duplicados** (manter apenas o mais antigo por nome/user)
-2. **Criar constraint UNIQUE** em `(user_id, nome)` para impedir futuras duplicações
-3. **Corrigir a função de criação de tipos padrão** para usar `ON CONFLICT DO NOTHING`
-
-```sql
--- 1. Remover duplicados mantendo o registro mais antigo por (user_id, nome)
-DELETE FROM tipos_ajuste_estoque
-WHERE id NOT IN (
-  SELECT DISTINCT ON (user_id, nome) id
-  FROM tipos_ajuste_estoque
-  ORDER BY user_id, nome, created_at ASC
-);
-
--- 2. Adicionar constraint UNIQUE para evitar duplicações futuras
-ALTER TABLE tipos_ajuste_estoque
-ADD CONSTRAINT unique_tipo_ajuste_per_user UNIQUE (user_id, nome);
-```
+3. **`DropdownMenuContent`** em `src/components/ui/dropdown-menu.tsx`:
+   - Similar ao SelectContent, usa `overflow-hidden`
 
 ---
 
-### Parte 2: Ajustes no Frontend (Hooks)
+## Solução
 
-**Arquivo**: `src/hooks/useTiposAjuste.ts`
+### 1. Corrigir SelectContent (Base UI Component)
 
-| Mudança | Descrição |
-|---------|-----------|
-| `useCriarTiposPadrao` | Usar `upsert` com `onConflict: 'user_id,nome'` ou `INSERT ... ON CONFLICT DO NOTHING` |
-| Hooks de CRUD | Adicionar hooks para criar, editar, desativar e excluir tipos |
+**Arquivo**: `src/components/ui/select.tsx`
 
-**Novos hooks a implementar:**
+**Alterações no SelectContent**:
 
-```typescript
-// Criar novo tipo
-export function useCriarTipoAjuste()
+| Mudança | Antes | Depois |
+|---------|-------|--------|
+| Container overflow | `overflow-hidden` | `overflow-auto` |
+| Viewport scroll | `p-1` | `p-1 max-h-[300px] overflow-y-auto` |
+| Wheel event | Não tratado | `onWheel={(e) => e.stopPropagation()}` |
 
-// Editar nome do tipo
-export function useEditarTipoAjuste()
+**Código Proposto**:
 
-// Desativar tipo (soft delete)
-export function useDesativarTipoAjuste()
-
-// Excluir tipo (hard delete - só se não usado)
-export function useExcluirTipoAjuste()
-
-// Verificar se tipo está em uso
-export function useTipoAjusteEmUso(tipoId: string)
+```tsx
+const SelectContent = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
+>(({ className, children, position = "popper", ...props }, ref) => (
+  <SelectPrimitive.Portal>
+    <SelectPrimitive.Content
+      ref={ref}
+      className={cn(
+        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md ...",
+        className,
+      )}
+      position={position}
+      {...props}
+    >
+      <SelectScrollUpButton />
+      <SelectPrimitive.Viewport
+        className={cn(
+          "p-1 max-h-[300px] overflow-y-auto",
+          position === "popper" && "..."
+        )}
+        onWheel={(e) => e.stopPropagation()}
+      >
+        {children}
+      </SelectPrimitive.Viewport>
+      <SelectScrollDownButton />
+    </SelectPrimitive.Content>
+  </SelectPrimitive.Portal>
+));
 ```
 
 ---
 
-### Parte 3: Nova Tela de Configurações
+### 2. Corrigir DropdownMenuContent (Base UI Component)
 
-**Rota**: `/configuracoes/tipos-ajuste`
+**Arquivo**: `src/components/ui/dropdown-menu.tsx`
 
-**Acesso**: Apenas `admin` e `gerente`
+**Alterações similares**:
 
-**Localização no menu**: Adicionar item "Tipos de Ajuste" no sidebar, abaixo de "Usuários" em Configurações
-
-#### Interface da Tela
-
-```text
-┌────────────────────────────────────────────────────────────────────┐
-│ ⚙️ Tipos de Ajuste                           [+ Novo Tipo]         │
-├────────────────────────────────────────────────────────────────────┤
-│ 🔍 Buscar tipo...                                                  │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │ Inventário / Conferência física          🟢 Ativo    [⋮]    │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │ Perda / Avaria                           🟢 Ativo    [⋮]    │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │ Erro de lançamento                       🟢 Ativo    [⋮]    │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │ Bonificação / Brinde                     🟢 Ativo    [⋮]    │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │ Devolução (antigo)                       ⚪ Inativo  [⋮]    │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-```
-
-#### Menu de Ações (⋮)
-
-- **Editar nome** → Abre modal de edição
-- **Desativar** → Define `ativo = false` (ação padrão)
-- **Reativar** (se inativo) → Define `ativo = true`
-- **Excluir permanentemente** → Só habilitado se não houver uso em `estoque_movimentacoes`
-
-#### Modal de Criação/Edição
-
-```text
-┌────────────────────────────────────────┐
-│ ➕ Novo Tipo de Ajuste              X  │
-├────────────────────────────────────────┤
-│                                        │
-│ Nome do Tipo *                         │
-│ ┌────────────────────────────────────┐ │
-│ │ Ex: Devolução ao fornecedor       │ │
-│ └────────────────────────────────────┘ │
-│                                        │
-│ ⚠️ Este nome já existe               │ ← (validação em tempo real)
-│                                        │
-├────────────────────────────────────────┤
-│               [Cancelar] [Salvar]      │
-└────────────────────────────────────────┘
-```
-
-#### Modal de Exclusão
-
-```text
-┌────────────────────────────────────────┐
-│ 🗑️ Excluir Tipo de Ajuste           X  │
-├────────────────────────────────────────┤
-│                                        │
-│ Deseja excluir permanentemente o tipo  │
-│ "Perda / Avaria"?                      │
-│                                        │
-│ ⚠️ Este tipo está em uso em 15        │
-│ movimentações e não pode ser excluído. │
-│ Utilize "Desativar" como alternativa.  │
-│                                        │
-├────────────────────────────────────────┤
-│           [Cancelar] [Desativar]       │
-└────────────────────────────────────────┘
-
--- OU se não estiver em uso --
-
-┌────────────────────────────────────────┐
-│ 🗑️ Excluir Tipo de Ajuste           X  │
-├────────────────────────────────────────┤
-│                                        │
-│ Deseja excluir permanentemente o tipo  │
-│ "Teste"?                               │
-│                                        │
-│ ✅ Este tipo não está em uso e pode    │
-│ ser excluído com segurança.            │
-│                                        │
-├────────────────────────────────────────┤
-│           [Cancelar] [Excluir]         │
-└────────────────────────────────────────┘
+```tsx
+const DropdownMenuContent = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
+>(({ className, sideOffset = 4, ...props }, ref) => (
+  <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Content
+      ref={ref}
+      sideOffset={sideOffset}
+      className={cn(
+        "z-50 min-w-[8rem] max-h-[300px] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md ...",
+        className,
+      )}
+      onWheel={(e) => e.stopPropagation()}
+      {...props}
+    />
+  </DropdownMenuPrimitive.Portal>
+));
 ```
 
 ---
 
-## Arquivos a Serem Criados/Modificados
+### 3. Corrigir PopoverContent (Base UI Component)
 
-### Novos Arquivos
+**Arquivo**: `src/components/ui/popover.tsx`
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/pages/ConfigTiposAjuste.tsx` | Tela CRUD de tipos de ajuste |
+**Alterações**:
 
-### Arquivos Modificados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useTiposAjuste.ts` | Adicionar hooks de CRUD, corrigir `useCriarTiposPadrao` |
-| `src/components/layout/AppSidebar.tsx` | Adicionar item "Tipos de Ajuste" no menu |
-| `src/components/layout/BottomNavigation.tsx` | Adicionar acesso mobile se necessário |
-| `src/App.tsx` | Adicionar rota `/configuracoes/tipos-ajuste` |
-
-### Migração SQL
-
-```sql
--- Remover duplicados
-DELETE FROM tipos_ajuste_estoque
-WHERE id NOT IN (
-  SELECT DISTINCT ON (user_id, nome) id
-  FROM tipos_ajuste_estoque
-  ORDER BY user_id, nome, created_at ASC
-);
-
--- Constraint UNIQUE
-ALTER TABLE tipos_ajuste_estoque
-ADD CONSTRAINT unique_tipo_ajuste_per_user UNIQUE (user_id, nome);
+```tsx
+const PopoverContent = React.forwardRef<
+  React.ElementRef<typeof PopoverPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
+>(({ className, align = "center", sideOffset = 4, ...props }, ref) => (
+  <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Content
+      ref={ref}
+      align={align}
+      sideOffset={sideOffset}
+      className={cn(
+        "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none ...",
+        className,
+      )}
+      onWheel={(e) => e.stopPropagation()}
+      {...props}
+    />
+  </PopoverPrimitive.Portal>
+));
 ```
 
 ---
 
-## Fluxo de Validação
+### 4. Adicionar Componente ScrollableList Reutilizável
 
-### Ao Criar Novo Tipo
+**Novo arquivo**: `src/components/ui/scrollable-list.tsx`
 
-1. Frontend: Trim do nome, verificar se não está vazio
-2. Frontend: Verificar duplicidade antes de enviar (busca local)
-3. Backend: Constraint UNIQUE impede inserção duplicada
-4. Se erro de constraint: Mostrar mensagem "Este nome já existe"
+Criar componente wrapper para listas scrolláveis dentro de popovers:
 
-### Ao Editar Tipo
+```tsx
+interface ScrollableListProps {
+  children: React.ReactNode;
+  maxHeight?: number;
+  className?: string;
+}
 
-1. Mesma validação de trim e duplicidade
-2. Não permitir editar para um nome já existente
+export function ScrollableList({ 
+  children, 
+  maxHeight = 280,
+  className 
+}: ScrollableListProps) {
+  return (
+    <div 
+      className={cn(
+        "overflow-y-auto overscroll-contain",
+        className
+      )}
+      style={{ maxHeight }}
+      onWheel={(e) => e.stopPropagation()}
+    >
+      {children}
+    </div>
+  );
+}
+```
 
-### Ao Desativar Tipo
+---
 
-1. Define `ativo = false`
-2. Tipo continua aparecendo em movimentações antigas no histórico
-3. Tipo não aparece mais nos selects de "Ajustar Estoque" e "Filtro do Relatório"
+### 5. Atualizar RelatorioSaidasModal
 
-### Ao Excluir Tipo
+**Arquivo**: `src/components/estoque/RelatorioSaidasModal.tsx`
 
-1. Verificar se há uso em `estoque_movimentacoes.tipo_ajuste_id`
-2. Se houver uso: Bloquear exclusão, sugerir desativar
-3. Se não houver uso: Permitir DELETE definitivo
+**Alterações no container de modelos (linha 349)**:
+
+Atual:
+```tsx
+<div className="max-h-[200px] overflow-y-auto border rounded-md">
+```
+
+Proposto:
+```tsx
+<div 
+  className="max-h-[280px] overflow-y-auto border rounded-md overscroll-contain"
+  onWheel={(e) => e.stopPropagation()}
+>
+```
+
+**Alterações no container de tipos de ajuste (linha 450)**:
+
+Atual:
+```tsx
+<div className="max-h-[200px] overflow-y-auto space-y-1">
+```
+
+Proposto:
+```tsx
+<div 
+  className="max-h-[280px] overflow-y-auto space-y-1 overscroll-contain"
+  onWheel={(e) => e.stopPropagation()}
+>
+```
+
+---
+
+### 6. Atualizar AjusteEstoqueModal
+
+**Arquivo**: `src/components/estoque/AjusteEstoqueModal.tsx`
+
+O Select de Tipo de Ajuste já usa o componente base que será corrigido globalmente.
+
+---
+
+### 7. Adicionar CSS Global para Overscroll
+
+**Arquivo**: `src/index.css`
+
+Adicionar regra global:
+
+```css
+/* Enable wheel scroll in dropdowns and popovers */
+[data-radix-popper-content-wrapper] {
+  pointer-events: auto !important;
+}
+
+/* Ensure scrollable containers work properly */
+.scrollable-dropdown {
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+```
+
+---
+
+## Resumo de Arquivos Impactados
+
+| Arquivo | Tipo | Alteração |
+|---------|------|-----------|
+| `src/components/ui/select.tsx` | Base Component | Adicionar scroll no Viewport + onWheel |
+| `src/components/ui/dropdown-menu.tsx` | Base Component | Adicionar max-height, overflow, onWheel |
+| `src/components/ui/popover.tsx` | Base Component | Adicionar onWheel no Content |
+| `src/components/ui/scrollable-list.tsx` | Novo | Componente reutilizável para listas |
+| `src/components/estoque/RelatorioSaidasModal.tsx` | Modal | Aplicar onWheel nos containers de lista |
+| `src/index.css` | Global | Adicionar estilos para overscroll |
+
+---
+
+## Testes de Validação
+
+Após implementação, testar:
+
+| Componente | Cenário | Esperado |
+|------------|---------|----------|
+| Select de Local (RelatorioSaidasModal) | Scroll com roda do mouse | Lista rola normalmente |
+| Select de Tipo de Ajuste (AjusteEstoqueModal) | Scroll com trackpad | Lista rola suavemente |
+| Multi-select de Modelos (PopoverContent) | Scroll com mouse wheel | Lista rola sem afetar modal pai |
+| DropdownMenu de ações | Mobile swipe | Lista rola corretamente |
+| Qualquer dropdown dentro de Dialog | Scroll em lista longa | Não propaga para o modal |
 
 ---
 
 ## Critérios de Aceite
 
-- ✅ Duplicatas removidas do banco de dados
-- ✅ Constraint UNIQUE impede novas duplicações
-- ✅ Cada tipo aparece apenas uma vez nos selects
-- ✅ Tela CRUD funcional em `/configuracoes/tipos-ajuste`
-- ✅ CRUD: Listar, criar, editar nome, desativar, excluir
-- ✅ Validação de duplicidade no frontend e backend
-- ✅ Tipos inativos não aparecem nos selects
-- ✅ Histórico continua mostrando tipos mesmo se inativos
-- ✅ Exclusão só permitida se tipo não estiver em uso
-- ✅ Funcionalidades existentes não quebradas
+- Todos os dropdowns/selects permitem scroll com roda do mouse
+- Scroll com trackpad funciona em todos os componentes
+- Mobile swipe funciona em listas dentro de drawers
+- Modal pai não rola quando scrollando dentro de dropdown
+- Layout existente não é afetado
+- Altura máxima de 280-320px aplicada consistentemente
 
