@@ -1,180 +1,319 @@
 
 
-## Plano: Melhorias no Modal de Ajuste e Relatório de Saídas
+## Plano: Melhorias no Sistema de Estoque
 
 ### Resumo das Alterações
-Duas melhorias solicitadas:
-1. **Modal "Ajustar Estoque"**: Tornar o campo "Estoque Atual" editável
-2. **Modal "Relatório de Saídas"**: Adicionar filtro de modelos com seleção múltipla
+Quatro melhorias solicitadas:
+1. **Filtro de Modelos (Relatório de Saídas)**: Rolagem com mouse e botão "Selecionar todos"
+2. **Tipos de Ajuste de Estoque**: Padronização com tabela de tipos
+3. **Filtro por Tipo de Ajuste no Relatório**: Novo filtro condicional
+4. **Histórico de Movimentações**: Estado vazio informativo e lista detalhada
 
 ---
 
-## 1. Modal "Ajustar Estoque" - Campo Editável
-
-### Situação Atual
-- "Estoque Atual" é somente leitura (exibe `item.quantidade`)
-- "Novo Estoque" é editável
-- "Diferença" é calculada como `novoEstoque - item.quantidade`
-
-### Nova Lógica
-
-| Campo | Comportamento |
-|-------|---------------|
-| **Estoque Atual** | Input numérico editável (>= 0) |
-| **Novo Estoque** | Input numérico editável (>= 0) |
-| **Diferença** | Somente leitura: `novoEstoque - estoqueAtualEditavel` |
-
-### Regras de Inicialização e Sincronização
-1. Ao abrir modal:
-   - `estoqueAtualEditavel` = valor do banco (`item.quantidade`)
-   - `novoEstoque` = valor do banco (`item.quantidade`)
-   - `diferenca` = 0
-   
-2. Ao alterar "Estoque Atual":
-   - Se "Novo Estoque" ainda não foi alterado manualmente → sincronizar `novoEstoque = estoqueAtualEditavel`
-   - Se "Novo Estoque" já foi alterado → não sobrescrever
-
-3. Ao salvar:
-   - `delta = novoEstoque - estoqueAtualEditavel`
-   - Chamar RPC com `novaQuantidade = novoEstoque` (mantém lógica atual)
+## 1. Filtro de Modelos - Melhorias de UX
 
 ### Arquivo Impactado
-- `src/components/estoque/AjusteEstoqueModal.tsx`
+- `src/components/estoque/RelatorioSaidasModal.tsx`
 
-### Alterações de Estado
+### Alterações
 
-**Antes:**
-```typescript
-const [novaQuantidade, setNovaQuantidade] = useState('');
-const diferenca = novaQtd - item.quantidade;
+| Mudança | Descrição |
+|---------|-----------|
+| max-height + overflow | Adicionar `max-h-[200px] overflow-y-auto` no container da lista |
+| Botão "Selecionar todos" | Exibir quando houver busca com 2+ resultados filtrados |
+| Contador | Melhorar exibição de modelos selecionados |
+
+### UI Proposta
+
 ```
-
-**Depois:**
-```typescript
-const [estoqueAtualEditavel, setEstoqueAtualEditavel] = useState('');
-const [novaQuantidade, setNovaQuantidade] = useState('');
-const [novoEstoqueManualmenteAlterado, setNovoEstoqueManualmenteAlterado] = useState(false);
-const diferenca = novaQtd - estoqueAtualInt;
+┌────────────────────────────────────────┐
+│  🔍 alfa                               │
+├────────────────────────────────────────┤
+│  [Selecionar todos (6)]                │
+├────────────────────────────────────────┤
+│  ☐ Calça Alfaiataria Cinza - 900      │ ← max-height: 200px
+│  ☑ Calça Alfaiataria Marrom - 800     │   overflow-y: auto
+│  ☐ Calça Alfaiataria Mom - 886        │   scroll via mouse/trackpad
+│  ...                                   │
+└────────────────────────────────────────┘
+│  2 modelo(s) selecionado(s)            │
+│  [Limpar seleção]                      │
+└────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Relatório de Saídas - Filtro de Modelos
+## 2. Tipos de Ajuste de Estoque
 
-### Situação Atual
-Filtros existentes:
-- Data Inicial / Data Final
-- Local
-- Tipo de Saída
+### Alterações no Banco de Dados
 
-### Nova Funcionalidade
-Adicionar filtro "Modelos" com:
-- MultiSelect com busca (autocomplete)
-- Debounce de 300ms para performance
-- Exibição: "Nome - Código" (ex: "Short Alfaiataria - 163")
-- Placeholder: "Todos os modelos"
-- Contador: "X modelo(s) selecionado(s)"
+**Nova Tabela: `tipos_ajuste_estoque`**
+
+| Coluna | Tipo | Nullable | Default |
+|--------|------|----------|---------|
+| id | uuid | No | gen_random_uuid() |
+| user_id | uuid | No | - |
+| nome | text | No | - |
+| ativo | boolean | No | true |
+| created_at | timestamp | No | now() |
+
+**Dados Iniciais Sugeridos:**
+- Inventário / Conferência física
+- Perda / Avaria
+- Erro de lançamento
+- Bonificação / Brinde
+- Devolução de cliente
+- Outro
+
+**Alteração na Tabela `estoque_movimentacoes`**
+
+| Coluna Nova | Tipo | Nullable |
+|-------------|------|----------|
+| tipo_ajuste_id | uuid | Yes |
+
+**RLS Policies:**
+- SELECT: user_id = auth.uid()
+- INSERT/UPDATE/DELETE: user_id = auth.uid()
 
 ### Arquivos Impactados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useRelatorioSaidas.ts` | Adicionar `modeloIds?: string[]` ao filtro e à query |
-| `src/components/estoque/RelatorioSaidasModal.tsx` | Adicionar UI do filtro de modelos |
+| `src/hooks/useEstoquePorLocalGerenciamento.ts` | Adicionar hook `useTiposAjuste()` e passar `tipo_ajuste_id` na mutation |
+| `src/components/estoque/AjusteEstoqueModal.tsx` | Substituir textarea por Select de tipos + campo observação opcional |
 
-### Novo Hook: useModelosParaFiltro
-Buscar modelos com debounce para autocomplete:
+### Nova Interface do Modal Ajustar Estoque
 
-```typescript
-export function useModelosParaFiltro(searchTerm: string) {
-  return useQuery({
-    queryKey: ['modelos-para-filtro', searchTerm],
-    queryFn: async () => {
-      let query = supabase
-        .from('estoque_itens')
-        .select('id, nome, categoria')
-        .order('nome')
-        .limit(50);
-      
-      if (searchTerm) {
-        query = query.or(`nome.ilike.%${searchTerm}%,categoria.ilike.%${searchTerm}%`);
-      }
-      
-      return data;
-    },
-    enabled: searchTerm.length >= 2 || searchTerm === '',
-  });
-}
+```
+┌────────────────────────────────────────┐
+│ Ajustar Estoque                     X  │
+├────────────────────────────────────────┤
+│ [Imagem] Short Alfaiataria - 163       │
+│          Cód: Modelo Manual • R$ 25.00 │
+├────────────────────────────────────────┤
+│  Estoque Atual    Novo Estoque   Dif.  │
+│  [    11    ]     [    11    ]    0    │
+├────────────────────────────────────────┤
+│ Tipo de Ajuste *                       │
+│ ┌──────────────────────────────────┐   │
+│ │ Selecione o tipo...          ▼  │   │
+│ └──────────────────────────────────┘   │
+│                                        │
+│ Observação (opcional)                  │
+│ ┌──────────────────────────────────┐   │
+│ │ Detalhe adicional se necessário  │   │
+│ └──────────────────────────────────┘   │
+├────────────────────────────────────────┤
+│               [Cancelar] [Salvar]      │
+└────────────────────────────────────────┘
 ```
 
-### Alteração na Query de Movimentações
-Adicionar filtro por `item_id`:
+### Validação
+- Bloquear salvamento se `tipo_ajuste_id` não estiver selecionado
+- Observação passa a ser opcional
 
-```typescript
-// No hook useRelatorioSaidas
-if (filtros.modeloIds && filtros.modeloIds.length > 0) {
-  query = query.in('item_id', filtros.modeloIds);
-}
+---
+
+## 3. Filtro por Tipo de Ajuste no Relatório
+
+### Comportamento
+- O filtro só aparece quando "Ajuste/Venda" estiver selecionado no Tipo de Saída
+- Multi-select com os tipos cadastrados na tabela `tipos_ajuste_estoque`
+- Aplicar `.in('tipo_ajuste_id', [ids])` na query
+
+### Arquivos Impactados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useRelatorioSaidas.ts` | Adicionar `tipoAjusteIds?: string[]` ao filtro e à query; hook `useTiposAjusteParaFiltro()` |
+| `src/components/estoque/RelatorioSaidasModal.tsx` | Adicionar filtro condicional de tipos de ajuste |
+
+### UI Proposta
+
 ```
-
-### UI do Filtro de Modelos (Popover com Busca + Checkboxes)
-
-```text
-┌─────────────────────────────────────────────────┐
-│  Modelos                                        │
-│  ┌─────────────────────────────────────────┐    │
-│  │ 2 modelo(s) selecionado(s)          ▼  │    │
-│  └─────────────────────────────────────────┘    │
-│                                                 │
-│  ┌─────────────────────────────────────────┐    │
-│  │ 🔍 Buscar modelo...                     │    │
-│  └─────────────────────────────────────────┘    │
-│                                                 │
-│  ☑ Short Alfaiataria - 163                     │
-│  ☑ Short Jeans Cargo - 497                     │
-│  ☐ Calça Pantalona - 285                       │
-│  ☐ Saia Midi - 412                             │
-│  ...                                            │
-│                                                 │
-│  [Limpar seleção]                               │
-└─────────────────────────────────────────────────┘
-```
-
-### Interface FiltrosSaidas Atualizada
-
-```typescript
-export interface FiltrosSaidas {
-  dataInicial: Date;
-  dataFinal: Date;
-  localId?: string;
-  tiposMovimento?: string[];
-  modeloIds?: string[];  // NOVO
-}
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Data Inicial   Data Final   Local        Tipo Saída     Modelos        │
+│ [01/01/2026]   [31/01/26]   [Loja ▼]     [Ajuste  ▼]   [3 modelo(s)]   │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Tipo de Ajuste (visível apenas quando Tipo Saída = Ajuste)              │
+│ ┌─────────────────────────────────────────────────────────────────┐     │
+│ │ Inventário, Perda                                           ▼  │     │
+│ └─────────────────────────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Resumo de Arquivos
+## 4. Histórico de Movimentações - Melhorias
+
+### Arquivo Impactado
+- `src/components/estoque/HistoricoMovimentacoesModal.tsx`
+- `src/hooks/useEstoquePorLocalGerenciamento.ts`
+
+### Estado Vazio Melhorado
+
+```
+┌────────────────────────────────────────┐
+│ Histórico de Movimentações          X  │
+├────────────────────────────────────────┤
+│ [Imagem] Short Alfaiataria - 163       │
+│          Cód: Modelo Manual            │
+│          Local: Loja Parque das Feiras │
+├────────────────────────────────────────┤
+│                                        │
+│         📦                             │
+│                                        │
+│  Nenhuma movimentação encontrada       │
+│  nos últimos 90 dias                   │
+│                                        │
+│  Possíveis causas:                     │
+│  • Este item não teve movimentação     │
+│    neste período                       │
+│  • O local selecionado não tem         │
+│    histórico para este item            │
+│                                        │
+│  ┌──────────────────┐  ┌────────────┐  │
+│  │Buscar desde início│  │ Atualizar │  │
+│  └──────────────────┘  └────────────┘  │
+│                                        │
+├────────────────────────────────────────┤
+│                           [Fechar]     │
+└────────────────────────────────────────┘
+```
+
+### Lista Detalhada de Movimentações
+
+Cada card de movimentação mostrará:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ 📅 31/01/2026 14:35                            🏷️ Ajuste Saída │
+├────────────────────────────────────────────────────────────────┤
+│ Quantidade: -5 peças                                           │
+│ Saldo: 16 → 11                                                 │
+│                                                                │
+│ 📍 Loja Parque das Feiras                                      │
+│ 📋 Tipo: Inventário                                            │
+│ 💬 Obs: Conferência física realizada                           │
+│ 👤 Usuário: admin@empresa.com                                  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Dados Adicionais na Query
+
+Alterar `useHistoricoMovimentacoesItem` para incluir:
+- `tipo_ajuste_id` → join com `tipos_ajuste_estoque.nome`
+- Local origem/destino (para transferências)
+- `transferencia_id` como referência
+- Ordenar por `created_at DESC`
+
+### Interface MovimentacaoHistorico Expandida
+
+```typescript
+interface MovimentacaoHistorico {
+  id: string;
+  createdAt: string;
+  tipo: string;
+  quantidade: number;
+  estoqueAntes: number | null;
+  estoqueDepois: number | null;
+  motivo: string | null;
+  // Novos campos:
+  tipoAjusteId: string | null;
+  tipoAjusteNome: string | null;
+  localNome: string | null;
+  localDestinoNome: string | null;
+  transferenciaId: string | null;
+}
+```
+
+### Parâmetros do Hook
+
+Adicionar parâmetro opcional `semLimite?: boolean` para permitir buscar todo o histórico:
+
+```typescript
+export function useHistoricoMovimentacoesItem(
+  itemId: string | null, 
+  localId: string | null,
+  semLimite?: boolean
+)
+```
+
+---
+
+## Resumo de Alterações
+
+### Banco de Dados (Migração)
+
+```sql
+-- 1. Criar tabela tipos_ajuste_estoque
+CREATE TABLE public.tipos_ajuste_estoque (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  nome TEXT NOT NULL,
+  ativo BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 2. Habilitar RLS
+ALTER TABLE public.tipos_ajuste_estoque ENABLE ROW LEVEL SECURITY;
+
+-- 3. Policies
+CREATE POLICY "Users can read own tipos_ajuste" 
+  ON public.tipos_ajuste_estoque FOR SELECT 
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own tipos_ajuste" 
+  ON public.tipos_ajuste_estoque FOR INSERT 
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own tipos_ajuste" 
+  ON public.tipos_ajuste_estoque FOR UPDATE 
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own tipos_ajuste" 
+  ON public.tipos_ajuste_estoque FOR DELETE 
+  USING (auth.uid() = user_id);
+
+-- 4. Adicionar coluna em estoque_movimentacoes
+ALTER TABLE public.estoque_movimentacoes 
+  ADD COLUMN tipo_ajuste_id UUID REFERENCES public.tipos_ajuste_estoque(id);
+```
+
+### Arquivos Frontend
 
 | Arquivo | Tipo de Alteração |
 |---------|-------------------|
-| `src/components/estoque/AjusteEstoqueModal.tsx` | Adicionar estado editável para "Estoque Atual" |
-| `src/hooks/useRelatorioSaidas.ts` | Adicionar filtro `modeloIds` + novo hook `useModelosParaFiltro` |
-| `src/components/estoque/RelatorioSaidasModal.tsx` | Adicionar UI do filtro de modelos |
+| `src/components/estoque/RelatorioSaidasModal.tsx` | Scroll na lista, botão "Selecionar todos", filtro tipo ajuste condicional |
+| `src/components/estoque/AjusteEstoqueModal.tsx` | Substituir motivo por select de tipo + observação opcional |
+| `src/components/estoque/HistoricoMovimentacoesModal.tsx` | Estado vazio informativo, cards detalhados com mais informações |
+| `src/hooks/useRelatorioSaidas.ts` | Adicionar `tipoAjusteIds` ao filtro, hook `useTiposAjusteParaFiltro` |
+| `src/hooks/useEstoquePorLocalGerenciamento.ts` | Hook `useTiposAjuste`, expandir query do histórico, parâmetro `semLimite` |
 
 ---
 
 ## Critérios de Aceite
 
-### Modal Ajustar Estoque
-- ✅ Campo "Estoque Atual" é editável
-- ✅ Diferença reage corretamente quando mudo qualquer input
-- ✅ Modal sempre inicia com diferença 0
-- ✅ Salvar funciona e registra delta consistente
+### Filtro de Modelos
+- ✅ Lista rola com mouse/trackpad
+- ✅ Botão "Selecionar todos" aparece quando há busca com 2+ resultados
+- ✅ Contador de modelos selecionados
 
-### Relatório de Saídas
-- ✅ Filtro de modelos com busca e seleção múltipla
-- ✅ Lista e totais respeitam o filtro de modelos
-- ✅ Sem seleção = comportamento anterior
-- ✅ Performance: busca com debounce, limite de 50 resultados
+### Tipos de Ajuste
+- ✅ Tabela `tipos_ajuste_estoque` criada com RLS
+- ✅ Select obrigatório no modal Ajustar Estoque
+- ✅ Observação opcional
+- ✅ Bloqueia salvamento sem tipo
+
+### Filtro no Relatório
+- ✅ Aparece somente quando Tipo Saída = Ajuste
+- ✅ Multi-select dos tipos cadastrados
+- ✅ Query filtra por `tipo_ajuste_id`
+
+### Histórico de Movimentações
+- ✅ Estado vazio mostra período, possíveis causas e botões de ação
+- ✅ Cards mostram todos os detalhes (data, tipo, quantidade, saldo, local, motivo, usuário)
+- ✅ Ordenado por mais recente
+- ✅ Botão "Buscar desde início" funciona
 
