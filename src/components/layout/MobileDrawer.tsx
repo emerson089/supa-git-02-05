@@ -47,7 +47,8 @@ const drawerOperationsItems: DrawerNavItem[] = [
 ];
 
 const drawerBottomItems: DrawerNavItem[] = [
-  { label: 'Configurações', icon: Settings, path: '/configuracoes/usuarios', roles: ['admin'] },
+  { label: 'Usuários', icon: Settings, path: '/configuracoes/usuarios', roles: ['admin'] },
+  { label: 'Tipos de Ajuste', icon: Settings, path: '/configuracoes/tipos-ajuste', roles: ['admin', 'gerente'] },
   { label: 'Ajuda', icon: HelpCircle, path: '/ajuda' },
 ];
 

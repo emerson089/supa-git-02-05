@@ -20,6 +20,7 @@ import Transferencias from "./pages/Transferencias";
 import Auth from "./pages/Auth";
 import AlterarSenha from "./pages/AlterarSenha";
 import ConfigUsuarios from "./pages/ConfigUsuarios";
+import ConfigTiposAjuste from "./pages/ConfigTiposAjuste";
 import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 
@@ -59,6 +60,14 @@ function App() {
                       element={
                         <ProtectedRoute allowedRoles={['admin']}>
                           <ConfigUsuarios />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/tipos-ajuste"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <ConfigTiposAjuste />
                         </ProtectedRoute>
                       }
                     />
