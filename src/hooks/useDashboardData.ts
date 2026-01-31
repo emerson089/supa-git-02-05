@@ -545,12 +545,13 @@ export function useDashboardData(
         const producaoAtiva = producaoData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
         const producaoYoYAtiva = producaoYoYData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
 
-        // Tendência de vendas (grouped by tipoAgrupamento) - USA paid_at PARA PEDIDOS PAGOS
+        // Tendência de vendas (grouped by tipoAgrupamento) - USA created_at PARA TENDÊNCIAS
         const vendasAgrupadas: Record<string, { valor: number; pedidos: number; pecas: number; data: Date }> = {};
         
         pedidosPagos.forEach(p => {
-          // Usar paid_at quando disponível (preferido), fallback para created_at
-          const dataEfetiva = p.paid_at || p.created_at;
+          // CORRIGIDO: Usar created_at para tendências históricas
+          // O paid_at foi preenchido retroativamente em 2026, distorcendo dados antigos
+          const dataEfetiva = p.created_at;
           const dataCompleta = parseISO(dataEfetiva);
           let chave: string;
           
