@@ -1,170 +1,180 @@
 
 
-## Plano: Padronizar Tipografia do ResumoCard
+## Plano: Adicionar Quantidade de Modelos e Taxa de Excursão no Modal e PDF
 
 ### Objetivo
 
-Criar hierarquia tipográfica consistente para todos os cards de métricas do resumo do pedido, sem alterar lógica de cálculos.
+Incluir no modal "Detalhes do Pedido" e no PDF gerado:
+- Quantidade de modelos (calculada a partir dos itens com produto_id único)
+- Taxa de Excursão (valor já salvo na tabela pedidos)
 
 ---
 
-### Especificações Tipográficas
+### Alterações Necessárias
 
-| Elemento | Tamanho | Peso | Outras |
-|----------|---------|------|--------|
-| Label (título) | 12px (`text-xs`) | 500 (`font-medium`) | Uppercase, opacidade 70% |
-| Valor principal | 24px (`text-2xl`) | 600 (`font-semibold`) | line-height 1.2 |
-| Sufixo (peças, modelos) | 14px (`text-sm`) | 400 (`font-normal`) | Mesma linha que valor |
+#### 1. Arquivo: `src/hooks/usePedidosPaginated.ts`
 
----
+**Adicionar campos ao tipo `PedidoPaginatedDB`:**
 
-### Alterações no Arquivo
-
-**Arquivo:** `src/components/pedidos/ResumoCard.tsx`
-
-#### Problema Atual
-
-```tsx
-// Quantidade de peças - usa text-2xl lg:text-3xl font-bold
-<p className="text-2xl lg:text-3xl font-bold text-primary">
-  {totalPecas} <span className="text-sm font-normal">peças</span>
-</p>
-
-// Subtotal - usa text-xl lg:text-2xl font-semibold  
-<p className="text-xl lg:text-2xl font-semibold text-foreground">
-  {formatCurrency(valorItens)}
-</p>
-
-// Valor total - usa text-2xl lg:text-3xl font-bold
-<p className="text-2xl lg:text-3xl font-bold text-emerald-600">
-  {formatCurrency(valorTotal)}
-</p>
-```
-
-#### Solução: Padronizar Todos
-
-```tsx
-// LABELS - padrão para todos (12px, medium, uppercase, 70% opacity)
-className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider mb-1"
-
-// VALORES - padrão para todos (24px, semibold, leading-tight)
-className="text-2xl font-semibold leading-tight text-[COR]"
-
-// SUFIXOS - padrão para todos (14px, normal)
-className="text-sm font-normal text-muted-foreground"
+```typescript
+export interface PedidoPaginatedDB {
+  // ... campos existentes ...
+  excursao_id: string | null;  // NOVO
+  taxa_excursao: number | null; // NOVO
+  // ...
+}
 ```
 
 ---
 
-### Código Final de Cada Métrica
+#### 2. Arquivo: `src/pages/PedidosCriados.tsx`
 
-#### 1. Quantidade total de peças
+##### 2.1 - Adicionar função para calcular quantidade de modelos
+
+```typescript
+// Calcular quantidade de modelos únicos no pedido
+const calcularQuantidadeModelos = (itens: Array<{ produto_id?: string | null }>) => {
+  const modelosUnicos = new Set(
+    itens
+      .filter(item => item.produto_id)
+      .map(item => item.produto_id)
+  );
+  return modelosUnicos.size;
+};
+```
+
+##### 2.2 - Atualizar seção "Totals" no modal (linhas 1235-1245)
+
+**Antes:**
+```
+┌─────────────────────────────────────────────┐
+│  Total de Peças         Valor Total         │
+│  14 peças               R$ 460,00           │
+└─────────────────────────────────────────────┘
+```
+
+**Depois:**
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Total de Peças    Qtd Modelos    Subtotal     Taxa Excursão  │ Total  │
+│  14 peças          3 modelos      R$ 450,00    + R$ 10,00     │R$460,00│
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+Código novo para a seção de totais:
 
 ```tsx
-<div className="flex flex-col gap-1">
-  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-    Quantidade total de peças
-  </p>
-  <p className="text-2xl font-semibold leading-tight text-primary">
-    {totalPecas} <span className="text-sm font-normal text-muted-foreground">peças</span>
-  </p>
+{/* Totals - Atualizado com grid */}
+<div className="neu-card p-4 rounded-xl">
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    {/* Total de Peças */}
+    <div className="flex flex-col gap-1">
+      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+        Total de Peças
+      </p>
+      <p className="text-2xl font-semibold leading-tight text-primary">
+        {selectedPedido.total_pecas || 0} <span className="text-sm font-normal text-muted-foreground">peças</span>
+      </p>
+    </div>
+    
+    {/* Quantidade de Modelos */}
+    <div className="flex flex-col gap-1">
+      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+        Qtd de Modelos
+      </p>
+      <p className="text-2xl font-semibold leading-tight text-violet-600">
+        {calcularQuantidadeModelos(selectedPedido.pedido_itens || [])} 
+        <span className="text-sm font-normal text-muted-foreground">
+          {calcularQuantidadeModelos(selectedPedido.pedido_itens || []) === 1 ? 'modelo' : 'modelos'}
+        </span>
+      </p>
+    </div>
+    
+    {/* Taxa Excursão (condicional) */}
+    {(selectedPedido.taxa_excursao || 0) > 0 && (
+      <div className="flex flex-col gap-1">
+        <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+          Taxa Excursão
+        </p>
+        <p className="text-2xl font-semibold leading-tight text-amber-600">
+          + {formatCurrency(selectedPedido.taxa_excursao || 0)}
+        </p>
+      </div>
+    )}
+    
+    {/* Valor Total */}
+    <div className="flex flex-col gap-1">
+      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+        Valor Total
+      </p>
+      <p className="text-2xl font-semibold leading-tight text-emerald-600">
+        {formatCurrency(selectedPedido.valor_total || 0)}
+      </p>
+    </div>
+  </div>
 </div>
 ```
 
-#### 2. Quantidade de modelos
+##### 2.3 - Atualizar função `generatePDF` (linhas 534-636)
 
-```tsx
-<div className="flex flex-col gap-1">
-  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-    Quantidade de modelos
-  </p>
-  <p className="text-2xl font-semibold leading-tight text-violet-600">
-    {quantidadeModelos} <span className="text-sm font-normal text-muted-foreground">
-      {quantidadeModelos === 1 ? 'modelo' : 'modelos'}
-    </span>
-  </p>
-</div>
-```
+Adicionar na seção de totais do PDF:
 
-#### 3. Subtotal dos itens
+```typescript
+// Totals - Atualizado com quantidade de modelos e taxa excursão
+const quantidadeModelos = calcularQuantidadeModelos(itens);
+const taxaExcursao = pedido.taxa_excursao || 0;
+const subtotalItens = itens.reduce((acc, item) => acc + (item.quantidade * item.valor_unitario), 0);
 
-```tsx
-<div className="flex flex-col gap-1">
-  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-    Subtotal dos itens
-  </p>
-  <p className="text-2xl font-semibold leading-tight text-foreground">
-    {formatCurrency(valorItens)}
-  </p>
-</div>
-```
+doc.setFillColor(240, 240, 240);
+doc.rect(14, finalY, pageWidth - 28, 35, 'F');
 
-#### 4. Taxa Excursão
+doc.setFont('helvetica', 'bold');
+doc.setFontSize(11);
 
-```tsx
-<div className="flex flex-col gap-1">
-  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-    Taxa Excursão {nomeExcursao && <span className="normal-case">({nomeExcursao})</span>}
-  </p>
-  <p className="text-2xl font-semibold leading-tight text-amber-600">
-    + {formatCurrency(taxaExcursao)}
-  </p>
-</div>
-```
+// Linha 1: Peças e Modelos
+doc.text(`Total de Peças: ${pedido.total_pecas || 0}`, 20, finalY + 10);
+doc.text(`Quantidade de Modelos: ${quantidadeModelos}`, pageWidth / 2, finalY + 10);
 
-#### 5. Valor total do pedido
+// Linha 2: Subtotal e Taxa (se houver)
+if (taxaExcursao > 0) {
+  doc.text(`Subtotal dos Itens: ${formatCurrency(subtotalItens)}`, 20, finalY + 18);
+  doc.text(`Taxa Excursão: + ${formatCurrency(taxaExcursao)}`, pageWidth / 2, finalY + 18);
+}
 
-```tsx
-<div className="flex flex-col gap-1">
-  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-    Valor total do pedido
-  </p>
-  <p className="text-2xl font-semibold leading-tight text-emerald-600">
-    {formatCurrency(valorTotal)}
-  </p>
-</div>
+// Linha 3: Valor Total
+doc.setFontSize(12);
+doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 28);
 ```
 
 ---
 
-### Resumo das Mudanças
+### Resultado Visual Esperado
 
-| Antes | Depois |
-|-------|--------|
-| Labels com `mb-2` | Labels com `gap-1` via flex container |
-| Valores variando entre `text-xl`, `text-2xl`, `text-3xl` | Todos com `text-2xl` fixo |
-| Pesos variando entre `font-semibold` e `font-bold` | Todos com `font-semibold` |
-| Sem `leading-tight` | Todos com `leading-tight` para line-height 1.2 |
+#### Modal "Detalhes do Pedido"
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  TOTAL DE PEÇAS    QTD DE MODELOS    TAXA EXCURSÃO   VALOR TOTAL │
+│  14 peças          3 modelos         + R$ 10,00      R$ 460,00   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+#### PDF Gerado
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Total de Peças: 14          Quantidade de Modelos: 3            │
+│  Subtotal dos Itens: R$ 450,00    Taxa Excursão: + R$ 10,00      │
+│  Valor Total: R$ 460,00                                          │
+└──────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-### Resultado Visual
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│  QUANTIDADE TOTAL     QUANTIDADE DE      SUBTOTAL DOS     TAXA EXCURSÃO    │
-│  DE PEÇAS             MODELOS            ITENS            (cabanas)        │
-│                                                                             │
-│  39 peças             2 modelos          R$ 1.080,00      + R$ 10,00       │
-│  ↑ azul               ↑ roxo             ↑ neutro         ↑ amarelo        │
-│                                                                             │
-│                       VALOR TOTAL DO PEDIDO                                 │
-│                       R$ 1.090,00                                           │
-│                       ↑ verde                                               │
-│                                                                             │
-│  ─────────────────────────────────────────────────────────────────────────  │
-│                                              [Limpar]  [Criar Pedido]      │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-Todos os valores agora têm o mesmo tamanho (24px) e peso (600), criando consistência visual.
-
----
-
-### Arquivos Impactados
+### Resumo de Arquivos
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/pedidos/ResumoCard.tsx` | Padronizar classes CSS de tipografia |
+| `src/hooks/usePedidosPaginated.ts` | Adicionar `taxa_excursao` e `excursao_id` ao tipo |
+| `src/pages/PedidosCriados.tsx` | Adicionar função `calcularQuantidadeModelos`, atualizar modal de detalhes e função `generatePDF` |
 
