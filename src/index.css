@@ -279,3 +279,15 @@ body[data-scroll-locked] {
     max-width: 100vw;
   }
 }
+
+/* Enable wheel scroll in dropdowns and popovers */
+[data-radix-popper-content-wrapper] {
+  pointer-events: auto !important;
+}
+
+/* Ensure scrollable containers work properly inside modals */
+.scrollable-dropdown {
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

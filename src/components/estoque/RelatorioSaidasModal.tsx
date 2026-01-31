@@ -346,7 +346,10 @@ export function RelatorioSaidasModal({
                     )}
 
                     {/* Lista de modelos com scroll */}
-                    <div className="max-h-[200px] overflow-y-auto border rounded-md">
+                    <div 
+                      className="max-h-[280px] overflow-y-auto border rounded-md overscroll-contain"
+                      onWheel={(e) => e.stopPropagation()}
+                    >
                       {isLoadingModelos ? (
                         <div className="flex items-center justify-center py-4">
                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -447,7 +450,10 @@ export function RelatorioSaidasModal({
                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                         </div>
                       ) : (
-                        <div className="max-h-[200px] overflow-y-auto space-y-1">
+                        <div 
+                          className="max-h-[280px] overflow-y-auto space-y-1 overscroll-contain"
+                          onWheel={(e) => e.stopPropagation()}
+                        >
                           {tiposAjusteDisponiveis.map(tipo => {
                             const isSelected = tiposAjusteSelecionados.some(t => t.id === tipo.id);
                             return (
