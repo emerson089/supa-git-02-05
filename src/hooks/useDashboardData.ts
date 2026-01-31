@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, startOfYear, getWeek, endOfMonth, subYears, getMonth, getYear, subMonths, getDate, getDaysInMonth, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export type Periodo = "hoje" | "7dias" | "mes" | "personalizado";
+export type Periodo = "hoje" | "30dias" | "90dias" | "ano_atual" | "12meses" | "mes" | "personalizado";
 
 export interface DateRange {
   from: Date | undefined;
@@ -221,10 +221,25 @@ function getDateRange(periodo: Periodo, dateRange?: DateRange) {
       startDateAnterior = startOfDay(subDays(now, 1));
       endDateAnterior = startOfDay(now);
       break;
-    case "7dias":
-      startDate = startOfDay(subDays(now, 7));
-      startDateAnterior = startOfDay(subDays(now, 14));
-      endDateAnterior = startOfDay(subDays(now, 7));
+    case "30dias":
+      startDate = startOfDay(subDays(now, 30));
+      startDateAnterior = startOfDay(subDays(now, 60));
+      endDateAnterior = startOfDay(subDays(now, 30));
+      break;
+    case "90dias":
+      startDate = startOfDay(subDays(now, 90));
+      startDateAnterior = startOfDay(subDays(now, 180));
+      endDateAnterior = startOfDay(subDays(now, 90));
+      break;
+    case "ano_atual":
+      startDate = startOfYear(now);
+      startDateAnterior = startOfYear(subYears(now, 1));
+      endDateAnterior = subYears(now, 1);
+      break;
+    case "12meses":
+      startDate = startOfDay(subMonths(now, 12));
+      startDateAnterior = startOfDay(subMonths(now, 24));
+      endDateAnterior = startOfDay(subMonths(now, 12));
       break;
     case "mes":
     default:
@@ -557,13 +572,16 @@ export function useDashboardData(
           
           switch (tipoAgrupamento) {
             case "mes":
+              // Manter formato curto mas com ano: jan/25, fev/26
               chave = format(dataCompleta, "MMM/yy", { locale: ptBR });
               break;
             case "semana":
-              chave = `Sem ${getWeek(dataCompleta)}`;
+              // Para semanas, incluir ano para clareza
+              chave = `Sem ${getWeek(dataCompleta)}/${format(dataCompleta, "yy")}`;
               break;
             default:
-              chave = format(dataCompleta, "dd/MM");
+              // Para dias, incluir ano para evitar confusão
+              chave = format(dataCompleta, "dd/MM/yy");
           }
           
           if (!vendasAgrupadas[chave]) {

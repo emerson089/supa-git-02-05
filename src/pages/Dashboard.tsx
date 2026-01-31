@@ -21,7 +21,7 @@ import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, 
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { format, startOfMonth } from "date-fns";
+import { format, startOfMonth, getYear, subDays, subMonths, startOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 function formatCurrency(value: number) {
@@ -170,8 +170,17 @@ export default function Dashboard() {
     label: "Hoje",
     value: "hoje"
   }, {
-    label: "7 dias",
-    value: "7dias"
+    label: "30 dias",
+    value: "30dias"
+  }, {
+    label: "90 dias",
+    value: "90dias"
+  }, {
+    label: "Ano atual",
+    value: "ano_atual"
+  }, {
+    label: "12 meses",
+    value: "12meses"
   }, {
     label: "Mês",
     value: "mes"
@@ -212,17 +221,96 @@ export default function Dashboard() {
       }
     }
   };
+  // Detecta se o período cruza anos diferentes
+  const periodoAcrossaAnos = (() => {
+    if (periodo === "personalizado" && dateRange.from && dateRange.to) {
+      return getYear(dateRange.from) !== getYear(dateRange.to);
+    }
+    // Para presets que podem cruzar anos
+    const now = new Date();
+    if (periodo === "90dias") {
+      return getYear(subDays(now, 90)) !== getYear(now);
+    }
+    if (periodo === "12meses") {
+      return getYear(subMonths(now, 12)) !== getYear(now);
+    }
+    if (periodo === "ano_atual") {
+      return false; // ano_atual nunca cruza anos
+    }
+    return false;
+  })();
+
+  // Formata o período de forma explícita para exibir no gráfico
+  const formatPeriodoExplicito = () => {
+    const now = new Date();
+    let from: Date, to: Date;
+    
+    switch (periodo) {
+      case 'hoje':
+        from = now;
+        to = now;
+        break;
+      case '30dias':
+        from = subDays(now, 30);
+        to = now;
+        break;
+      case '90dias':
+        from = subDays(now, 90);
+        to = now;
+        break;
+      case 'ano_atual':
+        from = startOfYear(now);
+        to = now;
+        break;
+      case '12meses':
+        from = subMonths(now, 12);
+        to = now;
+        break;
+      case 'mes':
+        from = startOfMonth(now);
+        to = now;
+        break;
+      case 'personalizado':
+        if (dateRange.from && dateRange.to) {
+          from = dateRange.from;
+          to = dateRange.to;
+        } else {
+          return '';
+        }
+        break;
+      default:
+        from = startOfMonth(now);
+        to = now;
+    }
+    
+    // Se cruza anos, mostrar ano completo
+    if (getYear(from) !== getYear(to)) {
+      return `${format(from, "dd/MM/yyyy")} → ${format(to, "dd/MM/yyyy")}`;
+    }
+    return `${format(from, "dd/MM")} → ${format(to, "dd/MM")}`;
+  };
+
   const getPeriodoLabel = () => {
     switch (periodo) {
       case 'hoje':
         return 'Hoje';
-      case '7dias':
-        return 'Últimos 7 dias';
+      case '30dias':
+        return 'Últimos 30 dias';
+      case '90dias':
+        return 'Últimos 90 dias';
+      case 'ano_atual':
+        return `Ano ${getYear(new Date())}`;
+      case '12meses':
+        return 'Últimos 12 meses';
       case 'mes':
         return `${format(startOfMonth(new Date()), "dd/MM")} - ${format(new Date(), "dd/MM")} (Mês atual)`;
       case 'personalizado':
         if (dateRange.from && dateRange.to) {
-          return `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}`;
+          // Se cruza anos, mostrar ano completo
+          if (getYear(dateRange.from) !== getYear(dateRange.to)) {
+            return `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}`;
+          }
+          return `${format(dateRange.from, "dd/MM")} - ${format(dateRange.to, "dd/MM")}`;
         }
         return 'Período personalizado';
       default:
@@ -388,7 +476,9 @@ export default function Dashboard() {
                         <Button variant={periodo === "personalizado" ? "default" : "outline"} size="sm" className={cn("gap-2 h-8", periodo === "personalizado" && "shadow-neu-inset")}>
                           <CalendarIcon size={14} />
                           {periodo === "personalizado" && dateRange.from && dateRange.to ? <span className="font-medium">
-                              {format(dateRange.from, "dd/MM")} - {format(dateRange.to, "dd/MM")}
+                              {getYear(dateRange.from) !== getYear(dateRange.to) 
+                                ? `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}`
+                                : `${format(dateRange.from, "dd/MM")} - ${format(dateRange.to, "dd/MM")}`}
                             </span> : <span>Período</span>}
                         </Button>
                       </PopoverTrigger>
@@ -616,9 +706,19 @@ export default function Dashboard() {
           <Card className="neu-card lg:col-span-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold">Tendência de Vendas</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Receita {data.tipoAgrupamento === "dia" ? "diária" : data.tipoAgrupamento === "semana" ? "semanal" : "mensal"} no período
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm text-muted-foreground">
+                  Receita {data.tipoAgrupamento === "dia" ? "diária" : data.tipoAgrupamento === "semana" ? "semanal" : "mensal"} no período
+                </p>
+                <Badge variant="outline" className="text-xs font-normal">
+                  {formatPeriodoExplicito()}
+                </Badge>
+                {periodoAcrossaAnos && (
+                  <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    📅 Cruza anos
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {loading ? <Skeleton className="h-[200px] w-full" /> : data.tendenciaVendas.length === 0 ? <p className="text-sm text-muted-foreground text-center py-16">
