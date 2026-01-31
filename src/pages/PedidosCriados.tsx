@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { InlineStatusSelect } from '@/components/pedidos/InlineStatusSelect';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { statusPagamentoOptions, statusPedidoOptions, statusEntregaOptions } from '@/components/pedidos/StatusSelector';
+import { StatusMultiSelect } from '@/components/pedidos/StatusMultiSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Search, Plus, Eye, Trash2, ShoppingBag, DollarSign, Package, MapPin, Phone, Bus, MoreHorizontal, ArrowUpDown, FileText, Pencil, Calendar as CalendarIcon, X, Download, Upload, Loader2, RefreshCw } from 'lucide-react';
@@ -76,19 +77,19 @@ const FILTERS_STORAGE_KEY = 'pedidosCriados_filters';
 interface PersistedFilters {
   startDate?: string;
   endDate?: string;
-  filterStatusPagamento: string;
-  filterStatusPedido: string;
-  filterStatusEntrega: string;
+  filterStatusPagamento: string[];
+  filterStatusPedido: string[];
+  filterStatusEntrega: string[];
   filterModelo: string;
   searchTerm: string;
 }
 
-// Função para carregar filtros do localStorage com tratamento de erro
+// Função para carregar filtros do localStorage com tratamento de erro e migração
 const loadPersistedFilters = (): PersistedFilters => {
   const defaultFilters: PersistedFilters = {
-    filterStatusPagamento: 'all',
-    filterStatusPedido: 'all',
-    filterStatusEntrega: 'all',
+    filterStatusPagamento: [],
+    filterStatusPedido: [],
+    filterStatusEntrega: [],
     filterModelo: '',
     searchTerm: ''
   };
@@ -96,6 +97,18 @@ const loadPersistedFilters = (): PersistedFilters => {
     const stored = localStorage.getItem(FILTERS_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      
+      // Migration: convert old string format to array format
+      if (typeof parsed.filterStatusPagamento === 'string') {
+        parsed.filterStatusPagamento = parsed.filterStatusPagamento === 'all' ? [] : [parsed.filterStatusPagamento];
+      }
+      if (typeof parsed.filterStatusPedido === 'string') {
+        parsed.filterStatusPedido = parsed.filterStatusPedido === 'all' ? [] : [parsed.filterStatusPedido];
+      }
+      if (typeof parsed.filterStatusEntrega === 'string') {
+        parsed.filterStatusEntrega = parsed.filterStatusEntrega === 'all' ? [] : [parsed.filterStatusEntrega];
+      }
+      
       return {
         ...defaultFilters,
         ...parsed
@@ -159,16 +172,16 @@ export default function PedidosCriados() {
   });
 
   // Advanced filters - priorizar URL sobre localStorage
-  const [filterStatusPagamento, setFilterStatusPagamento] = useState(() => {
+  const [filterStatusPagamento, setFilterStatusPagamento] = useState<string[]>(() => {
     const urlStatus = searchParams.get('status');
     if (urlStatus) {
-      const statuses = urlStatus.split(',');
-      return statuses[0] || 'all';
+      const statuses = urlStatus.split(',').filter(Boolean);
+      return statuses.length > 0 ? statuses : [];
     }
     return persistedFilters.filterStatusPagamento;
   });
-  const [filterStatusPedido, setFilterStatusPedido] = useState(persistedFilters.filterStatusPedido);
-  const [filterStatusEntrega, setFilterStatusEntrega] = useState(persistedFilters.filterStatusEntrega);
+  const [filterStatusPedido, setFilterStatusPedido] = useState<string[]>(persistedFilters.filterStatusPedido);
+  const [filterStatusEntrega, setFilterStatusEntrega] = useState<string[]>(persistedFilters.filterStatusEntrega);
   const [filterModelo, setFilterModelo] = useState(persistedFilters.filterModelo);
 
   // CSV import modal
@@ -397,9 +410,9 @@ export default function PedidosCriados() {
     setSearchTerm('');
     setStartDate(undefined);
     setEndDate(undefined);
-    setFilterStatusPagamento('all');
-    setFilterStatusPedido('all');
-    setFilterStatusEntrega('all');
+    setFilterStatusPagamento([]);
+    setFilterStatusPedido([]);
+    setFilterStatusEntrega([]);
     setFilterModelo('');
     // Limpar também do localStorage
     localStorage.removeItem(FILTERS_STORAGE_KEY);
@@ -409,9 +422,9 @@ export default function PedidosCriados() {
   const applyQuickFilter = (filter: 'hoje' | 'ontem' | '7dias' | 'emAberto' | 'pendPagamento' | 'naoSeparado') => {
     // Reset all filters first
     setSearchTerm('');
-    setFilterStatusPagamento('all');
-    setFilterStatusPedido('all');
-    setFilterStatusEntrega('all');
+    setFilterStatusPagamento([]);
+    setFilterStatusPedido([]);
+    setFilterStatusEntrega([]);
     setFilterModelo('');
     switch (filter) {
       case 'hoje':
@@ -431,17 +444,17 @@ export default function PedidosCriados() {
         setStartDate(undefined);
         setEndDate(undefined);
         // Filtrar por entrega diferente de ENTREGUE
-        setFilterStatusEntrega('PEND. ENTREGA');
+        setFilterStatusEntrega(['PEND. ENTREGA']);
         break;
       case 'pendPagamento':
         setStartDate(undefined);
         setEndDate(undefined);
-        setFilterStatusPagamento('PENDENTE');
+        setFilterStatusPagamento(['PENDENTE']);
         break;
       case 'naoSeparado':
         setStartDate(undefined);
         setEndDate(undefined);
-        setFilterStatusPedido('NÃO SEPARADO');
+        setFilterStatusPedido(['NÃO SEPARADO']);
         break;
     }
   };
@@ -451,31 +464,33 @@ export default function PedidosCriados() {
     const hoje = new Date();
     const ontem = subDays(hoje, 1);
     const seteDiasAtras = subDays(hoje, 6);
+    
+    const noStatusFilters = filterStatusPagamento.length === 0 && filterStatusPedido.length === 0 && filterStatusEntrega.length === 0;
 
     // Verificar se é "Hoje"
-    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && noStatusFilters) {
       return 'hoje';
     }
 
     // Verificar se é "Ontem"
-    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') && filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') && noStatusFilters) {
       return 'ontem';
     }
 
     // Verificar se é "Últimos 7 dias"
-    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(seteDiasAtras, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && filterStatusPagamento === 'all' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(seteDiasAtras, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && noStatusFilters) {
       return '7dias';
     }
 
     // Verificar filtros de status
     if (!startDate && !endDate) {
-      if (filterStatusEntrega === 'PEND. ENTREGA' && filterStatusPagamento === 'all' && filterStatusPedido === 'all') {
+      if (filterStatusEntrega.length === 1 && filterStatusEntrega[0] === 'PEND. ENTREGA' && filterStatusPagamento.length === 0 && filterStatusPedido.length === 0) {
         return 'emAberto';
       }
-      if (filterStatusPagamento === 'PENDENTE' && filterStatusPedido === 'all' && filterStatusEntrega === 'all') {
+      if (filterStatusPagamento.length === 1 && filterStatusPagamento[0] === 'PENDENTE' && filterStatusPedido.length === 0 && filterStatusEntrega.length === 0) {
         return 'pendPagamento';
       }
-      if (filterStatusPedido === 'NÃO SEPARADO' && filterStatusPagamento === 'all' && filterStatusEntrega === 'all') {
+      if (filterStatusPedido.length === 1 && filterStatusPedido[0] === 'NÃO SEPARADO' && filterStatusPagamento.length === 0 && filterStatusEntrega.length === 0) {
         return 'naoSeparado';
       }
     }
@@ -495,7 +510,7 @@ export default function PedidosCriados() {
     setIsRefreshing(false);
     toast.success('Dados atualizados');
   };
-  const hasAnyFilter = searchTerm || startDate || endDate || filterStatusPagamento !== 'all' || filterStatusPedido !== 'all' || filterStatusEntrega !== 'all' || filterModelo;
+  const hasAnyFilter = searchTerm || startDate || endDate || filterStatusPagamento.length > 0 || filterStatusPedido.length > 0 || filterStatusEntrega.length > 0 || filterModelo;
 
   // Use totals from server-side hook
   const calculatedTotals = {
@@ -503,10 +518,17 @@ export default function PedidosCriados() {
     totalPecas: totals?.totalPecas || 0,
     totalValor: totals?.totalValor || 0
   };
-  const hasActiveFilters = startDate || endDate || filterStatusPagamento !== 'all' || filterStatusPedido !== 'all' || filterStatusEntrega !== 'all' || filterModelo;
+  const hasActiveFilters = startDate || endDate || filterStatusPagamento.length > 0 || filterStatusPedido.length > 0 || filterStatusEntrega.length > 0 || filterModelo;
 
   // Count active filters for mobile badge
-  const activeFilterCount = [startDate, endDate, filterStatusPagamento !== 'all' ? filterStatusPagamento : null, filterStatusPedido !== 'all' ? filterStatusPedido : null, filterStatusEntrega !== 'all' ? filterStatusEntrega : null, filterModelo].filter(Boolean).length;
+  const activeFilterCount = [
+    startDate, 
+    endDate, 
+    filterStatusPagamento.length > 0 ? filterStatusPagamento : null, 
+    filterStatusPedido.length > 0 ? filterStatusPedido : null, 
+    filterStatusEntrega.length > 0 ? filterStatusEntrega : null, 
+    filterModelo
+  ].filter(Boolean).length;
 
   // PDF Generation
   const generatePDF = (pedido: PedidoPaginatedDB) => {
@@ -643,14 +665,14 @@ export default function PedidosCriados() {
         if (searchTerm) {
           query = query.or(`cliente_nome.ilike.%${searchTerm}%,telefone.ilike.%${searchTerm}%,cidade.ilike.%${searchTerm}%`);
         }
-        if (filterStatusPagamento !== 'all') {
-          query = query.eq('status_pagamento', filterStatusPagamento);
+        if (filterStatusPagamento.length > 0) {
+          query = query.in('status_pagamento', filterStatusPagamento);
         }
-        if (filterStatusPedido !== 'all') {
-          query = query.eq('status_pedido', filterStatusPedido);
+        if (filterStatusPedido.length > 0) {
+          query = query.in('status_pedido', filterStatusPedido);
         }
-        if (filterStatusEntrega !== 'all') {
-          query = query.eq('status_entrega', filterStatusEntrega);
+        if (filterStatusEntrega.length > 0) {
+          query = query.in('status_entrega', filterStatusEntrega);
         }
         if (startDate) {
           query = query.gte('created_at', startOfDay(startDate).toISOString());
@@ -821,37 +843,31 @@ export default function PedidosCriados() {
                     <Input placeholder="Buscar cliente, ID ou status..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-11 rounded-xl neu-input border-0 bg-background" />
                   </div>
 
-                  {/* Status Filters */}
+                  {/* Status Filters - Multi-Select */}
                   <div className="flex flex-wrap items-center gap-2">
-                    <Select value={filterStatusPagamento} onValueChange={setFilterStatusPagamento}>
-                      <SelectTrigger className="h-11 w-[140px] rounded-xl neu-input border-0 bg-background">
-                        <SelectValue placeholder="Pagamento" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos Pagamentos</SelectItem>
-                        {statusPagamentoOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <StatusMultiSelect
+                      label="Pagamentos"
+                      options={statusPagamentoOptions}
+                      selected={filterStatusPagamento}
+                      onSelectionChange={setFilterStatusPagamento}
+                      placeholder="Todos Pagamentos"
+                    />
                     
-                    <Select value={filterStatusPedido} onValueChange={setFilterStatusPedido}>
-                      <SelectTrigger className="h-11 w-[140px] rounded-xl neu-input border-0 bg-background">
-                        <SelectValue placeholder="Separação" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos Pedidos</SelectItem>
-                        {statusPedidoOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <StatusMultiSelect
+                      label="Pedidos"
+                      options={statusPedidoOptions}
+                      selected={filterStatusPedido}
+                      onSelectionChange={setFilterStatusPedido}
+                      placeholder="Todos Pedidos"
+                    />
                     
-                    <Select value={filterStatusEntrega} onValueChange={setFilterStatusEntrega}>
-                      <SelectTrigger className="h-11 w-[140px] rounded-xl neu-input border-0 bg-background">
-                        <SelectValue placeholder="Entrega" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas Entregas</SelectItem>
-                        {statusEntregaOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <StatusMultiSelect
+                      label="Entregas"
+                      options={statusEntregaOptions}
+                      selected={filterStatusEntrega}
+                      onSelectionChange={setFilterStatusEntrega}
+                      placeholder="Todas Entregas"
+                    />
                   </div>
                   
                   {/* Modelo Filter */}
