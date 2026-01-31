@@ -47,6 +47,10 @@ interface MovimentacaoHistorico {
   estoqueAntes: number | null;
   estoqueDepois: number | null;
   motivo: string | null;
+  tipoAjusteId?: string | null;
+  tipoAjusteNome?: string | null;
+  localNome?: string | null;
+  transferenciaId?: string | null;
 }
 
 // Hook para buscar estoque detalhado de um local (com preços por local)
@@ -120,13 +124,13 @@ export function useEstoqueDetalhadoPorLocal(localId: string | null) {
   });
 }
 
-// Hook para ajustar estoque (aumentar ou diminuir) - USANDO RPC ATÔMICA + preco_aplicado
+// Hook para ajustar estoque (aumentar ou diminuir) - USANDO RPC ATÔMICA + preco_aplicado + tipo_ajuste_id
 export function useAjustarEstoqueLocal() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ estoqueLocalId, itemId, localId, novaQuantidade, motivo, precoAplicado }: AjusteEstoqueParams & { precoAplicado?: number }) => {
+    mutationFn: async ({ estoqueLocalId, itemId, localId, novaQuantidade, motivo, precoAplicado, tipoAjusteId }: AjusteEstoqueParams & { precoAplicado?: number; tipoAjusteId?: string }) => {
       if (!user?.id) throw new Error('Usuário não autenticado');
 
       // Chamar RPC atômica - tudo ou nada
@@ -153,22 +157,30 @@ export function useAjustarEstoqueLocal() {
       const diferenca = novaQuantidade - Number(estoqueAtual?.quantidade || 0);
       const tipoMovimentacao = diferenca > 0 ? 'AJUSTE_ENTRADA' : 'AJUSTE_SAIDA';
 
-      // Atualizar a última movimentação para incluir preco_aplicado (se fornecido)
-      if (precoAplicado !== undefined && precoAplicado > 0) {
-        const { data: ultimaMov } = await supabase
-          .from('estoque_movimentacoes')
-          .select('id')
-          .eq('item_id', itemId)
-          .eq('local_id', localId)
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+      // Atualizar a última movimentação para incluir preco_aplicado e tipo_ajuste_id
+      const { data: ultimaMov } = await supabase
+        .from('estoque_movimentacoes')
+        .select('id')
+        .eq('item_id', itemId)
+        .eq('local_id', localId)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-        if (ultimaMov) {
+      if (ultimaMov) {
+        const updateData: Record<string, any> = {};
+        if (precoAplicado !== undefined && precoAplicado > 0) {
+          updateData.preco_aplicado = precoAplicado;
+        }
+        if (tipoAjusteId) {
+          updateData.tipo_ajuste_id = tipoAjusteId;
+        }
+        
+        if (Object.keys(updateData).length > 0) {
           await supabase
             .from('estoque_movimentacoes')
-            .update({ preco_aplicado: precoAplicado })
+            .update(updateData)
             .eq('id', ultimaMov.id);
         }
       }
@@ -189,6 +201,7 @@ export function useAjustarEstoqueLocal() {
       queryClient.invalidateQueries({ queryKey: ['produtos-disponiveis-adicionar'] });
       queryClient.invalidateQueries({ queryKey: ['vendas-desde-contagem'] });
       queryClient.invalidateQueries({ queryKey: ['contagens-estoque'] });
+      queryClient.invalidateQueries({ queryKey: ['historico-movimentacoes-item'] });
       
       const tipoTexto = result.tipoMovimentacao === 'AJUSTE_ENTRADA' ? 'entrada' : 'saída';
       toast.success(`Ajuste de ${tipoTexto} registrado com sucesso!`);
@@ -337,24 +350,65 @@ export function useZerarProdutoLocal() {
 }
 
 // Hook para buscar histórico de movimentações de um item em um local
-export function useHistoricoMovimentacoesItem(itemId: string | null, localId: string | null) {
+export function useHistoricoMovimentacoesItem(
+  itemId: string | null, 
+  localId: string | null,
+  semLimite?: boolean
+) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['historico-movimentacoes-item', itemId, localId, user?.id],
+    queryKey: ['historico-movimentacoes-item', itemId, localId, user?.id, semLimite],
     queryFn: async (): Promise<MovimentacaoHistorico[]> => {
       if (!itemId || !localId || !user?.id) return [];
 
       // Query SEM filtro user_id - RLS controla acesso via local_id
-      const { data, error } = await supabase
+      let query = supabase
         .from('estoque_movimentacoes')
-        .select('id, created_at, tipo, quantidade, estoque_antes, estoque_depois, motivo')
+        .select(`
+          id, 
+          created_at, 
+          tipo, 
+          quantidade, 
+          estoque_antes, 
+          estoque_depois, 
+          motivo,
+          tipo_ajuste_id,
+          transferencia_id,
+          local_id
+        `)
         .eq('item_id', itemId)
         .eq('local_id', localId)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .order('created_at', { ascending: false });
+      
+      // Aplicar limite apenas se não for busca completa
+      if (!semLimite) {
+        query = query.limit(50);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
+
+      // Buscar nomes dos tipos de ajuste se houver
+      const tipoAjusteIds = [...new Set((data || []).filter(m => m.tipo_ajuste_id).map(m => m.tipo_ajuste_id))];
+      let tiposAjusteMap = new Map<string, string>();
+      
+      if (tipoAjusteIds.length > 0) {
+        const { data: tiposAjuste } = await supabase
+          .from('tipos_ajuste_estoque')
+          .select('id, nome')
+          .in('id', tipoAjusteIds);
+        
+        tiposAjusteMap = new Map((tiposAjuste || []).map(t => [t.id, t.nome]));
+      }
+
+      // Buscar nome do local atual
+      const { data: localData } = await supabase
+        .from('estoque_locais')
+        .select('nome')
+        .eq('id', localId)
+        .single();
 
       return (data || []).map((mov) => ({
         id: mov.id,
@@ -364,6 +418,10 @@ export function useHistoricoMovimentacoesItem(itemId: string | null, localId: st
         estoqueAntes: mov.estoque_antes ? Number(mov.estoque_antes) : null,
         estoqueDepois: mov.estoque_depois ? Number(mov.estoque_depois) : null,
         motivo: mov.motivo,
+        tipoAjusteId: mov.tipo_ajuste_id,
+        tipoAjusteNome: mov.tipo_ajuste_id ? tiposAjusteMap.get(mov.tipo_ajuste_id) || null : null,
+        localNome: localData?.nome || null,
+        transferenciaId: mov.transferencia_id,
       }));
     },
     enabled: !!itemId && !!localId && !!user?.id,

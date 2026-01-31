@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, subDays, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileDown, FileSpreadsheet, Loader2, Calendar, Filter, TrendingDown, DollarSign, Package, Search, X } from 'lucide-react';
+import { FileDown, FileSpreadsheet, Loader2, Calendar, Filter, TrendingDown, DollarSign, Package, Search, X, CheckSquare } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,7 @@ import {
   TIPOS_SAIDA,
   TIPO_LABELS,
 } from '@/hooks/useRelatorioSaidas';
+import { useTiposAjusteParaFiltro } from '@/hooks/useTiposAjuste';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { generateRelatorioSaidasPDF } from '@/utils/generateRelatorioSaidasPDF';
 import { generateRelatorioSaidasExcel } from '@/utils/generateRelatorioSaidasExcel';
@@ -66,6 +67,7 @@ export function RelatorioSaidasModal({
   const [tiposSelecionados, setTiposSelecionados] = useState<string[]>([]);
   const [modelosSelecionados, setModelosSelecionados] = useState<{ id: string; nome: string; categoria: string }[]>([]);
   const [modeloBusca, setModeloBusca] = useState('');
+  const [tiposAjusteSelecionados, setTiposAjusteSelecionados] = useState<{ id: string; nome: string }[]>([]);
   const [filtrosAplicados, setFiltrosAplicados] = useState<FiltrosSaidas | null>(null);
 
   // Debounce para busca de modelos
@@ -74,10 +76,14 @@ export function RelatorioSaidasModal({
   // Queries
   const { data: locais } = useLocaisParaFiltro();
   const { data: modelosDisponiveis, isLoading: isLoadingModelos } = useModelosParaFiltro(modeloBuscaDebounced);
+  const { data: tiposAjusteDisponiveis = [], isLoading: isLoadingTiposAjuste } = useTiposAjusteParaFiltro();
   const { data, isLoading, isFetching } = useRelatorioSaidas(filtrosAplicados);
 
   const saidas = data?.saidas || [];
   const resumo = data?.resumo || { totalPecas: 0, valorVendaTotal: 0, valorCustoTotal: null, quantidadeSemPreco: 0 };
+
+  // Verificar se AJUSTE_SAIDA está selecionado para exibir filtro de tipos de ajuste
+  const mostrarFiltroTiposAjuste = tiposSelecionados.includes('AJUSTE_SAIDA') || tiposSelecionados.length === 0;
 
   // Nome do local selecionado para exibição
   const localNomeFiltro = useMemo(() => {
@@ -93,6 +99,7 @@ export function RelatorioSaidasModal({
       localId: localId !== 'todos' ? localId : undefined,
       tiposMovimento: tiposSelecionados.length > 0 ? tiposSelecionados : undefined,
       modeloIds: modelosSelecionados.length > 0 ? modelosSelecionados.map(m => m.id) : undefined,
+      tipoAjusteIds: tiposAjusteSelecionados.length > 0 ? tiposAjusteSelecionados.map(t => t.id) : undefined,
     });
   };
 
@@ -127,9 +134,37 @@ export function RelatorioSaidasModal({
     });
   };
 
+  // Selecionar todos os modelos filtrados
+  const handleSelecionarTodosModelos = () => {
+    if (!modelosDisponiveis) return;
+    
+    // Adicionar apenas os modelos que ainda não estão selecionados
+    const modelosParaAdicionar = modelosDisponiveis.filter(
+      m => !modelosSelecionados.some(s => s.id === m.id)
+    );
+    
+    setModelosSelecionados(prev => [...prev, ...modelosParaAdicionar]);
+  };
+
   // Limpar modelos selecionados
   const handleLimparModelos = () => {
     setModelosSelecionados([]);
+  };
+
+  // Toggle tipo de ajuste
+  const handleToggleTipoAjuste = (tipo: { id: string; nome: string }) => {
+    setTiposAjusteSelecionados(prev => {
+      const isSelected = prev.some(t => t.id === tipo.id);
+      if (isSelected) {
+        return prev.filter(t => t.id !== tipo.id);
+      }
+      return [...prev, tipo];
+    });
+  };
+
+  // Limpar tipos de ajuste selecionados
+  const handleLimparTiposAjuste = () => {
+    setTiposAjusteSelecionados([]);
   };
 
   // Exportar Excel/CSV
@@ -297,14 +332,27 @@ export function RelatorioSaidasModal({
                       />
                     </div>
 
-                    {/* Lista de modelos */}
-                    <ScrollArea className="h-[200px]">
+                    {/* Botão Selecionar Todos (quando há busca com 2+ resultados) */}
+                    {modeloBusca.length >= 2 && modelosDisponiveis && modelosDisponiveis.length > 1 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full h-8 text-xs"
+                        onClick={handleSelecionarTodosModelos}
+                      >
+                        <CheckSquare className="mr-1.5 h-3.5 w-3.5" />
+                        Selecionar todos ({modelosDisponiveis.length})
+                      </Button>
+                    )}
+
+                    {/* Lista de modelos com scroll */}
+                    <div className="max-h-[200px] overflow-y-auto border rounded-md">
                       {isLoadingModelos ? (
                         <div className="flex items-center justify-center py-4">
                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                         </div>
                       ) : modelosDisponiveis && modelosDisponiveis.length > 0 ? (
-                        <div className="space-y-1">
+                        <div className="p-1 space-y-0.5">
                           {modelosDisponiveis.map(modelo => {
                             const isSelected = modelosSelecionados.some(m => m.id === modelo.id);
                             return (
@@ -334,15 +382,18 @@ export function RelatorioSaidasModal({
                             : 'Nenhum modelo encontrado'}
                         </div>
                       )}
-                    </ScrollArea>
+                    </div>
 
                     {/* Modelos selecionados e botão limpar */}
                     {modelosSelecionados.length > 0 && (
                       <div className="border-t pt-2 space-y-2">
-                        <div className="flex flex-wrap gap-1">
-                          {modelosSelecionados.slice(0, 3).map(modelo => (
+                        <div className="text-xs text-muted-foreground">
+                          {modelosSelecionados.length} modelo(s) selecionado(s)
+                        </div>
+                        <div className="flex flex-wrap gap-1 max-h-[60px] overflow-y-auto">
+                          {modelosSelecionados.slice(0, 5).map(modelo => (
                             <Badge key={modelo.id} variant="secondary" className="text-xs">
-                              {truncateText(modelo.nome, 15)}
+                              {truncateText(modelo.nome, 12)}
                               <button
                                 className="ml-1 hover:text-destructive"
                                 onClick={(e) => {
@@ -354,9 +405,9 @@ export function RelatorioSaidasModal({
                               </button>
                             </Badge>
                           ))}
-                          {modelosSelecionados.length > 3 && (
+                          {modelosSelecionados.length > 5 && (
                             <Badge variant="outline" className="text-xs">
-                              +{modelosSelecionados.length - 3}
+                              +{modelosSelecionados.length - 5}
                             </Badge>
                           )}
                         </div>
@@ -375,6 +426,65 @@ export function RelatorioSaidasModal({
               </Popover>
             </div>
           </div>
+
+          {/* Linha adicional para Tipo de Ajuste (condicional) */}
+          {mostrarFiltroTiposAjuste && tiposAjusteDisponiveis.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="space-y-1.5 md:col-span-2">
+                <Label className="text-xs">Tipo de Ajuste</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      {tiposAjusteSelecionados.length === 0
+                        ? 'Todos os tipos de ajuste'
+                        : `${tiposAjusteSelecionados.length} tipo(s) selecionado(s)`}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72" align="start">
+                    <div className="space-y-3">
+                      {isLoadingTiposAjuste ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <div className="max-h-[200px] overflow-y-auto space-y-1">
+                          {tiposAjusteDisponiveis.map(tipo => {
+                            const isSelected = tiposAjusteSelecionados.some(t => t.id === tipo.id);
+                            return (
+                              <div
+                                key={tipo.id}
+                                className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer"
+                                onClick={() => handleToggleTipoAjuste(tipo)}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => handleToggleTipoAjuste(tipo)}
+                                />
+                                <span className="text-sm">{tipo.nome}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {tiposAjusteSelecionados.length > 0 && (
+                        <div className="border-t pt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full h-7 text-xs"
+                            onClick={handleLimparTiposAjuste}
+                          >
+                            Limpar seleção
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end">
             <Button onClick={handleAplicarFiltros} disabled={isLoading}>

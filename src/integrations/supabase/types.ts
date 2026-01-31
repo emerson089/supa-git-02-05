@@ -259,6 +259,7 @@ export type Database = {
           producao_id: string | null
           quantidade: number
           tipo: string
+          tipo_ajuste_id: string | null
           transferencia_id: string | null
           user_id: string
         }
@@ -274,6 +275,7 @@ export type Database = {
           producao_id?: string | null
           quantidade: number
           tipo: string
+          tipo_ajuste_id?: string | null
           transferencia_id?: string | null
           user_id: string
         }
@@ -289,6 +291,7 @@ export type Database = {
           producao_id?: string | null
           quantidade?: number
           tipo?: string
+          tipo_ajuste_id?: string | null
           transferencia_id?: string | null
           user_id?: string
         }
@@ -312,6 +315,13 @@ export type Database = {
             columns: ["producao_id"]
             isOneToOne: false
             referencedRelation: "producao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_tipo_ajuste_id_fkey"
+            columns: ["tipo_ajuste_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_ajuste_estoque"
             referencedColumns: ["id"]
           },
           {
@@ -832,6 +842,30 @@ export type Database = {
           nome?: string | null
           status?: string | null
           updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tipos_ajuste_estoque: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
           user_id?: string
         }
         Relationships: []

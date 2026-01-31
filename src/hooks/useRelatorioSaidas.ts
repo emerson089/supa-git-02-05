@@ -8,6 +8,7 @@ export interface FiltrosSaidas {
   localId?: string;
   tiposMovimento?: string[];
   modeloIds?: string[];
+  tipoAjusteIds?: string[];
 }
 
 export interface SaidaDetalhada {
@@ -80,7 +81,8 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
           motivo,
           local_id,
           preco_aplicado,
-          transferencia_id
+          transferencia_id,
+          tipo_ajuste_id
         `)
         .eq('user_id', user.id)
         .gte('created_at', filtros.dataInicial.toISOString())
@@ -102,6 +104,11 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       // Filtrar por modelos se especificado
       if (filtros.modeloIds && filtros.modeloIds.length > 0) {
         query = query.in('item_id', filtros.modeloIds);
+      }
+
+      // Filtrar por tipos de ajuste se especificado
+      if (filtros.tipoAjusteIds && filtros.tipoAjusteIds.length > 0) {
+        query = query.in('tipo_ajuste_id', filtros.tipoAjusteIds);
       }
 
       const { data: movimentacoes, error } = await query;
