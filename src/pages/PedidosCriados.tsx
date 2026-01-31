@@ -704,8 +704,17 @@ export default function PedidosCriados() {
         toast.error('Nenhum pedido encontrado para exportar');
         return;
       }
-      const headers = ['Data', 'Cliente', 'Telefone', 'Cidade', 'Estado', 'Itens', 'Qtd Total', 'Valor Total', 'Status Pagamento', 'Status Pedido', 'Status Entrega'];
-      const rows = allPedidos.map(pedido => [format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm"), pedido.cliente_nome, pedido.telefone || '', pedido.cidade || '', pedido.estado || '', (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '), (pedido.total_pecas || 0).toString(), (pedido.valor_total || 0).toFixed(2), pedido.status_pagamento || 'Pendente', pedido.status_pedido || 'Nao separado', pedido.status_entrega || 'Pend. Entrega']);
+      const headers = ['Data', 'Cliente', 'Modelos', 'Qtd', 'Valor', 'Pagamento', 'Pedido', 'Entrega'];
+      const rows = allPedidos.map(pedido => [
+        format(new Date(pedido.created_at), "dd/MM/yyyy"),
+        pedido.cliente_nome || '',
+        (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '),
+        pedido.total_pecas?.toString() || '',
+        pedido.valor_total?.toFixed(2) || '',
+        pedido.status_pagamento || '',
+        pedido.status_pedido || '',
+        pedido.status_entrega || ''
+      ]);
       const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))].join('\n');
       const blob = new Blob(['\uFEFF' + csvContent], {
         type: 'text/csv;charset=utf-8;'
