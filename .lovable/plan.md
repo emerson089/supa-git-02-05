@@ -1,156 +1,129 @@
 
+## Plano: Persistir Busca Entre Navegações (Estoque e Produção)
 
-## Plano: Persistência de Busca e Métricas Dinâmicas no Estoque
+### Problema Identificado
 
-### Problema 1: Persistência da Busca
+1. **Página de Produção (`/producao`)**: Usa estado local (`useState`) para busca - perde dados ao navegar
+2. **Navegação**: Os botões de menu usam `navigate('/estoque')` sem preservar query params existentes
 
-A busca já está sendo persistida via URL params (`?q=termo`), mas ao navegar para outra página e retornar, o termo de busca deveria permanecer. Vou verificar e garantir que isso funcione corretamente.
+### Solução Proposta
 
-**Diagnóstico**: A lógica atual já usa `useSearchParams` corretamente. O problema pode estar no `<BrowserRouter>` ou na forma como os links navegam.
+#### Parte 1: Migrar Produção para URL Params
 
-### Problema 2: Métricas Não Refletem a Busca
+Alterar a página de Produção para usar `useSearchParams` ao invés de `useState` para a busca e filtros.
 
-Os cards de resumo (Total Peças, Valor Total, Em Alerta, Esgotados) atualmente mostram dados de **todos os itens**, não apenas dos itens que correspondem à busca.
-
-**Solução**: Modificar o hook `useEstoqueMetrics` para aceitar o parâmetro `search` e filtrar os resultados de acordo.
-
----
-
-### Alterações Propostas
-
-#### Arquivo 1: `src/hooks/useEstoqueItensPaginated.ts`
-
-Adicionar o parâmetro `search` ao hook `useEstoqueMetrics`:
+**Arquivo:** `src/pages/Index.tsx`
 
 ```typescript
-// Hook para obter métricas agregadas (para os cards de resumo)
-export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado', search?: string) {
-  const { user } = useAuth();
-  const debouncedSearch = useDebouncedValue(search || '', 300);
-  
-  return useQuery({
-    queryKey: ['estoque-metrics', user?.id, tipo, debouncedSearch],
-    queryFn: async () => {
-      if (!user) return { totalPecas: 0, valorTotal: 0, itensAlerta: 0, itensEsgotados: 0, totalItens: 0 };
-      
-      // Buscar local Central
-      const { data: localCentral } = await supabase
-        .from('estoque_locais')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('tipo', 'central')
-        .maybeSingle();
-      
-      // Buscar campos necessários para métricas
-      let query = supabase
-        .from('estoque_itens')
-        .select('id, nome, categoria, quantidade, preco_unitario')
-        .eq('user_id', user.id);
-      
-      if (tipo) {
-        query = query.eq('tipo', tipo);
-      }
-      
-      // NOVO: Aplicar filtro de busca
-      if (debouncedSearch) {
-        query = query.or(`nome.ilike.%${debouncedSearch}%,categoria.ilike.%${debouncedSearch}%`);
-      }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      if (!data) return { totalPecas: 0, valorTotal: 0, itensAlerta: 0, itensEsgotados: 0, totalItens: 0 };
-      
-      // Get quantities from Central
-      let quantidadeMap = new Map<string, number>();
-      if (localCentral) {
-        const { data: estoquePorLocal } = await supabase
-          .from('estoque_por_local')
-          .select('item_id, quantidade')
-          .eq('local_id', localCentral.id);
-        
-        if (estoquePorLocal) {
-          estoquePorLocal.forEach(epl => {
-            quantidadeMap.set(epl.item_id, Number(epl.quantidade));
-          });
-        }
-      }
-      
-      // Calcular métricas
-      let totalPecas = 0;
-      let valorTotal = 0;
-      let itensAlerta = 0;
-      let itensEsgotados = 0;
-      
-      data.forEach(item => {
-        const qty = quantidadeMap.has(item.id) ? quantidadeMap.get(item.id)! : Number(item.quantidade);
-        const preco = Number(item.preco_unitario) || 0;
-        
-        totalPecas += qty;
-        valorTotal += preco * qty;
-        
-        if (qty === 0) {
-          itensEsgotados++;
-        } else if (qty <= 20) {
-          itensAlerta++;
-        }
-      });
-      
-      return {
-        totalPecas,
-        valorTotal,
-        itensAlerta,
-        itensEsgotados,
-        totalItens: data.length,
-      };
-    },
-    enabled: !!user,
-    staleTime: 30000,
+// ANTES (estado local - perde ao navegar)
+const [search, setSearch] = useState('');
+const [filtros, setFiltros] = useState<FiltrosProducao>({ prioridade: 'todos' });
+
+// DEPOIS (URL params - persiste entre navegações)
+import { useSearchParams } from 'react-router-dom';
+
+const [searchParams, setSearchParams] = useSearchParams();
+const search = searchParams.get('q') || '';
+const filtros: FiltrosProducao = {
+  prioridade: (searchParams.get('prioridade') as FiltrosProducao['prioridade']) || 'todos',
+  responsavel: searchParams.get('responsavel') || undefined
+};
+
+// Helper para atualizar URL params
+const updateParams = (updates: Record<string, string | undefined>) => {
+  const newParams = new URLSearchParams(searchParams);
+  Object.entries(updates).forEach(([key, value]) => {
+    if (value === undefined || value === '' || value === 'todos') {
+      newParams.delete(key);
+    } else {
+      newParams.set(key, value);
+    }
   });
-}
+  setSearchParams(newParams, { replace: true });
+};
+
+// Handlers atualizados
+const handleSearchChange = (value: string) => updateParams({ q: value || undefined });
+const handleFiltrosChange = (newFiltros: FiltrosProducao) => {
+  updateParams({
+    prioridade: newFiltros.prioridade === 'todos' ? undefined : newFiltros.prioridade,
+    responsavel: newFiltros.responsavel
+  });
+};
 ```
 
 ---
 
-#### Arquivo 2: `src/pages/Estoque.tsx`
+#### Parte 2: Preservar Query Params na Navegação
 
-Passar o parâmetro `search` para o hook `useEstoqueMetrics`:
+Modificar os componentes de navegação para preservar os query params ao retornar para a mesma página.
 
-**Antes (linha ~163):**
+**Arquivos:**
+- `src/components/layout/AppSidebar.tsx`
+- `src/components/layout/BottomNavigation.tsx`
+
+**Lógica**: Ao navegar, verificar se já estamos na mesma rota base. Se sim, não alterar (já está com params). Se não, navegar para a rota base.
+
 ```typescript
-const { data: metrics } = useEstoqueMetrics(tipoEstoque);
+// AppSidebar.tsx - Atualizar handleNavigate
+const handleNavigate = (path: string) => {
+  // Se já estamos na mesma rota, não fazer nada (preserva params)
+  if (location.pathname === path) return;
+  
+  // Se está retornando para uma página que já visitou (tem params salvos)
+  // Podemos preservar via sessionStorage ou simplesmente navegar
+  navigate(path);
+};
 ```
 
-**Depois:**
+**Alternativa mais robusta** usando sessionStorage para salvar a última URL completa de cada página:
+
 ```typescript
-const { data: metrics } = useEstoqueMetrics(tipoEstoque, search);
+// Ao navegar PARA FORA de uma página, salvar URL completa
+useEffect(() => {
+  return () => {
+    sessionStorage.setItem(`lastUrl_${location.pathname}`, location.pathname + location.search);
+  };
+}, [location]);
+
+// Ao clicar para navegar
+const handleNavigate = (targetPath: string) => {
+  const savedUrl = sessionStorage.getItem(`lastUrl_${targetPath}`);
+  if (savedUrl && savedUrl.startsWith(targetPath)) {
+    navigate(savedUrl);
+  } else {
+    navigate(targetPath);
+  }
+};
 ```
+
+---
+
+### Resumo das Alterações
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/Index.tsx` | Migrar `search` e `filtros` de `useState` para `useSearchParams` |
+| `src/components/layout/AppSidebar.tsx` | Salvar e restaurar URL completa via sessionStorage |
+| `src/components/layout/BottomNavigation.tsx` | Salvar e restaurar URL completa via sessionStorage |
 
 ---
 
 ### Comportamento Esperado
 
-| Cenário | Indicadores |
-|---------|-------------|
-| Sem busca | Mostram totais de todos os itens do tipo |
-| Busca "calça" | Mostram totais apenas dos itens com "calça" no nome ou categoria |
-| Busca "164" | Mostram métricas apenas dos itens que contêm "164" |
+| Ação | Resultado |
+|------|-----------|
+| Pesquisar "calça" em Estoque | URL: `/estoque?q=calça` |
+| Navegar para Produção | URL: `/producao` |
+| Voltar para Estoque | URL: `/estoque?q=calça` (busca preservada!) |
+| Pesquisar "lote 123" em Produção | URL: `/producao?q=lote+123` |
+| Navegar para Clientes | URL: `/clientes` |
+| Voltar para Produção | URL: `/producao?q=lote+123` (busca preservada!) |
 
 ---
 
-### Resultado Visual
+### Detalhes Técnicos
 
-Ao pesquisar por um termo:
-- **Total Peças**: Soma das quantidades dos itens filtrados
-- **Valor Total**: Soma do valor (preço × quantidade) dos itens filtrados  
-- **Em Alerta**: Contagem de itens filtrados com estoque baixo (1-20)
-- **Esgotados**: Contagem de itens filtrados com quantidade = 0
-
----
-
-### Resumo de Arquivos
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useEstoqueItensPaginated.ts` | Adicionar parâmetro `search` ao hook `useEstoqueMetrics` (linhas 240-314) |
-| `src/pages/Estoque.tsx` | Passar `search` para `useEstoqueMetrics` (linha ~163) |
-
+- **sessionStorage**: Dados persistem apenas na sessão atual do navegador
+- **Chave de armazenamento**: `lastUrl_/estoque`, `lastUrl_/producao`, etc.
+- **Compatibilidade**: Funciona com BrowserRouter sem alterações na configuração do React Router
