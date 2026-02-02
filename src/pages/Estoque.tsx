@@ -552,14 +552,20 @@ export default function Estoque() {
       }
     });
 
-    // Encontrar o primeiro número disponível entre 001 e 999
-    let nextRefNum = 1;
-    while (referenciasUsadas.has(nextRefNum) && nextRefNum <= 999) {
-      nextRefNum++;
-    }
-
-    // Se todos os 999 números estiverem em uso, começar do 001 (sobrescreve)
-    if (nextRefNum > 999) {
+    // Gerar número aleatório único entre 001 e 999
+    let nextRefNum: number;
+    const maxTentativas = 1000;
+    let tentativas = 0;
+    
+    // Se ainda há números disponíveis na faixa 001-999
+    if (referenciasUsadas.size < 999) {
+      do {
+        // Gerar número aleatório entre 1 e 999
+        nextRefNum = Math.floor(Math.random() * 999) + 1;
+        tentativas++;
+      } while (referenciasUsadas.has(nextRefNum) && tentativas < maxTentativas);
+    } else {
+      // Todos os 999 números estão em uso - usar 1 como fallback
       nextRefNum = 1;
     }
 
