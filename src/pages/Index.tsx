@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ViewMode, ChecklistAprontamento } from '@/types/production';
 import { Producao, ProducaoData, ProducaoInsert, ProducaoUpdate } from '@/entities/Producao';
 import { ProducaoLog } from '@/entities/ProducaoLog';
@@ -31,9 +32,42 @@ const Index = () => {
   const { integrarProducao } = useEstoque();
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [lots, setLots] = useState<ProducaoData[]>([]);
-  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [filtros, setFiltros] = useState<FiltrosProducao>({ prioridade: 'todos' });
+  
+  // URL-based state for search and filters (persists across navigation)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = searchParams.get('q') || '';
+  const filtros: FiltrosProducao = {
+    prioridade: (searchParams.get('prioridade') as FiltrosProducao['prioridade']) || 'todos',
+    responsavel: searchParams.get('responsavel') || undefined
+  };
+
+  // Helper to update URL params
+  const updateParams = useCallback((updates: Record<string, string | undefined>) => {
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === undefined || value === '' || value === 'todos') {
+          newParams.delete(key);
+        } else {
+          newParams.set(key, value);
+        }
+      });
+      return newParams;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  // Handlers for search and filters
+  const handleSearchChange = useCallback((value: string) => {
+    updateParams({ q: value || undefined });
+  }, [updateParams]);
+
+  const handleFiltrosChange = useCallback((newFiltros: FiltrosProducao) => {
+    updateParams({
+      prioridade: newFiltros.prioridade === 'todos' ? undefined : newFiltros.prioridade,
+      responsavel: newFiltros.responsavel
+    });
+  }, [updateParams]);
   
   // Debounce search for performance
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -555,7 +589,7 @@ const Index = () => {
         {/* Header */}
         <ProductionHeader
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={handleSearchChange}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           onNewLot={handleNewLot}
@@ -568,7 +602,7 @@ const Index = () => {
           loading={loading}
           totalLots={filteredLots.length}
           filtros={filtros}
-          onFiltrosChange={setFiltros}
+          onFiltrosChange={handleFiltrosChange}
           responsaveisDisponiveis={responsaveisDisponiveis}
         />
 

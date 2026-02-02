@@ -1,4 +1,4 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useState, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -65,6 +65,9 @@ const quickActions: QuickActionType[] = [
   { label: 'Novo Cliente', icon: UserPlus, path: '/clientes', roles: ['admin', 'gerente'] },
 ];
 
+// Pages that should preserve their URL params
+const PAGES_WITH_PARAMS = ['/estoque', '/producao', '/clientes', '/pedidos/criados'];
+
 interface NavItemProps {
   item: NavItemType;
   isActive: boolean;
@@ -106,6 +109,16 @@ export function BottomNavigation() {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
+  // Save current URL when leaving pages with params
+  useEffect(() => {
+    const currentPath = location.pathname;
+    const shouldSave = PAGES_WITH_PARAMS.some(p => currentPath.startsWith(p));
+    
+    if (shouldSave && location.search) {
+      sessionStorage.setItem(`lastUrl_${currentPath}`, currentPath + location.search);
+    }
+  }, [location.pathname, location.search]);
+
   // Filter items by role
   const filterByRole = <T extends { roles?: AppRole[] }>(items: T[]): T[] =>
     items.filter(item => !item.roles || (role && item.roles.includes(role)));
@@ -121,11 +134,24 @@ export function BottomNavigation() {
     return location.pathname.startsWith(path);
   };
 
-  const handleNavigate = (path: string) => {
-    navigate(path);
+  const handleNavigate = useCallback((targetPath: string) => {
+    // If already on the same path, don't navigate (preserves current params)
+    if (location.pathname === targetPath) {
+      setMoreMenuOpen(false);
+      setQuickActionsOpen(false);
+      return;
+    }
+    
+    // Check if target page has saved URL params
+    const savedUrl = sessionStorage.getItem(`lastUrl_${targetPath}`);
+    if (savedUrl && savedUrl.startsWith(targetPath)) {
+      navigate(savedUrl);
+    } else {
+      navigate(targetPath);
+    }
     setMoreMenuOpen(false);
     setQuickActionsOpen(false);
-  };
+  }, [location.pathname, navigate]);
 
   const handleSignOut = async () => {
     await signOut();
