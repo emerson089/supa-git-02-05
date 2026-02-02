@@ -237,11 +237,12 @@ export function useEstoqueItensPaginated(params: EstoquePaginatedParams) {
 }
 
 // Hook para obter métricas agregadas (para os cards de resumo)
-export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado') {
+export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado', search?: string) {
   const { user } = useAuth();
+  const debouncedSearch = useDebouncedValue(search || '', 300);
   
   return useQuery({
-    queryKey: ['estoque-metrics', user?.id, tipo],
+    queryKey: ['estoque-metrics', user?.id, tipo, debouncedSearch],
     queryFn: async () => {
       if (!user) return { totalPecas: 0, valorTotal: 0, itensAlerta: 0, itensEsgotados: 0, totalItens: 0 };
       
@@ -253,14 +254,19 @@ export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado') {
         .eq('tipo', 'central')
         .maybeSingle();
       
-      // Buscar apenas campos necessários para métricas
+      // Buscar campos necessários para métricas
       let query = supabase
         .from('estoque_itens')
-        .select('id, quantidade, preco_unitario')
+        .select('id, nome, categoria, quantidade, preco_unitario')
         .eq('user_id', user.id);
       
       if (tipo) {
         query = query.eq('tipo', tipo);
+      }
+      
+      // Aplicar filtro de busca
+      if (debouncedSearch) {
+        query = query.or(`nome.ilike.%${debouncedSearch}%,categoria.ilike.%${debouncedSearch}%`);
       }
       
       const { data, error } = await query;
@@ -310,6 +316,6 @@ export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado') {
       };
     },
     enabled: !!user,
-    staleTime: 30000, // 30 seconds
+    staleTime: 30000,
   });
 }
