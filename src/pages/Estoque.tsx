@@ -536,20 +536,36 @@ export default function Estoque() {
 
   // Handlers para Novo Modelo Acabado
   const handleOpenNovoModelo = async () => {
-    // Buscar a maior referência numérica existente
-    let maxRef = 0;
+    // Buscar todas as referências numéricas já usadas (1+ dígitos no final)
+    const referenciasUsadas = new Set<number>();
     const produtosAcabadosExistentes = itens.filter(item => item.tipo === 'acabado');
+    
     produtosAcabadosExistentes.forEach(item => {
-      // Procura padrão " - NNN" no final do nome
-      const match = item.nome.match(/ - (\d{3})$/);
+      // Captura qualquer sequência de dígitos no final do nome (após " - ")
+      const match = item.nome.match(/ - (\d+)$/);
       if (match) {
         const num = parseInt(match[1], 10);
-        if (num > maxRef) maxRef = num;
+        // Considerar apenas referências na faixa válida de 3 dígitos (001-999)
+        if (num >= 1 && num <= 999) {
+          referenciasUsadas.add(num);
+        }
       }
     });
 
-    // Próxima referência: max + 1, formatada com 3 dígitos
-    const nextRef = String(maxRef + 1).padStart(3, '0');
+    // Encontrar o primeiro número disponível entre 001 e 999
+    let nextRefNum = 1;
+    while (referenciasUsadas.has(nextRefNum) && nextRefNum <= 999) {
+      nextRefNum++;
+    }
+
+    // Se todos os 999 números estiverem em uso, começar do 001 (sobrescreve)
+    if (nextRefNum > 999) {
+      nextRefNum = 1;
+    }
+
+    // Formatar sempre com 3 dígitos
+    const nextRef = String(nextRefNum).padStart(3, '0');
+    
     setNovoModeloForm({
       nome: '',
       referencia: nextRef,
