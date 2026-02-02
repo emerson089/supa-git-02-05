@@ -1,110 +1,149 @@
 
 
-## Plano: Gerar Referência Automática com Números Aleatórios
+## Plano: Persistência de Busca e Métricas Dinâmicas no Estoque
 
-### Objetivo
+### Problema 1: Persistência da Busca
 
-Alterar a geração de referência para usar números **aleatórios de 3 dígitos** (não sequenciais), garantindo que nunca sejam repetidos.
+A busca já está sendo persistida via URL params (`?q=termo`), mas ao navegar para outra página e retornar, o termo de busca deveria permanecer. Vou verificar e garantir que isso funcione corretamente.
 
-**Exemplo de comportamento:**
-- Primeiro produto: `345`
-- Segundo produto: `782`
-- Terceiro produto: `156`
-- E assim por diante... (números aleatórios, nunca iguais)
+**Diagnóstico**: A lógica atual já usa `useSearchParams` corretamente. O problema pode estar no `<BrowserRouter>` ou na forma como os links navegam.
+
+### Problema 2: Métricas Não Refletem a Busca
+
+Os cards de resumo (Total Peças, Valor Total, Em Alerta, Esgotados) atualmente mostram dados de **todos os itens**, não apenas dos itens que correspondem à busca.
+
+**Solução**: Modificar o hook `useEstoqueMetrics` para aceitar o parâmetro `search` e filtrar os resultados de acordo.
 
 ---
 
-### Alterações no Arquivo
+### Alterações Propostas
 
-**Arquivo:** `src/pages/Estoque.tsx`
+#### Arquivo 1: `src/hooks/useEstoqueItensPaginated.ts`
 
-**Linhas a modificar:** 538-577 (função `handleOpenNovoModelo`)
+Adicionar o parâmetro `search` ao hook `useEstoqueMetrics`:
 
-#### Código Atual (Sequencial)
 ```typescript
-// Encontrar o primeiro número disponível entre 001 e 999
-let nextRefNum = 1;
-while (referenciasUsadas.has(nextRefNum) && nextRefNum <= 999) {
-  nextRefNum++;
+// Hook para obter métricas agregadas (para os cards de resumo)
+export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado', search?: string) {
+  const { user } = useAuth();
+  const debouncedSearch = useDebouncedValue(search || '', 300);
+  
+  return useQuery({
+    queryKey: ['estoque-metrics', user?.id, tipo, debouncedSearch],
+    queryFn: async () => {
+      if (!user) return { totalPecas: 0, valorTotal: 0, itensAlerta: 0, itensEsgotados: 0, totalItens: 0 };
+      
+      // Buscar local Central
+      const { data: localCentral } = await supabase
+        .from('estoque_locais')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('tipo', 'central')
+        .maybeSingle();
+      
+      // Buscar campos necessários para métricas
+      let query = supabase
+        .from('estoque_itens')
+        .select('id, nome, categoria, quantidade, preco_unitario')
+        .eq('user_id', user.id);
+      
+      if (tipo) {
+        query = query.eq('tipo', tipo);
+      }
+      
+      // NOVO: Aplicar filtro de busca
+      if (debouncedSearch) {
+        query = query.or(`nome.ilike.%${debouncedSearch}%,categoria.ilike.%${debouncedSearch}%`);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data) return { totalPecas: 0, valorTotal: 0, itensAlerta: 0, itensEsgotados: 0, totalItens: 0 };
+      
+      // Get quantities from Central
+      let quantidadeMap = new Map<string, number>();
+      if (localCentral) {
+        const { data: estoquePorLocal } = await supabase
+          .from('estoque_por_local')
+          .select('item_id, quantidade')
+          .eq('local_id', localCentral.id);
+        
+        if (estoquePorLocal) {
+          estoquePorLocal.forEach(epl => {
+            quantidadeMap.set(epl.item_id, Number(epl.quantidade));
+          });
+        }
+      }
+      
+      // Calcular métricas
+      let totalPecas = 0;
+      let valorTotal = 0;
+      let itensAlerta = 0;
+      let itensEsgotados = 0;
+      
+      data.forEach(item => {
+        const qty = quantidadeMap.has(item.id) ? quantidadeMap.get(item.id)! : Number(item.quantidade);
+        const preco = Number(item.preco_unitario) || 0;
+        
+        totalPecas += qty;
+        valorTotal += preco * qty;
+        
+        if (qty === 0) {
+          itensEsgotados++;
+        } else if (qty <= 20) {
+          itensAlerta++;
+        }
+      });
+      
+      return {
+        totalPecas,
+        valorTotal,
+        itensAlerta,
+        itensEsgotados,
+        totalItens: data.length,
+      };
+    },
+    enabled: !!user,
+    staleTime: 30000,
+  });
 }
 ```
 
-#### Código Novo (Aleatório)
+---
+
+#### Arquivo 2: `src/pages/Estoque.tsx`
+
+Passar o parâmetro `search` para o hook `useEstoqueMetrics`:
+
+**Antes (linha ~163):**
 ```typescript
-const handleOpenNovoModelo = async () => {
-  // Buscar todas as referências numéricas já usadas
-  const referenciasUsadas = new Set<number>();
-  const produtosAcabadosExistentes = itens.filter(item => item.tipo === 'acabado');
-  
-  produtosAcabadosExistentes.forEach(item => {
-    const match = item.nome.match(/ - (\d+)$/);
-    if (match) {
-      const num = parseInt(match[1], 10);
-      if (num >= 1 && num <= 999) {
-        referenciasUsadas.add(num);
-      }
-    }
-  });
+const { data: metrics } = useEstoqueMetrics(tipoEstoque);
+```
 
-  // Gerar número aleatório único entre 001 e 999
-  let nextRefNum: number;
-  const maxTentativas = 1000;
-  let tentativas = 0;
-  
-  // Se ainda há números disponíveis na faixa 001-999
-  if (referenciasUsadas.size < 999) {
-    do {
-      // Gerar número aleatório entre 1 e 999
-      nextRefNum = Math.floor(Math.random() * 999) + 1;
-      tentativas++;
-    } while (referenciasUsadas.has(nextRefNum) && tentativas < maxTentativas);
-  } else {
-    // Todos os 999 números estão em uso - usar 1 como fallback
-    nextRefNum = 1;
-  }
-
-  // Formatar sempre com 3 dígitos
-  const nextRef = String(nextRefNum).padStart(3, '0');
-  
-  setNovoModeloForm({
-    nome: '',
-    referencia: nextRef,
-    quantidade: 0,
-    precoVenda: 0,
-    imagemUrl: '',
-    imagemPreview: ''
-  });
-  setShowNovoModeloModal(true);
-};
+**Depois:**
+```typescript
+const { data: metrics } = useEstoqueMetrics(tipoEstoque, search);
 ```
 
 ---
 
 ### Comportamento Esperado
 
-| Cenário | Resultado |
-|---------|-----------|
-| Nenhum produto existente | Número aleatório (ex: `427`) |
-| Alguns produtos existentes | Número aleatório diferente dos existentes (ex: `156`) |
-| 998 produtos cadastrados | Um dos números restantes aleatório |
-| Todos 999 números em uso | Fallback para `001` |
+| Cenário | Indicadores |
+|---------|-------------|
+| Sem busca | Mostram totais de todos os itens do tipo |
+| Busca "calça" | Mostram totais apenas dos itens com "calça" no nome ou categoria |
+| Busca "164" | Mostram métricas apenas dos itens que contêm "164" |
 
 ---
 
-### Exemplos de Referências Geradas
+### Resultado Visual
 
-```
-Abertura do modal 1: 345
-Abertura do modal 2: 782
-Abertura do modal 3: 156
-Abertura do modal 4: 903
-Abertura do modal 5: 267
-```
-
-Os números são sempre:
-- Aleatórios (não sequenciais)
-- Únicos (nunca repetidos com produtos existentes)
-- Formatados com 3 dígitos (ex: `007`, `042`, `156`)
+Ao pesquisar por um termo:
+- **Total Peças**: Soma das quantidades dos itens filtrados
+- **Valor Total**: Soma do valor (preço × quantidade) dos itens filtrados  
+- **Em Alerta**: Contagem de itens filtrados com estoque baixo (1-20)
+- **Esgotados**: Contagem de itens filtrados com quantidade = 0
 
 ---
 
@@ -112,5 +151,6 @@ Os números são sempre:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/Estoque.tsx` | Alterar lógica de `handleOpenNovoModelo` para gerar números aleatórios únicos (linhas 538-577) |
+| `src/hooks/useEstoqueItensPaginated.ts` | Adicionar parâmetro `search` ao hook `useEstoqueMetrics` (linhas 240-314) |
+| `src/pages/Estoque.tsx` | Passar `search` para `useEstoqueMetrics` (linha ~163) |
 
