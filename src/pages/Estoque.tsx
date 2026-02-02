@@ -157,10 +157,10 @@ export default function Estoque() {
     filtroRapido
   });
 
-  // Métricas agregadas para os cards de resumo
+  // Métricas agregadas para os cards de resumo (filtradas pela busca)
   const {
     data: metrics
-  } = useEstoqueMetrics(tipoEstoque);
+  } = useEstoqueMetrics(tipoEstoque, search);
 
   // Helper para atualizar URL params (persistência)
   const updateParams = (updates: Record<string, string | undefined>) => {
