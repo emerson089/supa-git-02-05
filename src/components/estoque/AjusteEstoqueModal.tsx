@@ -89,7 +89,7 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
   // Encontrar nome do tipo selecionado para compor o motivo
   const tipoSelecionado = tiposAjuste.find(t => t.id === tipoAjusteId);
 
-  const isValid = novaQtd >= 0 && estoqueAtualInt >= 0 && tipoAjusteId.length > 0 && !semAlteracao;
+  const isValid = novaQtd >= 0 && estoqueAtualInt >= 0 && tipoAjusteId.length > 0;
 
   const handleEstoqueAtualChange = (value: string) => {
     const cleanValue = value.replace(/\D/g, '');
