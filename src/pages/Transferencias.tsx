@@ -753,14 +753,8 @@ export default function Transferencias() {
           )}
         </div>
       </ScrollArea>
-    </div>;
-                    <span className="font-medium truncate">{getLocalNome(t.localDestinoId)}</span>
-                  </div>
-                </CardContent>
-              </Card>)}
-        </div>
-      </ScrollArea>
-    </div>;
+    </div>
+  );
 
   // Early return for loading state - placed after render functions are defined
   if (isLoadingLocais || isLoadingTransferencias || isLoadingUserLocations) {
