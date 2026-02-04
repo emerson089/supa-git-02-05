@@ -228,59 +228,38 @@ export async function generateCargaPDF(
   doc.text('ITENS DA CARGA', margin, yPos);
   yPos += 4;
 
-  // Preparar dados da tabela - condicional para hideFinancials
+  // Preparar dados da tabela - sempre 5 colunas fixas
   const tableData: { content: string; styles?: object }[][] = [];
   const imagePositions: { rowIndex: number; itemId: string }[] = [];
 
   carga.itens.forEach((item, index) => {
     const qtd = Number(item.quantidadeEnviada) || 0;
     const preco = Number(item.precoUnitario) || Number(item.produtoPreco) || 0;
-    const subtotal = qtd * preco;
     const { nome, codigo } = extrairCodigo(item.produtoNome || 'Produto');
 
     imagePositions.push({ rowIndex: index, itemId: item.itemId });
 
-    if (hideFinancials) {
-      // Sem colunas de preço e subtotal
-      tableData.push([
-        { content: '', styles: { cellWidth: 16 } }, // Coluna para foto (maior)
-        { content: nome.length > 35 ? nome.substring(0, 32) + '...' : nome },
-        { content: codigo, styles: { halign: 'center' } },
-        { content: String(qtd), styles: { halign: 'center', fontStyle: 'bold' } },
-      ]);
-    } else {
-      // Tabela completa com preços
-      tableData.push([
-        { content: '', styles: { cellWidth: 16 } }, // Coluna para foto (maior)
-        { content: nome.length > 30 ? nome.substring(0, 27) + '...' : nome },
-        { content: codigo, styles: { halign: 'center' } },
-        { content: String(qtd), styles: { halign: 'center' } },
-        { content: formatCurrency(preco), styles: { halign: 'right' } },
-        { content: formatCurrency(subtotal), styles: { halign: 'right', fontStyle: 'bold' } },
-      ]);
-    }
+    // Tabela sempre com 5 colunas: Foto, Produto, Cód, Qtd, Preço
+    tableData.push([
+      { content: '', styles: { cellWidth: 16 } }, // Coluna para foto
+      { content: nome.length > 30 ? nome.substring(0, 27) + '...' : nome },
+      { content: codigo, styles: { halign: 'center' } },
+      { content: String(qtd), styles: { halign: 'center', fontStyle: 'bold' } },
+      { content: formatCurrency(preco), styles: { halign: 'right' } },
+    ]);
   });
 
-  // Configuração de colunas condicional
-  const columnStyles = hideFinancials 
-    ? {
-        0: { cellWidth: 16, halign: 'center' as const }, // Foto (maior)
-        1: { cellWidth: 'auto' as const }, // Produto - expande
-        2: { cellWidth: 16, halign: 'center' as const }, // Código
-        3: { cellWidth: 18, halign: 'center' as const }, // Qtd
-      }
-    : {
-        0: { cellWidth: 16, halign: 'center' as const }, // Foto (maior)
-        1: { cellWidth: 'auto' as const }, // Produto
-        2: { cellWidth: 16, halign: 'center' as const }, // Código
-        3: { cellWidth: 14, halign: 'center' as const }, // Qtd
-        4: { cellWidth: 22, halign: 'right' as const }, // Preço
-        5: { cellWidth: 24, halign: 'right' as const }, // Subtotal
-      };
+  // Configuração de colunas fixa (5 colunas)
+  const columnStyles = {
+    0: { cellWidth: 16, halign: 'center' as const },  // Foto
+    1: { cellWidth: 'auto' as const },                 // Produto
+    2: { cellWidth: 16, halign: 'center' as const },  // Código
+    3: { cellWidth: 14, halign: 'center' as const },  // Qtd
+    4: { cellWidth: 22, halign: 'right' as const },   // Preço
+  };
 
-  const tableHeaders = hideFinancials 
-    ? [['', 'Produto', 'Cód', 'Qtd']]
-    : [['', 'Produto', 'Cód', 'Qtd', 'Preço', 'Subtotal']];
+  // Cabeçalho fixo (sem condicional)
+  const tableHeaders = [['', 'Produto', 'Cód', 'Qtd', 'Preço']];
 
   autoTable(doc, {
     startY: yPos,
