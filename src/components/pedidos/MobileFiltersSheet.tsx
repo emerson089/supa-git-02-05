@@ -1,5 +1,6 @@
 import { SlidersHorizontal, X, Package, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -226,6 +227,8 @@ export function MobileFiltersSheet({
                       mode="single"
                       selected={startDate}
                       onSelect={onStartDateChange}
+                      defaultMonth={startDate}
+                      locale={ptBR}
                       initialFocus
                       className="pointer-events-auto"
                     />
@@ -247,6 +250,8 @@ export function MobileFiltersSheet({
                       mode="single"
                       selected={endDate}
                       onSelect={onEndDateChange}
+                      defaultMonth={endDate}
+                      locale={ptBR}
                       initialFocus
                       className="pointer-events-auto"
                     />
