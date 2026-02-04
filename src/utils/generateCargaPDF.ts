@@ -30,13 +30,24 @@ function calcularTotais(itens: TransferenciaItemComProduto[]) {
 
 // Extrair código do nome do produto
 function extrairCodigo(nome: string): { nome: string; codigo: string } {
-  const match = nome.match(/\s*-\s*(\d+)$/);
-  if (match) {
+  // Padrão 1: "Nome - 123" (com traço)
+  const matchTraco = nome.match(/\s*-\s*(\d+)$/);
+  if (matchTraco) {
     return {
       nome: nome.replace(/\s*-\s*\d+$/, '').trim(),
-      codigo: match[1],
+      codigo: matchTraco[1],
     };
   }
+  
+  // Padrão 2: "Nome 123" (número no final sem traço, mínimo 3 dígitos)
+  const matchFinal = nome.match(/\s+(\d{3,})$/);
+  if (matchFinal) {
+    return {
+      nome: nome.replace(/\s+\d{3,}$/, '').trim(),
+      codigo: matchFinal[1],
+    };
+  }
+  
   return { nome, codigo: '-' };
 }
 
@@ -241,8 +252,8 @@ export async function generateCargaPDF(
 
     // Tabela sempre com 5 colunas: Foto, Produto, Cód, Qtd, Preço
     tableData.push([
-      { content: '', styles: { cellWidth: 16 } }, // Coluna para foto
-      { content: nome.length > 30 ? nome.substring(0, 27) + '...' : nome },
+      { content: '', styles: { cellWidth: 14 } }, // Coluna para foto
+      { content: nome.length > 45 ? nome.substring(0, 42) + '...' : nome },
       { content: codigo, styles: { halign: 'center' } },
       { content: String(qtd), styles: { halign: 'center', fontStyle: 'bold' } },
       { content: formatCurrency(preco), styles: { halign: 'right' } },
@@ -251,11 +262,11 @@ export async function generateCargaPDF(
 
   // Configuração de colunas fixa (5 colunas)
   const columnStyles = {
-    0: { cellWidth: 16, halign: 'center' as const },  // Foto
+    0: { cellWidth: 14, halign: 'center' as const },  // Foto
     1: { cellWidth: 'auto' as const },                 // Produto
-    2: { cellWidth: 16, halign: 'center' as const },  // Código
-    3: { cellWidth: 14, halign: 'center' as const },  // Qtd
-    4: { cellWidth: 22, halign: 'right' as const },   // Preço
+    2: { cellWidth: 14, halign: 'center' as const },  // Código
+    3: { cellWidth: 12, halign: 'center' as const },  // Qtd
+    4: { cellWidth: 20, halign: 'right' as const },   // Preço
   };
 
   // Cabeçalho fixo (sem condicional)
