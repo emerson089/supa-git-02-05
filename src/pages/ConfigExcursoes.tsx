@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Pencil, Trash2, Bus, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { useExcursoes, useAddExcursao, useUpdateExcursao, useDeleteExcursao, Excursao } from '@/hooks/useExcursoes';
+import { useExcursoes, useAddExcursao, useUpdateExcursao, useDeleteExcursao, useDeleteMultipleExcursoes, Excursao } from '@/hooks/useExcursoes';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ImportExcursoesCSVModal } from '@/components/excursoes/ImportExcursoesCSVModal';
 
@@ -21,12 +22,15 @@ const ConfigExcursoes = () => {
   const addExcursao = useAddExcursao();
   const updateExcursao = useUpdateExcursao();
   const deleteExcursao = useDeleteExcursao();
+  const deleteMultiple = useDeleteMultipleExcursoes();
 
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingExcursao, setEditingExcursao] = useState<Excursao | null>(null);
   const [formData, setFormData] = useState({ nome: '', taxa: '' });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteMultipleConfirm, setShowDeleteMultipleConfirm] = useState(false);
 
   const handleOpenNew = () => {
     setEditingExcursao(null);
@@ -99,6 +103,42 @@ const ConfigExcursoes = () => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (!excursoes) return;
+    if (selectedIds.size === excursoes.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(excursoes.map((e) => e.id)));
+    }
+  };
+
+  const handleDeleteMultiple = async () => {
+    try {
+      await deleteMultiple.mutateAsync(Array.from(selectedIds));
+      toast.success(`${selectedIds.size} excursões excluídas com sucesso!`);
+      setSelectedIds(new Set());
+      setShowDeleteMultipleConfirm(false);
+    } catch (error: any) {
+      if (error.message?.includes('violates foreign key')) {
+        toast.error('Algumas excursões não podem ser excluídas pois possuem pedidos vinculados');
+      } else {
+        toast.error('Erro ao excluir excursões');
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex overflow-hidden">
       {isMobile && <MobileHeader title="Excursões" />}
@@ -117,15 +157,44 @@ const ConfigExcursoes = () => {
         <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
           <div className="max-w-3xl space-y-6">
             {/* Botões de ação */}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowImportModal(true)} className="gap-2">
-                <Upload size={18} />
-                Importar CSV
-              </Button>
-              <Button onClick={handleOpenNew} className="gap-2">
-                <Plus size={18} />
-                Nova Excursão
-              </Button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-3">
+                {excursoes && excursoes.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="select-all"
+                        checked={selectedIds.size === excursoes.length && excursoes.length > 0}
+                        onCheckedChange={handleToggleSelectAll}
+                      />
+                      <Label htmlFor="select-all" className="text-sm text-muted-foreground cursor-pointer">
+                        Selecionar Tudo ({excursoes.length})
+                      </Label>
+                    </div>
+                    {selectedIds.size > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setShowDeleteMultipleConfirm(true)}
+                        className="gap-2"
+                      >
+                        <Trash2 size={16} />
+                        Excluir ({selectedIds.size})
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowImportModal(true)} className="gap-2">
+                  <Upload size={18} />
+                  Importar CSV
+                </Button>
+                <Button onClick={handleOpenNew} className="gap-2">
+                  <Plus size={18} />
+                  Nova Excursão
+                </Button>
+              </div>
             </div>
 
             {/* Lista de Excursões */}
@@ -148,10 +217,15 @@ const ConfigExcursoes = () => {
                     key={excursao.id}
                     className={cn(
                       "neu-card p-5 flex items-center justify-between gap-4",
-                      !excursao.ativo && "opacity-60"
+                      !excursao.ativo && "opacity-60",
+                      selectedIds.has(excursao.id) && "ring-2 ring-primary"
                     )}
                   >
                     <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <Checkbox
+                        checked={selectedIds.has(excursao.id)}
+                        onCheckedChange={() => handleToggleSelect(excursao.id)}
+                      />
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <Bus size={20} className="text-primary" />
                       </div>
@@ -272,6 +346,31 @@ const ConfigExcursoes = () => {
         open={showImportModal} 
         onOpenChange={setShowImportModal} 
       />
+
+      {/* Modal Confirmar Exclusão em Massa */}
+      <Dialog open={showDeleteMultipleConfirm} onOpenChange={setShowDeleteMultipleConfirm}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Excluir {selectedIds.size} Excursões</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir {selectedIds.size} excursões selecionadas? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-4">
+            <Button variant="outline" onClick={() => setShowDeleteMultipleConfirm(false)} className="flex-1 h-11 rounded-xl">
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteMultiple}
+              disabled={deleteMultiple.isPending}
+              className="flex-1 h-11 rounded-xl"
+            >
+              {deleteMultiple.isPending ? 'Excluindo...' : `Excluir ${selectedIds.size}`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <BottomNavigation />
     </div>

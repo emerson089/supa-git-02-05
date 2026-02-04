@@ -32,14 +32,49 @@ function capitalizeWords(nome: string): string {
 }
 
 /**
- * Converte valor no formato "R$ 10,00" para número
+ * Parser robusto de linha CSV que trata campos entre aspas
+ */
+function parseCSVLine(line: string, separator: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === separator && !inQuotes) {
+      result.push(current.trim().replace(/^"|"$/g, ''));
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim().replace(/^"|"$/g, ''));
+  
+  return result;
+}
+
+/**
+ * Detecta o separador do CSV (vírgula ou ponto-e-vírgula)
+ */
+function detectSeparator(headerLine: string): string {
+  const commaCount = (headerLine.match(/,/g) || []).length;
+  const semicolonCount = (headerLine.match(/;/g) || []).length;
+  return semicolonCount > commaCount ? ';' : ',';
+}
+
+/**
+ * Converte valor no formato "10,00" ou "R$ 10,00" para número
  */
 function parseValorBRL(valor: string): number {
   if (!valor) return 0;
   
-  // Remove "R$", espaços e converte vírgula para ponto
+  // Remove "R$", espaços, aspas e converte vírgula para ponto
   const cleaned = valor
     .replace(/R\$\s*/gi, '')
+    .replace(/"/g, '')
     .replace(/\s/g, '')
     .replace(/\./g, '') // Remove separador de milhar
     .replace(',', '.'); // Converte decimal
@@ -61,10 +96,20 @@ export function parseExcursoesCSV(csvContent: string): {
     return { excursoes: [], errors: ['Arquivo vazio ou sem dados'] };
   }
   
+  // Detecta separador automaticamente
+  const separator = detectSeparator(lines[0]);
+  
   // Detecta cabeçalho
-  const header = lines[0].split(';').map(h => sanitizeString(h).toUpperCase());
-  const excursaoIdx = header.findIndex(h => h.includes('EXCURSAO'));
-  const valorIdx = header.findIndex(h => h.includes('VALOR') && h.includes('EXCURSAO'));
+  const headerCols = parseCSVLine(lines[0], separator);
+  const header = headerCols.map(h => sanitizeString(h).toUpperCase());
+  
+  // Procura por colunas de excursão e valor
+  const excursaoIdx = header.findIndex(h => h.includes('EXCURSAO') || h.includes('EXCURSÃO'));
+  const valorIdx = header.findIndex(h => 
+    (h.includes('VALOR') && (h.includes('EXCURSAO') || h.includes('EXCURSÃO'))) ||
+    h.includes('TAXA') ||
+    h === 'VALOR'
+  );
   
   if (excursaoIdx === -1) {
     return { excursoes: [], errors: ['Coluna EXCURSAO não encontrada'] };
@@ -79,7 +124,7 @@ export function parseExcursoesCSV(csvContent: string): {
   
   // Processa linhas (pula cabeçalho)
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(';');
+    const cols = parseCSVLine(lines[i], separator);
     const nomeRaw = sanitizeString(cols[excursaoIdx] || '');
     
     if (!nomeRaw) continue;
