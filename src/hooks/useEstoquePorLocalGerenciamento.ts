@@ -29,7 +29,8 @@ interface AdicionarProdutoParams {
   itemId: string;
   localId: string;
   quantidade: number;
-  motivo?: string;
+  motivo: string;
+  observacoes?: string;
 }
 
 interface ZerarProdutoParams {
@@ -218,7 +219,7 @@ export function useAdicionarProdutoLocal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ itemId, localId, quantidade, motivo }: AdicionarProdutoParams) => {
+    mutationFn: async ({ itemId, localId, quantidade, motivo, observacoes }: AdicionarProdutoParams) => {
       if (!user?.id) throw new Error('Usuário não autenticado');
 
       // 1. Buscar local "central"
@@ -244,7 +245,8 @@ export function useAdicionarProdutoLocal() {
         p_destino_local_id: localId,
         p_itens: itensJson,
         p_user_id: user.id,
-        p_motivo: motivo || 'Transferência do Central'
+        p_motivo: motivo || 'reposicao',
+        p_observacoes: observacoes || null
       });
 
       if (error) {
