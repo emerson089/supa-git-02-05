@@ -1,97 +1,109 @@
 
 
-## Plano: Ajustar PDF - Preço Sempre Visível, Ocultar Apenas Total
+## Plano: Corrigir Exibição de Produto e Referência no PDF
 
-### Novo Comportamento
+### Problemas Identificados
 
-| Modo | Tabela | Resumo |
-|------|--------|--------|
-| **Padrão** | Foto, Produto, Cód, Qtd, Preço | `8 modelos \| 636 peças \| R$ 18.710,00` |
-| **Ocultar valores** | Foto, Produto, Cód, Qtd, **Preço** ✅ | `8 modelos \| 636 peças` (sem total) |
+Analisando o PDF gerado e o código:
 
-### Mudanças em `src/utils/generateCargaPDF.ts`
+1. **Regex de extração incorreto**: A função `extrairCodigo` só captura referências no padrão `Nome - 123` (com traço). Nomes como `Short jeans vintage 574` não são detectados.
 
-#### 1. Remover Subtotal da tabela (sempre)
+2. **Truncamento excessivo**: Nomes são cortados em 27 caracteres, perdendo informação importante.
 
-A tabela terá **sempre 5 colunas**: Foto, Produto, Cód, Qtd, Preço
+3. **Colunas podem estar colapsando**: A largura `auto` pode não estar funcionando corretamente quando há muitas colunas.
 
+### Solução
+
+#### 1. Melhorar a função `extrairCodigo` para detectar referências em múltiplos padrões
+
+**De:**
 ```typescript
-// Linha ~245-260: Remover lógica condicional de colunas
-tableData.push([
-  { content: '', styles: { cellWidth: 16 } },  // Foto
-  { content: nome... },                         // Produto
-  { content: codigo... },                       // Código
-  { content: String(qtd)... },                  // Qtd
-  { content: formatCurrency(preco)... },        // Preço (SEMPRE)
-]);
-```
-
-#### 2. Cabeçalho fixo (sem condicional)
-
-```typescript
-// Linha ~283
-const tableHeaders = [['', 'Produto', 'Cód', 'Qtd', 'Preço']];
-```
-
-#### 3. columnStyles fixo (sem condicional)
-
-```typescript
-// Linhas ~266-279
-const columnStyles = {
-  0: { cellWidth: 16, halign: 'center' as const },  // Foto
-  1: { cellWidth: 'auto' as const },                 // Produto
-  2: { cellWidth: 16, halign: 'center' as const },  // Código
-  3: { cellWidth: 14, halign: 'center' as const },  // Qtd
-  4: { cellWidth: 22, halign: 'right' as const },   // Preço
-};
-```
-
-#### 4. hideFinancials afeta APENAS o resumo (linhas ~181-195)
-
-```typescript
-// Resumo - hideFinancials controla apenas o valor total
-if (hideFinancials) {
-  const resumoText = `${totais.totalItens} modelos  |  ${totais.totalPecas} peças`;
-  doc.text(resumoText, margin + 25, yPos + 10);
-} else {
-  const resumoText = `${totais.totalItens} modelos  |  ${totais.totalPecas} peças  |  `;
-  doc.text(resumoText, margin + 25, yPos + 10);
-  
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...primaryColor);
-  doc.text(formatCurrency(totais.valorTotal), margin + 25 + doc.getTextWidth(resumoText), yPos + 10);
+function extrairCodigo(nome: string): { nome: string; codigo: string } {
+  const match = nome.match(/\s*-\s*(\d+)$/);
+  if (match) {
+    return {
+      nome: nome.replace(/\s*-\s*\d+$/, '').trim(),
+      codigo: match[1],
+    };
+  }
+  return { nome, codigo: '-' };
 }
 ```
 
-### Resultado Visual
+**Para:**
+```typescript
+function extrairCodigo(nome: string): { nome: string; codigo: string } {
+  // Padrão 1: "Nome - 123" (com traço)
+  const matchTraco = nome.match(/\s*-\s*(\d+)$/);
+  if (matchTraco) {
+    return {
+      nome: nome.replace(/\s*-\s*\d+$/, '').trim(),
+      codigo: matchTraco[1],
+    };
+  }
+  
+  // Padrão 2: "Nome 123" (número no final sem traço)
+  const matchFinal = nome.match(/\s+(\d{3,})$/);
+  if (matchFinal) {
+    return {
+      nome: nome.replace(/\s+\d{3,}$/, '').trim(),
+      codigo: matchFinal[1],
+    };
+  }
+  
+  return { nome, codigo: '-' };
+}
+```
 
-**Tabela (SEMPRE igual):**
-```
-┌──────┬──────────────────────────┬──────┬─────┬──────────┐
-│      │ Produto                  │ Cód  │ Qtd │  Preço   │
-├──────┼──────────────────────────┼──────┼─────┼──────────┤
-│[foto]│ Short cinto encapado...  │ 124  │ 108 │ R$ 29,90 │
-│[foto]│ Calça Alfaiataria...     │ 280  │  30 │ R$ 49,90 │
-└──────┴──────────────────────────┴──────┴─────┴──────────┘
+#### 2. Aumentar limite de caracteres do nome (de 30 para 45)
+
+**De:**
+```typescript
+{ content: nome.length > 30 ? nome.substring(0, 27) + '...' : nome },
 ```
 
-**Resumo (padrão):**
-```
-┌────────────────────────────────────────────────────────┐
-│ RESUMO: 8 modelos  |  636 peças  |  R$ 18.710,00      │
-└────────────────────────────────────────────────────────┘
+**Para:**
+```typescript
+{ content: nome.length > 45 ? nome.substring(0, 42) + '...' : nome },
 ```
 
-**Resumo (ocultar valores):**
+#### 3. Ajustar larguras das colunas para melhor distribuição
+
+```typescript
+const columnStyles = {
+  0: { cellWidth: 14, halign: 'center' as const },   // Foto (um pouco menor)
+  1: { cellWidth: 'auto' as const },                  // Produto (expande)
+  2: { cellWidth: 14, halign: 'center' as const },   // Código
+  3: { cellWidth: 12, halign: 'center' as const },   // Qtd
+  4: { cellWidth: 20, halign: 'right' as const },    // Preço
+};
 ```
-┌────────────────────────────────────────────────────────┐
-│ RESUMO: 8 modelos  |  636 peças                       │
-└────────────────────────────────────────────────────────┘
+
+### Exemplos de Extração Corrigida
+
+| Nome Original | Nome Extraído | Código |
+|---------------|---------------|--------|
+| `Short jeans vintage 574` | `Short jeans vintage` | `574` |
+| `Short Saia jeans frente e traseira - 385` | `Short Saia jeans frente e traseira` | `385` |
+| `PLS Saia Cargo Jeans 540` | `PLS Saia Cargo Jeans` | `540` |
+| `Short jeans bordado` | `Short jeans bordado` | `-` |
+
+### Resultado Visual Esperado
+
+```
+┌──────┬───────────────────────────────────────┬──────┬─────┬──────────┐
+│      │ Produto                               │ Cód  │ Qtd │  Preço   │
+├──────┼───────────────────────────────────────┼──────┼─────┼──────────┤
+│[foto]│ Short Saia jeans frente e traseira    │ 385  │  10 │ R$ 29,90 │
+│[foto]│ Short jeans vintage                   │ 574  │   5 │ R$ 34,90 │
+│[foto]│ PLS Saia Cargo Jeans                  │ 540  │   8 │ R$ 49,90 │
+│[foto]│ Short jeans bordado                   │  -   │  12 │ R$ 27,90 │
+└──────┴───────────────────────────────────────┴──────┴─────┴──────────┘
 ```
 
 ### Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/utils/generateCargaPDF.ts` | Remover Subtotal, manter Preço sempre, hideFinancials só no resumo |
+| `src/utils/generateCargaPDF.ts` | Melhorar extração de código, aumentar limite de nome, ajustar larguras |
 
