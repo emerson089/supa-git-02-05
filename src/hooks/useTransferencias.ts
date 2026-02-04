@@ -941,11 +941,13 @@ export function useCriarTransferencia() {
       origemId,
       destinoId,
       itens,
+      motivo,
       observacoes,
     }: {
       origemId: string;
       destinoId: string;
       itens: { itemId: string; quantidade: number }[];
+      motivo: MotivoTransferencia;
       observacoes?: string;
     }) => {
       if (!user) throw new Error('Usuário não autenticado');
@@ -962,7 +964,8 @@ export function useCriarTransferencia() {
         p_destino_local_id: destinoId,
         p_itens: itensJson,
         p_user_id: user.id,
-        p_motivo: observacoes || null
+        p_motivo: motivo,
+        p_observacoes: observacoes || null
       });
 
       if (error) {
