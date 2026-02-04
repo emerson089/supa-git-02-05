@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, Bus } from 'lucide-react';
+import { Plus, Pencil, Trash2, Bus, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useExcursoes, useAddExcursao, useUpdateExcursao, useDeleteExcursao, Excursao } from '@/hooks/useExcursoes';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ImportExcursoesCSVModal } from '@/components/excursoes/ImportExcursoesCSVModal';
 
 const ConfigExcursoes = () => {
   const isMobile = useIsMobile();
@@ -22,6 +23,7 @@ const ConfigExcursoes = () => {
   const deleteExcursao = useDeleteExcursao();
 
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingExcursao, setEditingExcursao] = useState<Excursao | null>(null);
   const [formData, setFormData] = useState({ nome: '', taxa: '' });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -114,8 +116,12 @@ const ConfigExcursoes = () => {
 
         <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
           <div className="max-w-3xl space-y-6">
-            {/* Botão Nova Excursão */}
-            <div className="flex justify-end">
+            {/* Botões de ação */}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowImportModal(true)} className="gap-2">
+                <Upload size={18} />
+                Importar CSV
+              </Button>
               <Button onClick={handleOpenNew} className="gap-2">
                 <Plus size={18} />
                 Nova Excursão
@@ -260,6 +266,12 @@ const ConfigExcursoes = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Importar CSV */}
+      <ImportExcursoesCSVModal 
+        open={showImportModal} 
+        onOpenChange={setShowImportModal} 
+      />
 
       <BottomNavigation />
     </div>
