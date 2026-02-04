@@ -753,8 +753,7 @@ export default function Transferencias() {
           )}
         </div>
       </ScrollArea>
-    </div>
-  );
+    </div>;
 
   // Early return for loading state - placed after render functions are defined
   if (isLoadingLocais || isLoadingTransferencias || isLoadingUserLocations) {
