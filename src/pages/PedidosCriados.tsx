@@ -949,7 +949,7 @@ export default function PedidosCriados() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 z-50" align="start">
-                        <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus className="pointer-events-auto" />
+                        <Calendar mode="single" selected={startDate} onSelect={setStartDate} defaultMonth={startDate} locale={ptBR} initialFocus className="pointer-events-auto" />
                       </PopoverContent>
                     </Popover>
 
@@ -963,7 +963,7 @@ export default function PedidosCriados() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 z-50" align="start">
-                        <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus className="pointer-events-auto" />
+                        <Calendar mode="single" selected={endDate} onSelect={setEndDate} defaultMonth={endDate} locale={ptBR} initialFocus className="pointer-events-auto" />
                       </PopoverContent>
                     </Popover>
 
