@@ -143,25 +143,27 @@ interface DashboardData {
   faturamentoDiaSemana: FaturamentoDiaSemana[];
 }
 
-// Ordem padrão das etapas de produção (configurável)
+// Ordem padrão das etapas de produção (alinhado com STAGES em production-data.ts)
 const ETAPA_ORDER: string[] = [
   "Corte",
-  "Costura",
-  "Costura/Facção", // Alias para Costura
+  "Costura/Facção",
+  "Travete",
+  "Destroyed",
   "Lavanderia",
-  "Acabamento",
+  "Limpado",
   "Aprontamento",
-  "Concluído",
+  "Vendas",
 ];
 
 const ETAPA_COLORS: Record<string, string> = {
-  "Corte": "hsl(var(--stage-corte))",
-  "Costura": "hsl(var(--stage-costura))",
-  "Costura/Facção": "hsl(var(--stage-costura))", // Mesmo cor que Costura
-  "Lavanderia": "hsl(var(--stage-lavanderia))",
-  "Acabamento": "hsl(var(--stage-acabamento))",
-  "Aprontamento": "hsl(var(--stage-acabamento))", // Fallback cor
-  "Concluído": "hsl(var(--stage-concluido))",
+  "Corte": "hsl(210 100% 50%)",         // Blue
+  "Costura/Facção": "hsl(var(--primary))",
+  "Travete": "hsl(239 84% 67%)",        // Indigo
+  "Destroyed": "hsl(25 95% 53%)",       // Orange
+  "Lavanderia": "hsl(187 85% 53%)",     // Cyan
+  "Limpado": "hsl(168 76% 42%)",        // Teal
+  "Aprontamento": "hsl(271 81% 56%)",   // Purple
+  "Vendas": "hsl(152 76% 43%)",         // Emerald
 };
 
 const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
@@ -271,11 +273,11 @@ function getEstoqueStatus(quantidade: number): "baixo" | "zerado" | "negativo" {
 }
 
 function detectBottlenecks(etapas: ProducaoEtapa[]): ProducaoEtapa[] {
-  // Skip "Concluído" for bottleneck detection
-  const activeEtapas = etapas.filter(e => e.etapa !== "Concluído");
+  // Skip "Vendas" (final stage) for bottleneck detection
+  const activeEtapas = etapas.filter(e => e.etapa !== "Vendas");
   
   return etapas.map((etapa) => {
-    if (etapa.etapa === "Concluído") {
+    if (etapa.etapa === "Vendas") {
       return { ...etapa, isBottleneck: false };
     }
     
@@ -454,13 +456,11 @@ export function useDashboardData(
             .gte("pedidos.created_at", startDate)
             .lte("pedidos.created_at", endDate),
 
-          // Produção atual (com filtro de período)
+          // Produção atual (TODOS os lotes ativos - sem filtro de período)
           supabase
             .from("producao")
-            .select("processo_atual, quantidade, created_date")
-            .eq("user_id", user.id)
-            .gte("created_date", startDate)
-            .lte("created_date", endDate),
+            .select("processo_atual, quantidade")
+            .eq("user_id", user.id),
 
           // Produção mesmo período do ano passado (YoY)
           supabase
@@ -554,11 +554,11 @@ export function useDashboardData(
           p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO"
         ).length;
 
-        // Produção agora é filtrada por período
+        // Produção: todos os lotes ativos (sem filtro de período)
         const producaoData = producao.data || [];
         const producaoYoYData = producaoYoY.data || [];
-        const producaoAtiva = producaoData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
-        const producaoYoYAtiva = producaoYoYData.filter(p => p.processo_atual !== "Concluído").reduce((sum, p) => sum + (p.quantidade || 0), 0);
+        const producaoAtiva = producaoData.reduce((sum, p) => sum + (p.quantidade || 0), 0);
+        const producaoYoYAtiva = producaoYoYData.reduce((sum, p) => sum + (p.quantidade || 0), 0);
 
         // Tendência de vendas (grouped by tipoAgrupamento) - USA created_at PARA TENDÊNCIAS
         const vendasAgrupadas: Record<string, { valor: number; pedidos: number; pecas: number; data: Date }> = {};
