@@ -1,414 +1,279 @@
 
+## Plano: Melhorar Legibilidade dos Cards do Dashboard
 
-## Plano: Evolução do Módulo de Transferências
+### Objetivo
 
-### Visão Geral
-
-Este plano implementa 4 melhorias no módulo de Transferências:
-1. Modal de Detalhes da Transferência
-2. Fluxo de Status (Pendente → Concluída / Cancelada)
-3. Campo obrigatório de Motivo
-4. Filtros avançados (período, origem/destino, status, motivo)
+Garantir que os nomes de modelos, status de pedidos e etapas de produção estejam sempre acessíveis e legíveis em qualquer dispositivo, sem truncamento incompreensível.
 
 ---
 
-### 1. Alterações no Banco de Dados
+### 1. Card "Top 5 Modelos"
 
-#### 1.1 Adicionar colunas à tabela `transferencias`
+**Problema Atual:**
+- Linha 833: `truncate max-w-[120px]` força truncamento em todas as telas
+- Apenas atributo `title` existe (funciona apenas em desktop com hover)
 
-```sql
--- Adicionar campo de motivo da transferência
-ALTER TABLE transferencias ADD COLUMN IF NOT EXISTS motivo text;
+**Alterações:**
 
--- Adicionar campo para quem concluiu/cancelou
-ALTER TABLE transferencias ADD COLUMN IF NOT EXISTS concluido_por uuid REFERENCES auth.users(id);
+#### 1.1 Remover truncamento forçado e permitir wrap
 
--- Adicionar data de conclusão
-ALTER TABLE transferencias ADD COLUMN IF NOT EXISTS data_conclusao timestamp with time zone;
+```typescript
+// ANTES (linha 833)
+<span className="flex-1 leading-tight truncate max-w-[120px]" title={modelo.nome}>
+
+// DEPOIS
+<span 
+  className="flex-1 leading-tight line-clamp-2 break-words min-w-0" 
+  title={modelo.nome}
+  aria-label={modelo.nome}
+>
 ```
 
-#### 1.2 Criar enum para motivos (constraint check)
+#### 1.2 Adicionar Tooltip em desktop
 
-```sql
--- Garantir valores válidos para motivo
-ALTER TABLE transferencias ADD CONSTRAINT transferencias_motivo_check 
-CHECK (motivo IS NULL OR motivo IN ('feira', 'reposicao', 'ajuste', 'devolucao'));
+Envolver o item com `Tooltip` do Radix para mostrar nome completo no hover:
+
+```typescript
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+
+// Dentro do map de modelos:
+<TooltipProvider delayDuration={200}>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <div className="..."> {/* item existente */}
+    </TooltipTrigger>
+    <TooltipContent>
+      <p className="font-medium">{modelo.nome}</p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
 ```
 
----
+#### 1.3 Adicionar Modal para Mobile
 
-### 2. Modificar RPC `rpc_criar_transferencia`
+Criar estado para modal de detalhes do modelo:
 
-Atualizar a função para:
-- Criar transferência com status `pendente` (não mais `concluida`)
-- **NÃO** mover estoque na criação
-- Salvar o motivo no campo `motivo`
+```typescript
+const [selectedModelo, setSelectedModelo] = useState<TopModelo | null>(null);
 
-```sql
-CREATE OR REPLACE FUNCTION public.rpc_criar_transferencia(
-  p_origem_local_id uuid, 
-  p_destino_local_id uuid, 
-  p_itens jsonb, 
-  p_user_id uuid, 
-  p_motivo text DEFAULT NULL,
-  p_observacoes text DEFAULT NULL
-)
-RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-DECLARE
-  v_transferencia_id UUID;
-  v_item JSONB;
-  v_item_id UUID;
-  v_quantidade NUMERIC;
-  v_auth_uid UUID;
-BEGIN
-  -- Validar autenticação
-  v_auth_uid := auth.uid();
-  IF v_auth_uid IS NULL OR v_auth_uid != p_user_id THEN
-    RAISE EXCEPTION 'Usuário não autorizado';
-  END IF;
+// No onClick do item (mobile):
+onClick={() => isMobile ? setSelectedModelo(modelo) : navigate(...)}
 
-  -- Criar transferência com status PENDENTE (sem mover estoque)
-  INSERT INTO transferencias (
-    user_id, local_origem_id, local_destino_id, 
-    tipo, status, motivo, observacoes
-  )
-  VALUES (
-    v_auth_uid, p_origem_local_id, p_destino_local_id, 
-    'transferencia', 'pendente', p_motivo, p_observacoes
-  )
-  RETURNING id INTO v_transferencia_id;
-
-  -- Inserir itens (sem mover estoque ainda)
-  FOR v_item IN SELECT * FROM jsonb_array_elements(p_itens)
-  LOOP
-    v_item_id := (v_item->>'item_id')::UUID;
-    v_quantidade := (v_item->>'quantidade')::NUMERIC;
-
-    INSERT INTO transferencia_itens (user_id, transferencia_id, item_id, quantidade_enviada)
-    VALUES (v_auth_uid, v_transferencia_id, v_item_id, v_quantidade);
-  END LOOP;
-
-  RETURN v_transferencia_id;
-END;
-$$;
+// Modal simples:
+<Dialog open={!!selectedModelo} onOpenChange={(open) => !open && setSelectedModelo(null)}>
+  <DialogContent className="max-w-sm">
+    <DialogHeader>
+      <DialogTitle>Detalhes do Modelo</DialogTitle>
+    </DialogHeader>
+    <div className="space-y-3">
+      <div>
+        <p className="text-xs text-muted-foreground">Nome do Modelo</p>
+        <p className="font-medium">{selectedModelo?.nome}</p>
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">Quantidade Vendida</p>
+        <p className="text-lg font-bold text-primary">{selectedModelo?.quantidade} un</p>
+      </div>
+      <Button onClick={() => navigate(`/estoque?search=${encodeURIComponent(selectedModelo?.nome || '')}`)}>
+        Ver no Estoque
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
 ```
 
 ---
 
-### 3. Nova RPC `rpc_concluir_transferencia`
+### 2. Card "Produção — Peças por etapa"
 
-Esta função:
-- Valida estoque disponível
-- Move estoque atomicamente
-- Registra movimentações
-- Atualiza status para `concluida`
+**Problema Atual:**
+- Linha 974-976: `etapa.etapa.slice(0, 4).` exibe apenas 4 letras + ponto (ex: "Cort.")
+- Card fica quase vazio quando há poucas etapas
+- Não mostra total geral claramente
 
-```sql
-CREATE OR REPLACE FUNCTION public.rpc_concluir_transferencia(
-  p_transferencia_id uuid,
-  p_user_id uuid
-)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-DECLARE
-  v_transferencia RECORD;
-  v_item RECORD;
-  v_estoque_origem RECORD;
-  v_estoque_destino RECORD;
-  v_disponivel NUMERIC;
-  v_auth_uid UUID;
-BEGIN
-  v_auth_uid := auth.uid();
-  IF v_auth_uid IS NULL THEN
-    RAISE EXCEPTION 'Usuário não autenticado';
-  END IF;
+**Alterações:**
 
-  -- Buscar transferência
-  SELECT * INTO v_transferencia FROM transferencias 
-  WHERE id = p_transferencia_id;
-  
-  IF v_transferencia IS NULL THEN
-    RAISE EXCEPTION 'Transferência não encontrada';
-  END IF;
-  
-  IF v_transferencia.status != 'pendente' THEN
-    RAISE EXCEPTION 'Transferência não está pendente. Status atual: %', v_transferencia.status;
-  END IF;
+#### 2.1 Mostrar Total no Topo
 
-  -- Validar disponibilidade de TODOS os itens
-  FOR v_item IN 
-    SELECT * FROM transferencia_itens WHERE transferencia_id = p_transferencia_id
-  LOOP
-    SELECT * INTO v_estoque_origem
-    FROM estoque_por_local
-    WHERE item_id = v_item.item_id 
-      AND local_id = v_transferencia.local_origem_id;
+```typescript
+// Calcular total antes do render
+const totalPecasProducao = data.producaoKanban.reduce((sum, e) => sum + e.pecas, 0);
+const etapasAtivas = data.producaoKanban.filter(e => e.pecas > 0);
 
-    v_disponivel := COALESCE(v_estoque_origem.quantidade, 0) - COALESCE(v_estoque_origem.quantidade_reservada, 0);
+// Renderizar total no topo do CardContent
+<div className="text-center mb-3 pb-2 border-b">
+  <span className="text-2xl font-bold text-foreground">
+    {formatNumber(totalPecasProducao)}
+  </span>
+  <span className="text-sm text-muted-foreground ml-1">peças</span>
+</div>
+```
 
-    IF v_disponivel < v_item.quantidade_enviada THEN
-      RAISE EXCEPTION 'Estoque insuficiente para item %. Disponível: %, Necessário: %', 
-        v_item.item_id, v_disponivel, v_item.quantidade_enviada;
-    END IF;
-  END LOOP;
+#### 2.2 Exibir Lista de Etapas com Nomes Completos
 
-  -- Mover estoque de cada item
-  FOR v_item IN 
-    SELECT * FROM transferencia_itens WHERE transferencia_id = p_transferencia_id
-  LOOP
-    SELECT * INTO v_estoque_origem
-    FROM estoque_por_local
-    WHERE item_id = v_item.item_id AND local_id = v_transferencia.local_origem_id;
+Substituir grid de colunas por lista vertical ou horizontal responsiva:
 
-    SELECT * INTO v_estoque_destino
-    FROM estoque_por_local
-    WHERE item_id = v_item.item_id AND local_id = v_transferencia.local_destino_id;
+```typescript
+// Se total = 0
+if (totalPecasProducao === 0) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+      <Factory size={24} className="mb-2 opacity-50" />
+      <span className="text-sm">Sem peças em produção</span>
+    </div>
+  );
+}
 
-    -- Registrar saída na origem
-    INSERT INTO estoque_movimentacoes (
-      user_id, item_id, local_id, tipo, quantidade, motivo,
-      estoque_antes, estoque_depois, transferencia_id
-    )
-    VALUES (
-      v_auth_uid, v_item.item_id, v_transferencia.local_origem_id, 
-      'TRANSFERENCIA', v_item.quantidade_enviada,
-      'Saída por transferência',
-      v_estoque_origem.quantidade, 
-      v_estoque_origem.quantidade - v_item.quantidade_enviada,
-      p_transferencia_id
-    );
+// Se tem peças mas etapasAtivas está vazio (fallback)
+if (etapasAtivas.length === 0) {
+  return (
+    <div className="space-y-2">
+      <div className="text-center">
+        <span className="text-2xl font-bold">{totalPecasProducao}</span>
+        <span className="text-sm text-muted-foreground ml-1">peças</span>
+      </div>
+      <p className="text-xs text-amber-600 text-center">Etapas não encontradas</p>
+    </div>
+  );
+}
 
-    -- Subtrair da origem
-    UPDATE estoque_por_local
-    SET quantidade = quantidade - v_item.quantidade_enviada, updated_at = NOW()
-    WHERE id = v_estoque_origem.id;
-
-    -- Registrar entrada no destino
-    INSERT INTO estoque_movimentacoes (
-      user_id, item_id, local_id, tipo, quantidade, motivo,
-      estoque_antes, estoque_depois, transferencia_id
-    )
-    VALUES (
-      v_auth_uid, v_item.item_id, v_transferencia.local_destino_id, 
-      'TRANSFERENCIA', v_item.quantidade_enviada,
-      'Entrada por transferência',
-      COALESCE(v_estoque_destino.quantidade, 0), 
-      COALESCE(v_estoque_destino.quantidade, 0) + v_item.quantidade_enviada,
-      p_transferencia_id
-    );
-
-    -- Adicionar no destino
-    IF v_estoque_destino IS NOT NULL THEN
-      UPDATE estoque_por_local
-      SET quantidade = quantidade + v_item.quantidade_enviada, updated_at = NOW()
-      WHERE id = v_estoque_destino.id;
-    ELSE
-      INSERT INTO estoque_por_local (user_id, item_id, local_id, quantidade, quantidade_reservada)
-      VALUES (v_transferencia.user_id, v_item.item_id, v_transferencia.local_destino_id, v_item.quantidade_enviada, 0);
-    END IF;
-  END LOOP;
-
-  -- Atualizar status para concluída
-  UPDATE transferencias 
-  SET status = 'concluida', 
-      concluido_por = v_auth_uid,
-      data_conclusao = NOW(),
-      data_retorno = NOW()
-  WHERE id = p_transferencia_id;
-END;
-$$;
+// Render normal: lista com nomes completos
+<div className="space-y-2">
+  {etapasAtivas.map(etapa => (
+    <div 
+      key={etapa.etapa} 
+      className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 cursor-pointer"
+      style={{ backgroundColor: `${etapa.color}10` }}
+      onClick={() => navigate("/")}
+    >
+      <div className="flex items-center gap-2">
+        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: etapa.color }} />
+        <span className="text-sm truncate max-w-[100px]" title={etapa.etapa}>
+          {etapa.etapa}
+        </span>
+        {etapa.isBottleneck && <AlertTriangle size={12} className="text-amber-500" />}
+      </div>
+      <span className="text-sm font-bold" style={{ color: etapa.color }}>
+        {formatNumber(etapa.pecas)}
+      </span>
+    </div>
+  ))}
+</div>
 ```
 
 ---
 
-### 4. Nova RPC `rpc_cancelar_transferencia`
+### 3. Card "Status de Pedidos"
 
-```sql
-CREATE OR REPLACE FUNCTION public.rpc_cancelar_transferencia(
-  p_transferencia_id uuid,
-  p_user_id uuid
-)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-DECLARE
-  v_transferencia RECORD;
-  v_auth_uid UUID;
-BEGIN
-  v_auth_uid := auth.uid();
-  IF v_auth_uid IS NULL THEN
-    RAISE EXCEPTION 'Usuário não autenticado';
-  END IF;
+**Problema Atual:**
+- Linha 927: `truncate max-w-[50px]` trunca severamente (ex: "PEND...")
+- Grid de 2 colunas não tem espaço suficiente
 
-  SELECT * INTO v_transferencia FROM transferencias WHERE id = p_transferencia_id;
-  
-  IF v_transferencia IS NULL THEN
-    RAISE EXCEPTION 'Transferência não encontrada';
-  END IF;
-  
-  IF v_transferencia.status != 'pendente' THEN
-    RAISE EXCEPTION 'Apenas transferências pendentes podem ser canceladas';
-  END IF;
+**Alterações:**
 
-  -- Atualizar status para cancelada (sem mover estoque)
-  UPDATE transferencias 
-  SET status = 'cancelada',
-      concluido_por = v_auth_uid,
-      data_conclusao = NOW()
-  WHERE id = p_transferencia_id;
-END;
-$$;
+#### 3.1 Permitir Wrap na Legenda
+
+```typescript
+// ANTES (linha 927)
+<span className="text-[10px] text-muted-foreground truncate max-w-[50px]">
+
+// DEPOIS
+<span 
+  className="text-[10px] text-muted-foreground line-clamp-2 break-words min-w-0"
+  title={status.status}
+  aria-label={status.status}
+>
+```
+
+#### 3.2 Expandir Grid para Comportar Textos
+
+```typescript
+// ANTES (linha 918)
+<div className="w-full grid grid-cols-2 gap-x-2 gap-y-0.5">
+
+// DEPOIS - Aumentar gap e permitir mais espaço
+<div className="w-full grid grid-cols-2 gap-x-3 gap-y-1">
+```
+
+#### 3.3 Adicionar Tooltip para Desktop
+
+Envolver cada item da legenda com Tooltip:
+
+```typescript
+<TooltipProvider delayDuration={200}>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <button className="...">
+        {/* conteúdo existente */}
+      </button>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p className="font-medium">{status.status}</p>
+      <p className="text-xs text-muted-foreground">
+        {status.count} pedidos ({percentage}%)
+      </p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+```
+
+#### 3.4 Modal para Mobile (Opcional)
+
+Similar ao Top 5 Modelos, criar modal ao tocar:
+
+```typescript
+const [selectedStatus, setSelectedStatus] = useState<StatusPedido | null>(null);
+
+// onClick do item da legenda:
+onClick={() => {
+  if (isMobile) {
+    setSelectedStatus(status);
+  } else if (isClickable) {
+    navigate(`/pedidos-criados?status=${status.status}`);
+  }
+}}
+
+// Modal:
+<Dialog open={!!selectedStatus} onOpenChange={(open) => !open && setSelectedStatus(null)}>
+  <DialogContent className="max-w-xs">
+    <DialogHeader>
+      <DialogTitle>Status do Pedido</DialogTitle>
+    </DialogHeader>
+    <div className="space-y-3 text-center">
+      <div className="w-4 h-4 rounded-full mx-auto" style={{ backgroundColor: selectedStatus?.color }} />
+      <p className="text-lg font-bold">{selectedStatus?.status}</p>
+      <p className="text-3xl font-bold text-primary">{selectedStatus?.count}</p>
+      <p className="text-sm text-muted-foreground">{percentage}% do total</p>
+      <Button onClick={() => navigate(`/pedidos-criados?status=${selectedStatus?.status}`)}>
+        Ver Pedidos
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
 ```
 
 ---
 
-### 5. Novos Componentes Frontend
+### 4. Resumo dos Arquivos
 
-#### 5.1 `src/components/transferencias/DetalhesTransferenciaModal.tsx`
-
-Modal que exibe:
-- ID/código da transferência
-- Status com badge colorido (Pendente=amarelo, Concluída=verde, Cancelada=vermelho)
-- Origem → Destino
-- Datas (criação, conclusão)
-- Usuário responsável (nome + role via profiles/user_roles)
-- Motivo (Feira/Reposição/Ajuste/Devolução)
-- Observação
-- Tabela de itens: Modelo, Quantidade
-- Ações (editar observação/motivo, Concluir, Cancelar) - somente se pendente
-
-#### 5.2 `src/components/transferencias/FiltrosTransferencias.tsx`
-
-Componente com:
-- Select de período (Hoje, Últimos 7 dias, Últimos 30 dias, Personalizado)
-- Calendário para datas customizadas
-- Select de Origem (todos os locais)
-- Select de Destino (todos os locais)
-- Select de Status (Todos, Pendente, Concluída, Cancelada)
-- Select de Motivo (Todos, Feira, Reposição, Ajuste, Devolução)
-- Botões Aplicar/Limpar
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/Dashboard.tsx` | Importar Tooltip, Dialog; Adicionar estados para modais; Modificar renderização dos 3 cards |
 
 ---
 
-### 6. Modificações em Arquivos Existentes
+### 5. Comportamento Esperado
 
-#### 6.1 `src/hooks/useTransferencias.ts`
-
-Adicionar:
-- Interface `Transferencia` com novos campos: `motivo`, `concluidoPor`, `dataConclusao`
-- Hook `useConcluirTransferencia` (chama RPC)
-- Hook `useCancelarTransferencia` (chama RPC)
-- Hook `useAtualizarTransferencia` (editar observação/motivo)
-- Hook `useTransferenciasFiltradas` (aceita filtros como parâmetro)
-- Modificar `useCriarTransferencia` para enviar `motivo`
-
-#### 6.2 `src/pages/Transferencias.tsx`
-
-- Adicionar estado para filtros
-- Adicionar estado para modal de detalhes
-- Integrar componente `FiltrosTransferencias`
-- Na lista, ao clicar em um card, abrir `DetalhesTransferenciaModal`
-- Mostrar badge de status na lista com cores
-- Mostrar motivo na lista (como linha secundária)
-- Campo obrigatório de motivo no modal "Nova Transferência"
+| Card | Desktop/iPad | Mobile |
+|------|--------------|--------|
+| **Top 5 Modelos** | Nome em até 2 linhas + tooltip no hover | Toque abre modal com detalhes completos |
+| **Produção** | Total no topo + lista de etapas com nomes completos | Mesmo layout, clicável para Kanban |
+| **Status Pedidos** | Legenda com wrap (2 linhas) + tooltip no hover | Toque abre modal com status/quantidade/% |
 
 ---
 
-### 7. Fluxo de Criação Atualizado
+### 6. Acessibilidade
 
-| Passo | Ação | Status |
-|-------|------|--------|
-| 1 | Usuário seleciona origem, destino, itens, motivo | - |
-| 2 | Clica "Criar Transferência" | `pendente` |
-| 3 | Transferência aparece na lista com badge amarelo | `pendente` |
-| 4 | Usuário clica na transferência → abre modal | - |
-| 5a | Clica "Concluir" → valida estoque → move itens | `concluida` |
-| 5b | Clica "Cancelar" → não move nada | `cancelada` |
-
----
-
-### 8. Estrutura Visual
-
-```text
-+------------------------------------------+
-| TRANSFERÊNCIAS                    [+ Nova] |
-+------------------------------------------+
-| Filtros:                                   |
-| [Período v] [Origem v] [Destino v]        |
-| [Status v]  [Motivo v] [Aplicar] [Limpar] |
-+------------------------------------------+
-| Lista:                                     |
-| +--------------------------------------+ |
-| | ● PENDENTE          28/01 às 14:30  | |
-| | Central → Loja Parque               | |
-| | Motivo: Reposição                   | |
-| +--------------------------------------+ |
-| +--------------------------------------+ |
-| | ✓ CONCLUÍDA         27/01 às 10:15  | |
-| | Central → Loja Parque               | |
-| | Motivo: Feira                       | |
-| +--------------------------------------+ |
-+------------------------------------------+
-```
-
----
-
-### 9. Modal de Detalhes
-
-```text
-+--------------------------------------------------+
-| Detalhes da Transferência           [X]          |
-+--------------------------------------------------+
-| ID: 3d8949ab-1693                                |
-| Status: ● PENDENTE                               |
-|                                                  |
-| Origem: Estoque Central                          |
-| Destino: Loja Parque das Feiras                  |
-|                                                  |
-| Criado em: 28/01/2026 às 14:30                   |
-| Por: João Silva (Gerente)                        |
-|                                                  |
-| Motivo: [Reposição v]  (editável se pendente)    |
-| Observação: [_________________] (editável)       |
-|                                                  |
-| +----------------------------------------------+ |
-| | Produto          | Quantidade                | |
-| |------------------+---------------------------| |
-| | Short Saia 164   | 10 peças                  | |
-| | Calça Jeans 285  | 5 peças                   | |
-| +----------------------------------------------+ |
-|                                                  |
-| [Cancelar Transferência]  [Concluir Transferência]|
-+--------------------------------------------------+
-```
-
----
-
-### 10. Resumo dos Arquivos
-
-| Arquivo | Ação |
-|---------|------|
-| Migração SQL | Adicionar colunas e funções RPC |
-| `src/hooks/useTransferencias.ts` | Adicionar hooks para concluir, cancelar, filtrar |
-| `src/pages/Transferencias.tsx` | Integrar filtros, modal de detalhes, campo motivo |
-| `src/components/transferencias/DetalhesTransferenciaModal.tsx` | **Novo** - Modal de detalhes |
-| `src/components/transferencias/FiltrosTransferencias.tsx` | **Novo** - Componente de filtros |
-
----
-
-### 11. Considerações de Segurança
-
-- RPCs usam `SECURITY DEFINER` com validação de `auth.uid()`
-- Apenas o criador ou roles autorizadas podem concluir/cancelar
-- Validação atômica de estoque antes de movimentar
-- RLS policies existentes serão mantidas
-
+- Todos os itens terão `title` e `aria-label` com texto completo
+- Tooltips acessíveis via teclado (Radix)
+- Modais focáveis e fecháveis via ESC
