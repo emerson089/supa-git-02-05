@@ -130,3 +130,25 @@ export function useDeleteExcursao() {
     },
   });
 }
+
+export function useDeleteMultipleExcursoes() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return { deleted: 0 };
+
+      const { error } = await supabase
+        .from('excursoes')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+      return { deleted: ids.length };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['excursoes'] });
+      queryClient.invalidateQueries({ queryKey: ['excursoes-ativas'] });
+    },
+  });
+}
