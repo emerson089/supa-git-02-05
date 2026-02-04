@@ -207,3 +207,124 @@ export function useVendasDesdeContagem(localId: string | null) {
     staleTime: 30_000,
   });
 }
+
+// Hook para buscar detalhes (itens) de uma contagem específica
+export interface ContagemItemDetalhe {
+  id: string;
+  itemId: string;
+  itemNome: string;
+  quantidadeContada: number;
+  precoAplicado: number;
+}
+
+export function useContagemDetalhes(contagemId: string | null) {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['contagem-detalhes', contagemId],
+    queryFn: async (): Promise<ContagemItemDetalhe[]> => {
+      if (!contagemId || !user) return [];
+
+      const { data, error } = await supabase
+        .from('contagem_itens')
+        .select(`
+          id,
+          item_id,
+          quantidade_contada,
+          preco_aplicado,
+          estoque_itens!inner(nome)
+        `)
+        .eq('contagem_id', contagemId)
+        .eq('user_id', user.id)
+        .order('quantidade_contada', { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map(item => ({
+        id: item.id,
+        itemId: item.item_id,
+        itemNome: (item.estoque_itens as any)?.nome || 'Produto',
+        quantidadeContada: item.quantidade_contada,
+        precoAplicado: item.preco_aplicado,
+      }));
+    },
+    enabled: !!contagemId && !!user,
+    staleTime: 60_000,
+  });
+}
+
+// Hook para excluir uma contagem
+export function useExcluirContagem() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (contagemId: string) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // Primeiro, deletar os itens da contagem
+      const { error: itensError } = await supabase
+        .from('contagem_itens')
+        .delete()
+        .eq('contagem_id', contagemId)
+        .eq('user_id', user.id);
+
+      if (itensError) throw itensError;
+
+      // Depois, deletar a contagem
+      const { error: contagemError } = await supabase
+        .from('contagens_estoque')
+        .delete()
+        .eq('id', contagemId)
+        .eq('user_id', user.id);
+
+      if (contagemError) throw contagemError;
+
+      return contagemId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contagens-estoque'] });
+      queryClient.invalidateQueries({ queryKey: ['ultima-contagem'] });
+      queryClient.invalidateQueries({ queryKey: ['vendas-desde-contagem'] });
+      toast.success('Contagem excluída com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Erro ao excluir contagem:', error);
+      toast.error('Erro ao excluir contagem');
+    },
+  });
+}
+
+// Interface para contagem com variação calculada
+export interface ContagemComVariacao extends ContagemEstoque {
+  variacao: {
+    pecas: number;
+    valor: number;
+    diasEntre: number;
+  } | null;
+}
+
+// Função utilitária para calcular variações entre contagens
+export function calcularVariacoes(contagens: ContagemEstoque[]): ContagemComVariacao[] {
+  return contagens.map((contagem, index) => {
+    const anterior = contagens[index + 1]; // próxima na lista é a anterior cronologicamente
+    
+    if (!anterior) {
+      return { ...contagem, variacao: null };
+    }
+
+    const diasEntre = Math.ceil(
+      (new Date(contagem.dataContagem).getTime() - new Date(anterior.dataContagem).getTime()) 
+      / (1000 * 60 * 60 * 24)
+    );
+
+    return {
+      ...contagem,
+      variacao: {
+        pecas: anterior.totalPecas - contagem.totalPecas, // positivo = vendeu
+        valor: anterior.valorTotal - contagem.valorTotal, // positivo = vendeu
+        diasEntre,
+      },
+    };
+  });
+}
