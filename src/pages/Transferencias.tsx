@@ -665,22 +665,20 @@ export default function Transferencias() {
   const renderHistoricoTransferenciasSection = () => <div className="flex flex-col h-full w-full max-w-full overflow-hidden">
       {/* Header do Histórico */}
       <div className={cn("shrink-0", isMobile ? "px-3 pt-2 pb-3" : "pb-4")}>
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <ArrowLeftRight className="h-5 w-5 text-primary shrink-0" />
-            <h2 className="font-semibold truncate text-sm sm:text-base">Transferências</h2>
+        {/* Título + Barra de Filtros Horizontal */}
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-2 shrink-0">
+            <ArrowLeftRight className="h-5 w-5 text-primary" />
+            <h2 className="font-semibold text-sm sm:text-base">Transferências</h2>
           </div>
-          <div className="flex items-center gap-2">
-            <FiltrosTransferencias 
-              filtros={filtros} 
-              onFiltrosChange={setFiltros} 
-              locais={locaisDisponiveis} 
-            />
-            <Button size="sm" onClick={handleOpenModal} className="shrink-0">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline ml-1">Nova</span>
-            </Button>
-          </div>
+          
+          {/* Filtros + Nova - ocupa resto do espaço */}
+          <FiltrosTransferencias 
+            filtros={filtros} 
+            onFiltrosChange={setFiltros} 
+            locais={locaisDisponiveis}
+            onNovaClick={handleOpenModal}
+          />
         </div>
 
         {/* Cards de resumo */}
