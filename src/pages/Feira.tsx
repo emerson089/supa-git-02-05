@@ -313,6 +313,9 @@ export default function Feira() {
     dataSaida: carga.dataSaida,
     dataRetorno: carga.dataRetorno,
     observacoes: carga.observacoes,
+    motivo: null,
+    dataConclusao: null,
+    concluidoPor: null,
     createdAt: carga.createdAt,
     itens: carga.itens.map(item => ({
       id: item.id,
