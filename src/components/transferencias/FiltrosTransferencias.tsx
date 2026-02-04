@@ -13,7 +13,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Badge } from '@/components/ui/badge';
 
 export type MotivoTransferencia = 'feira' | 'reposicao' | 'ajuste' | 'devolucao';
-export type StatusTransferencia = 'pendente' | 'concluida' | 'cancelada';
+export type StatusTransferencia = 'em_andamento' | 'concluida' | 'cancelada';
 
 export interface FiltrosTransferenciasState {
   dataInicio: Date | undefined;
@@ -51,7 +51,7 @@ const MOTIVOS_LABELS: Record<MotivoTransferencia, string> = {
 };
 
 const STATUS_LABELS: Record<StatusTransferencia, string> = {
-  pendente: 'Pendente',
+  em_andamento: 'Pendente',
   concluida: 'Concluída',
   cancelada: 'Cancelada',
 };

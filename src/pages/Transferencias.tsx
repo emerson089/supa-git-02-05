@@ -59,7 +59,7 @@ const MOTIVOS_LABELS: Record<MotivoTransferencia, string> = {
 };
 
 const STATUS_CONFIG: Record<StatusTransferencia, { label: string; icon: typeof Clock; className: string }> = {
-  pendente: { label: 'Pendente', icon: Clock, className: 'bg-amber-100 text-amber-800 border-amber-200' },
+  em_andamento: { label: 'Pendente', icon: Clock, className: 'bg-amber-100 text-amber-800 border-amber-200' },
   concluida: { label: 'Concluída', icon: CheckCircle2, className: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
   cancelada: { label: 'Cancelada', icon: XCircle, className: 'bg-red-100 text-red-800 border-red-200' },
 };
@@ -718,7 +718,7 @@ export default function Transferencias() {
             </div>
           ) : (
             transferencias.map(t => {
-              const statusConfig = STATUS_CONFIG[t.status as StatusTransferencia] || STATUS_CONFIG.pendente;
+              const statusConfig = STATUS_CONFIG[t.status as StatusTransferencia] || STATUS_CONFIG.em_andamento;
               const StatusIcon = statusConfig.icon;
               return (
                 <Card 
