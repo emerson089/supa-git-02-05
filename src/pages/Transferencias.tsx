@@ -448,7 +448,8 @@ export default function Transferencias() {
           itemId: i.itemId,
           quantidade: i.quantidade
         })),
-        observacoes: motivoNovo
+        motivo: motivoNovo,
+        observacoes: undefined,
       });
       toast.success('Transferência criada! Clique nela para concluir.');
       setShowNovaTransferencia(false);
@@ -868,6 +869,22 @@ export default function Transferencias() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Seleção de Motivo */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Motivo *</Label>
+              <Select value={motivoNovo} onValueChange={(v) => setMotivoNovo(v as MotivoTransferencia)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o motivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="reposicao">Reposição</SelectItem>
+                  <SelectItem value="feira">Feira</SelectItem>
+                  <SelectItem value="ajuste">Ajuste</SelectItem>
+                  <SelectItem value="devolucao">Devolução</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Seção: Produtos Disponíveis */}
