@@ -963,7 +963,9 @@ export type Database = {
       }
       transferencias: {
         Row: {
+          concluido_por: string | null
           created_at: string | null
+          data_conclusao: string | null
           data_retorno: string | null
           data_saida: string | null
           deleted_at: string | null
@@ -972,13 +974,16 @@ export type Database = {
           id: string
           local_destino_id: string
           local_origem_id: string
+          motivo: string | null
           observacoes: string | null
           status: string
           tipo: string
           user_id: string
         }
         Insert: {
+          concluido_por?: string | null
           created_at?: string | null
+          data_conclusao?: string | null
           data_retorno?: string | null
           data_saida?: string | null
           deleted_at?: string | null
@@ -987,13 +992,16 @@ export type Database = {
           id?: string
           local_destino_id: string
           local_origem_id: string
+          motivo?: string | null
           observacoes?: string | null
           status?: string
           tipo: string
           user_id: string
         }
         Update: {
+          concluido_por?: string | null
           created_at?: string | null
+          data_conclusao?: string | null
           data_retorno?: string | null
           data_saida?: string | null
           deleted_at?: string | null
@@ -1002,6 +1010,7 @@ export type Database = {
           id?: string
           local_destino_id?: string
           local_origem_id?: string
+          motivo?: string | null
           observacoes?: string | null
           status?: string
           tipo?: string
@@ -1154,6 +1163,14 @@ export type Database = {
           p_nova_quantidade: number
           p_user_id: string
         }
+        Returns: undefined
+      }
+      rpc_cancelar_transferencia: {
+        Args: { p_transferencia_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      rpc_concluir_transferencia: {
+        Args: { p_transferencia_id: string; p_user_id: string }
         Returns: undefined
       }
       rpc_criar_transferencia: {

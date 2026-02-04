@@ -2,15 +2,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
+export type MotivoTransferencia = 'feira' | 'reposicao' | 'ajuste' | 'devolucao';
+export type StatusTransferencia = 'pendente' | 'concluida' | 'cancelada' | 'em_andamento';
+
 export interface Transferencia {
   id: string;
   localOrigemId: string;
   localDestinoId: string;
   tipo: 'transferencia' | 'carga_feira';
-  status: 'em_andamento' | 'concluida' | 'cancelada';
+  status: StatusTransferencia;
   dataSaida: string;
   dataRetorno: string | null;
   observacoes: string | null;
+  motivo: MotivoTransferencia | null;
+  dataConclusao: string | null;
+  concluidoPor: string | null;
   createdAt: string;
 }
 
@@ -38,6 +44,9 @@ interface DbTransferencia {
   data_saida: string;
   data_retorno: string | null;
   observacoes: string | null;
+  motivo: string | null;
+  data_conclusao: string | null;
+  concluido_por: string | null;
   created_at: string;
 }
 
@@ -57,10 +66,13 @@ const mapDbToTransferencia = (db: DbTransferencia): Transferencia => ({
   localOrigemId: db.local_origem_id,
   localDestinoId: db.local_destino_id,
   tipo: db.tipo as 'transferencia' | 'carga_feira',
-  status: db.status as 'em_andamento' | 'concluida' | 'cancelada',
+  status: db.status as StatusTransferencia,
   dataSaida: db.data_saida,
   dataRetorno: db.data_retorno,
   observacoes: db.observacoes,
+  motivo: db.motivo as MotivoTransferencia | null,
+  dataConclusao: db.data_conclusao,
+  concluidoPor: db.concluido_por,
   createdAt: db.created_at,
 });
 
@@ -1025,4 +1037,155 @@ export function useResumoFeira(data?: Date) {
     cargas: cargas || [],
     isLoading,
   };
+}
+
+// Hook para concluir transferência (chama RPC atômica)
+export function useConcluirTransferencia() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ transferenciaId }: { transferenciaId: string }) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const { error } = await supabase.rpc('rpc_concluir_transferencia', {
+        p_transferencia_id: transferenciaId,
+        p_user_id: user.id,
+      });
+
+      if (error) {
+        console.error('[useConcluirTransferencia] Erro RPC:', error);
+        throw new Error(error.message || 'Erro ao concluir transferência');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transferencias'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] === 'estoque-por-local' || 
+           query.queryKey[0] === 'estoque-detalhado-por-local' ||
+           query.queryKey[0] === 'estoque-itens'),
+        refetchType: 'all'
+      });
+      queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
+    },
+  });
+}
+
+// Hook para cancelar transferência (chama RPC)
+export function useCancelarTransferencia() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ transferenciaId }: { transferenciaId: string }) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const { error } = await supabase.rpc('rpc_cancelar_transferencia', {
+        p_transferencia_id: transferenciaId,
+        p_user_id: user.id,
+      });
+
+      if (error) {
+        console.error('[useCancelarTransferencia] Erro RPC:', error);
+        throw new Error(error.message || 'Erro ao cancelar transferência');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transferencias'] });
+    },
+  });
+}
+
+// Hook para atualizar motivo/observação de transferência pendente
+export function useAtualizarTransferencia() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      transferenciaId, 
+      motivo, 
+      observacoes 
+    }: { 
+      transferenciaId: string; 
+      motivo?: string | null;
+      observacoes?: string | null;
+    }) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const updateData: Record<string, unknown> = {};
+      if (motivo !== undefined) updateData.motivo = motivo;
+      if (observacoes !== undefined) updateData.observacoes = observacoes;
+
+      const { error } = await supabase
+        .from('transferencias')
+        .update(updateData)
+        .eq('id', transferenciaId)
+        .eq('status', 'pendente'); // Só permite atualizar se pendente
+
+      if (error) {
+        console.error('[useAtualizarTransferencia] Erro:', error);
+        throw new Error(error.message || 'Erro ao atualizar transferência');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transferencias'] });
+    },
+  });
+}
+
+// Filtros para busca de transferências
+export interface FiltrosTransferencias {
+  dataInicio?: Date;
+  dataFim?: Date;
+  origemId?: string;
+  destinoId?: string;
+  status?: string;
+  motivo?: string;
+}
+
+// Hook para buscar transferências com filtros
+export function useTransferenciasFiltradas(tipo: 'transferencia' | 'carga_feira' = 'transferencia', filtros?: FiltrosTransferencias) {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['transferencias', user?.id, tipo, filtros],
+    queryFn: async () => {
+      if (!user) return [];
+
+      let query = supabase
+        .from('transferencias')
+        .select('*')
+        .eq('tipo', tipo)
+        .order('created_at', { ascending: false });
+
+      // Aplicar filtros
+      if (filtros?.dataInicio) {
+        query = query.gte('created_at', filtros.dataInicio.toISOString());
+      }
+      if (filtros?.dataFim) {
+        query = query.lte('created_at', filtros.dataFim.toISOString());
+      }
+      if (filtros?.origemId) {
+        query = query.eq('local_origem_id', filtros.origemId);
+      }
+      if (filtros?.destinoId) {
+        query = query.eq('local_destino_id', filtros.destinoId);
+      }
+      if (filtros?.status) {
+        query = query.eq('status', filtros.status);
+      }
+      if (filtros?.motivo) {
+        query = query.eq('motivo', filtros.motivo);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      return (data as DbTransferencia[]).map(mapDbToTransferencia);
+    },
+    enabled: !!user,
+  });
 }

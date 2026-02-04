@@ -7,10 +7,11 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { useRole } from '@/contexts/RoleContext';
 import { useDisponivelCentral, useLocais } from '@/hooks/useEstoqueLocais';
-import { useTransferencias, useCriarTransferencia } from '@/hooks/useTransferencias';
+import { useTransferenciasFiltradas, useCriarTransferencia, useTransferenciaItens } from '@/hooks/useTransferencias';
 import { useEstoqueDetalhadoPorLocal, EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
 import { useVendasDesdeContagem } from '@/hooks/useContagensEstoque';
 import { useUserLocations, useHasLocationAccess } from '@/hooks/useUserLocations';
+
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck, History, BarChart3, AlertTriangle } from 'lucide-react';
+import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck, History, BarChart3, AlertTriangle, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PrintEstoqueLocal } from '@/components/estoque/PrintEstoqueLocal';
 import { LotImage } from '@/components/production/LotImage';
@@ -33,11 +34,15 @@ import { EditarPrecoLocalModal } from '@/components/estoque/EditarPrecoLocalModa
 import { NovaContagemModal } from '@/components/estoque/NovaContagemModal';
 import { HistoricoContagensModal } from '@/components/estoque/HistoricoContagensModal';
 import { RelatorioSaidasModal } from '@/components/estoque/RelatorioSaidasModal';
+import { FiltrosTransferencias, FiltrosTransferenciasState, MotivoTransferencia, StatusTransferencia } from '@/components/transferencias/FiltrosTransferencias';
+import { DetalhesTransferenciaModal } from '@/components/transferencias/DetalhesTransferenciaModal';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import type { Transferencia } from '@/hooks/useTransferencias';
+
 interface ItemTransferencia {
   itemId: string;
   nome: string;
@@ -45,6 +50,19 @@ interface ItemTransferencia {
   quantidade: number;
   disponivelOrigem: number;
 }
+
+const MOTIVOS_LABELS: Record<MotivoTransferencia, string> = {
+  feira: 'Feira',
+  reposicao: 'Reposição',
+  ajuste: 'Ajuste',
+  devolucao: 'Devolução',
+};
+
+const STATUS_CONFIG: Record<StatusTransferencia, { label: string; icon: typeof Clock; className: string }> = {
+  pendente: { label: 'Pendente', icon: Clock, className: 'bg-amber-100 text-amber-800 border-amber-200' },
+  concluida: { label: 'Concluída', icon: CheckCircle2, className: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  cancelada: { label: 'Cancelada', icon: XCircle, className: 'bg-red-100 text-red-800 border-red-200' },
+};
 export default function Transferencias() {
   const isMobile = useIsMobile();
   const {
@@ -60,10 +78,27 @@ export default function Transferencias() {
     estoquePorLocal,
     isLoading: isLoadingLocais
   } = useDisponivelCentral();
+  // Estado para filtros de transferência
+  const [filtros, setFiltros] = useState<FiltrosTransferenciasState>({
+    dataInicio: undefined,
+    dataFim: undefined,
+    origemId: '',
+    destinoId: '',
+    status: '',
+    motivo: '',
+  });
+
   const {
     data: transferencias,
     isLoading: isLoadingTransferencias
-  } = useTransferencias('transferencia');
+  } = useTransferenciasFiltradas('transferencia', {
+    dataInicio: filtros.dataInicio,
+    dataFim: filtros.dataFim,
+    origemId: filtros.origemId || undefined,
+    destinoId: filtros.destinoId || undefined,
+    status: filtros.status || undefined,
+    motivo: filtros.motivo || undefined,
+  });
   const criarTransferencia = useCriarTransferencia();
 
   // Hook para obter locais permitidos do usuário
@@ -91,11 +126,56 @@ export default function Transferencias() {
   const [showNovaTransferencia, setShowNovaTransferencia] = useState(false);
   const [origemId, setOrigemId] = useState<string>('');
   const [destinoId, setDestinoId] = useState<string>('');
+  const [motivoNovo, setMotivoNovo] = useState<MotivoTransferencia | ''>('');
   const [itensTransferencia, setItensTransferencia] = useState<ItemTransferencia[]>([]);
   const [searchProdutos, setSearchProdutos] = useState('');
+
+  // Estados para modal de detalhes
+  const [showDetalhesModal, setShowDetalhesModal] = useState(false);
+  const [transferenciaSelecionada, setTransferenciaSelecionada] = useState<Transferencia | null>(null);
+
+  // Buscar itens da transferência selecionada
+  const { data: itensTransferenciaSelecionada = [] } = useTransferenciaItens(transferenciaSelecionada?.id);
+
+  const produtosAcabados = getProdutosAcabados();
+
+  // Mapear itens da transferência selecionada com dados dos produtos
+  const itensDetalhados = useMemo(() => {
+    return itensTransferenciaSelecionada.map(item => {
+      const produto = produtosAcabados.find(p => p.id === item.itemId);
+      return {
+        id: item.id,
+        itemId: item.itemId,
+        itemNome: produto?.nome || 'Produto não encontrado',
+        itemImagemUrl: produto?.imagemUrl || null,
+        quantidadeEnviada: item.quantidadeEnviada,
+      };
+    });
+  }, [itensTransferenciaSelecionada, produtosAcabados]);
+
+  // Dados completos da transferência selecionada para o modal
+  const transferenciaCompleta = useMemo(() => {
+    if (!transferenciaSelecionada) return null;
+    const origemLocal = locais.find(l => l.id === transferenciaSelecionada.localOrigemId);
+    const destinoLocal = locais.find(l => l.id === transferenciaSelecionada.localDestinoId);
+    return {
+      ...transferenciaSelecionada,
+      localOrigemNome: origemLocal?.nome || 'Desconhecido',
+      localDestinoNome: destinoLocal?.nome || 'Desconhecido',
+      concluidoPorNome: null,
+      concluidoPorRole: null,
+      criadorNome: null,
+      criadorRole: null,
+    };
+  }, [transferenciaSelecionada, locais]);
+
+  // Handler para abrir modal de detalhes
+  const handleOpenDetalhes = (t: Transferencia) => {
+    setTransferenciaSelecionada(t);
+    setShowDetalhesModal(true);
+  };
   const [lastAddedItemId, setLastAddedItemId] = useState<string | null>(null);
   const quantidadeInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
-  const produtosAcabados = getProdutosAcabados();
 
   // Encontrar local - para vendedor, usar o primeiro local permitido
   // Prioridade: loja > banca > central
@@ -352,6 +432,10 @@ export default function Transferencias() {
       toast.error('Origem e destino devem ser diferentes');
       return;
     }
+    if (!motivoNovo) {
+      toast.error('Selecione o motivo da transferência');
+      return;
+    }
     if (itensTransferencia.length === 0) {
       toast.error('Adicione ao menos um item');
       return;
@@ -363,13 +447,15 @@ export default function Transferencias() {
         itens: itensTransferencia.map(i => ({
           itemId: i.itemId,
           quantidade: i.quantidade
-        }))
+        })),
+        observacoes: motivoNovo
       });
-      toast.success('Transferência realizada com sucesso!');
+      toast.success('Transferência criada! Clique nela para concluir.');
       setShowNovaTransferencia(false);
       setItensTransferencia([]);
       setOrigemId('');
       setDestinoId('');
+      setMotivoNovo('');
     } catch (error: any) {
       toast.error(error.message || 'Erro ao criar transferência');
     }
@@ -583,10 +669,17 @@ export default function Transferencias() {
             <ArrowLeftRight className="h-5 w-5 text-primary shrink-0" />
             <h2 className="font-semibold truncate text-sm sm:text-base">Transferências</h2>
           </div>
-          <Button size="sm" onClick={handleOpenModal} className="shrink-0">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline ml-1">Nova</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <FiltrosTransferencias 
+              filtros={filtros} 
+              onFiltrosChange={setFiltros} 
+              locais={locaisDisponiveis} 
+            />
+            <Button size="sm" onClick={handleOpenModal} className="shrink-0">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Nova</span>
+            </Button>
+          </div>
         </div>
 
         {/* Cards de resumo */}
@@ -613,25 +706,54 @@ export default function Transferencias() {
       {/* Lista de transferências */}
       <ScrollArea className="flex-1 w-full">
         <div className={cn("space-y-2 w-full", isMobile ? "px-3 pb-4" : "pb-4")}>
-          {!transferencias || transferencias.length === 0 ? <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          {isLoadingTransferencias ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : !transferencias || transferencias.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <ArrowLeftRight className="h-12 w-12 mb-3 opacity-50" />
               <p className="font-medium">Nenhuma transferência</p>
               <p className="text-sm mt-1">Transferências entre locais aparecerão aqui</p>
-            </div> : transferencias.map(t => <Card key={t.id}>
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge variant="outline" className={cn("text-xs", t.status === 'concluida' && "bg-emerald-50 text-emerald-700 border-emerald-200", t.status === 'cancelada' && "bg-red-50 text-red-700 border-red-200")}>
-                      {t.status === 'concluida' ? 'Concluída' : 'Cancelada'}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {format(new Date(t.dataSaida), "dd/MM/yyyy HH:mm", {
-                  locale: ptBR
-                })}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="font-medium truncate">{getLocalNome(t.localOrigemId)}</span>
-                    <ArrowRight size={14} className="text-muted-foreground shrink-0" />
+            </div>
+          ) : (
+            transferencias.map(t => {
+              const statusConfig = STATUS_CONFIG[t.status as StatusTransferencia] || STATUS_CONFIG.pendente;
+              const StatusIcon = statusConfig.icon;
+              return (
+                <Card 
+                  key={t.id} 
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => handleOpenDetalhes(t)}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge variant="outline" className={cn("text-xs gap-1", statusConfig.className)}>
+                        <StatusIcon className="h-3 w-3" />
+                        {statusConfig.label}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(t.createdAt), "dd/MM/yy HH:mm", { locale: ptBR })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-medium truncate">{getLocalNome(t.localOrigemId)}</span>
+                      <ArrowRight size={14} className="text-muted-foreground shrink-0" />
+                      <span className="font-medium truncate">{getLocalNome(t.localDestinoId)}</span>
+                    </div>
+                    {t.motivo && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Motivo: {MOTIVOS_LABELS[t.motivo]}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+        </div>
+      </ScrollArea>
+    </div>;
                     <span className="font-medium truncate">{getLocalNome(t.localDestinoId)}</span>
                   </div>
                 </CardContent>
