@@ -79,6 +79,14 @@ export const ProducaoCSVRowSchema = z.object({
 
 export type ValidatedProducaoCSVRow = z.infer<typeof ProducaoCSVRowSchema>;
 
+// ==================== EXCURSÕES ====================
+export const ExcursaoCSVRowSchema = z.object({
+  nome: z.string().min(1, 'Nome obrigatório').max(255, 'Nome muito longo'),
+  taxa: z.number().min(0, 'Taxa inválida').max(10000, 'Taxa muito alta'),
+});
+
+export type ValidatedExcursaoCSVRow = z.infer<typeof ExcursaoCSVRowSchema>;
+
 // ==================== UTILITY FUNCTIONS ====================
 
 /**
