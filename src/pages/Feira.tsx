@@ -1010,80 +1010,126 @@ export default function Feira() {
             </div>
           </div>
 
-          {/* Header de colunas fixo */}
-          <div className="grid grid-cols-[52px_1fr_44px_64px_64px] gap-2 px-4 py-2.5 border-b bg-muted/30 text-[10px] font-medium text-muted-foreground uppercase tracking-wide sticky top-0 z-10">
-            <span></span>
-            <span>Produto</span>
-            <span className="text-center">Enviado</span>
-            <span className="text-center">Retorno</span>
-            <span className="text-center">Vendido</span>
-          </div>
-
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
-            {itensRetornoFiltrados.length === 0 && buscaRetorno ? <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+            {itensRetornoFiltrados.length === 0 && buscaRetorno ? (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">Nenhum produto encontrado</p>
-              </div> : <div className="divide-y">
+              </div>
+            ) : (
+              <div className="divide-y">
                 {itensRetornoFiltrados.map(item => {
-              const retorno = itensRetorno.find(i => i.itemId === item.itemId);
-              const retornado = retorno?.quantidadeRetornada || 0;
-              const vendido = item.quantidadeEnviada - retornado;
-              const itemWithExtras = item as typeof item & {
-                produtoNome?: string | null;
-                produtoImagem?: string | null;
-              };
-              const inputValue = inputRetornoValues[item.itemId];
-              const campoVazio = inputValue === '' || inputValue === undefined;
-              return <div key={item.id} className="grid grid-cols-[52px_1fr_44px_64px_64px] gap-2 items-center px-4 py-3 hover:bg-muted/20 transition-colors">
-                      {/* Coluna 1: Imagem */}
-                      <div className="w-12 h-12 rounded-xl overflow-hidden bg-muted flex-shrink-0">
-                        <LotImage src={itemWithExtras.produtoImagem} alt={itemWithExtras.produtoNome || 'Produto'} className="w-full h-full object-cover" eager={true} />
+                  const retorno = itensRetorno.find(i => i.itemId === item.itemId);
+                  const retornado = retorno?.quantidadeRetornada || 0;
+                  const vendido = item.quantidadeEnviada - retornado;
+                  const itemWithExtras = item as typeof item & {
+                    produtoNome?: string | null;
+                    produtoImagem?: string | null;
+                  };
+                  const inputValue = inputRetornoValues[item.itemId];
+                  const campoVazio = inputValue === '' || inputValue === undefined;
+                  
+                  // Extrair referência do nome (padrão "Nome - 123")
+                  const nomeCompleto = itemWithExtras.produtoNome || `Item #${item.itemId.slice(0, 8)}`;
+                  const referenciaMatch = nomeCompleto.match(/\s*-\s*(\d+)$/);
+                  const referencia = referenciaMatch ? referenciaMatch[1] : null;
+                  const nomeSemReferencia = referencia 
+                    ? nomeCompleto.replace(/\s*-\s*\d+$/, '').trim()
+                    : nomeCompleto;
+                  
+                  return (
+                    <div key={item.id} className="px-4 py-3 hover:bg-muted/20 transition-colors">
+                      {/* Linha 1: Imagem + Nome/Referência */}
+                      <div className="flex items-start gap-3">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted flex-shrink-0">
+                          <LotImage 
+                            src={itemWithExtras.produtoImagem} 
+                            alt={nomeCompleto} 
+                            className="w-full h-full object-cover" 
+                            eager={true} 
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0 pt-0.5">
+                          <p className="text-sm font-medium leading-tight line-clamp-2">
+                            {nomeSemReferencia}
+                          </p>
+                          {referencia && (
+                            <Badge variant="outline" className="mt-1.5 text-xs px-2 py-0.5">
+                              Ref: {referencia}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       
-                      {/* Coluna 2: Nome do Produto */}
-                      <p className="text-sm font-medium truncate leading-tight">
-                        {itemWithExtras.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
-                      </p>
-                      
-                      {/* Coluna 3: Enviado */}
-                      <span className="text-center text-sm font-medium text-blue-600 dark:text-blue-400">
-                        {item.quantidadeEnviada}
-                      </span>
-                      
-                      {/* Coluna 4: Input Retorno */}
-                      <Input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="—" value={inputRetornoValues[item.itemId] ?? ''} onChange={e => {
-                  const val = e.target.value;
-                  if (val === '' || /^\d+$/.test(val)) {
-                    setInputRetornoValues(prev => ({
-                      ...prev,
-                      [item.itemId]: val
-                    }));
-                    if (val !== '') {
-                      handleUpdateRetorno(item.itemId, parseInt(val, 10));
-                    }
-                  }
-                }} onBlur={() => {
-                  const val = inputRetornoValues[item.itemId];
-                  if (val !== '' && val !== undefined) {
-                    const numVal = parseInt(val, 10);
-                    if (!isNaN(numVal)) {
-                      const clampedVal = Math.max(0, Math.min(item.quantidadeEnviada, numVal));
-                      setInputRetornoValues(prev => ({
-                        ...prev,
-                        [item.itemId]: String(clampedVal)
-                      }));
-                      handleUpdateRetorno(item.itemId, clampedVal);
-                    }
-                  }
-                }} className={cn("w-14 h-9 text-center text-base font-medium rounded-full border-2", campoVazio ? "border-amber-400 bg-white dark:bg-background" : "border-input bg-white dark:bg-background")} />
-                      
-                      {/* Coluna 5: Vendido */}
-                      <span className={cn("inline-flex items-center justify-center h-9 text-sm rounded-full font-medium", campoVazio ? "bg-muted/60 text-muted-foreground" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400")}>
-                        {campoVazio ? '—' : vendido}
-                      </span>
-                    </div>;
-            })}
-              </div>}
+                      {/* Linha 2: Enviado + Retorno + Vendido */}
+                      <div className="flex items-center justify-between gap-3 mt-3 pl-[76px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Env:</span>
+                          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                            {item.quantidadeEnviada}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Ret:</span>
+                          <Input 
+                            type="text" 
+                            inputMode="numeric" 
+                            pattern="[0-9]*" 
+                            placeholder="—" 
+                            value={inputRetornoValues[item.itemId] ?? ''} 
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d+$/.test(val)) {
+                                setInputRetornoValues(prev => ({
+                                  ...prev,
+                                  [item.itemId]: val
+                                }));
+                                if (val !== '') {
+                                  handleUpdateRetorno(item.itemId, parseInt(val, 10));
+                                }
+                              }
+                            }} 
+                            onBlur={() => {
+                              const val = inputRetornoValues[item.itemId];
+                              if (val !== '' && val !== undefined) {
+                                const numVal = parseInt(val, 10);
+                                if (!isNaN(numVal)) {
+                                  const clampedVal = Math.max(0, Math.min(item.quantidadeEnviada, numVal));
+                                  setInputRetornoValues(prev => ({
+                                    ...prev,
+                                    [item.itemId]: String(clampedVal)
+                                  }));
+                                  handleUpdateRetorno(item.itemId, clampedVal);
+                                }
+                              }
+                            }} 
+                            className={cn(
+                              "w-14 h-8 text-center text-base font-medium rounded-full border-2", 
+                              campoVazio 
+                                ? "border-amber-400 bg-white dark:bg-background" 
+                                : "border-input bg-white dark:bg-background"
+                            )} 
+                          />
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Vend:</span>
+                          <span className={cn(
+                            "inline-flex items-center justify-center min-w-[40px] h-8 px-2 text-sm rounded-full font-semibold",
+                            campoVazio 
+                              ? "bg-muted/60 text-muted-foreground" 
+                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                          )}>
+                            {campoVazio ? '—' : vendido}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Footer fixo com resumo */}
