@@ -36,6 +36,7 @@ interface KanbanColumnProps {
   onDeleteCard?: (lot: ProducaoData) => void;
   onManageCosts?: (lot: ProducaoData) => void;
   onOpenChecklist?: (lot: ProducaoData) => void;
+  onOpenHistory?: (lot: ProducaoData) => void;
   onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
   isFirstStage: boolean;
   isLastStage: boolean;
@@ -51,6 +52,7 @@ export function KanbanColumn({
   onDeleteCard,
   onManageCosts,
   onOpenChecklist,
+  onOpenHistory,
   onUpdateProgress,
   isFirstStage, 
   isLastStage 
@@ -120,6 +122,7 @@ export function KanbanColumn({
             onDelete={() => onDeleteCard?.(lot)}
             onManageCosts={() => onManageCosts?.(lot)}
             onOpenChecklist={() => onOpenChecklist?.(lot)}
+            onOpenHistory={() => onOpenHistory?.(lot)}
             onUpdateProgress={onUpdateProgress}
             isFirstStage={isFirstStage}
             isLastStage={isLastStage}

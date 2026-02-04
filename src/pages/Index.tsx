@@ -16,6 +16,7 @@ import { CustosLoteModal } from '@/components/production/CustosLoteModal';
 import { AprontamentoChecklist, isChecklistComplete } from '@/components/production/AprontamentoChecklist';
 import { ImportProducaoCSVModal } from '@/components/production/ImportProducaoCSVModal';
 import { ImportCustosCSVModal } from '@/components/production/ImportCustosCSVModal';
+import { HistoricoProducaoModal } from '@/components/production/HistoricoProducaoModal';
 import ProducaoForm from '@/components/producao/ProducaoForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
@@ -92,6 +93,10 @@ const Index = () => {
   
   // Import custos modal
   const [showImportCustosModal, setShowImportCustosModal] = useState(false);
+  
+  // History modal
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedLoteForHistory, setSelectedLoteForHistory] = useState<ProducaoData | null>(null);
 
   // Fetch data from database
   const fetchData = useCallback(async () => {
@@ -280,6 +285,12 @@ const Index = () => {
   const handleManageCosts = (lot: ProducaoData) => {
     setSelectedLoteForCustos(lot);
     setShowCustosModal(true);
+  };
+
+  // Handle open history
+  const handleOpenHistory = (lot: ProducaoData) => {
+    setSelectedLoteForHistory(lot);
+    setShowHistoryModal(true);
   };
 
   // Handle new lot
@@ -617,6 +628,7 @@ const Index = () => {
                 onDeleteCard={handleDeleteCard}
                 onManageCosts={handleManageCosts}
                 onOpenChecklist={handleOpenChecklist}
+                onOpenHistory={handleOpenHistory}
                 onUpdateProgress={handleUpdateProgress}
               />
             ) : (
@@ -628,6 +640,7 @@ const Index = () => {
                 onDeleteCard={handleDeleteCard}
                 onManageCosts={handleManageCosts}
                 onOpenChecklist={handleOpenChecklist}
+                onOpenHistory={handleOpenHistory}
                 onUpdateProgress={handleUpdateProgress}
                 filtros={filtros}
               />
@@ -692,6 +705,16 @@ const Index = () => {
         open={showImportCustosModal}
         onOpenChange={setShowImportCustosModal}
         onSuccess={fetchData}
+      />
+
+      {/* History Modal */}
+      <HistoricoProducaoModal
+        open={showHistoryModal}
+        onOpenChange={(open) => {
+          setShowHistoryModal(open);
+          if (!open) setSelectedLoteForHistory(null);
+        }}
+        lot={selectedLoteForHistory}
       />
       
       {/* Bottom Navigation for Mobile */}
