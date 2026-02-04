@@ -1,141 +1,97 @@
 
 
-## Plano: Melhorias no Modal "Registrar Retorno" da Feira
+## Plano: Ajustar PDF - Preço Sempre Visível, Ocultar Apenas Total
 
-### Problemas Identificados
+### Novo Comportamento
 
-Analisando o código do modal em `src/pages/Feira.tsx` (linhas 986-1120):
+| Modo | Tabela | Resumo |
+|------|--------|--------|
+| **Padrão** | Foto, Produto, Cód, Qtd, Preço | `8 modelos \| 636 peças \| R$ 18.710,00` |
+| **Ocultar valores** | Foto, Produto, Cód, Qtd, **Preço** ✅ | `8 modelos \| 636 peças` (sem total) |
 
-1. **Nomes dos produtos truncados**: O grid atual usa `truncate` (CSS) que corta o texto com "..."
-2. **Referência não exibida**: A referência (código numérico após "-") existe no nome mas não é destacada
-3. **Foto pequena no mobile**: A imagem está com `w-12 h-12` (48px), que é pequeno para tela touch
+### Mudanças em `src/utils/generateCargaPDF.ts`
 
-### Solução Proposta
+#### 1. Remover Subtotal da tabela (sempre)
 
-#### 1. Novo Layout de Grid - Mobile
+A tabela terá **sempre 5 colunas**: Foto, Produto, Cód, Qtd, Preço
 
-Mudar de layout horizontal (uma linha) para layout com **2 linhas por produto**:
-
-| Atual (horizontal) | Proposto (2 linhas) |
-|-------------------|---------------------|
-| `[Foto 48px][Nome truncado][Env][Ret][Vend]` | **Linha 1:** `[Foto 64px][Nome completo + Ref]` |
-| Nome cortado, difícil identificar | **Linha 2:** `[Env][Ret][Vend] alinhado abaixo` |
-
-#### 2. Exibir Nome Completo + Referência em Destaque
-
-- **Nome do modelo**: Exibir em até 2 linhas (`line-clamp-2`)
-- **Referência**: Extrair do nome (padrão "Nome - 170") e mostrar como Badge separado
-
-Exemplo:
-```
-┌──────────────────────────────────────────┐
-│ [FOTO]  Short Alfaiataria com         │
-│  64x64  fechamento zíper   [Ref: 385]   │
-├──────────────────────────────────────────┤
-│      Enviado: 60  │ Ret: [___] │ V: 60  │
-└──────────────────────────────────────────┘
-```
-
-#### 3. Aumentar Foto no Mobile
-
-- **De**: `w-12 h-12` (48px)
-- **Para**: `w-16 h-16` (64px)
-
-### Alterações Técnicas
-
-#### Arquivo: `src/pages/Feira.tsx`
-
-**1. Criar função utilitária para extrair referência** (replicar padrão existente):
 ```typescript
-function extrairReferencia(nome: string): string | null {
-  const match = nome.match(/\s*-\s*(\d+)$/);
-  return match ? match[1] : null;
+// Linha ~245-260: Remover lógica condicional de colunas
+tableData.push([
+  { content: '', styles: { cellWidth: 16 } },  // Foto
+  { content: nome... },                         // Produto
+  { content: codigo... },                       // Código
+  { content: String(qtd)... },                  // Qtd
+  { content: formatCurrency(preco)... },        // Preço (SEMPRE)
+]);
+```
+
+#### 2. Cabeçalho fixo (sem condicional)
+
+```typescript
+// Linha ~283
+const tableHeaders = [['', 'Produto', 'Cód', 'Qtd', 'Preço']];
+```
+
+#### 3. columnStyles fixo (sem condicional)
+
+```typescript
+// Linhas ~266-279
+const columnStyles = {
+  0: { cellWidth: 16, halign: 'center' as const },  // Foto
+  1: { cellWidth: 'auto' as const },                 // Produto
+  2: { cellWidth: 16, halign: 'center' as const },  // Código
+  3: { cellWidth: 14, halign: 'center' as const },  // Qtd
+  4: { cellWidth: 22, halign: 'right' as const },   // Preço
+};
+```
+
+#### 4. hideFinancials afeta APENAS o resumo (linhas ~181-195)
+
+```typescript
+// Resumo - hideFinancials controla apenas o valor total
+if (hideFinancials) {
+  const resumoText = `${totais.totalItens} modelos  |  ${totais.totalPecas} peças`;
+  doc.text(resumoText, margin + 25, yPos + 10);
+} else {
+  const resumoText = `${totais.totalItens} modelos  |  ${totais.totalPecas} peças  |  `;
+  doc.text(resumoText, margin + 25, yPos + 10);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...primaryColor);
+  doc.text(formatCurrency(totais.valorTotal), margin + 25 + doc.getTextWidth(resumoText), yPos + 10);
 }
 ```
 
-**2. Alterar grid para layout 2 linhas no mobile**:
+### Resultado Visual
 
-De:
-```typescript
-grid-cols-[52px_1fr_44px_64px_64px]
+**Tabela (SEMPRE igual):**
+```
+┌──────┬──────────────────────────┬──────┬─────┬──────────┐
+│      │ Produto                  │ Cód  │ Qtd │  Preço   │
+├──────┼──────────────────────────┼──────┼─────┼──────────┤
+│[foto]│ Short cinto encapado...  │ 124  │ 108 │ R$ 29,90 │
+│[foto]│ Calça Alfaiataria...     │ 280  │  30 │ R$ 49,90 │
+└──────┴──────────────────────────┴──────┴─────┴──────────┘
 ```
 
-Para:
-```typescript
-// Mobile: 2 linhas verticais
-// Desktop: manter horizontal
-```
-
-**3. Código JSX proposto para cada item**:
-```tsx
-// Linha 1: Imagem + Nome/Referência
-<div className="flex items-start gap-3">
-  <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted flex-shrink-0">
-    <LotImage src={...} alt={...} eager />
-  </div>
-  <div className="flex-1 min-w-0">
-    <p className="text-sm font-medium leading-tight line-clamp-2">
-      {nomesSemReferencia}
-    </p>
-    {referencia && (
-      <Badge variant="outline" className="mt-1 text-xs">
-        Ref: {referencia}
-      </Badge>
-    )}
-  </div>
-</div>
-
-// Linha 2: Enviado + Retorno + Vendido
-<div className="flex items-center justify-between gap-2 mt-2">
-  <span>Enviado: <strong>{quantidadeEnviada}</strong></span>
-  <Input ... /> {/* Retorno */}
-  <span>Vendido: <strong>{vendido}</strong></span>
-</div>
-```
-
-### Resultado Visual Esperado
-
+**Resumo (padrão):**
 ```
 ┌────────────────────────────────────────────────────────┐
-│ 📦 Registrar Retorno                              ✕   │
-├────────────────────────────────────────────────────────┤
-│ 8 de 8 produto(s)      [🔍 Buscar modelo...]          │
-├────────────────────────────────────────────────────────┤
-│ ┌──────────────────────────────────────────────────┐  │
-│ │ ┌────┐ Short cinto encapado                      │  │
-│ │ │    │ sarja com bordado     [Ref: 124]          │  │
-│ │ │64px│                                           │  │
-│ │ └────┘                                           │  │
-│ │ Enviado: 108    [Retorno: ___]    Vendido: 108   │  │
-│ └──────────────────────────────────────────────────┘  │
-│                                                        │
-│ ┌──────────────────────────────────────────────────┐  │
-│ │ ┌────┐ Calça Alfaiataria Modelagem              │  │
-│ │ │    │ reta cintura alta     [Ref: 280]          │  │
-│ │ │64px│                                           │  │
-│ │ └────┘                                           │  │
-│ │ Enviado: 30     [Retorno: ___]    Vendido: 30    │  │
-│ └──────────────────────────────────────────────────┘  │
-├────────────────────────────────────────────────────────┤
-│   8 item(s) pendente(s) de preenchimento              │
-│   Enviado: 636  Retorno: 0  Vendido: 636              │
-│  [  Cancelar  ]           [  ✓ Confirmar  ]           │
+│ RESUMO: 8 modelos  |  636 peças  |  R$ 18.710,00      │
 └────────────────────────────────────────────────────────┘
 ```
 
-### Resumo das Mudanças
-
-| Item | Antes | Depois |
-|------|-------|--------|
-| **Tamanho da foto** | 48x48px | 64x64px |
-| **Nome do produto** | 1 linha truncada | 2 linhas visíveis |
-| **Referência** | Escondida no nome | Badge destacado |
-| **Layout** | 1 linha horizontal | 2 linhas (nome/valores) |
-| **Identificação** | Difícil | Fácil e rápida |
+**Resumo (ocultar valores):**
+```
+┌────────────────────────────────────────────────────────┐
+│ RESUMO: 8 modelos  |  636 peças                       │
+└────────────────────────────────────────────────────────┘
+```
 
 ### Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/Feira.tsx` | Refatorar layout do modal de retorno (linhas 1013-1086) |
+| `src/utils/generateCargaPDF.ts` | Remover Subtotal, manter Preço sempre, hideFinancials só no resumo |
 
