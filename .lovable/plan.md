@@ -1,93 +1,126 @@
 
-
-## Plano: Corrigir Importação CSV + Botão Excluir Tudo
+## Plano: Corrigir Card de Produção no Dashboard
 
 ### Problemas Identificados
 
-1. **Separador errado**: O parser usa `;` mas o CSV usa `,`
-2. **Campos com aspas**: `"Estrela Dalva, setor laranja"` e `"10,00"` não são tratados
-3. **Falta seleção em massa**: Não há como excluir todas as excursões de uma vez
-
-### Solução
-
-#### 1. Corrigir Parser CSV (`useExcursoesBatchImport.ts`)
-
-Implementar um parser CSV robusto que:
-- Detecta automaticamente o separador (`,` ou `;`)
-- Trata campos entre aspas corretamente
-- Processa valores como `"10,00"` → 10.00
-
-```text
-Antes:  "estrela Dalva, Setor Laranja, Vaga 44","r$ 10,00" → Nome: ??   Taxa: ??
-Depois: "estrela Dalva, Setor Laranja, Vaga 44","10,00"    → Nome: Estrela Dalva   Taxa: 10.00
+#### 1. Filtro de Período Incorreto (Principal)
+A query de produção no Dashboard filtra por `created_date`:
+```typescript
+.gte("created_date", startDate)
+.lte("created_date", endDate)
 ```
 
-#### 2. Adicionar Botão "Excluir Tudo" (`ConfigExcursoes.tsx`)
+**Resultado**: Mostra apenas lotes **criados** no período selecionado (8 peças em fevereiro), quando deveria mostrar **todos os lotes ativos** (1.999 peças em 5 etapas).
 
-- Checkbox "Selecionar Tudo" no topo da lista
-- Modal de confirmação para exclusão em massa
-- Hook `useDeleteAllExcursoes` para excluir em lote
+| Estado | Lotes | Peças |
+|--------|-------|-------|
+| Mostrado | 1 | 8 |
+| Real | 13 | 1.999 |
 
-### Mudanças em Arquivos
+#### 2. Etapas Desatualizadas
+O mapeamento no Dashboard (`ETAPA_ORDER` e `ETAPA_COLORS`) está incompleto:
+
+| Etapas no Banco | ETAPA_ORDER | Status |
+|-----------------|-------------|--------|
+| Corte | Corte | OK |
+| Costura/Facção | Costura/Facção | OK |
+| **Travete** | - | Faltando |
+| **Destroyed** | - | Faltando |
+| Lavanderia | Lavanderia | OK |
+| **Limpado** | - | Faltando |
+| Aprontamento | Aprontamento | OK |
+| **Vendas** | - | Faltando |
+| - | Acabamento | Não existe |
+| - | Concluído | Não existe |
+
+#### 3. Cores Faltando
+Etapas como `Travete`, `Destroyed`, `Limpado`, `Vendas` usam cor fallback (`muted`) em vez de cores distintas.
+
+### Solução Proposta
+
+#### 1. Remover Filtro de Período da Produção
+
+**De:**
+```typescript
+// Produção atual (com filtro de período)
+supabase
+  .from("producao")
+  .select("processo_atual, quantidade, created_date")
+  .eq("user_id", user.id)
+  .gte("created_date", startDate)
+  .lte("created_date", endDate),
+```
+
+**Para:**
+```typescript
+// Produção atual (TODOS os lotes ativos)
+supabase
+  .from("producao")
+  .select("processo_atual, quantidade")
+  .eq("user_id", user.id),
+```
+
+Isso alinha o Dashboard com o comportamento do Kanban que já usa `useProducaoContagens` sem filtro de período.
+
+#### 2. Atualizar Lista de Etapas
+
+```typescript
+const ETAPA_ORDER: string[] = [
+  "Corte",
+  "Costura/Facção",
+  "Travete",
+  "Destroyed",
+  "Lavanderia",
+  "Limpado",
+  "Aprontamento",
+  "Vendas",
+];
+```
+
+#### 3. Adicionar Cores para Novas Etapas
+
+```typescript
+const ETAPA_COLORS: Record<string, string> = {
+  "Corte": "hsl(var(--stage-corte))",
+  "Costura/Facção": "hsl(var(--stage-costura))",
+  "Travete": "#6366f1",           // Indigo
+  "Destroyed": "#f97316",          // Orange
+  "Lavanderia": "hsl(var(--stage-lavanderia))",
+  "Limpado": "#14b8a6",            // Teal
+  "Aprontamento": "hsl(var(--stage-acabamento))",
+  "Vendas": "hsl(var(--stage-estoque))",
+};
+```
+
+### Resultado Esperado
+
+```text
+┌─────────────────────────────────────────────┐
+│ Produção                      Ver Kanban >  │
+│ Peças por etapa                             │
+├─────────────────────────────────────────────┤
+│              1.999 peças                    │
+│                                             │
+│ ● Lavanderia                          708   │
+│ ● Corte                               458   │
+│ ● Aprontamento                        336   │
+│ ● Vendas                              251   │
+│ ● Costura/Facção                      246   │
+└─────────────────────────────────────────────┘
+```
+
+### Detalhes Técnicos
+
+#### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useExcursoesBatchImport.ts` | Corrigir parser CSV para usar vírgula e tratar aspas |
-| `src/hooks/useExcursoes.ts` | Adicionar hook `useDeleteAllExcursoes` |
-| `src/pages/ConfigExcursoes.tsx` | Adicionar checkbox + modal de exclusão em massa |
+| `src/hooks/useDashboardData.ts` | Remover filtro de período na query de produção; Atualizar `ETAPA_ORDER` e `ETAPA_COLORS` |
 
-### Interface Atualizada
+#### Impacto nos KPIs
 
-```text
-┌────────────────────────────────────────────────────────────┐
-│ EXCURSÕES                                                   │
-│ Gerencie as excursões e suas taxas de envio                │
-│                                                             │
-│ [ ] Selecionar Tudo (45)    [🗑️ Excluir Selecionadas]      │
-│                                                             │
-│ ┌────────────────────────────────────────────────────────┐ │
-│ │ [✓] 🚌 Estrela Dalva, Setor Laranja, Vaga 44           │ │
-│ │     Taxa: R$ 10,00                        [ON] ✏️ 🗑️   │ │
-│ └────────────────────────────────────────────────────────┘ │
-│                                                             │
-│ ┌────────────────────────────────────────────────────────┐ │
-│ │ [✓] 🚌 Cabanas Setor Verde                              │ │
-│ │     Taxa: R$ 10,00                        [ON] ✏️ 🗑️   │ │
-│ └────────────────────────────────────────────────────────┘ │
-└────────────────────────────────────────────────────────────┘
-```
+O KPI "Produção Ativa" no cabeçalho também será afetado positivamente — mostrará o total real de peças em produção (1.999) em vez de apenas as do período.
 
-### Novo Parser CSV
+#### Comparativo YoY
 
-```typescript
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  result.push(current.trim());
-  
-  return result;
-}
-```
-
-### Exemplo de Resultado Corrigido
-
-| CSV Original | Nome Extraído | Taxa |
-|--------------|---------------|------|
-| `Cabanas turismo,"10,00"` | Cabanas Turismo | R$ 10,00 |
-| `"Estrela Dalva, setor laranja, vaga 44","10,00"` | Estrela Dalva, Setor Laranja, Vaga 44 | R$ 10,00 |
-| `Dege tur,"5,00"` | Dege Tur | R$ 5,00 |
-
+A query de comparação YoY para produção pode continuar com filtro de período para comparar produção **iniciada** no mesmo período do ano passado, se desejado. Mas o card de etapas mostrará sempre a situação atual real.
