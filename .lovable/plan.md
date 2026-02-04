@@ -1,133 +1,154 @@
 
+## Plano: Melhorias no Calendário de Seleção de Datas
 
-## Plano: Atualização Automática em Tempo Real (Produção)
+### Problemas Identificados
 
-### Situação Atual
+1. **Nome do mês em inglês**: O calendário está mostrando "February 2026" em vez de "Fevereiro 2026"
+2. **Calendário não abre no mês correto**: Quando uma data já está selecionada, o calendário deveria abrir mostrando o mês/ano dessa data, não o mês atual
+3. **Experiência de seleção**: A navegação entre meses pode ser melhorada
 
-1. **Sem realtime na produção**: As tabelas `producao` e `producao_log` não têm canal de realtime configurado
-2. **Dados estáticos**: Para ver mudanças, é necessário recarregar a página manualmente
-3. **Modal de histórico**: Também não atualiza automaticamente se outro usuário mover o lote
+---
 
-### Estratégia de Economia de Créditos
+### Solução Proposta
 
-Vou aplicar a mesma estratégia já utilizada no módulo de Estoque (`useRealtimeEstoque`):
+#### 1. Adicionar Locale Português (ptBR)
 
-| Técnica | Descrição |
-|---------|-----------|
-| **Invalidação Granular** | Em vez de refetch de tudo, invalida apenas queries ativas/montadas |
-| **refetchType: 'active'** | Só recarrega dados de componentes visíveis na tela |
-| **Filtro por evento** | UPDATE invalida menos que INSERT/DELETE |
-| **Canal único** | Um único canal para ambas as tabelas (producao + producao_log) |
+O projeto já usa `date-fns/locale` com `ptBR` em outros lugares (Dashboard, FiltroPeriodo, FiltrosTransferencias). Falta apenas adicionar nas páginas de Pedidos.
 
-### Alterações Técnicas
+**Mudanças necessárias:**
+- Adicionar `locale={ptBR}` ao componente Calendar
+- Isso traduz automaticamente:
+  - Nomes dos meses: "February" → "Fevereiro"
+  - Dias da semana: "Su, Mo, Tu..." → "Dom, Seg, Ter..."
 
-#### 1. Novo Hook: `src/hooks/useRealtimeProducao.ts`
+#### 2. Usar `defaultMonth` para Abrir no Mês Correto
 
-Criar um hook global (similar ao `useRealtimeEstoque`) que:
-- Escuta mudanças em `producao` (movimentos de lotes entre etapas)
-- Escuta mudanças em `producao_log` (novos registros de histórico)
-- Invalida queries de forma inteligente baseado no tipo de evento:
+O componente Calendar do react-day-picker aceita a prop `defaultMonth` que define qual mês será exibido inicialmente:
 
 ```typescript
-// Para eventos UPDATE (mais comum - mover lote)
-if (payload.eventType === 'UPDATE') {
-  queryClient.invalidateQueries({ 
-    queryKey: ['producao-etapa'],
-    refetchType: 'active' // Só colunas visíveis!
-  });
-  queryClient.invalidateQueries({ 
-    queryKey: ['producao-contagens'],
-    refetchType: 'active'
-  });
-}
-
-// Para INSERT em producao_log (histórico)
-if (payload.table === 'producao_log' && payload.eventType === 'INSERT') {
-  const producaoId = payload.new?.producao_id;
-  if (producaoId) {
-    // Invalida apenas o log daquele lote específico
-    queryClient.invalidateQueries({ 
-      queryKey: ['producao-logs-tempo', producaoId],
-      refetchType: 'active'
-    });
-  }
-}
+<Calendar
+  mode="single"
+  selected={startDate}
+  onSelect={setStartDate}
+  defaultMonth={startDate}  // Abre no mês da data selecionada
+  locale={ptBR}
+  initialFocus
+/>
 ```
 
-#### 2. Habilitar Realtime nas Tabelas (Migração SQL)
+---
 
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE public.producao;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.producao_log;
-```
-
-#### 3. Montar Hook no App
-
-Em `src/pages/Index.tsx` (ou no componente de produção), chamar o hook para iniciar a escuta:
-
-```typescript
-// No início do componente Index
-useRealtimeProducao(); // Inicia escuta realtime
-```
-
-### Comportamento Esperado
-
-| Cenário | O que acontece |
-|---------|----------------|
-| **Usuário A move lote** | Usuário B vê lote mudar de coluna automaticamente |
-| **Novo lote criado** | Aparece na coluna correta sem reload |
-| **Modal histórico aberto** | Atualiza timeline se houver nova movimentação |
-| **Tela em segundo plano** | Não consome créditos (refetchType: 'active') |
-
-### Arquivos a Criar/Modificar
+### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useRealtimeProducao.ts` | **Novo** - Hook de realtime para produção |
-| `src/pages/Index.tsx` | Montar o hook `useRealtimeProducao()` |
-| Migração SQL | Habilitar realtime nas tabelas |
+| `src/pages/PedidosCriados.tsx` | Adicionar `locale={ptBR}` e `defaultMonth` aos 2 calendários (Início e Fim) |
+| `src/components/pedidos/MobileFiltersSheet.tsx` | Adicionar `locale={ptBR}` e `defaultMonth` aos 2 calendários (Início e Fim) |
 
-### Estimativa de Economia
+---
 
-Comparado a polling a cada 5 segundos:
-- **Polling**: ~720 queries/hora por usuário
-- **Realtime com invalidação granular**: ~10-50 queries/hora (apenas quando há mudanças reais)
-- **Economia**: ~95%+ menos queries
+### Alterações Detalhadas
 
-### Layout do Fluxo
+#### Arquivo: `src/pages/PedidosCriados.tsx`
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Supabase Realtime                            │
-│                                                                 │
-│   producao         producao_log                                 │
-│      │                  │                                       │
-│      └────────┬─────────┘                                       │
-│               │                                                 │
-│               ▼                                                 │
-│   ┌─────────────────────────┐                                   │
-│   │ useRealtimeProducao()   │                                   │
-│   │ (Canal único)           │                                   │
-│   └───────────┬─────────────┘                                   │
-│               │                                                 │
-│               ▼                                                 │
-│   ┌─────────────────────────┐                                   │
-│   │ QueryClient.invalidate  │                                   │
-│   │ (refetchType: 'active') │                                   │
-│   └───────────┬─────────────┘                                   │
-│               │                                                 │
-│     ┌─────────┼─────────┬──────────────┐                        │
-│     ▼         ▼         ▼              ▼                        │
-│ [Contagens] [Colunas] [Cards]   [Modal Histórico]               │
-│  visíveis   visíveis                                            │
-└─────────────────────────────────────────────────────────────────┘
+**Linhas 951-966 - Calendários desktop:**
+
+Antes:
+```typescript
+<Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus className="pointer-events-auto" />
 ```
 
-### Resultado Esperado
+Depois:
+```typescript
+<Calendar 
+  mode="single" 
+  selected={startDate} 
+  onSelect={setStartDate} 
+  defaultMonth={startDate}
+  locale={ptBR}
+  initialFocus 
+  className="pointer-events-auto" 
+/>
+```
 
-1. Lotes movem entre colunas automaticamente em tempo real
-2. Modal de histórico atualiza se aberto durante uma movimentação
-3. Contagens nas colunas atualizam sem reload
-4. Economia máxima de créditos (só refetch do que está visível)
-5. Nenhum polling - conexão WebSocket eficiente
+**Importação necessária:**
+```typescript
+import { ptBR } from 'date-fns/locale';
+```
+(Esta importação já existe na linha 34 do arquivo)
 
+---
+
+#### Arquivo: `src/components/pedidos/MobileFiltersSheet.tsx`
+
+**Linhas 225-251 - Calendários mobile:**
+
+Antes:
+```typescript
+<Calendar
+  mode="single"
+  selected={startDate}
+  onSelect={onStartDateChange}
+  initialFocus
+  className="pointer-events-auto"
+/>
+```
+
+Depois:
+```typescript
+<Calendar
+  mode="single"
+  selected={startDate}
+  onSelect={onStartDateChange}
+  defaultMonth={startDate}
+  locale={ptBR}
+  initialFocus
+  className="pointer-events-auto"
+/>
+```
+
+**Importação necessária:**
+```typescript
+import { ptBR } from 'date-fns/locale';
+```
+
+---
+
+### Resultado Visual Esperado
+
+**Antes:**
+```
+┌────────────────────────┐
+│  <   February 2026   > │
+│  Su Mo Tu We Th Fr Sa  │
+│  1  2  3  4  5  6  7   │
+└────────────────────────┘
+```
+
+**Depois:**
+```
+┌────────────────────────┐
+│  <   Fevereiro 2026  > │
+│  Dom Seg Ter Qua Qui... │
+│  1   2   3   4   5...   │
+└────────────────────────┘
+```
+
+---
+
+### Comportamento de Navegação
+
+| Cenário | Comportamento |
+|---------|--------------|
+| Data selecionada: 15/02/2026 | Calendário abre em Fevereiro 2026 |
+| Data selecionada: 10/01/2026 | Calendário abre em Janeiro 2026 |
+| Nenhuma data selecionada | Calendário abre no mês atual |
+
+---
+
+### Resumo das Mudanças
+
+1. **2 arquivos modificados**
+2. **1 importação adicionada** (MobileFiltersSheet.tsx)
+3. **4 props adicionadas** (locale + defaultMonth em 2 lugares)
+4. **Zero alterações no componente Calendar base** - apenas uso correto das props existentes
