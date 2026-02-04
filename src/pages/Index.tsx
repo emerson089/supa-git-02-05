@@ -24,12 +24,15 @@ import { useEstoque } from '@/contexts/EstoqueContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useResponsaveisUnicos, FiltrosProducao } from '@/hooks/useProducaoPorEtapa';
+import { useRealtimeProducao } from '@/hooks/useRealtimeProducao';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import { getSignedUrl, getImageAsBase64 } from '@/utils/imageUtils';
 
 const Index = () => {
+  // Iniciar escuta realtime para produção
+  useRealtimeProducao();
   const { integrarProducao } = useEstoque();
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [lots, setLots] = useState<ProducaoData[]>([]);
