@@ -1,129 +1,145 @@
 
 
-## Plano: Devolver Peças ao Estoque ao Excluir Pedido
+## Plano: Corrigir Erro de Constraint na Transferência
 
 ### Problema Identificado
 
-Atualmente, ao excluir um pedido criado:
-- A função `handleDelete` simplesmente remove o pedido do banco
-- Os itens são deletados via CASCADE
-- **As quantidades NÃO são devolvidas ao estoque**
+O modal de transferência permite texto livre no campo "Motivo", mas a tabela `transferencias` tem um CHECK constraint que só permite:
+- `NULL`
+- `'feira'`
+- `'reposicao'`
+- `'ajuste'`
+- `'devolucao'`
 
-Isso causa uma perda de rastreabilidade do estoque, pois as peças que estavam "vendidas" desaparecem sem voltar ao inventário.
-
----
-
-### Solução Proposta
-
-Modificar o fluxo de exclusão para:
-1. Buscar o pedido completo com seus itens **antes** de excluir
-2. Para cada item, localizar o produto no estoque e adicionar a quantidade de volta
-3. Registrar movimentação de estorno (opcional, para auditoria)
-4. Então excluir o pedido
+Quando o usuário digita "envio loja", a RPC falha com `transferencias_motivo_check`.
 
 ---
 
-### Alterações Técnicas
+### Solução
 
-#### 1. Arquivo: `src/pages/PedidosCriados.tsx`
+Separar os campos em:
+1. **Motivo** (obrigatório) - Dropdown com valores válidos
+2. **Observações** (opcional) - Campo de texto livre
 
-**Modificar a função `handleDelete` (linhas 392-398):**
+---
 
-```typescript
-// ANTES
-const handleDelete = () => {
-  if (deleteId) {
-    removePedido(deleteId);
-    setDeleteId(null);
-    toast.success('Pedido excluído com sucesso!');
-  }
-};
+### Alterações
 
-// DEPOIS
-const handleDelete = async () => {
-  if (!deleteId) return;
-  
-  try {
-    // Buscar o pedido completo com itens
-    const pedido = getPedidoById(deleteId);
-    
-    // Se encontrou o pedido e não foi estornado ainda, devolver ao estoque
-    if (pedido && !pedido.estornoRealizado) {
-      const pecasDevolvidas = estornarEstoque(pedido);
-      
-      if (pecasDevolvidas > 0) {
-        // Aguardar um tick para garantir que as atualizações de estoque foram processadas
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
-    
-    // Excluir o pedido
-    removePedido(deleteId);
-    setDeleteId(null);
-    
-    const mensagem = pedido && !pedido.estornoRealizado && pedido.totalPecas > 0
-      ? `Pedido excluído! ${pedido.totalPecas} peças retornaram ao estoque.`
-      : 'Pedido excluído com sucesso!';
-    
-    toast.success(mensagem);
-  } catch (error) {
-    console.error('Erro ao excluir pedido:', error);
-    toast.error('Erro ao excluir pedido');
-    setDeleteId(null);
-  }
-};
+#### 1. Atualizar RPC `rpc_criar_transferencia`
+
+Adicionar parâmetro `p_observacoes` e incluir no INSERT:
+
+```sql
+-- Atualizar função para incluir observações
+CREATE OR REPLACE FUNCTION public.rpc_criar_transferencia(
+  p_origem_local_id uuid, 
+  p_destino_local_id uuid, 
+  p_itens jsonb, 
+  p_user_id uuid, 
+  p_motivo text DEFAULT NULL::text,
+  p_observacoes text DEFAULT NULL::text  -- NOVO parâmetro
+)
+-- ...
+INSERT INTO transferencias (
+  user_id, local_origem_id, local_destino_id, 
+  tipo, status, motivo, observacoes  -- Adicionar observacoes
+)
+VALUES (
+  v_auth_uid, p_origem_local_id, p_destino_local_id, 
+  'transferencia', 'pendente', p_motivo, p_observacoes
+)
 ```
 
-#### 2. Tratamento de Casos Especiais
+#### 2. Atualizar Modal `AdicionarProdutoLocalModal.tsx`
 
-A lógica considera:
+**Substituir campo de texto por:**
+- Dropdown de Motivo com opções:
+  - `reposicao` → "Reposição"
+  - `feira` → "Feira"
+  - `ajuste` → "Ajuste"
+  - `devolucao` → "Devolução"
+- Campo de texto para Observações (opcional)
 
-| Cenário | Comportamento |
-|---------|---------------|
-| Pedido ativo (não cancelado) | Devolve todas as peças ao estoque |
-| Pedido já cancelado (`estornoRealizado = true`) | Não devolve (já foi estornado antes) |
-| Pedido sem itens | Apenas exclui, sem devolução |
-| Item sem `produtoId` | Tenta encontrar pelo nome no estoque |
-| Produto não encontrado no estoque | Ignora (log de warning) |
+```typescript
+// Estados
+const [motivo, setMotivo] = useState<string>('reposicao');
+const [observacoes, setObservacoes] = useState('');
+
+// Opções do dropdown
+const MOTIVOS_TRANSFERENCIA = [
+  { value: 'reposicao', label: 'Reposição' },
+  { value: 'feira', label: 'Feira' },
+  { value: 'ajuste', label: 'Ajuste' },
+  { value: 'devolucao', label: 'Devolução' },
+];
+
+// Na chamada
+await transferirProduto.mutateAsync({
+  itemId: produtoSelecionado.id,
+  localId: localId,
+  quantidade: qtd,
+  motivo: motivo,  // Valor do enum
+  observacoes: observacoes.trim() || undefined,
+});
+```
+
+#### 3. Atualizar Hook `useAdicionarProdutoLocal`
+
+Modificar a interface e chamada RPC:
+
+```typescript
+interface AdicionarProdutoParams {
+  itemId: string;
+  localId: string;
+  quantidade: number;
+  motivo: string;  // Agora é enum
+  observacoes?: string;  // Novo campo
+}
+
+// Na chamada RPC
+const { data, error } = await supabase.rpc('rpc_criar_transferencia', {
+  p_origem_local_id: localCentral.id,
+  p_destino_local_id: localId,
+  p_itens: itensJson,
+  p_user_id: user.id,
+  p_motivo: motivo || 'reposicao',  // Valor do enum
+  p_observacoes: observacoes || null  // Texto livre
+});
+```
 
 ---
 
-### Fluxo de Exclusão Atualizado
+### UI do Modal (Atualizada)
 
 ```text
-Usuário clica "Excluir"
-       │
-       ▼
-┌──────────────────────────┐
-│  Buscar pedido completo  │
-└──────────────────────────┘
-       │
-       ▼
-┌──────────────────────────┐
-│  Pedido já foi estornado?│
-└──────────────────────────┘
-       │
-   Não │        Sim
-       ▼         ▼
-┌──────────────┐  │
-│ Para cada    │  │
-│ item:        │  │
-│ - Encontrar  │  │
-│   produto    │  │
-│ - Somar qty  │  │
-│   ao estoque │  │
-└──────────────┘  │
-       │          │
-       ▼          │
-┌──────────────────────────┐
-│  Excluir pedido (CASCADE)│
-└──────────────────────────┘
-       │
-       ▼
-┌──────────────────────────┐
-│  Toast: "X peças voltaram│
-│  ao estoque"             │
-└──────────────────────────┘
+┌─────────────────────────────────────────┐
+│  Central → Loja Parque das Feiras       │
+├─────────────────────────────────────────┤
+│  [Busca de produto...]                  │
+│                                         │
+│  PRODUTO SELECIONADO                    │
+│  ┌─────────────────────────────────┐    │
+│  │ [img] Macaquinho estampa chic   │    │
+│  │       Central: 50 | Local: 13   │    │
+│  └─────────────────────────────────┘    │
+│                                         │
+│  Quantidade a Transferir *              │
+│  ┌────────────────┐                     │
+│  │ 7              │ / 50 disp.          │
+│  └────────────────┘                     │
+│                                         │
+│  Motivo *                               │
+│  ┌────────────────────────────────┐     │
+│  │ Reposição              ▼       │     │
+│  └────────────────────────────────┘     │
+│                                         │
+│  Observações (opcional)                 │
+│  ┌────────────────────────────────┐     │
+│  │ Envio para loja parque...      │     │
+│  └────────────────────────────────┘     │
+│                                         │
+│  [Cancelar]  [→ Transferir]             │
+└─────────────────────────────────────────┘
 ```
 
 ---
@@ -132,29 +148,16 @@ Usuário clica "Excluir"
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/PedidosCriados.tsx` | Modificar `handleDelete` para devolver estoque antes de excluir |
+| `supabase/migrations/` | Nova migration para atualizar RPC |
+| `src/components/estoque/AdicionarProdutoLocalModal.tsx` | Adicionar dropdown de motivo e campo de observações |
+| `src/hooks/useEstoquePorLocalGerenciamento.ts` | Atualizar interface e chamada RPC |
 
 ---
 
-### Comportamento Esperado Após Implementação
+### Comportamento Esperado
 
-1. Ao excluir um pedido **não cancelado**:
-   - As quantidades de cada item voltam ao estoque
-   - Mensagem: "Pedido excluído! X peças retornaram ao estoque."
-
-2. Ao excluir um pedido **já cancelado** (estorno já realizado):
-   - Não há devolução duplicada
-   - Mensagem: "Pedido excluído com sucesso!"
-
-3. Ao excluir um pedido **sem itens**:
-   - Apenas exclui
-   - Mensagem: "Pedido excluído com sucesso!"
-
----
-
-### Considerações de Segurança
-
-- A função `estornarEstoque` já existe e é usada no cancelamento
-- Reutilizamos essa função para evitar duplicação de código
-- O campo `estornoRealizado` impede devolução duplicada
+1. O dropdown mostra "Reposição" como padrão
+2. O usuário pode digitar observações livremente
+3. A transferência é criada com `motivo='reposicao'` e `observacoes='Envio para loja...'`
+4. Nenhum erro de constraint
 
