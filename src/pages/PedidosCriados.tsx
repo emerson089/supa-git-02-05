@@ -389,11 +389,36 @@ export default function PedidosCriados() {
       currency: 'BRL'
     }).format(value);
   };
-  const handleDelete = () => {
-    if (deleteId) {
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    
+    try {
+      // Buscar o pedido completo com itens antes de excluir
+      const pedido = getPedidoById(deleteId);
+      
+      // Se encontrou o pedido e não foi estornado ainda, devolver ao estoque
+      if (pedido && !pedido.estornoRealizado) {
+        const pecasDevolvidas = estornarEstoque(pedido);
+        
+        if (pecasDevolvidas > 0) {
+          // Aguardar um tick para garantir que as atualizações de estoque foram processadas
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      // Excluir o pedido
       removePedido(deleteId);
       setDeleteId(null);
-      toast.success('Pedido excluído com sucesso!');
+      
+      const mensagem = pedido && !pedido.estornoRealizado && pedido.totalPecas > 0
+        ? `Pedido excluído! ${pedido.totalPecas} peças retornaram ao estoque.`
+        : 'Pedido excluído com sucesso!';
+      
+      toast.success(mensagem);
+    } catch (error) {
+      console.error('Erro ao excluir pedido:', error);
+      toast.error('Erro ao excluir pedido');
+      setDeleteId(null);
     }
   };
   const getModelosResumo = (pedido: PedidoPaginatedDB) => {
