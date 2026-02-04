@@ -1019,5 +1019,13 @@ export default function Transferencias() {
 
       {/* Modal de Relatório de Saídas */}
       <RelatorioSaidasModal open={showRelatorioSaidasModal} onOpenChange={setShowRelatorioSaidasModal} localIdInicial={lojaId || undefined} />
+
+      {/* Modal de Detalhes da Transferência */}
+      <DetalhesTransferenciaModal 
+        open={showDetalhesModal} 
+        onOpenChange={setShowDetalhesModal} 
+        transferencia={transferenciaCompleta}
+        itensDetalhados={itensDetalhados}
+      />
     </div>;
 }
