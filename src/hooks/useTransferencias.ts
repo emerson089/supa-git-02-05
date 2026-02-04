@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 export type MotivoTransferencia = 'feira' | 'reposicao' | 'ajuste' | 'devolucao';
-export type StatusTransferencia = 'pendente' | 'concluida' | 'cancelada' | 'em_andamento';
+export type StatusTransferencia = 'em_andamento' | 'concluida' | 'cancelada';
 
 export interface Transferencia {
   id: string;
