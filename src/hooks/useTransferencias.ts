@@ -1123,7 +1123,7 @@ export function useAtualizarTransferencia() {
         .from('transferencias')
         .update(updateData)
         .eq('id', transferenciaId)
-        .eq('status', 'pendente'); // Só permite atualizar se pendente
+        .eq('status', 'em_andamento'); // Só permite atualizar se em_andamento
 
       if (error) {
         console.error('[useAtualizarTransferencia] Erro:', error);
