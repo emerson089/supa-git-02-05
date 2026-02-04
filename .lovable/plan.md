@@ -1,149 +1,184 @@
 
-## Plano: Melhorias no Sistema de Contagens
 
-Analisei o sistema atual de contagens de estoque e identifiquei várias oportunidades para facilitar sua vida no dia-a-dia. A imagem mostra o **Histórico de Contagens** e o card **"Desde última contagem"**.
+## Plano: Melhorias no Módulo de Produção
+
+### Situação Atual
+
+Analisando o código, descobri algo importante: **O log de movimentações JÁ está sendo salvo no banco de dados!** 
+
+O problema é que **não existe uma interface visual para visualizar este histórico**. A tabela `producao_log` tem registros com:
+- `processo_anterior` e `processo_novo`
+- `created_at` (data/hora da movimentação)
+- `responsavel` (quem estava responsável na hora)
+- `observacao` (campo disponível mas não utilizado)
+
+Dados atuais no banco mostram movimentações reais sendo registradas:
+- "Travete" → "Destroyed" em 04/02/2026 às 16:31
+- "Corte" → "Costura/Facção" em 04/02/2026 às 13:40
+- etc.
 
 ---
 
 ### Melhorias Propostas
 
-#### 1. Mostrar Variação Entre Contagens
+#### 1. Modal de Histórico de Movimentações (PRINCIPAL)
 
-**O que é hoje**: Apenas exibe peças e valor de cada contagem isoladamente.
+Criar um novo componente `HistoricoProducaoModal` que mostra a timeline completa de movimentações de um lote.
 
-**Melhoria**: Mostrar a **diferença** entre contagens consecutivas:
-- "Vendido: 234 peças (R$ 10.616)" entre 03/02 e 30/01
-- Indicador visual verde/vermelho para ganho ou perda de estoque
+**O que exibirá:**
+- Lista cronológica de todas as movimentações
+- Para cada movimentação: data/hora, etapa anterior → nova etapa, responsável
+- Tempo total em produção (desde criação)
+- Tempo médio por etapa
 
-Isso permite ver rapidamente quanto foi vendido em cada período sem precisar fazer conta.
-
----
-
-#### 2. Expandir Detalhes por Contagem
-
-**Melhoria**: Ao clicar em uma contagem, expandir para mostrar:
-- Lista dos produtos que estavam em estoque naquele momento
-- Quantidade de cada produto
-- Preço aplicado
-
-Útil para conferir exatamente o que estava na loja naquele dia.
+**Acesso:**
+- Novo item no menu dropdown do card: "Ver Histórico"
+- Ícone de relógio com timeline
 
 ---
 
-#### 3. Gráfico de Evolução
+#### 2. Indicador Visual de Movimentações no Card
 
-**Melhoria**: Adicionar um mini-gráfico de linha no topo do modal mostrando:
-- Eixo X: datas das contagens
-- Eixo Y: valor do estoque
-
-Visualização rápida da tendência: estoque crescendo, diminuindo ou estável.
+Adicionar ao `ProductionCard`:
+- Contador de movimentações (quantas vezes o lote mudou de etapa)
+- Tooltip com última movimentação ao passar o mouse no indicador de tempo
 
 ---
 
-#### 4. Métricas Calculadas Automaticamente
+#### 3. Adicionar Observação na Movimentação
 
-Adicionar um resumo no topo do modal:
-- **Média de vendas/dia** desde a primeira contagem
-- **Total vendido** no período (soma das variações)
-- **Ticket médio** por peça vendida
+Atualmente o campo `observacao` existe na tabela `producao_log` mas não é utilizado. 
 
----
-
-#### 5. Ação Rápida de Nova Contagem
-
-**Melhoria**: Botão "+ Nova Contagem" direto no modal de histórico, permitindo registrar sem fechar e reabrir.
+**Melhoria:**
+- Ao mover lote para outra etapa via setas ou drag-and-drop, mostrar um diálogo opcional para adicionar observação
+- Opção de "Mover rapidamente sem observação" (comportamento atual)
+- Opção de "Adicionar nota desta movimentação"
 
 ---
 
-#### 6. Deletar Contagens Antigas
+#### 4. Relatório de Lead Time (Tempo de Produção)
 
-**Melhoria**: Opção de excluir contagens antigas (com confirmação). Útil para:
-- Remover contagens feitas por engano
-- Limpar histórico antigo que não é mais relevante
+Criar funcionalidade para analisar:
+- Tempo médio que lotes ficam em cada etapa
+- Identificar gargalos (qual etapa demora mais)
+- Comparar com períodos anteriores
+
+**Interface:**
+- Novo botão no header "Relatório de Tempo"
+- Modal com gráfico de barras por etapa
+- Tabela com detalhes
+
+---
+
+#### 5. Filtro por Período de Criação
+
+Adicionar ao header de filtros:
+- Filtrar lotes por data de criação
+- Opções: Hoje, Últimos 7 dias, Últimos 30 dias, Período customizado
+
+---
+
+#### 6. Notificações de Lotes Atrasados
+
+Cards que estão há mais de X dias na mesma etapa podem gerar alertas:
+- Configuração de limite de dias por etapa
+- Badge de "Atrasado" no card
+- Filtro rápido para ver apenas atrasados
 
 ---
 
 ### Alterações Técnicas
 
-#### Arquivo: `src/hooks/useContagensEstoque.ts`
+#### Novos Arquivos
 
-1. Criar hook `useContagemDetalhes(contagemId)` para buscar itens de uma contagem específica
-2. Criar hook `useContagensComVariacao(localId)` que calcula diferenças entre contagens consecutivas
-3. Criar mutation `useExcluirContagem()` para deletar contagens
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/production/HistoricoProducaoModal.tsx` | Modal de histórico de movimentações |
+| `src/hooks/useProducaoLog.ts` | Hook para buscar logs de um lote específico |
 
-#### Arquivo: `src/components/estoque/HistoricoContagensModal.tsx`
+#### Arquivos a Modificar
 
-1. Adicionar cálculo de variação entre contagens
-2. Tornar cards expansíveis (Collapsible)
-3. Adicionar mini-gráfico com Recharts
-4. Adicionar botão "+ Nova Contagem" no header
-5. Adicionar botão de exclusão com confirmação
-6. Adicionar resumo estatístico no topo
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/entities/ProducaoLog.ts` | Adicionar campo de contagem e estatísticas |
+| `src/components/production/ProductionCard.tsx` | Adicionar opção "Ver Histórico" no dropdown |
+| `src/components/production/MobileProductionCard.tsx` | Adicionar opção "Ver Histórico" no dropdown |
+| `src/pages/Index.tsx` | Controlar modal de histórico, adicionar diálogo de observação |
+| `src/components/production/ProductionHeader.tsx` | Adicionar filtro de período e botão de relatório |
 
 ---
 
-### Layout Visual (Proposto)
+### Layout do Modal de Histórico
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│ 📋 Histórico de Contagens                 [+ Nova Contagem] │
-│ Loja Parque das Feiras                                      │
-├─────────────────────────────────────────────────────────────┤
-│ ┌─────────────────────────────────────────────────────────┐ │
-│ │ 📊 Resumo do Período                                    │ │
-│ │ Média vendas/dia: 15 peças | Total vendido: R$ 12.871   │ │
-│ │ ┌──────────────────────────────────────────────────────┐│ │
-│ │ │  [Mini gráfico de linha - evolução do estoque]       ││ │
-│ │ └──────────────────────────────────────────────────────┘│ │
-│ └─────────────────────────────────────────────────────────┘ │
-│                                                             │
-│ ┌───────────────────────────────────────────────────────┐   │
-│ │ 📅 03/02/2026 10:03                        [Última] 🗑  │   │
-│ │ 📦 Peças: 1019  💵 Valor: R$ 40.770,00                 │   │
-│ │ ────────────────────────────────────────────────────── │   │
-│ │ 🔻 Vendido desde anterior: 234 peças (-R$ 10.616)      │   │
-│ │                                                        │   │
-│ │ ▼ Ver itens desta contagem                             │   │
-│ └───────────────────────────────────────────────────────┘   │
-│                                                             │
-│ ┌───────────────────────────────────────────────────────┐   │
-│ │ 📅 30/01/2026 08:41                               🗑    │   │
-│ │ 📦 Peças: 1253  💵 Valor: R$ 51.386,00                 │   │
-│ │ ────────────────────────────────────────────────────── │   │
-│ │ 🔻 Vendido desde anterior: 208 peças (-R$ 10.056)      │   │
-│ │                                                        │   │
-│ │ ▼ Ver itens desta contagem                             │   │
-│ └───────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ 📋 Histórico do Lote 1021                                ✕   │
+│ PLS Short Saia jeans Plus Size 100% 590                      │
+├──────────────────────────────────────────────────────────────┤
+│ ┌──────────────────────────────────────────────────────────┐ │
+│ │ ⏱️ Tempo Total: 14 dias  |  🔄 8 movimentações           │ │
+│ └──────────────────────────────────────────────────────────┘ │
+│                                                              │
+│ ────────────── Timeline ──────────────                       │
+│                                                              │
+│ 📍 04/02/2026 16:31                                          │
+│ │  Travete → Destroyed                                       │
+│ │  👤 Ivan                                                   │
+│ │  ⏱️ 2 dias nesta etapa                                    │
+│ │                                                            │
+│ 📍 02/02/2026 10:15                                          │
+│ │  Costura/Facção → Travete                                  │
+│ │  👤 Regina                                                 │
+│ │  💬 "Encaminhar para acabamento"                           │
+│ │  ⏱️ 5 dias nesta etapa                                    │
+│ │                                                            │
+│ 📍 28/01/2026 09:00                                          │
+│ │  Corte → Costura/Facção                                    │
+│ │  👤 Zeze                                                   │
+│ │  ⏱️ 3 dias nesta etapa                                    │
+│ │                                                            │
+│ 🎯 25/01/2026 14:30 - Lote Criado                            │
+│    Etapa inicial: Corte                                      │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Arquivos a Modificar
+### Diálogo de Observação na Movimentação (Opcional)
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useContagensEstoque.ts` | Adicionar hooks para detalhes, variação e exclusão |
-| `src/components/estoque/HistoricoContagensModal.tsx` | UI expandida com gráfico, variações, exclusão e nova contagem |
-
----
-
-### Resultado Esperado
-
-1. Ver instantaneamente quanto vendeu entre cada contagem
-2. Visualizar tendência do estoque via gráfico
-3. Consultar detalhes de qualquer contagem passada
-4. Registrar nova contagem sem sair do histórico
-5. Excluir contagens incorretas
-6. Ter métricas automáticas (média, total, ticket)
+```text
+┌─────────────────────────────────────────────────────┐
+│ Mover Lote 1021                                  ✕  │
+│                                                     │
+│ De: Corte → Para: Costura/Facção                    │
+│                                                     │
+│ Adicionar observação (opcional):                    │
+│ ┌─────────────────────────────────────────────────┐ │
+│ │ Ex: Entregue para Patricia às 14h               │ │
+│ └─────────────────────────────────────────────────┘ │
+│                                                     │
+│        [Mover sem nota]    [Mover com nota]         │
+└─────────────────────────────────────────────────────┘
+```
 
 ---
 
 ### Prioridade de Implementação
 
-Se preferir fazer em etapas:
+1. **Essencial**: Modal de Histórico de Movimentações (maior impacto)
+2. **Alta**: Indicador de movimentações no card
+3. **Média**: Observação opcional na movimentação
+4. **Bônus**: Relatório de Lead Time
+5. **Bônus**: Filtro por período e notificações de atraso
 
-1. **Essencial**: Variação entre contagens (mais impacto imediato)
-2. **Alta**: Botão "+ Nova Contagem" no modal
-3. **Média**: Exclusão de contagens
-4. **Bônus**: Gráfico e métricas resumidas
+---
+
+### Resultado Esperado
+
+1. Visualizar todo o histórico de um lote em um clique
+2. Saber exatamente quando cada movimentação aconteceu
+3. Registrar observações importantes nas movimentações
+4. Identificar gargalos no processo produtivo
+5. Acompanhar lotes que estão demorando demais em alguma etapa
+
