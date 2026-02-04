@@ -12,10 +12,26 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { LotImage } from '@/components/production/LotImage';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useAdicionarProdutoLocal, useProdutosDisponiveis } from '@/hooks/useEstoquePorLocalGerenciamento';
 import { Loader2, Search, Check, Package, Box, Store, Info, AlertCircle, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+
+// Opções válidas de motivo (valores aceitos pelo constraint do banco)
+const MOTIVOS_TRANSFERENCIA = [
+  { value: 'reposicao', label: 'Reposição' },
+  { value: 'feira', label: 'Feira' },
+  { value: 'ajuste', label: 'Ajuste' },
+  { value: 'devolucao', label: 'Devolução' },
+];
 
 interface AdicionarProdutoLocalModalProps {
   open: boolean;
@@ -44,7 +60,8 @@ export function AdicionarProdutoLocalModal({
   const [busca, setBusca] = useState('');
   const [produtoSelecionado, setProdutoSelecionado] = useState<ProdutoDisponivel | null>(null);
   const [quantidade, setQuantidade] = useState('');
-  const [motivo, setMotivo] = useState('');
+  const [motivo, setMotivo] = useState('reposicao');
+  const [observacoes, setObservacoes] = useState('');
   const quantidadeRef = useRef<HTMLInputElement>(null);
 
   // Condicionar ao open para forçar refetch quando o modal abrir
@@ -56,7 +73,8 @@ export function AdicionarProdutoLocalModal({
       setBusca('');
       setProdutoSelecionado(null);
       setQuantidade('');
-      setMotivo('');
+      setMotivo('reposicao');
+      setObservacoes('');
     }
   }, [open]);
 
@@ -87,7 +105,8 @@ export function AdicionarProdutoLocalModal({
         itemId: produtoSelecionado.id,
         localId: localId,
         quantidade: qtd,
-        motivo: motivo.trim() || `Transferência para ${localNome}`,
+        motivo: motivo,
+        observacoes: observacoes.trim() || undefined,
       });
       onOpenChange(false);
     } catch (error) {
@@ -315,14 +334,35 @@ export function AdicionarProdutoLocalModal({
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="motivo-adicao">Motivo (opcional)</Label>
-                    <Input
-                      id="motivo-adicao"
-                      value={motivo}
-                      onChange={(e) => setMotivo(e.target.value)}
-                      placeholder="Ex: Reposição de estoque"
-                    />
+                    <Label htmlFor="motivo-adicao">
+                      Motivo <span className="text-destructive">*</span>
+                    </Label>
+                    <Select value={motivo} onValueChange={setMotivo}>
+                      <SelectTrigger id="motivo-adicao">
+                        <SelectValue placeholder="Selecione o motivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MOTIVOS_TRANSFERENCIA.map((m) => (
+                          <SelectItem key={m.value} value={m.value}>
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                </div>
+
+                {/* Campo de observações */}
+                <div className="space-y-2">
+                  <Label htmlFor="observacoes-adicao">Observações (opcional)</Label>
+                  <Textarea
+                    id="observacoes-adicao"
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    placeholder="Ex: Envio para loja parque das feiras..."
+                    className="resize-none min-h-[60px]"
+                    rows={2}
+                  />
                 </div>
 
                 {/* Mensagem informativa sobre a transferência */}

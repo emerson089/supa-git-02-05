@@ -1173,16 +1173,28 @@ export type Database = {
         Args: { p_transferencia_id: string; p_user_id: string }
         Returns: undefined
       }
-      rpc_criar_transferencia: {
-        Args: {
-          p_destino_local_id: string
-          p_itens: Json
-          p_motivo?: string
-          p_origem_local_id: string
-          p_user_id: string
-        }
-        Returns: string
-      }
+      rpc_criar_transferencia:
+        | {
+            Args: {
+              p_destino_local_id: string
+              p_itens: Json
+              p_motivo?: string
+              p_origem_local_id: string
+              p_user_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_destino_local_id: string
+              p_itens: Json
+              p_motivo?: string
+              p_observacoes?: string
+              p_origem_local_id: string
+              p_user_id: string
+            }
+            Returns: string
+          }
     }
     Enums: {
       app_role: "admin" | "gerente" | "vendedor" | "vendedor_loja"
