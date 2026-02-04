@@ -1,154 +1,141 @@
 
-## Plano: Melhorias no Calendário de Seleção de Datas
+
+## Plano: Melhorias no Modal "Registrar Retorno" da Feira
 
 ### Problemas Identificados
 
-1. **Nome do mês em inglês**: O calendário está mostrando "February 2026" em vez de "Fevereiro 2026"
-2. **Calendário não abre no mês correto**: Quando uma data já está selecionada, o calendário deveria abrir mostrando o mês/ano dessa data, não o mês atual
-3. **Experiência de seleção**: A navegação entre meses pode ser melhorada
+Analisando o código do modal em `src/pages/Feira.tsx` (linhas 986-1120):
 
----
+1. **Nomes dos produtos truncados**: O grid atual usa `truncate` (CSS) que corta o texto com "..."
+2. **Referência não exibida**: A referência (código numérico após "-") existe no nome mas não é destacada
+3. **Foto pequena no mobile**: A imagem está com `w-12 h-12` (48px), que é pequeno para tela touch
 
 ### Solução Proposta
 
-#### 1. Adicionar Locale Português (ptBR)
+#### 1. Novo Layout de Grid - Mobile
 
-O projeto já usa `date-fns/locale` com `ptBR` em outros lugares (Dashboard, FiltroPeriodo, FiltrosTransferencias). Falta apenas adicionar nas páginas de Pedidos.
+Mudar de layout horizontal (uma linha) para layout com **2 linhas por produto**:
 
-**Mudanças necessárias:**
-- Adicionar `locale={ptBR}` ao componente Calendar
-- Isso traduz automaticamente:
-  - Nomes dos meses: "February" → "Fevereiro"
-  - Dias da semana: "Su, Mo, Tu..." → "Dom, Seg, Ter..."
+| Atual (horizontal) | Proposto (2 linhas) |
+|-------------------|---------------------|
+| `[Foto 48px][Nome truncado][Env][Ret][Vend]` | **Linha 1:** `[Foto 64px][Nome completo + Ref]` |
+| Nome cortado, difícil identificar | **Linha 2:** `[Env][Ret][Vend] alinhado abaixo` |
 
-#### 2. Usar `defaultMonth` para Abrir no Mês Correto
+#### 2. Exibir Nome Completo + Referência em Destaque
 
-O componente Calendar do react-day-picker aceita a prop `defaultMonth` que define qual mês será exibido inicialmente:
+- **Nome do modelo**: Exibir em até 2 linhas (`line-clamp-2`)
+- **Referência**: Extrair do nome (padrão "Nome - 170") e mostrar como Badge separado
 
-```typescript
-<Calendar
-  mode="single"
-  selected={startDate}
-  onSelect={setStartDate}
-  defaultMonth={startDate}  // Abre no mês da data selecionada
-  locale={ptBR}
-  initialFocus
-/>
+Exemplo:
+```
+┌──────────────────────────────────────────┐
+│ [FOTO]  Short Alfaiataria com         │
+│  64x64  fechamento zíper   [Ref: 385]   │
+├──────────────────────────────────────────┤
+│      Enviado: 60  │ Ret: [___] │ V: 60  │
+└──────────────────────────────────────────┘
 ```
 
----
+#### 3. Aumentar Foto no Mobile
 
-### Arquivos a Modificar
+- **De**: `w-12 h-12` (48px)
+- **Para**: `w-16 h-16` (64px)
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/PedidosCriados.tsx` | Adicionar `locale={ptBR}` e `defaultMonth` aos 2 calendários (Início e Fim) |
-| `src/components/pedidos/MobileFiltersSheet.tsx` | Adicionar `locale={ptBR}` e `defaultMonth` aos 2 calendários (Início e Fim) |
+### Alterações Técnicas
 
----
+#### Arquivo: `src/pages/Feira.tsx`
 
-### Alterações Detalhadas
-
-#### Arquivo: `src/pages/PedidosCriados.tsx`
-
-**Linhas 951-966 - Calendários desktop:**
-
-Antes:
+**1. Criar função utilitária para extrair referência** (replicar padrão existente):
 ```typescript
-<Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus className="pointer-events-auto" />
+function extrairReferencia(nome: string): string | null {
+  const match = nome.match(/\s*-\s*(\d+)$/);
+  return match ? match[1] : null;
+}
 ```
 
-Depois:
+**2. Alterar grid para layout 2 linhas no mobile**:
+
+De:
 ```typescript
-<Calendar 
-  mode="single" 
-  selected={startDate} 
-  onSelect={setStartDate} 
-  defaultMonth={startDate}
-  locale={ptBR}
-  initialFocus 
-  className="pointer-events-auto" 
-/>
+grid-cols-[52px_1fr_44px_64px_64px]
 ```
 
-**Importação necessária:**
+Para:
 ```typescript
-import { ptBR } from 'date-fns/locale';
-```
-(Esta importação já existe na linha 34 do arquivo)
-
----
-
-#### Arquivo: `src/components/pedidos/MobileFiltersSheet.tsx`
-
-**Linhas 225-251 - Calendários mobile:**
-
-Antes:
-```typescript
-<Calendar
-  mode="single"
-  selected={startDate}
-  onSelect={onStartDateChange}
-  initialFocus
-  className="pointer-events-auto"
-/>
+// Mobile: 2 linhas verticais
+// Desktop: manter horizontal
 ```
 
-Depois:
-```typescript
-<Calendar
-  mode="single"
-  selected={startDate}
-  onSelect={onStartDateChange}
-  defaultMonth={startDate}
-  locale={ptBR}
-  initialFocus
-  className="pointer-events-auto"
-/>
-```
+**3. Código JSX proposto para cada item**:
+```tsx
+// Linha 1: Imagem + Nome/Referência
+<div className="flex items-start gap-3">
+  <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted flex-shrink-0">
+    <LotImage src={...} alt={...} eager />
+  </div>
+  <div className="flex-1 min-w-0">
+    <p className="text-sm font-medium leading-tight line-clamp-2">
+      {nomesSemReferencia}
+    </p>
+    {referencia && (
+      <Badge variant="outline" className="mt-1 text-xs">
+        Ref: {referencia}
+      </Badge>
+    )}
+  </div>
+</div>
 
-**Importação necessária:**
-```typescript
-import { ptBR } from 'date-fns/locale';
+// Linha 2: Enviado + Retorno + Vendido
+<div className="flex items-center justify-between gap-2 mt-2">
+  <span>Enviado: <strong>{quantidadeEnviada}</strong></span>
+  <Input ... /> {/* Retorno */}
+  <span>Vendido: <strong>{vendido}</strong></span>
+</div>
 ```
-
----
 
 ### Resultado Visual Esperado
 
-**Antes:**
 ```
-┌────────────────────────┐
-│  <   February 2026   > │
-│  Su Mo Tu We Th Fr Sa  │
-│  1  2  3  4  5  6  7   │
-└────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ 📦 Registrar Retorno                              ✕   │
+├────────────────────────────────────────────────────────┤
+│ 8 de 8 produto(s)      [🔍 Buscar modelo...]          │
+├────────────────────────────────────────────────────────┤
+│ ┌──────────────────────────────────────────────────┐  │
+│ │ ┌────┐ Short cinto encapado                      │  │
+│ │ │    │ sarja com bordado     [Ref: 124]          │  │
+│ │ │64px│                                           │  │
+│ │ └────┘                                           │  │
+│ │ Enviado: 108    [Retorno: ___]    Vendido: 108   │  │
+│ └──────────────────────────────────────────────────┘  │
+│                                                        │
+│ ┌──────────────────────────────────────────────────┐  │
+│ │ ┌────┐ Calça Alfaiataria Modelagem              │  │
+│ │ │    │ reta cintura alta     [Ref: 280]          │  │
+│ │ │64px│                                           │  │
+│ │ └────┘                                           │  │
+│ │ Enviado: 30     [Retorno: ___]    Vendido: 30    │  │
+│ └──────────────────────────────────────────────────┘  │
+├────────────────────────────────────────────────────────┤
+│   8 item(s) pendente(s) de preenchimento              │
+│   Enviado: 636  Retorno: 0  Vendido: 636              │
+│  [  Cancelar  ]           [  ✓ Confirmar  ]           │
+└────────────────────────────────────────────────────────┘
 ```
-
-**Depois:**
-```
-┌────────────────────────┐
-│  <   Fevereiro 2026  > │
-│  Dom Seg Ter Qua Qui... │
-│  1   2   3   4   5...   │
-└────────────────────────┘
-```
-
----
-
-### Comportamento de Navegação
-
-| Cenário | Comportamento |
-|---------|--------------|
-| Data selecionada: 15/02/2026 | Calendário abre em Fevereiro 2026 |
-| Data selecionada: 10/01/2026 | Calendário abre em Janeiro 2026 |
-| Nenhuma data selecionada | Calendário abre no mês atual |
-
----
 
 ### Resumo das Mudanças
 
-1. **2 arquivos modificados**
-2. **1 importação adicionada** (MobileFiltersSheet.tsx)
-3. **4 props adicionadas** (locale + defaultMonth em 2 lugares)
-4. **Zero alterações no componente Calendar base** - apenas uso correto das props existentes
+| Item | Antes | Depois |
+|------|-------|--------|
+| **Tamanho da foto** | 48x48px | 64x64px |
+| **Nome do produto** | 1 linha truncada | 2 linhas visíveis |
+| **Referência** | Escondida no nome | Badge destacado |
+| **Layout** | 1 linha horizontal | 2 linhas (nome/valores) |
+| **Identificação** | Difícil | Fácil e rápida |
+
+### Arquivo a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/Feira.tsx` | Refatorar layout do modal de retorno (linhas 1013-1086) |
+
