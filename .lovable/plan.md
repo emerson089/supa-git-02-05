@@ -1,163 +1,100 @@
 
+Contexto e causa raiz (confirmado)
+- O erro “violates check constraint transferencias_status_check” acontece porque a tabela transferencias só aceita status:
+  - em_andamento, concluida, cancelada, estornada
+  (isso está definido no CHECK transferencias_status_check).
+- Porém, a função do backend rpc_criar_transferencia (atual) ainda está inserindo status = 'pendente' (ver migration 20260204144905... linha 56).
+- Resultado: ao tentar criar a transferência (Central → Loja) via modal, o INSERT falha imediatamente com a constraint.
 
-## Plano: Corrigir Erro de Constraint na Transferência
+Objetivo
+- Fazer com que toda transferência “pendente” use o status correto do banco: em_andamento.
+- Ajustar também concluir/cancelar e a UI para reconhecer em_andamento como “Pendente”, mantendo labels amigáveis.
 
-### Problema Identificado
+Plano de correção
 
-O modal de transferência permite texto livre no campo "Motivo", mas a tabela `transferencias` tem um CHECK constraint que só permite:
-- `NULL`
-- `'feira'`
-- `'reposicao'`
-- `'ajuste'`
-- `'devolucao'`
+1) Backend (migração) — corrigir status usado nas RPCs
+1.1 Criar uma nova migration para substituir as funções:
+- rpc_criar_transferencia
+  - Manter assinatura com p_observacoes (já existente).
+  - Trocar no INSERT: status de 'pendente' para 'em_andamento'.
+  - Exemplo (trecho):
+    INSERT INTO transferencias (..., tipo, status, motivo, observacoes)
+    VALUES (..., 'transferencia', 'em_andamento', p_motivo, p_observacoes);
 
-Quando o usuário digita "envio loja", a RPC falha com `transferencias_motivo_check`.
+- rpc_concluir_transferencia
+  - Trocar a validação:
+    IF v_transferencia.status != 'em_andamento' THEN ...
+  - Mantém atualização final para status = 'concluida'.
 
----
+- rpc_cancelar_transferencia
+  - Trocar a validação:
+    IF v_transferencia.status != 'em_andamento' THEN ...
+  - Mantém update final para status = 'cancelada'.
 
-### Solução
+1.2 (Opcional, mas recomendado) Ajuste de mensagem de erro
+- Onde hoje diz “não está pendente…”, trocar para “não está em andamento…” para ficar consistente com o banco.
 
-Separar os campos em:
-1. **Motivo** (obrigatório) - Dropdown com valores válidos
-2. **Observações** (opcional) - Campo de texto livre
+2) Frontend — padronizar “Pendente” = em_andamento
+A UI hoje usa 'pendente' em vários pontos (filtros, badges e regras de habilitar ações). Depois que o backend passar a criar em_andamento, precisamos refletir isso na interface.
 
----
+2.1 Atualizar tipos e labels de status (filtros)
+Arquivo: src/components/transferencias/FiltrosTransferencias.tsx
+- Trocar StatusTransferencia de:
+  - 'pendente' | 'concluida' | 'cancelada'
+  para:
+  - 'em_andamento' | 'concluida' | 'cancelada'
+- Atualizar STATUS_LABELS para mapear:
+  - em_andamento → "Pendente"
 
-### Alterações
+2.2 Atualizar badges/config de status na tela de Transferências
+Arquivo: src/pages/Transferencias.tsx
+- Atualizar STATUS_CONFIG para usar em_andamento no lugar de pendente:
+  - em_andamento: { label: 'Pendente', ... }
 
-#### 1. Atualizar RPC `rpc_criar_transferencia`
+2.3 Atualizar modal de detalhes (ações só quando “pendente/em_andamento”)
+Arquivo: src/components/transferencias/DetalhesTransferenciaModal.tsx
+- STATUS_CONFIG: trocar chave pendente por em_andamento (label continua “Pendente”)
+- Regra de habilitar edição/ações:
+  - const isPendente = transferencia.status === 'em_andamento';
 
-Adicionar parâmetro `p_observacoes` e incluir no INSERT:
+2.4 Atualizar hook que só permite editar quando está pendente
+Arquivo: src/hooks/useTransferencias.ts
+- Em useAtualizarTransferencia:
+  - .eq('status', 'pendente') → .eq('status', 'em_andamento')
 
-```sql
--- Atualizar função para incluir observações
-CREATE OR REPLACE FUNCTION public.rpc_criar_transferencia(
-  p_origem_local_id uuid, 
-  p_destino_local_id uuid, 
-  p_itens jsonb, 
-  p_user_id uuid, 
-  p_motivo text DEFAULT NULL::text,
-  p_observacoes text DEFAULT NULL::text  -- NOVO parâmetro
-)
--- ...
-INSERT INTO transferencias (
-  user_id, local_origem_id, local_destino_id, 
-  tipo, status, motivo, observacoes  -- Adicionar observacoes
-)
-VALUES (
-  v_auth_uid, p_origem_local_id, p_destino_local_id, 
-  'transferencia', 'pendente', p_motivo, p_observacoes
-)
-```
+2.5 (Melhoria rápida) Ajustar useCriarTransferencia para não confundir motivo/observações
+Arquivo: src/hooks/useTransferencias.ts + src/pages/Transferencias.tsx (onde chama)
+- Hoje useCriarTransferencia manda p_motivo = observacoes.
+- Ajustar para:
+  - receber motivo (enum) e observacoes (texto) separadamente
+  - enviar p_motivo e p_observacoes corretamente
+Isso não é a causa do erro atual, mas evita inconsistência e reduz chance de novos constraints.
 
-#### 2. Atualizar Modal `AdicionarProdutoLocalModal.tsx`
+3) (Segurança) Verificação/limpeza de dados antigos (se existirem)
+- Rodar um SELECT para verificar se existe alguma transferência com status = 'pendente'.
+- Se existir (cenário improvável, mas possível em ambientes antigos), rodar UPDATE para:
+  - pendente → em_andamento
+Observação: isso é “alteração de dados”, então faremos como operação de dados separada (não como mudança estrutural).
 
-**Substituir campo de texto por:**
-- Dropdown de Motivo com opções:
-  - `reposicao` → "Reposição"
-  - `feira` → "Feira"
-  - `ajuste` → "Ajuste"
-  - `devolucao` → "Devolução"
-- Campo de texto para Observações (opcional)
+4) Validação (checklist de aceite)
+- No /transferencias:
+  - Abrir o modal “Central → Loja …”
+  - Selecionar produto + quantidade + motivo (dropdown)
+  - Transferir: não deve mais ocorrer erro de transferencias_status_check
+  - A nova transferência deve aparecer na lista como “Pendente” (status em_andamento)
+- Abrir Detalhes:
+  - Enquanto em_andamento: deve permitir editar motivo/observações e mostrar botões Concluir/Cancelar
+  - Concluir: status vira concluida
+  - Cancelar: status vira cancelada
 
-```typescript
-// Estados
-const [motivo, setMotivo] = useState<string>('reposicao');
-const [observacoes, setObservacoes] = useState('');
+Arquivos impactados
+- Backend migration: supabase/migrations/XXXX_fix_transferencias_status.sql (nova)
+- Frontend:
+  - src/components/transferencias/FiltrosTransferencias.tsx
+  - src/pages/Transferencias.tsx
+  - src/components/transferencias/DetalhesTransferenciaModal.tsx
+  - src/hooks/useTransferencias.ts
 
-// Opções do dropdown
-const MOTIVOS_TRANSFERENCIA = [
-  { value: 'reposicao', label: 'Reposição' },
-  { value: 'feira', label: 'Feira' },
-  { value: 'ajuste', label: 'Ajuste' },
-  { value: 'devolucao', label: 'Devolução' },
-];
-
-// Na chamada
-await transferirProduto.mutateAsync({
-  itemId: produtoSelecionado.id,
-  localId: localId,
-  quantidade: qtd,
-  motivo: motivo,  // Valor do enum
-  observacoes: observacoes.trim() || undefined,
-});
-```
-
-#### 3. Atualizar Hook `useAdicionarProdutoLocal`
-
-Modificar a interface e chamada RPC:
-
-```typescript
-interface AdicionarProdutoParams {
-  itemId: string;
-  localId: string;
-  quantidade: number;
-  motivo: string;  // Agora é enum
-  observacoes?: string;  // Novo campo
-}
-
-// Na chamada RPC
-const { data, error } = await supabase.rpc('rpc_criar_transferencia', {
-  p_origem_local_id: localCentral.id,
-  p_destino_local_id: localId,
-  p_itens: itensJson,
-  p_user_id: user.id,
-  p_motivo: motivo || 'reposicao',  // Valor do enum
-  p_observacoes: observacoes || null  // Texto livre
-});
-```
-
----
-
-### UI do Modal (Atualizada)
-
-```text
-┌─────────────────────────────────────────┐
-│  Central → Loja Parque das Feiras       │
-├─────────────────────────────────────────┤
-│  [Busca de produto...]                  │
-│                                         │
-│  PRODUTO SELECIONADO                    │
-│  ┌─────────────────────────────────┐    │
-│  │ [img] Macaquinho estampa chic   │    │
-│  │       Central: 50 | Local: 13   │    │
-│  └─────────────────────────────────┘    │
-│                                         │
-│  Quantidade a Transferir *              │
-│  ┌────────────────┐                     │
-│  │ 7              │ / 50 disp.          │
-│  └────────────────┘                     │
-│                                         │
-│  Motivo *                               │
-│  ┌────────────────────────────────┐     │
-│  │ Reposição              ▼       │     │
-│  └────────────────────────────────┘     │
-│                                         │
-│  Observações (opcional)                 │
-│  ┌────────────────────────────────┐     │
-│  │ Envio para loja parque...      │     │
-│  └────────────────────────────────┘     │
-│                                         │
-│  [Cancelar]  [→ Transferir]             │
-└─────────────────────────────────────────┘
-```
-
----
-
-### Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/migrations/` | Nova migration para atualizar RPC |
-| `src/components/estoque/AdicionarProdutoLocalModal.tsx` | Adicionar dropdown de motivo e campo de observações |
-| `src/hooks/useEstoquePorLocalGerenciamento.ts` | Atualizar interface e chamada RPC |
-
----
-
-### Comportamento Esperado
-
-1. O dropdown mostra "Reposição" como padrão
-2. O usuário pode digitar observações livremente
-3. A transferência é criada com `motivo='reposicao'` e `observacoes='Envio para loja...'`
-4. Nenhum erro de constraint
-
+Resultado esperado
+- Transferência do estoque central passa a criar registro com status válido (em_andamento), eliminando o erro da constraint.
+- UI continua mostrando “Pendente” para o usuário, mas internamente usa o status correto do banco.
