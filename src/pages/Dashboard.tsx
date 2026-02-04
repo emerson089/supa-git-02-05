@@ -15,6 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip as TooltipUI, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { KpiCardSkeleton, ChartSkeleton, DonutChartSkeleton, ListItemSkeleton, TopModelosSkeleton, ProducaoKanbanSkeleton } from "@/components/ui/dashboard-skeleton";
 import { Banknote, Package, AlertCircle, Factory, TrendingUp, TrendingDown, Calendar as CalendarIcon, AlertTriangle, ChevronRight, Wrench, Wand2, Target, Pencil, X, Filter, Settings } from "lucide-react";
 import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, STATUS_COLORS, MetaYoY, TopModelosCoverage, PrevisaoMensal, MetaAutomatica, FaturamentoDiaSemana } from "@/hooks/useDashboardData";
@@ -24,6 +26,18 @@ import { cn } from "@/lib/utils";
 import { format, startOfMonth, getYear, subDays, subMonths, startOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+
+// Types for modals
+interface TopModelo {
+  nome: string;
+  quantidade: number;
+}
+
+interface StatusPedido {
+  status: string;
+  count: number;
+  color: string;
+}
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -137,6 +151,10 @@ export default function Dashboard() {
     return saved ? parseFloat(saved) : 10;
   });
   const [metaConfigOpen, setMetaConfigOpen] = useState(false);
+
+  // Estados para modais de detalhes (mobile)
+  const [selectedModelo, setSelectedModelo] = useState<TopModelo | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<StatusPedido | null>(null);
 
   // Persistir mudanças no localStorage
   useEffect(() => {
@@ -824,18 +842,47 @@ export default function Dashboard() {
                         ({data.topModelosCoverage.pedidosComItens} de {data.topModelosCoverage.totalPedidos} têm itens detalhados)
                       </span>
                     </div>}
-                  {data.topModelos.map((modelo, index) => <div key={modelo.nome} className="space-y-1 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigate(`/estoque?search=${encodeURIComponent(modelo.nome)}`)}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-medium">
-                            {index + 1}
-                          </span>
-                          <span className="flex-1 leading-tight truncate max-w-[120px]" title={modelo.nome}>{modelo.nome}</span>
-                        </span>
-                        <span className="font-medium">{modelo.quantidade} un</span>
-                      </div>
-                      <Progress value={modelo.quantidade / maxModelo * 100} className="h-2" />
-                    </div>)}
+                  <TooltipProvider delayDuration={200}>
+                    {data.topModelos.map((modelo, index) => (
+                      <TooltipUI key={modelo.nome}>
+                        <TooltipTrigger asChild>
+                          <div 
+                            className="space-y-1 cursor-pointer hover:opacity-80 transition-opacity" 
+                            onClick={() => {
+                              if (isMobile) {
+                                setSelectedModelo(modelo);
+                              } else {
+                                navigate(`/estoque?search=${encodeURIComponent(modelo.nome)}`);
+                              }
+                            }}
+                          >
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-2 min-w-0">
+                                <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-medium flex-shrink-0">
+                                  {index + 1}
+                                </span>
+                                <span 
+                                  className="flex-1 leading-tight line-clamp-2 break-words min-w-0" 
+                                  title={modelo.nome}
+                                  aria-label={modelo.nome}
+                                >
+                                  {modelo.nome}
+                                </span>
+                              </span>
+                              <span className="font-medium flex-shrink-0 ml-2">{modelo.quantidade} un</span>
+                            </div>
+                            <Progress value={modelo.quantidade / maxModelo * 100} className="h-2" />
+                          </div>
+                        </TooltipTrigger>
+                        {!isMobile && (
+                          <TooltipContent side="top" className="max-w-[200px]">
+                            <p className="font-medium">{modelo.nome}</p>
+                            <p className="text-xs text-muted-foreground">{modelo.quantidade} unidades vendidas</p>
+                          </TooltipContent>
+                        )}
+                      </TooltipUI>
+                    ))}
+                  </TooltipProvider>
                 </div>}
             </CardContent>
           </Card>
@@ -914,24 +961,58 @@ export default function Dashboard() {
                       </div>
                     </div>
                     
-                    {/* Status List - Grid compacto */}
-                    <div className="w-full grid grid-cols-2 gap-x-2 gap-y-0.5">
-                      {displayStatus.slice(0, 4).map(status => {
-                    const percentage = totalPedidos > 0 ? (status.count / totalPedidos * 100).toFixed(0) : 0;
-                    const isClickable = status.status !== 'OUTROS';
-                    return <button key={status.status} className={cn("flex items-center justify-between py-0.5 px-1 rounded text-left transition-colors", isClickable && "hover:bg-muted/50 cursor-pointer")} onClick={() => isClickable && navigate(`/pedidos-criados?status=${status.status}`)} disabled={!isClickable}>
-                            <div className="flex items-center gap-1">
-                              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{
-                          backgroundColor: status.color
-                        }} />
-                              <span className="text-[10px] text-muted-foreground truncate max-w-[50px]">
-                                {status.status}
-                              </span>
-                            </div>
-                            <span className="text-[10px] font-semibold">{status.count}</span>
-                          </button>;
-                  })}
-                    </div>
+                    {/* Status List - Grid compacto com tooltips */}
+                    <TooltipProvider delayDuration={200}>
+                      <div className="w-full grid grid-cols-2 gap-x-3 gap-y-1">
+                        {displayStatus.slice(0, 4).map(status => {
+                          const percentage = totalPedidos > 0 ? (status.count / totalPedidos * 100).toFixed(0) : 0;
+                          const isClickable = status.status !== 'OUTROS';
+                          return (
+                            <TooltipUI key={status.status}>
+                              <TooltipTrigger asChild>
+                                <button 
+                                  className={cn(
+                                    "flex items-center justify-between py-1 px-1.5 rounded text-left transition-colors min-w-0", 
+                                    isClickable && "hover:bg-muted/50 cursor-pointer"
+                                  )} 
+                                  onClick={() => {
+                                    if (isMobile && isClickable) {
+                                      setSelectedStatus(status);
+                                    } else if (isClickable) {
+                                      navigate(`/pedidos-criados?status=${status.status}`);
+                                    }
+                                  }} 
+                                  disabled={!isClickable}
+                                  title={status.status}
+                                  aria-label={`${status.status}: ${status.count} pedidos (${percentage}%)`}
+                                >
+                                  <div className="flex items-center gap-1 min-w-0 flex-1">
+                                    <div 
+                                      className="w-2 h-2 rounded-full flex-shrink-0" 
+                                      style={{ backgroundColor: status.color }} 
+                                    />
+                                    <span 
+                                      className="text-[10px] text-muted-foreground line-clamp-2 break-words min-w-0"
+                                    >
+                                      {status.status}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] font-semibold flex-shrink-0 ml-1">{status.count}</span>
+                                </button>
+                              </TooltipTrigger>
+                              {!isMobile && (
+                                <TooltipContent side="top">
+                                  <p className="font-medium">{status.status}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {status.count} pedidos ({percentage}%)
+                                  </p>
+                                </TooltipContent>
+                              )}
+                            </TooltipUI>
+                          );
+                        })}
+                      </div>
+                    </TooltipProvider>
                   </div>;
             })()}
             </CardContent>
@@ -955,31 +1036,136 @@ export default function Dashboard() {
                   {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-20 w-full" />)}
                 </div> : (() => {
               const etapasAtivas = data.producaoKanban.filter(e => e.pecas > 0);
-              if (etapasAtivas.length === 0) {
+              const totalPecasProducao = data.producaoKanban.reduce((sum, e) => sum + e.pecas, 0);
+              
+              if (totalPecasProducao === 0) {
                 return <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                       <Factory size={24} className="mb-2 opacity-50" />
-                      <span className="text-sm">Sem movimentação</span>
+                      <span className="text-sm">Sem peças em produção</span>
                     </div>;
               }
-              return <div className={cn("grid gap-2", etapasAtivas.length === 1 ? "grid-cols-1" : etapasAtivas.length === 2 ? "grid-cols-2" : etapasAtivas.length === 3 ? "grid-cols-3" : etapasAtivas.length === 4 ? "grid-cols-4" : "grid-cols-5")}>
-                    {etapasAtivas.map(etapa => <div key={etapa.etapa} className={cn("flex flex-col items-center justify-center p-2 rounded-lg text-center cursor-pointer transition-all hover:scale-105", etapa.isBottleneck && "ring-2 ring-amber-400 animate-pulse")} style={{
-                  backgroundColor: `${etapa.color}20`
-                }} onClick={() => navigate("/")}>
-                        {etapa.isBottleneck && <AlertTriangle size={12} className="text-amber-500 mb-0.5" />}
-                        <span className="text-lg font-bold" style={{
-                    color: etapa.color
-                  }}>
-                          {formatNumber(etapa.pecas)}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground truncate w-full">
-                          {etapa.etapa.slice(0, 4)}.
-                        </span>
-                      </div>)}
+              
+              if (etapasAtivas.length === 0) {
+                return <div className="space-y-2">
+                      <div className="text-center mb-3 pb-2 border-b">
+                        <span className="text-2xl font-bold text-foreground">{formatNumber(totalPecasProducao)}</span>
+                        <span className="text-sm text-muted-foreground ml-1">peças</span>
+                      </div>
+                      <p className="text-xs text-amber-600 text-center">Etapas não encontradas</p>
+                    </div>;
+              }
+              
+              return <div className="space-y-2">
+                    {/* Total no topo */}
+                    <div className="text-center mb-3 pb-2 border-b">
+                      <span className="text-2xl font-bold text-foreground">{formatNumber(totalPecasProducao)}</span>
+                      <span className="text-sm text-muted-foreground ml-1">peças</span>
+                    </div>
+                    
+                    {/* Lista de etapas com nomes completos */}
+                    <TooltipProvider delayDuration={200}>
+                      {etapasAtivas.map(etapa => (
+                        <TooltipUI key={etapa.etapa}>
+                          <TooltipTrigger asChild>
+                            <div 
+                              className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+                              style={{ backgroundColor: `${etapa.color}10` }}
+                              onClick={() => navigate("/")}
+                              title={etapa.etapa}
+                              aria-label={`${etapa.etapa}: ${etapa.pecas} peças`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div 
+                                  className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                                  style={{ backgroundColor: etapa.color }} 
+                                />
+                                <span 
+                                  className="text-xs line-clamp-1 break-words min-w-0"
+                                  title={etapa.etapa}
+                                >
+                                  {etapa.etapa}
+                                </span>
+                                {etapa.isBottleneck && <AlertTriangle size={12} className="text-amber-500 flex-shrink-0" />}
+                              </div>
+                              <span className="text-sm font-bold flex-shrink-0 ml-2" style={{ color: etapa.color }}>
+                                {formatNumber(etapa.pecas)}
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          {!isMobile && (
+                            <TooltipContent side="left">
+                              <p className="font-medium">{etapa.etapa}</p>
+                              <p className="text-xs text-muted-foreground">{formatNumber(etapa.pecas)} peças</p>
+                            </TooltipContent>
+                          )}
+                        </TooltipUI>
+                      ))}
+                    </TooltipProvider>
                   </div>;
             })()}
             </CardContent>
           </Card>
         </div>
+        
+        {/* Modal: Detalhes do Modelo (Mobile) */}
+        <Dialog open={!!selectedModelo} onOpenChange={(open) => !open && setSelectedModelo(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Detalhes do Modelo</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Nome do Modelo</p>
+                <p className="font-medium text-foreground">{selectedModelo?.nome}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Quantidade Vendida</p>
+                <p className="text-2xl font-bold text-primary">{selectedModelo?.quantidade} un</p>
+              </div>
+              <Button 
+                className="w-full" 
+                onClick={() => {
+                  navigate(`/estoque?search=${encodeURIComponent(selectedModelo?.nome || '')}`);
+                  setSelectedModelo(null);
+                }}
+              >
+                Ver no Estoque
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Modal: Detalhes do Status (Mobile) */}
+        <Dialog open={!!selectedStatus} onOpenChange={(open) => !open && setSelectedStatus(null)}>
+          <DialogContent className="max-w-xs">
+            <DialogHeader>
+              <DialogTitle>Status do Pedido</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 text-center">
+              <div 
+                className="w-6 h-6 rounded-full mx-auto" 
+                style={{ backgroundColor: selectedStatus?.color }} 
+              />
+              <p className="text-lg font-bold text-foreground">{selectedStatus?.status}</p>
+              <p className="text-3xl font-bold text-primary">{selectedStatus?.count}</p>
+              <p className="text-sm text-muted-foreground">
+                {data.statusPedidos.reduce((acc, s) => acc + s.count, 0) > 0 
+                  ? `${((selectedStatus?.count || 0) / data.statusPedidos.reduce((acc, s) => acc + s.count, 0) * 100).toFixed(1)}% do total`
+                  : '0% do total'
+                }
+              </p>
+              <Button 
+                className="w-full" 
+                onClick={() => {
+                  navigate(`/pedidos-criados?status=${selectedStatus?.status}`);
+                  setSelectedStatus(null);
+                }}
+              >
+                Ver Pedidos
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
       
       {/* Bottom Navigation for Mobile */}
