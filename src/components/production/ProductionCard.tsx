@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreVertical, ArrowRight, ArrowLeft, Trash2, Pencil, DollarSign, PackageCheck, Flame, AlertTriangle, Circle, Clock } from 'lucide-react';
+import { MoreVertical, ArrowRight, ArrowLeft, Trash2, Pencil, DollarSign, PackageCheck, Flame, AlertTriangle, Circle, Clock, History } from 'lucide-react';
 import { ProducaoData, Producao } from '@/entities/Producao';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { useLoteCustos } from '@/hooks/useLoteCustos';
@@ -29,6 +29,7 @@ interface ProductionCardProps {
   onDelete?: () => void;
   onManageCosts?: () => void;
   onOpenChecklist?: () => void;
+  onOpenHistory?: () => void;
   onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
   isFirstStage: boolean;
   isLastStage: boolean;
@@ -65,6 +66,7 @@ export function ProductionCard({
   onDelete,
   onManageCosts,
   onOpenChecklist,
+  onOpenHistory,
   onUpdateProgress,
   isFirstStage, 
   isLastStage,
@@ -174,6 +176,10 @@ export function ProductionCard({
               <DropdownMenuItem onClick={onManageCosts} className="cursor-pointer">
                 <DollarSign size={14} className="mr-2" />
                 Custos
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onOpenHistory} className="cursor-pointer">
+                <History size={14} className="mr-2" />
+                Histórico
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem 

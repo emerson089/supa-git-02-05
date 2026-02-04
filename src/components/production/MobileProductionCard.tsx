@@ -14,7 +14,8 @@ import {
   AlertTriangle,
   AlertCircle,
   Clock,
-  ClipboardCheck
+  ClipboardCheck,
+  History
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -36,6 +37,7 @@ interface MobileProductionCardProps {
   onDelete?: () => void;
   onManageCosts?: () => void;
   onOpenChecklist?: () => void;
+  onOpenHistory?: () => void;
   onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
   isFirstStage: boolean;
   isLastStage: boolean;
@@ -68,6 +70,7 @@ export function MobileProductionCard({
   onDelete,
   onManageCosts,
   onOpenChecklist,
+  onOpenHistory,
   onUpdateProgress,
   isFirstStage,
   isLastStage,
@@ -173,6 +176,12 @@ export function MobileProductionCard({
                   <DropdownMenuItem onClick={onManageCosts}>
                     <DollarSign className="h-4 w-4 mr-2" />
                     Custos
+                  </DropdownMenuItem>
+                )}
+                {onOpenHistory && (
+                  <DropdownMenuItem onClick={onOpenHistory}>
+                    <History className="h-4 w-4 mr-2" />
+                    Histórico
                   </DropdownMenuItem>
                 )}
                 {currentStage === 'Aprontamento' && onOpenChecklist && (

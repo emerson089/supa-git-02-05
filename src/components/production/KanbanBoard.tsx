@@ -23,6 +23,7 @@ interface KanbanBoardProps {
   onDeleteCard?: (lot: ProducaoData) => void;
   onManageCosts?: (lot: ProducaoData) => void;
   onOpenChecklist?: (lot: ProducaoData) => void;
+  onOpenHistory?: (lot: ProducaoData) => void;
   onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
   filtros?: FiltrosProducao;
 }
@@ -38,6 +39,7 @@ const LazyColumn = memo(function LazyColumn({
   onDeleteCard,
   onManageCosts,
   onOpenChecklist,
+  onOpenHistory,
   onUpdateProgress,
 }: {
   stageId: string;
@@ -49,6 +51,7 @@ const LazyColumn = memo(function LazyColumn({
   onDeleteCard?: (lot: ProducaoData) => void;
   onManageCosts?: (lot: ProducaoData) => void;
   onOpenChecklist?: (lot: ProducaoData) => void;
+  onOpenHistory?: (lot: ProducaoData) => void;
   onUpdateProgress?: (lotId: string, pecasConcluidas: number) => void;
 }) {
   const columnRef = useRef<HTMLDivElement>(null);
@@ -103,6 +106,7 @@ const LazyColumn = memo(function LazyColumn({
           onDeleteCard={onDeleteCard}
           onManageCosts={onManageCosts}
           onOpenChecklist={onOpenChecklist}
+          onOpenHistory={onOpenHistory}
           onUpdateProgress={onUpdateProgress}
           isFirstStage={stageIndex === 0}
           isLastStage={stageIndex === STAGES.length - 1}
@@ -126,6 +130,7 @@ export function KanbanBoard({
   onDeleteCard, 
   onManageCosts,
   onOpenChecklist,
+  onOpenHistory,
   onUpdateProgress,
   filtros,
 }: KanbanBoardProps) {
@@ -177,6 +182,7 @@ export function KanbanBoard({
             onDeleteCard={onDeleteCard}
             onManageCosts={onManageCosts}
             onOpenChecklist={onOpenChecklist}
+            onOpenHistory={onOpenHistory}
             onUpdateProgress={onUpdateProgress}
           />
         ))}
