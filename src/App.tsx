@@ -22,6 +22,7 @@ import AlterarSenha from "./pages/AlterarSenha";
 import ConfigUsuarios from "./pages/ConfigUsuarios";
 import ConfigTiposAjuste from "./pages/ConfigTiposAjuste";
 import ConfigExcursoes from "./pages/ConfigExcursoes";
+import ConfigCustosPadrao from "./pages/ConfigCustosPadrao";
 import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 
@@ -77,6 +78,14 @@ function App() {
                       element={
                         <ProtectedRoute allowedRoles={['admin', 'gerente']}>
                           <ConfigExcursoes />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/custos-padrao"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <ConfigCustosPadrao />
                         </ProtectedRoute>
                       }
                     />

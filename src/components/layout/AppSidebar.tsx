@@ -1,4 +1,4 @@
-import { Package, LayoutDashboard, Factory, Warehouse, Users, ShoppingCart, FileText, Settings, HelpCircle, LogOut, Store, ArrowLeftRight, Tag, Bus } from 'lucide-react';
+import { Package, LayoutDashboard, Factory, Warehouse, Users, ShoppingCart, FileText, Settings, HelpCircle, LogOut, Store, ArrowLeftRight, Tag, Bus, DollarSign } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/contexts/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -70,6 +70,11 @@ const bottomNavItems: NavItem[] = [{
   label: 'Excursões',
   icon: <Bus size={18} />,
   path: '/configuracoes/excursoes',
+  roles: ['admin', 'gerente']
+}, {
+  label: 'Custos Padrão',
+  icon: <DollarSign size={18} />,
+  path: '/configuracoes/custos-padrao',
   roles: ['admin', 'gerente']
 }, {
   label: 'Ajuda',
