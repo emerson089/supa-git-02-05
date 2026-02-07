@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreVertical, ArrowRight, ArrowLeft, Trash2, Pencil, DollarSign, PackageCheck, Flame, AlertTriangle, Circle, Clock, History } from 'lucide-react';
+import { MoreVertical, ArrowRight, ArrowLeft, Trash2, Pencil, DollarSign, PackageCheck, Package, Flame, AlertTriangle, Circle, Clock, History } from 'lucide-react';
 import { ProducaoData, Producao } from '@/entities/Producao';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { useLoteCustos } from '@/hooks/useLoteCustos';
@@ -149,12 +149,18 @@ export function ProductionCard({
             {priorityInfo.label}
           </span>
           
-          {lot.integrado_estoque && (
+          {/* Badge de status de integração com estoque */}
+          {lot.posted_to_stock_at ? (
             <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">
               <PackageCheck size={10} className="mr-1" />
-              Estoque
+              Estoque ✓
             </Badge>
-          )}
+          ) : lot.integrado_estoque ? (
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
+              <Package size={10} className="mr-1" />
+              Sem custo
+            </Badge>
+          ) : null}
         </div>
         
         <div className="flex items-center gap-1">

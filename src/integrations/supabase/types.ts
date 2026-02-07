@@ -164,12 +164,14 @@ export type Database = {
         Row: {
           categoria: string
           created_at: string
+          custo_medio: number | null
           id: string
           imagem_url: string | null
           localizacao: string | null
           nome: string
           preco_unitario: number | null
           producao_id: string | null
+          qtd_com_custo: number | null
           quantidade: number
           quantidade_minima: number
           tipo: string
@@ -180,12 +182,14 @@ export type Database = {
         Insert: {
           categoria: string
           created_at?: string
+          custo_medio?: number | null
           id?: string
           imagem_url?: string | null
           localizacao?: string | null
           nome: string
           preco_unitario?: number | null
           producao_id?: string | null
+          qtd_com_custo?: number | null
           quantidade?: number
           quantidade_minima?: number
           tipo: string
@@ -196,12 +200,14 @@ export type Database = {
         Update: {
           categoria?: string
           created_at?: string
+          custo_medio?: number | null
           id?: string
           imagem_url?: string | null
           localizacao?: string | null
           nome?: string
           preco_unitario?: number | null
           producao_id?: string | null
+          qtd_com_custo?: number | null
           quantidade?: number
           quantidade_minima?: number
           tipo?: string
@@ -249,6 +255,7 @@ export type Database = {
       estoque_movimentacoes: {
         Row: {
           created_at: string
+          custo_aplicado: number | null
           estoque_antes: number | null
           estoque_depois: number | null
           id: string
@@ -258,6 +265,8 @@ export type Database = {
           preco_aplicado: number | null
           producao_id: string | null
           quantidade: number
+          source_id: string | null
+          source_type: string | null
           tipo: string
           tipo_ajuste_id: string | null
           transferencia_id: string | null
@@ -265,6 +274,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          custo_aplicado?: number | null
           estoque_antes?: number | null
           estoque_depois?: number | null
           id?: string
@@ -274,6 +284,8 @@ export type Database = {
           preco_aplicado?: number | null
           producao_id?: string | null
           quantidade: number
+          source_id?: string | null
+          source_type?: string | null
           tipo: string
           tipo_ajuste_id?: string | null
           transferencia_id?: string | null
@@ -281,6 +293,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          custo_aplicado?: number | null
           estoque_antes?: number | null
           estoque_depois?: number | null
           id?: string
@@ -290,6 +303,8 @@ export type Database = {
           preco_aplicado?: number | null
           producao_id?: string | null
           quantidade?: number
+          source_id?: string | null
+          source_type?: string | null
           tipo?: string
           tipo_ajuste_id?: string | null
           transferencia_id?: string | null
@@ -725,11 +740,14 @@ export type Database = {
           modelo_nome_cache: string | null
           observacoes: string | null
           pecas_concluidas: number | null
+          posted_to_stock_at: string | null
           prioridade: string | null
           processo_atual: string
           produto_id: string | null
           quantidade: number
           responsavel: string | null
+          total_cost: number | null
+          unit_cost: number | null
           updated_at: string
           user_id: string | null
         }
@@ -743,11 +761,14 @@ export type Database = {
           modelo_nome_cache?: string | null
           observacoes?: string | null
           pecas_concluidas?: number | null
+          posted_to_stock_at?: string | null
           prioridade?: string | null
           processo_atual?: string
           produto_id?: string | null
           quantidade?: number
           responsavel?: string | null
+          total_cost?: number | null
+          unit_cost?: number | null
           updated_at?: string
           user_id?: string | null
         }
@@ -761,11 +782,14 @@ export type Database = {
           modelo_nome_cache?: string | null
           observacoes?: string | null
           pecas_concluidas?: number | null
+          posted_to_stock_at?: string | null
           prioridade?: string | null
           processo_atual?: string
           produto_id?: string | null
           quantidade?: number
           responsavel?: string | null
+          total_cost?: number | null
+          unit_cost?: number | null
           updated_at?: string
           user_id?: string | null
         }

@@ -19,6 +19,9 @@ export interface ItemEstoque {
   producaoId: string | null;
   createdAt: string;
   updatedAt: string;
+  // Novos campos para custo médio ponderado
+  custoMedio: number | null;
+  qtdComCusto: number;
 }
 
 export type TipoMovimentacao = 'entrada' | 'saida' | 'ENVIO_FEIRA' | 'RETORNO_FEIRA' | 'VENDA_FEIRA';
@@ -51,6 +54,9 @@ interface DbItem {
   producao_id: string | null;
   created_at: string;
   updated_at: string;
+  // Novos campos para custo médio ponderado
+  custo_medio: number | null;
+  qtd_com_custo: number | null;
 }
 
 interface DbMovimentacao {
@@ -81,6 +87,9 @@ const mapDbItemToItem = (dbItem: DbItem): ItemEstoque => ({
   producaoId: dbItem.producao_id,
   createdAt: dbItem.created_at,
   updatedAt: dbItem.updated_at,
+  // Novos campos para custo médio ponderado
+  custoMedio: dbItem.custo_medio != null ? Number(dbItem.custo_medio) : null,
+  qtdComCusto: dbItem.qtd_com_custo != null ? Number(dbItem.qtd_com_custo) : 0,
 });
 
 const mapDbMovToMov = (dbMov: DbMovimentacao): MovimentacaoEstoque => ({
