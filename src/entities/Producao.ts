@@ -23,6 +23,10 @@ export interface ProducaoData {
   prioridade: PrioridadeType | string;
   pecas_concluidas: number;
   checklist_aprontamento?: ChecklistAprontamento;
+  // Novos campos para integração com estoque e custos
+  posted_to_stock_at?: string | null;
+  unit_cost?: number | null;
+  total_cost?: number | null;
 }
 
 export interface ProducaoInsert {

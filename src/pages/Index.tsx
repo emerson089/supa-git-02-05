@@ -207,43 +207,9 @@ const Index = () => {
         responsavel: lot.responsavel
       }));
 
-      // Quando move para "Vendas" (Estoque/Pronto), integra ao estoque
-      if (newStage === 'Vendas' && !lot.integrado_estoque) {
-        // Buscar preço de venda do lote
-        let precoVenda = 0;
-        try {
-          const { data: custosConfig } = await supabase
-            .from('lote_custos_config')
-            .select('preco_venda')
-            .eq('producao_id', lot.id)
-            .maybeSingle();
-          
-          if (custosConfig) {
-            precoVenda = Number(custosConfig.preco_venda) || 0;
-          }
-        } catch (e) {
-          console.error('Erro ao buscar preço de venda:', e);
-        }
-
-        integrarProducao(
-          lot.modelo_nome_cache || `Lote ${lot.id_producao}`,
-          lot.quantidade,
-          lot.id_producao,
-          lot.imagem_url,
-          precoVenda
-        );
-        
-        // Marcar lote como integrado ao estoque
-        await callWithRetry(() => Producao.update(lot.id, { 
-          integrado_estoque: true 
-        }));
-        
-        // Atualizar estado local
-        setLots(prev => prev.map(l => 
-          l.id === lot.id ? { ...l, processo_atual: newStage, integrado_estoque: true } : l
-        ));
-        
-        toast.success('Lote enviado para o Estoque com sucesso!');
+      // Quando move para "Vendas", apenas notifica - integração é manual via modal de Custos
+      if (newStage === 'Vendas') {
+        toast.success('Lote movido para Vendas. Abra os Custos para enviar ao estoque com custo médio.');
       } else {
         toast.success(`Movido para ${STAGES.find(s => s.id === newStage)?.label}`);
       }

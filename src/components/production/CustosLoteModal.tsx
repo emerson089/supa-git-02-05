@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, DollarSign, TrendingUp, Ruler, Loader2, Check, CircleDollarSign, Percent, Package } from 'lucide-react';
+import { Plus, Trash2, DollarSign, TrendingUp, Ruler, Loader2, Check, CircleDollarSign, Percent, Package, PackageCheck, AlertTriangle, Send } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,10 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import { ProducaoData } from '@/entities/Producao';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { CustoItemSchema, CustoConfigSchema } from '@/lib/validations';
+import { useEnviarParaEstoque } from '@/hooks/useEnviarParaEstoque';
+import { format } from 'date-fns';
 
 interface CustoItem {
   id: string;
@@ -56,6 +59,31 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   
+  // Hook para integração com estoque
+  const { 
+    enviarParaEstoque, 
+    calcularPreview, 
+    verificarJaEnviado, 
+    isLoading: isEnviando 
+  } = useEnviarParaEstoque();
+  const [previewCustoMedio, setPreviewCustoMedio] = useState<{
+    produtoExistente: boolean;
+    produtoNome: string;
+    estoqueAtualQty: number;
+    estoqueAtualCustoMedio: number | null;
+    qtdComCustoAtual: number;
+    loteQty: number;
+    loteCustoUnitario: number;
+    novoCustoMedio: number;
+    novaQtdComCusto: number;
+    novoEstoqueTotal: number;
+  } | null>(null);
+  const [statusIntegracao, setStatusIntegracao] = useState<{
+    jaEnviado: boolean;
+    dataEnvio?: string;
+    integradoSemCusto?: boolean;
+  } | null>(null);
+  
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
   const quantidade = lot?.quantidade || 0;
 
@@ -70,6 +98,8 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
   useEffect(() => {
     if (lot && open) {
       loadData();
+      // Carregar status de integração
+      verificarJaEnviado(lot.id).then(setStatusIntegracao);
     }
   }, [lot, open]);
 
@@ -317,6 +347,48 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
   const totalPago = custos.filter(c => c.is_paid).reduce((sum, c) => sum + (c.valor_unitario * quantidade), 0);
   const totalPendente = custoItens - totalPago;
 
+  // Atualizar preview quando custos mudam
+  useEffect(() => {
+    if (lot && open && lot.processo_atual === 'Vendas' && custoUnitario > 0) {
+      calcularPreview({
+        modeloNome: lot.modelo_nome_cache || `Lote ${lot.id_producao}`,
+        quantidade: lot.quantidade,
+        custoUnitario,
+      }).then(setPreviewCustoMedio);
+    }
+  }, [lot, open, custoUnitario]);
+
+  // Função para enviar para estoque
+  const handleEnviarParaEstoque = async () => {
+    if (!lot) return;
+    
+    if (custoTotal <= 0) {
+      toast.error('Preencha os custos antes de enviar para o estoque');
+      return;
+    }
+
+    const success = await enviarParaEstoque({
+      loteId: lot.id,
+      loteIdProducao: lot.id_producao,
+      modeloNome: lot.modelo_nome_cache || `Lote ${lot.id_producao}`,
+      quantidade: lot.quantidade,
+      imagemUrl: lot.imagem_url,
+      precoVenda: localConfig.preco_venda,
+      custoUnitario,
+      custoTotal,
+    });
+
+    if (success) {
+      setStatusIntegracao({ jaEnviado: true, dataEnvio: new Date().toISOString() });
+      onClose();
+    }
+  };
+
+  // Condições para mostrar seção de integração
+  const podeEnviarParaEstoque = lot?.processo_atual === 'Vendas' && !statusIntegracao?.jaEnviado && !statusIntegracao?.integradoSemCusto;
+  const jaIntegradoSemCusto = statusIntegracao?.integradoSemCusto;
+  const jaEnviadoComData = statusIntegracao?.jaEnviado && statusIntegracao?.dataEnvio;
+
   // Margin color logic
   const getMarginColor = (margin: number) => {
     if (margin >= 30) return 'text-emerald-600 dark:text-emerald-400';
@@ -507,6 +579,102 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
           {custos.length === 0 && (
             <div className="text-center py-6 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
               Nenhum custo registrado
+            </div>
+          )}
+
+          {/* Seção de Integração com Estoque - Apenas para lotes em "Vendas" */}
+          {lot.processo_atual === 'Vendas' && (
+            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 rounded-lg p-3 sm:p-4 space-y-3 border border-emerald-200 dark:border-emerald-800">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-sm flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                  <PackageCheck size={16} />
+                  Integração com Estoque
+                </h4>
+                {jaEnviadoComData && (
+                  <Badge variant="outline" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700">
+                    <Check size={12} className="mr-1" />
+                    Enviado em {format(new Date(statusIntegracao.dataEnvio!), 'dd/MM/yyyy')}
+                  </Badge>
+                )}
+                {jaIntegradoSemCusto && (
+                  <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-700">
+                    <AlertTriangle size={12} className="mr-1" />
+                    Integrado (antes do sistema de custos)
+                  </Badge>
+                )}
+              </div>
+
+              {/* Preview do Custo Médio */}
+              {podeEnviarParaEstoque && previewCustoMedio && (
+                <div className="bg-background/80 rounded-lg p-3 space-y-2 border border-emerald-200 dark:border-emerald-800">
+                  <p className="text-xs font-medium text-muted-foreground">Preview do Custo Médio</p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Estoque atual:</span>
+                      <span>
+                        {previewCustoMedio.estoqueAtualQty} pç × R$ {previewCustoMedio.estoqueAtualCustoMedio?.toFixed(2) || '--'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                      <span>+ Este lote:</span>
+                      <span>
+                        {previewCustoMedio.loteQty} pç × R$ {previewCustoMedio.loteCustoUnitario.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="border-t pt-1 flex justify-between font-medium">
+                      <span>= Novo estoque:</span>
+                      <span>
+                        {previewCustoMedio.novoEstoqueTotal} pç × R$ {previewCustoMedio.novoCustoMedio.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-2">
+                    * Apenas qtd_com_custo ({previewCustoMedio.novaQtdComCusto} pç) entra no cálculo de valor do estoque
+                  </p>
+                </div>
+              )}
+
+              {/* Botão Enviar para Estoque */}
+              {podeEnviarParaEstoque && (
+                <div className="space-y-2">
+                  <Button
+                    onClick={handleEnviarParaEstoque}
+                    disabled={isEnviando || custoTotal <= 0}
+                    className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    {isEnviando ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={16} className="mr-2" />
+                        Enviar para Estoque
+                      </>
+                    )}
+                  </Button>
+                  {custoTotal <= 0 && (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <AlertTriangle size={10} />
+                      Preencha os custos antes de enviar
+                    </p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground">
+                    ⚠️ Ação irreversível. O estoque será atualizado imediatamente.
+                  </p>
+                </div>
+              )}
+
+              {/* Status para lotes já enviados */}
+              {(jaEnviadoComData || jaIntegradoSemCusto) && (
+                <p className="text-xs text-muted-foreground">
+                  {jaEnviadoComData 
+                    ? `Este lote foi integrado ao estoque com custo unitário de R$ ${lot.unit_cost?.toFixed(2) || custoUnitario.toFixed(2)}`
+                    : 'Este lote foi integrado antes do sistema de custos. Não é possível recalcular o custo médio.'
+                  }
+                </p>
+              )}
             </div>
           )}
 

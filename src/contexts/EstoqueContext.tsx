@@ -49,6 +49,8 @@ interface EstoqueContextType {
     localizacao: string;
     imagemUrl?: string;
     loteProducaoId?: string;
+    custoMedio?: number | null;
+    qtdComCusto?: number;
   }) => Promise<ItemEstoque>;
   updateItem: (id: string, data: Partial<{
     nome: string;
@@ -112,6 +114,8 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
     localizacao: string;
     imagemUrl?: string;
     loteProducaoId?: string;
+    custoMedio?: number | null;
+    qtdComCusto?: number;
   }): Promise<ItemEstoque> => {
     const result = await addItemMutation.mutateAsync({
       nome: data.nome,
@@ -124,6 +128,8 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
       localizacao: data.localizacao,
       imagemUrl: data.imagemUrl || null,
       producaoId: data.loteProducaoId || null,
+      custoMedio: data.custoMedio ?? null,
+      qtdComCusto: data.qtdComCusto ?? 0,
     });
     return { ...result, status: calcularStatus(result) };
   }, [addItemMutation]);
@@ -231,6 +237,8 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
       localizacao: 'Estoque Produção',
       imagemUrl: null,
       producaoId: loteProducaoId,
+      custoMedio: null,
+      qtdComCusto: 0,
     });
 
     await addMovimentacaoMutation.mutateAsync({
@@ -290,6 +298,8 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
       localizacao: 'Estoque Produção',
       imagemUrl: imagemUrl || null,
       producaoId: loteProducaoId,
+      custoMedio: null,
+      qtdComCusto: 0,
     });
 
     await addMovimentacaoMutation.mutateAsync({
