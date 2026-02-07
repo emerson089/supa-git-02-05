@@ -160,6 +160,42 @@ export type Database = {
         }
         Relationships: []
       }
+      custos_padrao: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          descricao: string
+          id: string
+          ordem: number
+          tipo: string
+          updated_at: string
+          user_id: string
+          valor_unitario: number
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          descricao: string
+          id?: string
+          ordem?: number
+          tipo: string
+          updated_at?: string
+          user_id: string
+          valor_unitario?: number
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          descricao?: string
+          id?: string
+          ordem?: number
+          tipo?: string
+          updated_at?: string
+          user_id?: string
+          valor_unitario?: number
+        }
+        Relationships: []
+      }
       estoque_itens: {
         Row: {
           categoria: string

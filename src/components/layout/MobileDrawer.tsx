@@ -13,6 +13,9 @@ import {
   ArrowLeftRight,
   Factory,
   FileText,
+  DollarSign,
+  Tag,
+  Bus,
   LucideIcon
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -48,7 +51,9 @@ const drawerOperationsItems: DrawerNavItem[] = [
 
 const drawerBottomItems: DrawerNavItem[] = [
   { label: 'Usuários', icon: Settings, path: '/configuracoes/usuarios', roles: ['admin'] },
-  { label: 'Tipos de Ajuste', icon: Settings, path: '/configuracoes/tipos-ajuste', roles: ['admin', 'gerente'] },
+  { label: 'Tipos de Ajuste', icon: Tag, path: '/configuracoes/tipos-ajuste', roles: ['admin', 'gerente'] },
+  { label: 'Excursões', icon: Bus, path: '/configuracoes/excursoes', roles: ['admin', 'gerente'] },
+  { label: 'Custos Padrão', icon: DollarSign, path: '/configuracoes/custos-padrao', roles: ['admin', 'gerente'] },
   { label: 'Ajuda', icon: HelpCircle, path: '/ajuda' },
 ];
 

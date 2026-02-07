@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, DollarSign, TrendingUp, Ruler, Loader2, Check, CircleDollarSign, Percent, Package, PackageCheck, AlertTriangle, Send } from 'lucide-react';
+import { Plus, Trash2, DollarSign, TrendingUp, Ruler, Loader2, Check, CircleDollarSign, Percent, Package, PackageCheck, AlertTriangle, Send, Wand2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { CustoItemSchema, CustoConfigSchema } from '@/lib/validations';
 import { useEnviarParaEstoque } from '@/hooks/useEnviarParaEstoque';
+import { useCustosPadrao } from '@/hooks/useCustosPadrao';
 import { format } from 'date-fns';
 
 interface CustoItem {
@@ -58,6 +59,10 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
   const [novoValor, setNovoValor] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [aplicandoPadrao, setAplicandoPadrao] = useState(false);
+  
+  // Hook para custos padrão
+  const { custosAtivos } = useCustosPadrao();
   
   // Hook para integração com estoque
   const { 
@@ -286,6 +291,68 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
     }
   };
 
+  // Aplicar custos padrão
+  const handleAplicarCustosPadrao = async () => {
+    if (!lot || custosAtivos.length === 0) return;
+    
+    setAplicandoPadrao(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Você precisa estar autenticado');
+        return;
+      }
+
+      // Verificar custos já existentes (por tipo+descricao)
+      const custosExistentes = new Set(
+        custos.map(c => `${c.tipo}|${c.descricao.toLowerCase()}`)
+      );
+
+      // Filtrar custos padrão que ainda não existem
+      const custosNovos = custosAtivos.filter(
+        cp => !custosExistentes.has(`${cp.tipo}|${cp.descricao.toLowerCase()}`)
+      );
+
+      if (custosNovos.length === 0) {
+        toast.info('Todos os custos padrão já estão aplicados');
+        return;
+      }
+
+      // Inserir novos custos
+      const inserts = custosNovos.map(cp => ({
+        producao_id: lot.id,
+        tipo: cp.tipo,
+        descricao: cp.descricao,
+        valor_unitario: cp.valor_unitario,
+        user_id: user.id
+      }));
+
+      const { data, error } = await supabase
+        .from('lote_custos_itens')
+        .insert(inserts)
+        .select();
+
+      if (error) throw error;
+
+      // Adicionar aos custos locais
+      const novosCustos = (data || []).map(item => ({
+        id: item.id,
+        tipo: item.tipo,
+        descricao: item.descricao,
+        valor_unitario: Number(item.valor_unitario),
+        is_paid: item.is_paid,
+        data_pagamento: item.data_pagamento || undefined
+      }));
+
+      setCustos([...custos, ...novosCustos]);
+      toast.success(`${custosNovos.length} custos padrão aplicados`);
+    } catch {
+      toast.error('Erro ao aplicar custos padrão');
+    } finally {
+      setAplicandoPadrao(false);
+    }
+  };
+
   const handleTogglePaid = async (id: string) => {
     const custo = custos.find(c => c.id === id);
     if (!custo) return;
@@ -463,11 +530,46 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
             </div>
           </div>
 
+          {/* Botão Aplicar Custos Padrão */}
+          {custosAtivos.length > 0 && (
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <Wand2 size={16} className="text-primary" />
+                    Custos Padrão
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {custosAtivos.length} custos configurados
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleAplicarCustosPadrao}
+                  disabled={aplicandoPadrao}
+                  className="h-9 shrink-0 border-primary/30 hover:bg-primary/10"
+                >
+                  {aplicandoPadrao ? (
+                    <>
+                      <Loader2 size={16} className="mr-2 animate-spin" />
+                      Aplicando...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 size={16} className="mr-2" />
+                      Aplicar Custos Padrão
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Add new cost - Compact */}
           <div className="bg-muted/50 rounded-lg p-3 sm:p-4 space-y-3">
             <h4 className="font-semibold text-sm flex items-center gap-2">
               <Plus size={16} className="text-primary" />
-              Adicionar Custo
+              Adicionar Custo Avulso
               <span className="text-xs font-normal text-muted-foreground">(por peça)</span>
             </h4>
             <div className="flex flex-col gap-2 sm:flex-row">
