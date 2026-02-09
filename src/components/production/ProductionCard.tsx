@@ -1,15 +1,14 @@
-import { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { MoreVertical, ArrowRight, ArrowLeft, Trash2, Pencil, DollarSign, PackageCheck, Package, Flame, AlertTriangle, Circle, Clock, History } from 'lucide-react';
-import { ProducaoData, Producao } from '@/entities/Producao';
+import { ProducaoData } from '@/entities/Producao';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { useLoteCustos } from '@/hooks/useLoteCustos';
 import { useTempoNaEtapa } from '@/hooks/useTempoNaEtapa';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Input } from '@/components/ui/input';
 import { LazyImage } from '@/components/ui/lazy-image';
+import { STAGES, getStageIndex } from '@/data/production-data';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,8 +72,7 @@ export function ProductionCard({
   isDragging: isDraggingProp,
   currentStage
 }: ProductionCardProps) {
-  const [editingProgress, setEditingProgress] = useState(false);
-  const [tempPecas, setTempPecas] = useState(lot.pecas_concluidas || 0);
+  
   const { attributes, listeners, setNodeRef, transform, isDragging: isDraggingDnd } = useDraggable({
     id: lot.id,
   });
@@ -100,29 +98,10 @@ export function ProductionCard({
   const priorityInfo = priorityConfig[priority];
   const PriorityIcon = priorityInfo.icon;
   
-  // Progress calculation
-  const pecasConcluidas = lot.pecas_concluidas || 0;
-  const progressPercent = lot.quantidade > 0 
-    ? Math.min((pecasConcluidas / lot.quantidade) * 100, 100)
-    : 0;
-
-  // Handle save progress
-  const handleSaveProgress = async () => {
-    const newValue = Math.min(Math.max(0, tempPecas), lot.quantidade);
-    setEditingProgress(false);
-    
-    if (newValue !== pecasConcluidas) {
-      try {
-        await Producao.update(lot.id, { pecas_concluidas: newValue });
-        onUpdateProgress?.(lot.id, newValue);
-        toast.success('Progresso atualizado!');
-      } catch (error) {
-        console.error('Erro ao atualizar progresso:', error);
-        toast.error('Erro ao atualizar progresso');
-        setTempPecas(pecasConcluidas);
-      }
-    }
-  };
+  // Stage progress calculation
+  const currentStageIndex = getStageIndex(lot.processo_atual);
+  const stageProgress = ((currentStageIndex + 1) / STAGES.length) * 100;
+  const currentStageLabel = STAGES[currentStageIndex]?.label || lot.processo_atual;
 
   return (
     <div
@@ -239,40 +218,13 @@ export function ProductionCard({
         </div>
       </div>
 
-      {/* Progress Bar */}
+      {/* Stage Progress Bar */}
       <div className="mb-4">
         <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-          <span>Progresso</span>
-          {editingProgress ? (
-            <div className="flex items-center gap-1">
-              <Input
-                type="number"
-                value={tempPecas}
-                onChange={(e) => setTempPecas(Number(e.target.value))}
-                onBlur={handleSaveProgress}
-                onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress()}
-                className="w-14 h-5 text-xs px-1 text-right"
-                min={0}
-                max={lot.quantidade}
-                autoFocus
-              />
-              <span className="text-muted-foreground">/{lot.quantidade}</span>
-            </div>
-          ) : (
-            <span 
-              onClick={(e) => {
-                e.stopPropagation();
-                setTempPecas(pecasConcluidas);
-                setEditingProgress(true);
-              }}
-              className="font-medium cursor-pointer hover:text-primary hover:underline"
-              title="Clique para editar"
-            >
-              {pecasConcluidas}/{lot.quantidade}
-            </span>
-          )}
+          <span>Etapa {currentStageIndex + 1} de {STAGES.length}</span>
+          <span className="font-medium">{currentStageLabel}</span>
         </div>
-        <Progress value={progressPercent} className="h-2" />
+        <Progress value={stageProgress} className="h-2" />
       </div>
 
       {/* Footer with Avatar & Actions */}

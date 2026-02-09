@@ -1,9 +1,7 @@
-import { useState } from 'react';
-import { ProducaoData, ChecklistAprontamento, Producao } from '@/entities/Producao';
+import { ProducaoData, ChecklistAprontamento } from '@/entities/Producao';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -76,40 +74,15 @@ export function MobileProductionCard({
   isLastStage,
   currentStage,
 }: MobileProductionCardProps) {
-  const [editingProgress, setEditingProgress] = useState(false);
-  const [tempPecas, setTempPecas] = useState(lot.pecas_concluidas || 0);
-  
   const priority = (lot.prioridade as keyof typeof priorityConfig) || 'normal';
   const config = priorityConfig[priority];
   const PriorityIcon = config.icon;
 
   const currentStageIndex = getStageIndex(lot.processo_atual);
-  const progress = ((currentStageIndex + 1) / STAGES.length) * 100;
-
-  const pecasConcluidas = lot.pecas_concluidas || 0;
-  const completedPercentage = lot.quantidade > 0
-    ? Math.round((pecasConcluidas / lot.quantidade) * 100)
-    : 0;
+  const stageProgress = ((currentStageIndex + 1) / STAGES.length) * 100;
+  const currentStageLabel = STAGES[currentStageIndex]?.label || lot.processo_atual;
 
   const { dias, corClasse, label: tempoLabel } = useTempoNaEtapa(lot.updated_at);
-
-  // Handle save progress
-  const handleSaveProgress = async () => {
-    const newValue = Math.min(Math.max(0, tempPecas), lot.quantidade);
-    setEditingProgress(false);
-    
-    if (newValue !== pecasConcluidas) {
-      try {
-        await Producao.update(lot.id, { pecas_concluidas: newValue });
-        onUpdateProgress?.(lot.id, newValue);
-        toast.success('Progresso atualizado!');
-      } catch (error) {
-        console.error('Erro ao atualizar progresso:', error);
-        toast.error('Erro ao atualizar progresso');
-        setTempPecas(pecasConcluidas);
-      }
-    }
-  };
 
   return (
     <Card className={cn(
@@ -211,41 +184,17 @@ export function MobileProductionCard({
             )}
           </div>
 
-          {/* Progress bar */}
+          {/* Stage progress bar */}
           <div className="mt-2 flex items-center gap-2">
             <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary transition-all"
-                style={{ width: `${completedPercentage}%` }}
+                style={{ width: `${stageProgress}%` }}
               />
             </div>
-            {editingProgress ? (
-              <div className="flex items-center gap-0.5">
-                <Input
-                  type="number"
-                  value={tempPecas}
-                  onChange={(e) => setTempPecas(Number(e.target.value))}
-                  onBlur={handleSaveProgress}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress()}
-                  className="w-10 h-5 text-[10px] px-1 text-right"
-                  min={0}
-                  max={lot.quantidade}
-                  autoFocus
-                />
-                <span className="text-[10px] text-muted-foreground">/{lot.quantidade}</span>
-              </div>
-            ) : (
-              <span 
-                onClick={() => {
-                  setTempPecas(pecasConcluidas);
-                  setEditingProgress(true);
-                }}
-                className="text-[10px] text-muted-foreground font-medium cursor-pointer hover:text-primary"
-                title="Clique para editar"
-              >
-                {completedPercentage}%
-              </span>
-            )}
+            <span className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">
+              {currentStageIndex + 1}/{STAGES.length}
+            </span>
           </div>
 
           {/* Checklist indicator for Aprontamento */}
