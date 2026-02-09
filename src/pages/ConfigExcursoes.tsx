@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, Bus, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Bus, Upload, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { cn } from '@/lib/utils';
 import { useExcursoes, useAddExcursao, useUpdateExcursao, useDeleteExcursao, useDeleteMultipleExcursoes, Excursao } from '@/hooks/useExcursoes';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,7 +32,12 @@ const ConfigExcursoes = () => {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteMultipleConfirm, setShowDeleteMultipleConfirm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
 
+  const filteredExcursoes = excursoes?.filter((e) =>
+    e.nome.toLowerCase().includes(debouncedSearch.toLowerCase())
+  );
   const handleOpenNew = () => {
     setEditingExcursao(null);
     setFormData({ nome: '', taxa: '' });
@@ -116,11 +122,11 @@ const ConfigExcursoes = () => {
   };
 
   const handleToggleSelectAll = () => {
-    if (!excursoes) return;
-    if (selectedIds.size === excursoes.length) {
+    if (!filteredExcursoes) return;
+    if (selectedIds.size === filteredExcursoes.length && filteredExcursoes.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(excursoes.map((e) => e.id)));
+      setSelectedIds(new Set(filteredExcursoes.map((e) => e.id)));
     }
   };
 
@@ -156,19 +162,30 @@ const ConfigExcursoes = () => {
 
         <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
           <div className="max-w-3xl space-y-6">
+            {/* Campo de busca */}
+            <div className="relative">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar excursão..."
+                className="pl-10 h-11 rounded-xl"
+              />
+            </div>
+
             {/* Botões de ação */}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-3">
-                {excursoes && excursoes.length > 0 && (
+                {filteredExcursoes && filteredExcursoes.length > 0 && (
                   <>
                     <div className="flex items-center gap-2">
                       <Checkbox
                         id="select-all"
-                        checked={selectedIds.size === excursoes.length && excursoes.length > 0}
+                        checked={selectedIds.size === filteredExcursoes.length && filteredExcursoes.length > 0}
                         onCheckedChange={handleToggleSelectAll}
                       />
                       <Label htmlFor="select-all" className="text-sm text-muted-foreground cursor-pointer">
-                        Selecionar Tudo ({excursoes.length})
+                        Selecionar Tudo ({filteredExcursoes.length})
                       </Label>
                     </div>
                     {selectedIds.size > 0 && (
@@ -203,16 +220,18 @@ const ConfigExcursoes = () => {
                 Array.from({ length: 3 }).map((_, i) => (
                   <Skeleton key={i} className="h-20 w-full rounded-xl" />
                 ))
-              ) : excursoes?.length === 0 ? (
+              ) : filteredExcursoes?.length === 0 ? (
                 <div className="neu-card p-8 text-center">
                   <Bus size={48} className="mx-auto text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground">Nenhuma excursão cadastrada</p>
+                  <p className="text-muted-foreground">
+                    {debouncedSearch ? 'Nenhuma excursão encontrada' : 'Nenhuma excursão cadastrada'}
+                  </p>
                   <p className="text-sm text-muted-foreground/70 mt-1">
-                    Clique em "Nova Excursão" para adicionar
+                    {debouncedSearch ? 'Tente outro termo de busca' : 'Clique em "Nova Excursão" para adicionar'}
                   </p>
                 </div>
               ) : (
-                excursoes?.map((excursao) => (
+                filteredExcursoes?.map((excursao) => (
                   <div
                     key={excursao.id}
                     className={cn(
