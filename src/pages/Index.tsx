@@ -17,6 +17,7 @@ import { AprontamentoChecklist, isChecklistComplete } from '@/components/product
 import { ImportProducaoCSVModal } from '@/components/production/ImportProducaoCSVModal';
 import { ImportCustosCSVModal } from '@/components/production/ImportCustosCSVModal';
 import { HistoricoProducaoModal } from '@/components/production/HistoricoProducaoModal';
+import { StageTransitionModal, StageTransitionData } from '@/components/production/StageTransitionModal';
 import ProducaoForm from '@/components/producao/ProducaoForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
@@ -101,6 +102,12 @@ const Index = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedLoteForHistory, setSelectedLoteForHistory] = useState<ProducaoData | null>(null);
 
+  // Stage transition modal
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
+  const [transitionLot, setTransitionLot] = useState<ProducaoData | null>(null);
+  const [transitionTarget, setTransitionTarget] = useState('');
+  const [transitionLoading, setTransitionLoading] = useState(false);
+
   // Fetch data from database
   const fetchData = useCallback(async () => {
     try {
@@ -172,7 +179,7 @@ const Index = () => {
     await handleStageChange(lot, targetStage);
   };
 
-  // Shared logic for stage changes
+  // Shared logic for stage changes — now opens transition modal
   const handleStageChange = async (lot: ProducaoData, newStage: string) => {
     const currentStage = lot.processo_atual;
 
@@ -187,27 +194,68 @@ const Index = () => {
       }
     }
 
+    // Open transition modal instead of moving directly
+    setTransitionLot(lot);
+    setTransitionTarget(newStage);
+    setShowTransitionModal(true);
+  };
+
+  // Execute the actual stage move after modal confirmation
+  const executeStageMove = async (data: StageTransitionData) => {
+    if (!transitionLot || !transitionTarget) return;
+
+    const lot = transitionLot;
+    const newStage = transitionTarget;
+    const currentStage = lot.processo_atual;
+
+    setTransitionLoading(true);
+
     // Optimistic update
     const originalLots = [...lots];
     setLots(prev => prev.map(l => 
-      l.id === lot.id ? { ...l, processo_atual: newStage } : l
+      l.id === lot.id ? { 
+        ...l, 
+        processo_atual: newStage,
+        responsavel: data.responsavel || l.responsavel
+      } : l
     ));
 
     try {
-      // Update database
-      await callWithRetry(() => Producao.update(lot.id, { 
-        processo_atual: newStage 
-      }));
+      // Update database with new stage + responsavel
+      const updateData: Record<string, any> = { processo_atual: newStage };
+      if (data.responsavel) {
+        updateData.responsavel = data.responsavel;
+      }
+      await callWithRetry(() => Producao.update(lot.id, updateData));
+
+      // Build observacao with extras
+      const obsParts: string[] = [];
+      if (data.extras) {
+        Object.entries(data.extras).forEach(([key, value]) => {
+          if (value) {
+            const labelMap: Record<string, string> = { rolos: 'Rolos' };
+            obsParts.push(`${labelMap[key] || key}: ${value}`);
+          }
+        });
+      }
+      if (data.observacao) {
+        obsParts.push(data.observacao);
+      }
 
       // Log the movement
       await callWithRetry(() => ProducaoLog.create({
         producao_id: lot.id,
         processo_anterior: currentStage,
         processo_novo: newStage,
-        responsavel: lot.responsavel
+        responsavel: data.responsavel || lot.responsavel,
+        observacao: obsParts.length > 0 ? obsParts.join(' | ') : undefined
       }));
 
-      // Quando move para "Vendas", apenas notifica - integração é manual via modal de Custos
+      // Close modal
+      setShowTransitionModal(false);
+      setTransitionLot(null);
+      setTransitionTarget('');
+
       if (newStage === 'Vendas') {
         toast.success('Lote movido para Vendas. Abra os Custos para enviar ao estoque com custo médio.');
       } else {
@@ -216,7 +264,9 @@ const Index = () => {
     } catch (error) {
       console.error("Erro ao mover card:", error);
       toast.error("Erro ao mover lote");
-      setLots(originalLots); // Revert on error
+      setLots(originalLots);
+    } finally {
+      setTransitionLoading(false);
     }
   };
 
@@ -674,6 +724,23 @@ const Index = () => {
         open={showImportCustosModal}
         onOpenChange={setShowImportCustosModal}
         onSuccess={fetchData}
+      />
+
+      {/* Stage Transition Modal */}
+      <StageTransitionModal
+        open={showTransitionModal}
+        onOpenChange={(open) => {
+          setShowTransitionModal(open);
+          if (!open) {
+            setTransitionLot(null);
+            setTransitionTarget('');
+          }
+        }}
+        lot={transitionLot}
+        fromStage={transitionLot?.processo_atual || ''}
+        toStage={transitionTarget}
+        onConfirm={executeStageMove}
+        loading={transitionLoading}
       />
 
       {/* History Modal */}
