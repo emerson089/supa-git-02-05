@@ -1,13 +1,23 @@
 import { useState, useMemo } from 'react';
 import { format, subDays, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileDown, FileSpreadsheet, Loader2, Calendar, Filter, TrendingDown, DollarSign, Package, Search, X, CheckSquare } from 'lucide-react';
+import { FileDown, FileSpreadsheet, Loader2, Calendar, Filter, TrendingDown, DollarSign, Package, Search, X, CheckSquare, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,6 +55,7 @@ import {
   TIPO_LABELS,
 } from '@/hooks/useRelatorioSaidas';
 import { useTiposAjusteParaFiltro } from '@/hooks/useTiposAjuste';
+import { useExcluirMovimentacoes } from '@/hooks/useExcluirMovimentacoes';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { generateRelatorioSaidasPDF } from '@/utils/generateRelatorioSaidasPDF';
 import { generateRelatorioSaidasExcel } from '@/utils/generateRelatorioSaidasExcel';
@@ -70,6 +81,10 @@ export function RelatorioSaidasModal({
   const [tiposAjusteSelecionados, setTiposAjusteSelecionados] = useState<{ id: string; nome: string }[]>([]);
   const [filtrosAplicados, setFiltrosAplicados] = useState<FiltrosSaidas | null>(null);
 
+  // Estado de seleção para exclusão
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   // Debounce para busca de modelos
   const modeloBuscaDebounced = useDebouncedValue(modeloBusca, 300);
 
@@ -78,6 +93,7 @@ export function RelatorioSaidasModal({
   const { data: modelosDisponiveis, isLoading: isLoadingModelos } = useModelosParaFiltro(modeloBuscaDebounced);
   const { data: tiposAjusteDisponiveis = [], isLoading: isLoadingTiposAjuste } = useTiposAjusteParaFiltro();
   const { data, isLoading, isFetching } = useRelatorioSaidas(filtrosAplicados);
+  const excluirMutation = useExcluirMovimentacoes();
 
   const saidas = data?.saidas || [];
   const resumo = data?.resumo || { totalPecas: 0, valorVendaTotal: 0, valorCustoTotal: null, quantidadeSemPreco: 0 };
@@ -91,8 +107,49 @@ export function RelatorioSaidasModal({
     return locais?.find(l => l.id === localId)?.nome;
   }, [localId, locais]);
 
+  // Seleção de movimentações
+  const allSelected = saidas.length > 0 && selectedIds.size === saidas.length;
+  const someSelected = selectedIds.size > 0;
+
+  const handleToggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(saidas.map(s => s.id)));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    const movParaExcluir = saidas
+      .filter(s => selectedIds.has(s.id))
+      .map(s => ({
+        id: s.id,
+        itemId: s.itemId,
+        localId: s.localId,
+        quantidade: s.quantidade,
+        tipo: s.tipo,
+      }));
+
+    await excluirMutation.mutateAsync(movParaExcluir);
+    setSelectedIds(new Set());
+    setShowDeleteConfirm(false);
+  };
+
   // Aplicar filtros
   const handleAplicarFiltros = () => {
+    setSelectedIds(new Set());
     setFiltrosAplicados({
       dataInicial,
       dataFinal,
@@ -137,12 +194,9 @@ export function RelatorioSaidasModal({
   // Selecionar todos os modelos filtrados
   const handleSelecionarTodosModelos = () => {
     if (!modelosDisponiveis) return;
-    
-    // Adicionar apenas os modelos que ainda não estão selecionados
     const modelosParaAdicionar = modelosDisponiveis.filter(
       m => !modelosSelecionados.some(s => s.id === m.id)
     );
-    
     setModelosSelecionados(prev => [...prev, ...modelosParaAdicionar]);
   };
 
@@ -554,6 +608,21 @@ export function RelatorioSaidasModal({
                 {saidas.length} movimentação(ões)
               </span>
               <div className="flex gap-2">
+                {someSelected && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={excluirMutation.isPending}
+                  >
+                    {excluirMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="mr-2 h-4 w-4" />
+                    )}
+                    Excluir selecionadas ({selectedIds.size})
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -589,6 +658,12 @@ export function RelatorioSaidasModal({
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[40px]">
+                        <Checkbox
+                          checked={allSelected}
+                          onCheckedChange={handleToggleSelectAll}
+                        />
+                      </TableHead>
                       <TableHead className="w-[100px]">Data/Hora</TableHead>
                       <TableHead>Modelo</TableHead>
                       <TableHead className="text-center w-[60px]">Qtd</TableHead>
@@ -602,7 +677,13 @@ export function RelatorioSaidasModal({
                   </TableHeader>
                   <TableBody>
                     {saidas.map(saida => (
-                      <TableRow key={saida.id}>
+                      <TableRow key={saida.id} className={selectedIds.has(saida.id) ? 'bg-muted/50' : ''}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.has(saida.id)}
+                            onCheckedChange={() => handleToggleSelect(saida.id)}
+                          />
+                        </TableCell>
                         <TableCell className="text-xs">
                           {formatarData(saida.data)}
                         </TableCell>
@@ -650,6 +731,39 @@ export function RelatorioSaidasModal({
           </div>
         )}
       </DialogContent>
+
+      {/* Dialog de confirmação de exclusão */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir movimentações</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{selectedIds.size}</strong> movimentação(ões)?
+              <br /><br />
+              <span className="text-destructive font-medium">
+                O estoque será revertido automaticamente.
+              </span>
+              <br />
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={excluirMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {excluirMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

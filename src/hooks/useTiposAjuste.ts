@@ -83,12 +83,11 @@ export function useCriarTiposPadrao() {
       if (!user) throw new Error('Usuário não autenticado');
 
       const tiposPadrao = [
-        'Inventário / Conferência física',
         'Perda / Avaria',
-        'Erro de lançamento',
-        'Bonificação / Brinde',
         'Devolução de cliente',
         'Outro',
+        'Ajuste de estoque',
+        'Devolução para estoque central',
       ];
 
       // Usar upsert com onConflict para evitar duplicatas
