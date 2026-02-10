@@ -27,6 +27,8 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [rolos, setRolos] = useState<number>(0);
+
   const [formData, setFormData] = useState({
     id_producao: '',
     modelo_nome_cache: '',
@@ -159,7 +161,16 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
     setLoading(true);
     
     try {
-      await onSave({ ...formData, prioridade: 'normal' });
+      if (lote) {
+        // Editing existing lot — send formData as-is
+        await onSave({ ...formData, prioridade: 'normal' });
+      } else {
+        // Creating new lot — set quantidade=0 and append rolos to observacoes
+        const obsWithRolos = rolos > 0
+          ? (formData.observacoes ? `Rolos: ${rolos} | ${formData.observacoes}` : `Rolos: ${rolos}`)
+          : formData.observacoes;
+        await onSave({ ...formData, quantidade: 0, observacoes: obsWithRolos, prioridade: 'normal' });
+      }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao salvar. Tente novamente.';
       toast.error(errorMessage);
@@ -194,32 +205,56 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
           {errors.id_producao && <p className="text-xs text-destructive">{errors.id_producao}</p>}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="quantidade">Quantidade</Label>
-          <Input
-            id="quantidade"
-            type="number"
-            value={formData.quantidade === 0 ? '' : formData.quantidade}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '') {
-                setFormData({ ...formData, quantidade: 0 });
-              } else {
-                const val = parseInt(value);
-                if (!isNaN(val)) {
-                  setFormData({ ...formData, quantidade: Math.min(Math.max(val, 0), 100000) });
+        {lote ? (
+          <div className="space-y-2">
+            <Label htmlFor="quantidade">Quantidade</Label>
+            <Input
+              id="quantidade"
+              type="number"
+              value={formData.quantidade === 0 ? '' : formData.quantidade}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '') {
+                  setFormData({ ...formData, quantidade: 0 });
+                } else {
+                  const val = parseInt(value);
+                  if (!isNaN(val)) {
+                    setFormData({ ...formData, quantidade: Math.min(Math.max(val, 0), 100000) });
+                  }
                 }
-              }
-              if (errors.quantidade) setErrors({ ...errors, quantidade: '' });
-            }}
-            min={0}
-            max={100000}
-            required
-            placeholder="0"
-            className={errors.quantidade ? 'border-destructive' : ''}
-          />
-          {errors.quantidade && <p className="text-xs text-destructive">{errors.quantidade}</p>}
-        </div>
+                if (errors.quantidade) setErrors({ ...errors, quantidade: '' });
+              }}
+              min={0}
+              max={100000}
+              placeholder="0"
+              className={errors.quantidade ? 'border-destructive' : ''}
+            />
+            {errors.quantidade && <p className="text-xs text-destructive">{errors.quantidade}</p>}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="rolos">Qtd de rolos de tecido</Label>
+            <Input
+              id="rolos"
+              type="number"
+              value={rolos === 0 ? '' : rolos}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '') {
+                  setRolos(0);
+                } else {
+                  const val = parseInt(value);
+                  if (!isNaN(val)) {
+                    setRolos(Math.min(Math.max(val, 0), 10000));
+                  }
+                }
+              }}
+              min={0}
+              max={10000}
+              placeholder="Ex: 3"
+            />
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

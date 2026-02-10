@@ -221,10 +221,16 @@ const Index = () => {
     ));
 
     try {
-      // Update database with new stage + responsavel
+      // Update database with new stage + responsavel + pecas (if transitioning to Costura/Facção)
       const updateData: Record<string, any> = { processo_atual: newStage };
       if (data.responsavel) {
         updateData.responsavel = data.responsavel;
+      }
+      if (newStage === 'Costura/Facção' && data.extras?.pecas) {
+        const pecas = parseInt(data.extras.pecas);
+        if (!isNaN(pecas) && pecas > 0) {
+          updateData.quantidade = pecas;
+        }
       }
       await callWithRetry(() => Producao.update(lot.id, updateData));
 
