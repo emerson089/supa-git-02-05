@@ -1,5 +1,8 @@
 import { useState, useMemo, useCallback, memo } from 'react';
-import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw, ChevronLeft, ChevronRight, ChevronsUpDown, Check } from 'lucide-react';
+import { useExcursoesAtivas } from '@/hooks/useExcursoes';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -194,6 +197,8 @@ export default function Clientes() {
   const [formData, setFormData] = useState(emptyCliente);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clienteToDelete, setClienteToDelete] = useState<ClientePaginatedDB | null>(null);
+  const [excursaoPopoverOpen, setExcursaoPopoverOpen] = useState(false);
+  const { data: excursoesAtivas } = useExcursoesAtivas();
 
   // CRM filter for VIP/Frequente/Inativo/Risco/Pendente
   const crmFilterStatus = filtroStatus !== 'todos' ? filtroStatus : null;
@@ -599,11 +604,32 @@ export default function Clientes() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="excursao">Excursão</Label>
-              <Input id="excursao" value={formData.excursao} onChange={e => setFormData(prev => ({
-              ...prev,
-              excursao: e.target.value
-            }))} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" placeholder="Nome da excursão" />
+              <Label>Excursão</Label>
+              <Popover open={excursaoPopoverOpen} onOpenChange={setExcursaoPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" aria-expanded={excursaoPopoverOpen} className="w-full justify-between font-normal shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0 h-10">
+                    {formData.excursao || <span className="text-muted-foreground">Selecione a excursão</span>}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar excursão..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhuma excursão encontrada</CommandEmpty>
+                      {(excursoesAtivas || []).map(exc => (
+                        <CommandItem key={exc.id} value={exc.nome} onSelect={() => {
+                          setFormData(prev => ({ ...prev, excursao: exc.nome }));
+                          setExcursaoPopoverOpen(false);
+                        }}>
+                          <Check className={cn("mr-2 h-4 w-4", formData.excursao === exc.nome ? "opacity-100" : "opacity-0")} />
+                          {exc.nome}
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="flex gap-3 pt-4">
