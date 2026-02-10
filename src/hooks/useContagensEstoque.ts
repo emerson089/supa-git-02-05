@@ -179,19 +179,35 @@ export function useVendasDesdeContagem(localId: string | null) {
         return { pecasVendidas: 0, valorVendido: 0, dataContagem: null };
       }
 
+      // Buscar IDs dos tipos de ajuste que contam como venda
+      const { data: tiposVenda } = await supabase
+        .from('tipos_ajuste_estoque')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('conta_como_venda', true);
+
+      const tiposVendaIds = new Set((tiposVenda || []).map(t => t.id));
+
       // Buscar movimentações de saída desde a última contagem
       const { data: movimentacoes, error } = await supabase
         .from('estoque_movimentacoes')
-        .select('quantidade, preco_aplicado')
+        .select('quantidade, preco_aplicado, tipo, tipo_ajuste_id')
         .eq('local_id', localId)
         .eq('user_id', user.id)
-        .in('tipo', ['AJUSTE_SAIDA', 'VENDA', 'TRANSFERENCIA'])
+        .in('tipo', ['AJUSTE_SAIDA', 'VENDA', 'VENDA_FEIRA', 'TRANSFERENCIA'])
         .gte('created_at', ultimaContagem.dataContagem);
 
       if (error) throw error;
 
-      const pecasVendidas = (movimentacoes || []).reduce((sum, m) => sum + Number(m.quantidade || 0), 0);
-      const valorVendido = (movimentacoes || []).reduce((sum, m) => {
+      // Filtrar: contar como venda apenas VENDA, VENDA_FEIRA, ou AJUSTE_SAIDA com tipo que conta como venda
+      const movVendas = (movimentacoes || []).filter(m => {
+        if (m.tipo === 'VENDA' || m.tipo === 'VENDA_FEIRA') return true;
+        if (m.tipo === 'AJUSTE_SAIDA' && m.tipo_ajuste_id && tiposVendaIds.has(m.tipo_ajuste_id)) return true;
+        return false;
+      });
+
+      const pecasVendidas = movVendas.reduce((sum, m) => sum + Number(m.quantidade || 0), 0);
+      const valorVendido = movVendas.reduce((sum, m) => {
         const preco = Number(m.preco_aplicado || 0);
         const qtd = Number(m.quantidade || 0);
         return sum + (qtd * preco);

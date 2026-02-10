@@ -51,9 +51,11 @@ import {
   useCriarTipoAjuste,
   useEditarTipoAjuste,
   useAlternarAtivoTipoAjuste,
+  useAlternarContaComoVenda,
   useExcluirTipoAjuste,
   useVerificarTipoEmUso,
 } from '@/hooks/useTiposAjuste';
+import { Switch } from '@/components/ui/switch';
 
 export default function ConfigTiposAjuste() {
   const isMobile = useIsMobile();
@@ -69,6 +71,7 @@ export default function ConfigTiposAjuste() {
   const criarMutation = useCriarTipoAjuste();
   const editarMutation = useEditarTipoAjuste();
   const alternarAtivoMutation = useAlternarAtivoTipoAjuste();
+  const alternarVendaMutation = useAlternarContaComoVenda();
   const excluirMutation = useExcluirTipoAjuste();
   const { data: tipoEmUsoInfo } = useVerificarTipoEmUso(deletingTipo?.id || null);
 
@@ -211,8 +214,8 @@ export default function ConfigTiposAjuste() {
             </div>
           ) : (
             tiposFiltrados.map((tipo) => (
-              <Card key={tipo.id} className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3 min-w-0">
+              <Card key={tipo.id} className="p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className={cn(
                     "w-2 h-2 rounded-full shrink-0",
                     tipo.ativo ? "bg-green-500" : "bg-muted-foreground/30"
@@ -229,6 +232,19 @@ export default function ConfigTiposAjuste() {
                     </Badge>
                   )}
                 </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor={`venda-${tipo.id}`} className="text-xs text-muted-foreground whitespace-nowrap">
+                      Venda
+                    </Label>
+                    <Switch
+                      id={`venda-${tipo.id}`}
+                      checked={tipo.contaComoVenda}
+                      onCheckedChange={(checked) => alternarVendaMutation.mutate({ id: tipo.id, contaComoVenda: checked })}
+                      disabled={!tipo.ativo}
+                    />
+                  </div>
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -263,6 +279,7 @@ export default function ConfigTiposAjuste() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                </div>
               </Card>
             ))
           )}

@@ -7,6 +7,7 @@ export interface TipoAjuste {
   id: string;
   nome: string;
   ativo: boolean;
+  contaComoVenda: boolean;
   createdAt: string;
 }
 
@@ -21,7 +22,7 @@ export function useTiposAjuste() {
 
       const { data, error } = await supabase
         .from('tipos_ajuste_estoque')
-        .select('id, nome, ativo, created_at')
+        .select('id, nome, ativo, conta_como_venda, created_at')
         .eq('user_id', user.id)
         .eq('ativo', true)
         .order('nome');
@@ -32,6 +33,7 @@ export function useTiposAjuste() {
         id: t.id,
         nome: t.nome,
         ativo: t.ativo,
+        contaComoVenda: (t as any).conta_como_venda ?? false,
         createdAt: t.created_at,
       }));
     },
@@ -51,7 +53,7 @@ export function useTodosOsTiposAjuste() {
 
       const { data, error } = await supabase
         .from('tipos_ajuste_estoque')
-        .select('id, nome, ativo, created_at')
+        .select('id, nome, ativo, conta_como_venda, created_at')
         .eq('user_id', user.id)
         .order('ativo', { ascending: false })
         .order('nome');
@@ -62,6 +64,7 @@ export function useTodosOsTiposAjuste() {
         id: t.id,
         nome: t.nome,
         ativo: t.ativo,
+        contaComoVenda: (t as any).conta_como_venda ?? false,
         createdAt: t.created_at,
       }));
     },
@@ -196,6 +199,31 @@ export function useAlternarAtivoTipoAjuste() {
       queryClient.invalidateQueries({ queryKey: ['tipos-ajuste'] });
       queryClient.invalidateQueries({ queryKey: ['tipos-ajuste-todos'] });
       toast.success(variables.ativo ? 'Tipo reativado!' : 'Tipo desativado!');
+    },
+    onError: (error: any) => {
+      toast.error(`Erro: ${error.message}`);
+    },
+  });
+}
+
+// Hook para alternar conta_como_venda
+export function useAlternarContaComoVenda() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, contaComoVenda }: { id: string; contaComoVenda: boolean }) => {
+      const { error } = await supabase
+        .from('tipos_ajuste_estoque')
+        .update({ conta_como_venda: contaComoVenda } as any)
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['tipos-ajuste'] });
+      queryClient.invalidateQueries({ queryKey: ['tipos-ajuste-todos'] });
+      queryClient.invalidateQueries({ queryKey: ['vendas-desde-contagem'] });
+      toast.success(variables.contaComoVenda ? 'Marcado como venda!' : 'Desmarcado como venda!');
     },
     onError: (error: any) => {
       toast.error(`Erro: ${error.message}`);
