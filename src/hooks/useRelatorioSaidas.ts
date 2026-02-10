@@ -45,7 +45,7 @@ export const TIPOS_SAIDA = [
 ] as const;
 
 export const TIPO_LABELS: Record<string, string> = {
-  'AJUSTE_SAIDA': 'Ajuste/Venda',
+  'AJUSTE_SAIDA': 'Ajuste Estoque',
   'VENDA_FEIRA': 'Venda Feira',
   'ENVIO_FEIRA': 'Envio Feira',
   'TRANSFERENCIA': 'Transferência',

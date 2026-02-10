@@ -952,6 +952,7 @@ export type Database = {
       tipos_ajuste_estoque: {
         Row: {
           ativo: boolean
+          conta_como_venda: boolean | null
           created_at: string
           id: string
           nome: string
@@ -959,6 +960,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
+          conta_como_venda?: boolean | null
           created_at?: string
           id?: string
           nome: string
@@ -966,6 +968,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
+          conta_como_venda?: boolean | null
           created_at?: string
           id?: string
           nome?: string
