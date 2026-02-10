@@ -1,67 +1,90 @@
 
-## Correcao: Ajuste de Estoque Nao Deve Contar Como Venda
 
-### Problema
+## Plano: Novos Tipos de Ajuste + Exclusao de Movimentacoes
 
-Hoje, **toda** movimentacao do tipo `AJUSTE_SAIDA` e tratada como venda nos relatorios e metricas ("Desde ultima contagem", "Relatorio de Saidas"). Porem, ajustes como "Inventario / Conferencia fisica", "Perda / Avaria" ou "Erro de lancamento" nao sao vendas -- apenas correcoes de quantidade.
+### Parte 1: Tipos de Ajuste - Adicionar e Remover
 
-Somente o tipo "Venda / loja" deveria contar como venda nas metricas financeiras.
+**Adicionar novos tipos:**
+- "Ajuste de estoque"
+- "Devoluçao para estoque central"
 
-### Solucao
+**Remover tipos (desativar, pois alguns estao em uso):**
+- "Inventario / Conferencia fisica" (em uso com 5 movimentacoes - sera **desativado**)
+- "Erro de lancamento" (em uso com 2 movimentacoes - sera **desativado**)
+- "Bonificacao / Brinde" (sem uso - sera **excluido**)
 
-Adicionar uma flag `conta_como_venda` na tabela `tipos_ajuste_estoque` para que cada tipo de ajuste indique se deve ou nao ser contabilizado como venda. Em seguida, atualizar as queries que calculam vendas para considerar essa flag.
+**Arquivos alterados:**
 
-### Mudancas
-
-| Arquivo / Recurso | Alteracao |
+| Arquivo | Alteracao |
 |---|---|
-| **Migracao SQL** | Adicionar coluna `conta_como_venda BOOLEAN DEFAULT false` em `tipos_ajuste_estoque`. Setar `true` apenas para tipos com nome contendo "Venda" |
-| **`src/hooks/useContagensEstoque.ts`** | Na query "vendas desde contagem": incluir `tipo_ajuste_id` no select, buscar IDs dos tipos que `conta_como_venda = true`, e filtrar apenas movimentacoes `AJUSTE_SAIDA` que tenham esses IDs (ou tipo `VENDA_FEIRA`/`VENDA`) |
-| **`src/hooks/useRelatorioSaidas.ts`** | Renomear label de `AJUSTE_SAIDA` de "Ajuste/Venda" para "Ajuste Estoque". O relatorio de saidas continua mostrando TODOS os ajustes (para auditoria), mas o resumo financeiro marca quais sao vendas |
-| **`src/hooks/useTiposAjuste.ts`** | Expor o campo `conta_como_venda` no tipo retornado |
-| **`src/pages/ConfigTiposAjuste.tsx`** | Adicionar toggle "Conta como venda?" na tela de gerenciamento de tipos de ajuste, para o usuario configurar quais tipos sao vendas |
+| `src/hooks/useTiposAjuste.ts` | Atualizar lista de `tiposPadrao` em `useCriarTiposPadrao`: remover os 3 tipos e adicionar os 2 novos |
+| **Migracao SQL** | INSERT dos 2 novos tipos para usuarios existentes; UPDATE `ativo = false` para "Inventario / Conferencia fisica" e "Erro de lancamento"; DELETE de "Bonificacao / Brinde" onde nao esta em uso |
 
-### Fluxo Apos Correcao
+### Parte 2: Exclusao de Movimentacoes no Relatorio de Saidas
+
+Adicionar funcionalidade para excluir movimentacoes diretamente no relatorio de saidas, com selecao individual ou em lote.
+
+**Arquivos alterados:**
+
+| Arquivo | Alteracao |
+|---|---|
+| `src/hooks/useRelatorioSaidas.ts` | Adicionar hook `useExcluirMovimentacoes` que: (1) reverte o estoque em `estoque_por_local` somando a quantidade de volta, (2) deleta os registros de `estoque_movimentacoes` |
+| `src/components/estoque/RelatorioSaidasModal.tsx` | Adicionar: (1) coluna de checkbox na tabela para selecionar movimentacoes, (2) checkbox "selecionar todas" no header, (3) barra de acoes com botao "Excluir selecionadas" quando ha selecao, (4) dialog de confirmacao antes de excluir, (5) estado para rastrear IDs selecionados |
+
+**Fluxo de exclusao:**
 
 ```text
-Tipos de Ajuste:
-  - Venda / loja          [conta_como_venda: SIM]
-  - Inventario            [conta_como_venda: NAO]
-  - Perda / Avaria        [conta_como_venda: NAO]
-  - Erro de lancamento    [conta_como_venda: NAO]
-  - Bonificacao / Brinde  [conta_como_venda: NAO]
-
-Ao ajustar estoque com tipo "Inventario":
-  -> Movimentacao AJUSTE_SAIDA criada com tipo_ajuste_id do "Inventario"
-  -> NAO contabiliza como venda nas metricas
-  -> Aparece normalmente no historico de movimentacoes
-
-Ao ajustar estoque com tipo "Venda / loja":
-  -> Movimentacao AJUSTE_SAIDA criada com tipo_ajuste_id do "Venda / loja"
-  -> CONTABILIZA como venda nas metricas (Desde ultima contagem, Dashboard)
+1. Usuario aplica filtros no relatorio
+2. Seleciona movimentacoes via checkbox individual ou "selecionar todas"
+3. Clica em "Excluir selecionadas (N)"
+4. Dialog de confirmacao aparece com quantidade e aviso
+5. Ao confirmar:
+   - Para cada movimentacao: reverte quantidade no estoque_por_local
+   - Deleta os registros de estoque_movimentacoes
+   - Invalida queries relacionadas
+   - Recarrega o relatorio
 ```
+
+**Logica de reversao de estoque:**
+- Se tipo = `AJUSTE_SAIDA`: soma a quantidade de volta ao `estoque_por_local`
+- Se tipo = `AJUSTE_ENTRADA`: subtrai a quantidade do `estoque_por_local`
+- Se tipo = `VENDA_FEIRA`, `ENVIO_FEIRA`, `TRANSFERENCIA`, `RETORNO_FEIRA`: soma/subtrai conforme o tipo (saida = soma de volta, entrada = subtrai)
 
 ### Detalhes Tecnicos
 
-**Migracao:**
+**Migracao SQL:**
 ```sql
-ALTER TABLE tipos_ajuste_estoque ADD COLUMN conta_como_venda BOOLEAN DEFAULT false;
-UPDATE tipos_ajuste_estoque SET conta_como_venda = true WHERE nome ILIKE '%venda%';
+-- Inserir novos tipos para todos os usuarios
+INSERT INTO tipos_ajuste_estoque (user_id, nome, ativo, conta_como_venda)
+SELECT DISTINCT user_id, 'Ajuste de estoque', true, false
+FROM tipos_ajuste_estoque
+ON CONFLICT (user_id, nome) DO NOTHING;
+
+INSERT INTO tipos_ajuste_estoque (user_id, nome, ativo, conta_como_venda)
+SELECT DISTINCT user_id, 'Devolução para estoque central', true, false
+FROM tipos_ajuste_estoque
+ON CONFLICT (user_id, nome) DO NOTHING;
+
+-- Desativar tipos em uso
+UPDATE tipos_ajuste_estoque SET ativo = false
+WHERE nome IN ('Inventário / Conferência física', 'Erro de lançamento');
+
+-- Excluir tipos sem uso (Bonificacao / Brinde)
+DELETE FROM tipos_ajuste_estoque
+WHERE nome = 'Bonificação / Brinde'
+AND id NOT IN (SELECT DISTINCT tipo_ajuste_id FROM estoque_movimentacoes WHERE tipo_ajuste_id IS NOT NULL);
 ```
 
-**useContagensEstoque.ts** - Logica atualizada:
-- Buscar `tipos_ajuste_estoque` onde `conta_como_venda = true` para obter IDs
-- Na query de movimentacoes, incluir `tipo_ajuste_id` no select
-- Filtrar: contar como venda apenas se `tipo IN ('VENDA_FEIRA', 'VENDA')` OU (`tipo = 'AJUSTE_SAIDA'` E `tipo_ajuste_id` esta na lista de tipos-venda)
+**Hook de exclusao (useExcluirMovimentacoes):**
+- Recebe array de `{ id, itemId, localId, quantidade, tipo }`
+- Para cada movimentacao, calcula delta de reversao
+- Agrupa por `item_id + local_id` para fazer updates em batch
+- Atualiza `estoque_por_local` e deleta `estoque_movimentacoes`
+- Invalida queries: `estoque-detalhado-por-local`, `relatorio-saidas`, `vendas-desde-contagem`
 
-**ConfigTiposAjuste.tsx:**
-- Adicionar coluna/toggle "Conta como venda?" na listagem
-- Ao criar/editar tipo, permitir marcar se conta como venda
+**UI de selecao na tabela:**
+- Checkbox na primeira coluna de cada linha
+- Checkbox "selecionar todas" no header da tabela
+- Barra flutuante aparece quando ha selecao: "N selecionada(s) | [Excluir selecionadas]"
+- AlertDialog de confirmacao com texto: "Tem certeza que deseja excluir N movimentacao(oes)? O estoque sera revertido automaticamente."
 
-### Impacto
-
-- Campo "Estoque Atual" continua editavel no modal de ajuste (sem mudanca)
-- Ajustes de inventario/perda/erro nao inflam mais as metricas de venda
-- Apenas ajustes marcados como "venda" serao contabilizados financeiramente
-- Retroativo: movimentacoes existentes serao reclassificadas pelo `tipo_ajuste_id` que ja possuem
-- Nenhuma mudanca na RPC de ajuste
