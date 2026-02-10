@@ -1,79 +1,76 @@
 
 
-## Plano: Trocar "Quantidade de Peças" por "Quantidade de Rolos" ao Criar Novo Lote
+## Vincular Excursoes Cadastradas ao Campo "Excursao" no Formulario de Cliente
 
-### Problema Atual
+### Objetivo
 
-O formulário de criação de lote pede **"Quantidade"** (peças), mas na prática essa informação só é conhecida **depois do corte**. O que o usuário sabe no momento da criação é quantos **rolos de tecido** serão usados.
+Substituir o campo de texto livre "Excursao" no formulario de criar/editar cliente por um **combobox com busca** que lista as excursoes ativas cadastradas no sistema. O usuario podera selecionar uma excursao existente, garantindo consistencia dos dados.
 
-### Solução
+### O que muda
 
-1. **No formulário de criação** (`ProducaoForm.tsx`): substituir o campo "Quantidade" por "Qtd de rolos de tecido" (apenas para novos lotes)
-2. **Salvar os rolos** na `observacoes` do lote (ex: "Rolos: 3") e definir `quantidade` como 0 por padrão
-3. **Na transição Corte -> Costura/Facção** (`StageTransitionModal.tsx`): adicionar o campo "Qtd de peças cortadas" para que o usuário informe as peças nesse momento, atualizando `producao.quantidade`
-4. **No formulário de edição**: manter o campo "Quantidade" editável normalmente (para correções)
+- O campo "Excursao" no modal de Novo/Editar Cliente deixa de ser um `Input` de texto livre
+- Passa a ser um **Combobox** (Popover + Command) com busca, listando apenas excursoes ativas
+- Ao digitar, filtra as opcoes em tempo real
+- Ao selecionar, preenche o campo `excursao` com o nome da excursao escolhida
 
-### Mudanças por Arquivo
+### Arquivo alterado
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/producao/ProducaoForm.tsx` | Para novos lotes: trocar campo "Quantidade" por "Qtd de rolos de tecido", salvar rolos na observação, e enviar quantidade=0 |
-| `src/components/production/StageTransitionModal.tsx` | Na config da etapa `Costura/Facção`: adicionar extraField `{ key: 'pecas', label: 'Qtd de peças cortadas', type: 'number' }` |
-| `src/pages/Index.tsx` | Ao confirmar transição para Costura/Facção com campo `pecas`: atualizar `producao.quantidade` com o valor informado |
-| `src/lib/validations.ts` | Ajustar `ProducaoFormSchema` para aceitar `quantidade` = 0 (já aceita, min é 0) |
+**`src/pages/Clientes.tsx`**
 
-### Fluxo Novo
+1. Importar `useExcursoesAtivas` de `@/hooks/useExcursoes`
+2. Importar componentes `Popover`, `PopoverTrigger`, `PopoverContent` e `Command`, `CommandInput`, `CommandList`, `CommandItem`, `CommandEmpty`
+3. Adicionar estado `excursaoPopoverOpen` para controlar abertura do combobox
+4. Substituir o `Input` do campo "Excursao" (linhas 601-607) por um Combobox que:
+   - Mostra o valor atual ou placeholder "Selecione a excursao"
+   - Lista as excursoes ativas com busca
+   - Ao selecionar, seta `formData.excursao` com o nome da excursao
+   - Exibe icone de check ao lado da opcao selecionada
+
+### Comportamento
+
+- Lista apenas excursoes com `ativo = true` (hook `useExcursoesAtivas` ja existe)
+- Busca client-side dentro do Command (componente ja suporta filtro nativo)
+- Clientes existentes que ja tem excursao preenchida verao o valor atual selecionado ao abrir o modal de edicao
+- Se a excursao do cliente nao existir mais na lista ativa, o campo mostra o nome atual mas sem selecao visual
+
+### Detalhes Tecnicos
 
 ```text
-1. Criar Lote:
-   - Referência: 5001
-   - Modelo: Wide Leg
-   - Qtd de rolos de tecido: [3]    <-- NOVO campo
-   - Responsável (cortador): Ildo
-   - ...
+Antes:
+  <Input value={formData.excursao} onChange={...} placeholder="Nome da excursao" />
 
-2. Lote criado com quantidade=0, observações="Rolos: 3"
-
-3. Ao mover Corte -> Costura/Facção:
-   ┌─────────────────────────────────────────┐
-   │ Mover lote 5001 para Costura/Facção     │
-   │                                         │
-   │ Qtd de peças cortadas: [120]  <-- NOVO  │
-   │                                         │
-   │ Responsável: [▼ Selecione facção]       │
-   │ Observação:  [                  ]       │
-   │                                         │
-   │        [Cancelar]    [Confirmar]         │
-   └─────────────────────────────────────────┘
-
-4. Ao confirmar: atualiza producao.quantidade = 120
+Depois:
+  <Popover open={excursaoPopoverOpen} onOpenChange={setExcursaoPopoverOpen}>
+    <PopoverTrigger asChild>
+      <Button variant="outline" role="combobox">
+        {formData.excursao || "Selecione a excursao"}
+        <ChevronsUpDown />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent>
+      <Command>
+        <CommandInput placeholder="Buscar excursao..." />
+        <CommandList>
+          <CommandEmpty>Nenhuma excursao encontrada</CommandEmpty>
+          {excursoesAtivas.map(exc => (
+            <CommandItem onSelect={() => {
+              setFormData(prev => ({...prev, excursao: exc.nome}));
+              setExcursaoPopoverOpen(false);
+            }}>
+              <Check className={formData.excursao === exc.nome ? "opacity-100" : "opacity-0"} />
+              {exc.nome}
+            </CommandItem>
+          ))}
+        </CommandList>
+      </Command>
+    </PopoverContent>
+  </Popover>
 ```
-
-### Detalhes Técnicos
-
-**ProducaoForm.tsx** (novo lote):
-- Adicionar campo `rolos` (number) no lugar de `quantidade`
-- Ao submeter: `quantidade: 0`, concatenar `Rolos: ${rolos}` nas observações
-- Para edição de lote existente: manter campo "Quantidade" como está
-
-**StageTransitionModal.tsx**:
-- Adicionar na config de `Costura/Facção`:
-  ```typescript
-  'Costura/Facção': {
-    showResponsavel: true,
-    responsavelLabel: 'Facção / Costureira',
-    extraFields: [
-      { key: 'pecas', label: 'Qtd de peças cortadas', type: 'number' }
-    ]
-  }
-  ```
-
-**Index.tsx** (ao confirmar transição):
-- Se `toStage === 'Costura/Facção'` e `extras.pecas`: atualizar `producao.quantidade` com o valor
 
 ### Impacto
 
-- Nenhuma migração de banco necessária
-- Campo `quantidade` continua existindo, apenas inicia com 0 e é preenchido ao sair do Corte
-- Rolos ficam registrados nas observações do lote
-- Formulário de edição mantém acesso ao campo quantidade para correções
+- Nenhuma migracao de banco necessaria
+- O campo `excursao` no banco continua sendo texto (nome da excursao)
+- Clientes existentes mantem seus valores atuais
+- Importacao CSV continua funcionando normalmente (usa texto direto)
+
