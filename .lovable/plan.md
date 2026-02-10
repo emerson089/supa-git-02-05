@@ -1,76 +1,67 @@
 
+## Correcao: Ajuste de Estoque Nao Deve Contar Como Venda
 
-## Vincular Excursoes Cadastradas ao Campo "Excursao" no Formulario de Cliente
+### Problema
 
-### Objetivo
+Hoje, **toda** movimentacao do tipo `AJUSTE_SAIDA` e tratada como venda nos relatorios e metricas ("Desde ultima contagem", "Relatorio de Saidas"). Porem, ajustes como "Inventario / Conferencia fisica", "Perda / Avaria" ou "Erro de lancamento" nao sao vendas -- apenas correcoes de quantidade.
 
-Substituir o campo de texto livre "Excursao" no formulario de criar/editar cliente por um **combobox com busca** que lista as excursoes ativas cadastradas no sistema. O usuario podera selecionar uma excursao existente, garantindo consistencia dos dados.
+Somente o tipo "Venda / loja" deveria contar como venda nas metricas financeiras.
 
-### O que muda
+### Solucao
 
-- O campo "Excursao" no modal de Novo/Editar Cliente deixa de ser um `Input` de texto livre
-- Passa a ser um **Combobox** (Popover + Command) com busca, listando apenas excursoes ativas
-- Ao digitar, filtra as opcoes em tempo real
-- Ao selecionar, preenche o campo `excursao` com o nome da excursao escolhida
+Adicionar uma flag `conta_como_venda` na tabela `tipos_ajuste_estoque` para que cada tipo de ajuste indique se deve ou nao ser contabilizado como venda. Em seguida, atualizar as queries que calculam vendas para considerar essa flag.
 
-### Arquivo alterado
+### Mudancas
 
-**`src/pages/Clientes.tsx`**
+| Arquivo / Recurso | Alteracao |
+|---|---|
+| **Migracao SQL** | Adicionar coluna `conta_como_venda BOOLEAN DEFAULT false` em `tipos_ajuste_estoque`. Setar `true` apenas para tipos com nome contendo "Venda" |
+| **`src/hooks/useContagensEstoque.ts`** | Na query "vendas desde contagem": incluir `tipo_ajuste_id` no select, buscar IDs dos tipos que `conta_como_venda = true`, e filtrar apenas movimentacoes `AJUSTE_SAIDA` que tenham esses IDs (ou tipo `VENDA_FEIRA`/`VENDA`) |
+| **`src/hooks/useRelatorioSaidas.ts`** | Renomear label de `AJUSTE_SAIDA` de "Ajuste/Venda" para "Ajuste Estoque". O relatorio de saidas continua mostrando TODOS os ajustes (para auditoria), mas o resumo financeiro marca quais sao vendas |
+| **`src/hooks/useTiposAjuste.ts`** | Expor o campo `conta_como_venda` no tipo retornado |
+| **`src/pages/ConfigTiposAjuste.tsx`** | Adicionar toggle "Conta como venda?" na tela de gerenciamento de tipos de ajuste, para o usuario configurar quais tipos sao vendas |
 
-1. Importar `useExcursoesAtivas` de `@/hooks/useExcursoes`
-2. Importar componentes `Popover`, `PopoverTrigger`, `PopoverContent` e `Command`, `CommandInput`, `CommandList`, `CommandItem`, `CommandEmpty`
-3. Adicionar estado `excursaoPopoverOpen` para controlar abertura do combobox
-4. Substituir o `Input` do campo "Excursao" (linhas 601-607) por um Combobox que:
-   - Mostra o valor atual ou placeholder "Selecione a excursao"
-   - Lista as excursoes ativas com busca
-   - Ao selecionar, seta `formData.excursao` com o nome da excursao
-   - Exibe icone de check ao lado da opcao selecionada
+### Fluxo Apos Correcao
 
-### Comportamento
+```text
+Tipos de Ajuste:
+  - Venda / loja          [conta_como_venda: SIM]
+  - Inventario            [conta_como_venda: NAO]
+  - Perda / Avaria        [conta_como_venda: NAO]
+  - Erro de lancamento    [conta_como_venda: NAO]
+  - Bonificacao / Brinde  [conta_como_venda: NAO]
 
-- Lista apenas excursoes com `ativo = true` (hook `useExcursoesAtivas` ja existe)
-- Busca client-side dentro do Command (componente ja suporta filtro nativo)
-- Clientes existentes que ja tem excursao preenchida verao o valor atual selecionado ao abrir o modal de edicao
-- Se a excursao do cliente nao existir mais na lista ativa, o campo mostra o nome atual mas sem selecao visual
+Ao ajustar estoque com tipo "Inventario":
+  -> Movimentacao AJUSTE_SAIDA criada com tipo_ajuste_id do "Inventario"
+  -> NAO contabiliza como venda nas metricas
+  -> Aparece normalmente no historico de movimentacoes
+
+Ao ajustar estoque com tipo "Venda / loja":
+  -> Movimentacao AJUSTE_SAIDA criada com tipo_ajuste_id do "Venda / loja"
+  -> CONTABILIZA como venda nas metricas (Desde ultima contagem, Dashboard)
+```
 
 ### Detalhes Tecnicos
 
-```text
-Antes:
-  <Input value={formData.excursao} onChange={...} placeholder="Nome da excursao" />
-
-Depois:
-  <Popover open={excursaoPopoverOpen} onOpenChange={setExcursaoPopoverOpen}>
-    <PopoverTrigger asChild>
-      <Button variant="outline" role="combobox">
-        {formData.excursao || "Selecione a excursao"}
-        <ChevronsUpDown />
-      </Button>
-    </PopoverTrigger>
-    <PopoverContent>
-      <Command>
-        <CommandInput placeholder="Buscar excursao..." />
-        <CommandList>
-          <CommandEmpty>Nenhuma excursao encontrada</CommandEmpty>
-          {excursoesAtivas.map(exc => (
-            <CommandItem onSelect={() => {
-              setFormData(prev => ({...prev, excursao: exc.nome}));
-              setExcursaoPopoverOpen(false);
-            }}>
-              <Check className={formData.excursao === exc.nome ? "opacity-100" : "opacity-0"} />
-              {exc.nome}
-            </CommandItem>
-          ))}
-        </CommandList>
-      </Command>
-    </PopoverContent>
-  </Popover>
+**Migracao:**
+```sql
+ALTER TABLE tipos_ajuste_estoque ADD COLUMN conta_como_venda BOOLEAN DEFAULT false;
+UPDATE tipos_ajuste_estoque SET conta_como_venda = true WHERE nome ILIKE '%venda%';
 ```
+
+**useContagensEstoque.ts** - Logica atualizada:
+- Buscar `tipos_ajuste_estoque` onde `conta_como_venda = true` para obter IDs
+- Na query de movimentacoes, incluir `tipo_ajuste_id` no select
+- Filtrar: contar como venda apenas se `tipo IN ('VENDA_FEIRA', 'VENDA')` OU (`tipo = 'AJUSTE_SAIDA'` E `tipo_ajuste_id` esta na lista de tipos-venda)
+
+**ConfigTiposAjuste.tsx:**
+- Adicionar coluna/toggle "Conta como venda?" na listagem
+- Ao criar/editar tipo, permitir marcar se conta como venda
 
 ### Impacto
 
-- Nenhuma migracao de banco necessaria
-- O campo `excursao` no banco continua sendo texto (nome da excursao)
-- Clientes existentes mantem seus valores atuais
-- Importacao CSV continua funcionando normalmente (usa texto direto)
-
+- Campo "Estoque Atual" continua editavel no modal de ajuste (sem mudanca)
+- Ajustes de inventario/perda/erro nao inflam mais as metricas de venda
+- Apenas ajustes marcados como "venda" serao contabilizados financeiramente
+- Retroativo: movimentacoes existentes serao reclassificadas pelo `tipo_ajuste_id` que ja possuem
+- Nenhuma mudanca na RPC de ajuste
