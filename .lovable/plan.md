@@ -1,90 +1,61 @@
 
 
-## Plano: Novos Tipos de Ajuste + Exclusao de Movimentacoes
+## Correção: Modal de Cliente e Exibição da Taxa da Excursão
 
-### Parte 1: Tipos de Ajuste - Adicionar e Remover
+### Problema 1: Conteúdo vazando do modal
 
-**Adicionar novos tipos:**
-- "Ajuste de estoque"
-- "Devoluçao para estoque central"
+O modal "Novo Cliente" não tem `overflow: hidden`, então o conteúdo (inputs, botões) vaza para fora dos limites do dialog. Além disso, o `DialogContent` não tem `overflow-y-auto` para lidar com conteúdo mais alto que a tela.
 
-**Remover tipos (desativar, pois alguns estao em uso):**
-- "Inventario / Conferencia fisica" (em uso com 5 movimentacoes - sera **desativado**)
-- "Erro de lancamento" (em uso com 2 movimentacoes - sera **desativado**)
-- "Bonificacao / Brinde" (sem uso - sera **excluido**)
+### Problema 2: Valor da excursão não aparece
 
-**Arquivos alterados:**
+Ao selecionar uma excursão no combobox, o usuário não vê a taxa cobrada. Precisa mostrar o valor ao lado do nome na lista e exibir a taxa selecionada abaixo do campo.
 
-| Arquivo | Alteracao |
-|---|---|
-| `src/hooks/useTiposAjuste.ts` | Atualizar lista de `tiposPadrao` em `useCriarTiposPadrao`: remover os 3 tipos e adicionar os 2 novos |
-| **Migracao SQL** | INSERT dos 2 novos tipos para usuarios existentes; UPDATE `ativo = false` para "Inventario / Conferencia fisica" e "Erro de lancamento"; DELETE de "Bonificacao / Brinde" onde nao esta em uso |
+### Correções no arquivo `src/pages/Clientes.tsx`
 
-### Parte 2: Exclusao de Movimentacoes no Relatorio de Saidas
-
-Adicionar funcionalidade para excluir movimentacoes diretamente no relatorio de saidas, com selecao individual ou em lote.
-
-**Arquivos alterados:**
-
-| Arquivo | Alteracao |
-|---|---|
-| `src/hooks/useRelatorioSaidas.ts` | Adicionar hook `useExcluirMovimentacoes` que: (1) reverte o estoque em `estoque_por_local` somando a quantidade de volta, (2) deleta os registros de `estoque_movimentacoes` |
-| `src/components/estoque/RelatorioSaidasModal.tsx` | Adicionar: (1) coluna de checkbox na tabela para selecionar movimentacoes, (2) checkbox "selecionar todas" no header, (3) barra de acoes com botao "Excluir selecionadas" quando ha selecao, (4) dialog de confirmacao antes de excluir, (5) estado para rastrear IDs selecionados |
-
-**Fluxo de exclusao:**
-
-```text
-1. Usuario aplica filtros no relatorio
-2. Seleciona movimentacoes via checkbox individual ou "selecionar todas"
-3. Clica em "Excluir selecionadas (N)"
-4. Dialog de confirmacao aparece com quantidade e aviso
-5. Ao confirmar:
-   - Para cada movimentacao: reverte quantidade no estoque_por_local
-   - Deleta os registros de estoque_movimentacoes
-   - Invalida queries relacionadas
-   - Recarrega o relatorio
+**1. Adicionar `overflow-hidden` no DialogContent:**
+```
+<DialogContent className="sm:max-w-[450px] overflow-hidden">
 ```
 
-**Logica de reversao de estoque:**
-- Se tipo = `AJUSTE_SAIDA`: soma a quantidade de volta ao `estoque_por_local`
-- Se tipo = `AJUSTE_ENTRADA`: subtrai a quantidade do `estoque_por_local`
-- Se tipo = `VENDA_FEIRA`, `ENVIO_FEIRA`, `TRANSFERENCIA`, `RETORNO_FEIRA`: soma/subtrai conforme o tipo (saida = soma de volta, entrada = subtrai)
-
-### Detalhes Tecnicos
-
-**Migracao SQL:**
-```sql
--- Inserir novos tipos para todos os usuarios
-INSERT INTO tipos_ajuste_estoque (user_id, nome, ativo, conta_como_venda)
-SELECT DISTINCT user_id, 'Ajuste de estoque', true, false
-FROM tipos_ajuste_estoque
-ON CONFLICT (user_id, nome) DO NOTHING;
-
-INSERT INTO tipos_ajuste_estoque (user_id, nome, ativo, conta_como_venda)
-SELECT DISTINCT user_id, 'Devolução para estoque central', true, false
-FROM tipos_ajuste_estoque
-ON CONFLICT (user_id, nome) DO NOTHING;
-
--- Desativar tipos em uso
-UPDATE tipos_ajuste_estoque SET ativo = false
-WHERE nome IN ('Inventário / Conferência física', 'Erro de lançamento');
-
--- Excluir tipos sem uso (Bonificacao / Brinde)
-DELETE FROM tipos_ajuste_estoque
-WHERE nome = 'Bonificação / Brinde'
-AND id NOT IN (SELECT DISTINCT tipo_ajuste_id FROM estoque_movimentacoes WHERE tipo_ajuste_id IS NOT NULL);
+**2. Mostrar taxa ao lado do nome de cada excursão no CommandItem:**
+```
+<CommandItem ...>
+  <Check ... />
+  <span className="flex-1 truncate">{exc.nome}</span>
+  <span className="text-xs text-emerald-600 font-semibold ml-2">
+    R$ {exc.taxa.toFixed(2)}
+  </span>
+</CommandItem>
 ```
 
-**Hook de exclusao (useExcluirMovimentacoes):**
-- Recebe array de `{ id, itemId, localId, quantidade, tipo }`
-- Para cada movimentacao, calcula delta de reversao
-- Agrupa por `item_id + local_id` para fazer updates em batch
-- Atualiza `estoque_por_local` e deleta `estoque_movimentacoes`
-- Invalida queries: `estoque-detalhado-por-local`, `relatorio-saidas`, `vendas-desde-contagem`
+**3. Exibir a taxa da excursão selecionada abaixo do combobox:**
 
-**UI de selecao na tabela:**
-- Checkbox na primeira coluna de cada linha
-- Checkbox "selecionar todas" no header da tabela
-- Barra flutuante aparece quando ha selecao: "N selecionada(s) | [Excluir selecionadas]"
-- AlertDialog de confirmacao com texto: "Tem certeza que deseja excluir N movimentacao(oes)? O estoque sera revertido automaticamente."
+Após selecionar uma excursão, buscar a taxa correspondente e exibir em texto pequeno abaixo do campo, como:
+```
+Excursão
+[Deyse S.amarelo V. 138...]
+Taxa: R$ 70,00
+```
 
+**4. Limitar largura do PopoverContent com `overflow-hidden` para evitar vazamento:**
+```
+<PopoverContent className="w-[--radix-popover-trigger-width] p-0 overflow-hidden" align="start">
+```
+
+**5. Truncar texto longo no botão trigger do combobox:**
+Adicionar `truncate` e `max-w` no texto do botão para que nomes longos de excursão não expandam o modal.
+
+### Detalhes Técnicos
+
+- Adicionar `overflow-hidden` no `DialogContent` (linha 565)
+- Adicionar `truncate block max-w-[calc(100%-2rem)]` no texto do `PopoverTrigger` button
+- No `CommandItem`, usar layout flex com `truncate` no nome e taxa à direita
+- Após o `</Popover>`, adicionar um `<p>` condicional mostrando a taxa quando `formData.excursao` estiver preenchido
+- Buscar a taxa com: `excursoesAtivas?.find(e => e.nome === formData.excursao)?.taxa`
+- Formatar como `toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })`
+
+### Impacto
+
+- Nenhuma mudança no banco de dados
+- Apenas alterações visuais no modal de criar/editar cliente
+- O campo `excursao` continua salvando apenas o nome (string)
