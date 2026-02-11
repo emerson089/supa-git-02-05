@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, Camera, Pencil, Check, X, Package } from 'lucide-react';
+import { Edit, Trash2, Camera, Pencil, Check, X, Package, ShoppingBag } from 'lucide-react';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { LazyImage } from '@/components/ui/lazy-image';
 import { Input } from '@/components/ui/input';
@@ -29,6 +29,7 @@ interface ProductCardProps {
   onEdit: (item: ProductCardProps['item']) => void;
   onDelete: (item: ProductCardProps['item']) => void;
   onImageUpdate: (productId: string, file: File) => void;
+  vendasSemana?: number;
 }
 
 function ProductImage({ 
@@ -87,6 +88,7 @@ export function ProductCard({
   onEdit,
   onDelete,
   onImageUpdate,
+  vendasSemana = 0,
 }: ProductCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -144,7 +146,7 @@ export function ProductCard({
       <div className="p-4">
         {/* Header: Name and Category */}
         <div className="mb-3 pb-3 border-b border-gray-100 dark:border-gray-700">
-          <h3 className="font-bold text-lg text-foreground truncate">{item.nome}</h3>
+          <h3 className="font-bold text-lg text-foreground line-clamp-2">{item.nome}</h3>
           <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mt-1">
             {item.categoria}
             {item.producaoId && (
@@ -209,8 +211,14 @@ export function ProductCard({
           </div>
 
           <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Localização</span>
-            <span className="text-sm text-muted-foreground">{item.localizacao}</span>
+            <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Vendidas Semana</span>
+            <span className={cn(
+              "text-sm font-semibold flex items-center gap-1.5",
+              vendasSemana > 0 ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"
+            )}>
+              <ShoppingBag size={14} />
+              {vendasSemana} peças
+            </span>
           </div>
         </div>
 
