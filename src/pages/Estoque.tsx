@@ -23,6 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ImportModelosCSVModal } from '@/components/estoque/ImportModelosCSVModal';
 import { ProductCard } from '@/components/estoque/ProductCard';
 import { MobileProductCard } from '@/components/estoque/MobileProductCard';
+import { useVendasSemana } from '@/hooks/useVendasSemana';
 import { EstoqueItemSchema, NovoModeloAcabadoSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -161,6 +162,9 @@ export default function Estoque() {
   const {
     data: metrics
   } = useEstoqueMetrics(tipoEstoque, search);
+
+  // Vendas da semana atual por produto_id
+  const { data: vendasSemanaMap } = useVendasSemana();
 
   // Helper para atualizar URL params (persistência)
   const updateParams = (updates: Record<string, string | undefined>) => {
@@ -882,7 +886,7 @@ export default function Estoque() {
               }} editingPriceId={editingPriceId} editingPrice={editingPriceValue.toString()} onEditPrice={(id, price) => {
                 setEditingPriceId(id);
                 setEditingPriceValue(price);
-              }} onSavePrice={handleSavePrice} onCancelEditPrice={handleCancelEditPrice} onPriceChange={v => setEditingPriceValue(Number(v))} onEdit={handleOpenModal} onDelete={handleDeleteClick} onImageUpdate={handleProductImageUpdate} /> : <ProductCard key={item.id} item={item} editingPriceId={editingPriceId} editingPriceValue={editingPriceValue} onEditPrice={handleStartEditPrice} onSavePrice={handleSavePrice} onCancelEditPrice={handleCancelEditPrice} onPriceValueChange={setEditingPriceValue} onEdit={handleOpenModal} onDelete={handleDeleteClick} onImageUpdate={handleProductImageUpdate} /> : <Card key={item.id} className="overflow-hidden shadow-soft border border-border/50 bg-card rounded-2xl">
+              }} onSavePrice={handleSavePrice} onCancelEditPrice={handleCancelEditPrice} onPriceChange={v => setEditingPriceValue(Number(v))} onEdit={handleOpenModal} onDelete={handleDeleteClick} onImageUpdate={handleProductImageUpdate} vendasSemana={vendasSemanaMap?.get(item.id) || 0} /> : <ProductCard key={item.id} item={item} editingPriceId={editingPriceId} editingPriceValue={editingPriceValue} onEditPrice={handleStartEditPrice} onSavePrice={handleSavePrice} onCancelEditPrice={handleCancelEditPrice} onPriceValueChange={setEditingPriceValue} onEdit={handleOpenModal} onDelete={handleDeleteClick} onImageUpdate={handleProductImageUpdate} vendasSemana={vendasSemanaMap?.get(item.id) || 0} /> : <Card key={item.id} className="overflow-hidden shadow-soft border border-border/50 bg-card rounded-2xl">
                       <CardContent className={cn("p-6", isMobile && "p-4")}>
                         {/* Two column layout */}
                         <div className="flex gap-4 mb-4 pb-4 border-b border-border/30">

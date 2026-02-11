@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Pencil, Trash2, DollarSign, Camera, MapPin, Package } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, DollarSign, Camera, ShoppingBag, Package } from 'lucide-react';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { LazyImage } from '@/components/ui/lazy-image';
 import { useRef } from 'react';
@@ -34,6 +34,7 @@ interface MobileProductCardProps {
   onEdit: (item: any) => void;
   onDelete: (item: any) => void;
   onImageUpdate?: (id: string, file: File) => void;
+  vendasSemana?: number;
 }
 
 function ProductImage({ 
@@ -96,6 +97,7 @@ export function MobileProductCard({
   onEdit,
   onDelete,
   onImageUpdate,
+  vendasSemana = 0,
 }: MobileProductCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditingPrice = editingPriceId === item.id;
@@ -220,15 +222,16 @@ export function MobileProductCard({
             )}
           </div>
 
-          {/* Localização */}
-          {item.localizacao && (
-            <div className="flex items-center gap-1 mt-1.5">
-              <MapPin className="h-3 w-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground truncate">
-                {item.localizacao}
-              </span>
-            </div>
-          )}
+          {/* Vendidas na semana */}
+          <div className="flex items-center gap-1 mt-1.5">
+            <ShoppingBag className="h-3 w-3 text-muted-foreground" />
+            <span className={cn(
+              "text-xs",
+              vendasSemana > 0 ? "text-blue-600 dark:text-blue-400 font-medium" : "text-muted-foreground"
+            )}>
+              {vendasSemana} vendidas na semana
+            </span>
+          </div>
         </div>
       </div>
     </Card>
