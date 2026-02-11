@@ -665,7 +665,7 @@ export function RelatorioSaidasModal({
                         />
                       </TableHead>
                       <TableHead className="w-[100px]">Data/Hora</TableHead>
-                      <TableHead>Modelo</TableHead>
+                      <TableHead className="min-w-[200px]">Modelo</TableHead>
                       <TableHead className="text-center w-[60px]">Qtd</TableHead>
                       <TableHead className="text-right w-[80px]">Unit.</TableHead>
                       <TableHead className="text-right w-[90px]">Total</TableHead>
@@ -688,7 +688,7 @@ export function RelatorioSaidasModal({
                           {formatarData(saida.data)}
                         </TableCell>
                         <TableCell className="font-medium text-sm">
-                          {truncateText(saida.modeloNome, 30)}
+                          {saida.modeloNome}
                         </TableCell>
                         <TableCell className="text-center font-semibold">
                           {saida.quantidade}
@@ -705,13 +705,13 @@ export function RelatorioSaidasModal({
                           </Badge>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {truncateText(saida.motivo || '—', 25)}
+                          {saida.motivo || '—'}
                         </TableCell>
                         <TableCell className="text-xs">
-                          {truncateText(saida.localNome, 15)}
+                          {saida.localNome}
                         </TableCell>
                         <TableCell className="text-xs">
-                          {saida.localDestinoNome ? truncateText(saida.localDestinoNome, 15) : '—'}
+                          {saida.localDestinoNome || '—'}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -740,10 +740,6 @@ export function RelatorioSaidasModal({
             <AlertDialogDescription>
               Tem certeza que deseja excluir <strong>{selectedIds.size}</strong> movimentação(ões)?
               <br /><br />
-              <span className="text-destructive font-medium">
-                O estoque será revertido automaticamente.
-              </span>
-              <br />
               Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
