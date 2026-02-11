@@ -1,61 +1,49 @@
 
 
-## Correção: Modal de Cliente e Exibição da Taxa da Excursão
+## Correções: Exclusão sem Reversão de Estoque + Coluna Modelo Legível
 
-### Problema 1: Conteúdo vazando do modal
+### Problema 1: Exclusão revertendo estoque indevidamente
 
-O modal "Novo Cliente" não tem `overflow: hidden`, então o conteúdo (inputs, botões) vaza para fora dos limites do dialog. Além disso, o `DialogContent` não tem `overflow-y-auto` para lidar com conteúdo mais alto que a tela.
+Ao excluir movimentações no Relatório de Saídas, o hook `useExcluirMovimentacoes` calcula deltas e atualiza `estoque_por_local`, devolvendo quantidade ao estoque. O usuário quer que a exclusão seja apenas uma remoção do registro, sem nenhuma alteração no estoque.
 
-### Problema 2: Valor da excursão não aparece
+### Problema 2: Nome do modelo cortado na tabela
 
-Ao selecionar uma excursão no combobox, o usuário não vê a taxa cobrada. Precisa mostrar o valor ao lado do nome na lista e exibir a taxa selecionada abaixo do campo.
+A coluna "Modelo" usa `truncateText(saida.modeloNome, 30)` que corta nomes longos com "..." tornando impossível ler o nome completo.
 
-### Correções no arquivo `src/pages/Clientes.tsx`
+### Correções
 
-**1. Adicionar `overflow-hidden` no DialogContent:**
-```
-<DialogContent className="sm:max-w-[450px] overflow-hidden">
-```
-
-**2. Mostrar taxa ao lado do nome de cada excursão no CommandItem:**
-```
-<CommandItem ...>
-  <Check ... />
-  <span className="flex-1 truncate">{exc.nome}</span>
-  <span className="text-xs text-emerald-600 font-semibold ml-2">
-    R$ {exc.taxa.toFixed(2)}
-  </span>
-</CommandItem>
-```
-
-**3. Exibir a taxa da excursão selecionada abaixo do combobox:**
-
-Após selecionar uma excursão, buscar a taxa correspondente e exibir em texto pequeno abaixo do campo, como:
-```
-Excursão
-[Deyse S.amarelo V. 138...]
-Taxa: R$ 70,00
-```
-
-**4. Limitar largura do PopoverContent com `overflow-hidden` para evitar vazamento:**
-```
-<PopoverContent className="w-[--radix-popover-trigger-width] p-0 overflow-hidden" align="start">
-```
-
-**5. Truncar texto longo no botão trigger do combobox:**
-Adicionar `truncate` e `max-w` no texto do botão para que nomes longos de excursão não expandam o modal.
+| Arquivo | Alteração |
+|---|---|
+| `src/hooks/useExcluirMovimentacoes.ts` | Remover toda a lógica de reversão de estoque (linhas 27-66). Manter apenas a exclusão dos registros em `estoque_movimentacoes`. Remover invalidação de queries de estoque desnecessárias. |
+| `src/components/estoque/RelatorioSaidasModal.tsx` | Remover `truncateText` da coluna Modelo (linha 691) -- exibir o nome completo. Adicionar `whitespace-nowrap` ou `min-w` para garantir legibilidade. Atualizar o texto do AlertDialog removendo a mensagem sobre reversão de estoque. |
 
 ### Detalhes Técnicos
 
-- Adicionar `overflow-hidden` no `DialogContent` (linha 565)
-- Adicionar `truncate block max-w-[calc(100%-2rem)]` no texto do `PopoverTrigger` button
-- No `CommandItem`, usar layout flex com `truncate` no nome e taxa à direita
-- Após o `</Popover>`, adicionar um `<p>` condicional mostrando a taxa quando `formData.excursao` estiver preenchido
-- Buscar a taxa com: `excursoesAtivas?.find(e => e.nome === formData.excursao)?.taxa`
-- Formatar como `toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })`
+**useExcluirMovimentacoes.ts** -- simplificar para:
+```typescript
+mutationFn: async (movimentacoes) => {
+  if (!user) throw new Error('Usuário não autenticado');
+  if (movimentacoes.length === 0) throw new Error('Nenhuma movimentação selecionada');
 
-### Impacto
+  const ids = movimentacoes.map(m => m.id);
+  const { error } = await supabase
+    .from('estoque_movimentacoes')
+    .delete()
+    .in('id', ids);
 
-- Nenhuma mudança no banco de dados
-- Apenas alterações visuais no modal de criar/editar cliente
-- O campo `excursao` continua salvando apenas o nome (string)
+  if (error) throw error;
+  return ids.length;
+}
+```
+
+Remover invalidação de `estoque-por-local` e `estoque-itens` no `onSuccess`, mantendo apenas `relatorio-saidas` e `vendas-desde-contagem`.
+
+**RelatorioSaidasModal.tsx** -- coluna Modelo:
+- Remover `truncateText(saida.modeloNome, 30)` e exibir `saida.modeloNome` diretamente
+- Adicionar `min-w-[200px]` no `TableHead` do Modelo para dar mais espaço
+- Remover truncate também do Local (linha 711) e Motivo (linha 708) para melhor legibilidade
+
+**AlertDialog** -- atualizar texto:
+- Remover a frase "O estoque será revertido automaticamente."
+- Manter apenas "Esta ação não pode ser desfeita."
+
