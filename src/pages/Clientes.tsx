@@ -562,7 +562,7 @@ export default function Clientes() {
 
       {/* Modal de Criar/Editar */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[450px] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-foreground">
               {editingCliente ? 'Editar Cliente' : 'Novo Cliente'}
@@ -607,12 +607,14 @@ export default function Clientes() {
               <Label>Excursão</Label>
               <Popover open={excursaoPopoverOpen} onOpenChange={setExcursaoPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" aria-expanded={excursaoPopoverOpen} className="w-full justify-between font-normal shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0 h-10">
-                    {formData.excursao || <span className="text-muted-foreground">Selecione a excursão</span>}
+                  <Button variant="outline" role="combobox" aria-expanded={excursaoPopoverOpen} className="w-full justify-between font-normal shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0 h-10 overflow-hidden">
+                    <span className="truncate block max-w-[calc(100%-2rem)]">
+                      {formData.excursao || <span className="text-muted-foreground">Selecione a excursão</span>}
+                    </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0 overflow-hidden" align="start">
                   <Command>
                     <CommandInput placeholder="Buscar excursão..." />
                     <CommandList>
@@ -621,15 +623,26 @@ export default function Clientes() {
                         <CommandItem key={exc.id} value={exc.nome} onSelect={() => {
                           setFormData(prev => ({ ...prev, excursao: exc.nome }));
                           setExcursaoPopoverOpen(false);
-                        }}>
-                          <Check className={cn("mr-2 h-4 w-4", formData.excursao === exc.nome ? "opacity-100" : "opacity-0")} />
-                          {exc.nome}
+                        }} className="flex items-center">
+                          <Check className={cn("mr-2 h-4 w-4 shrink-0", formData.excursao === exc.nome ? "opacity-100" : "opacity-0")} />
+                          <span className="flex-1 truncate">{exc.nome}</span>
+                          <span className="text-xs text-emerald-600 font-semibold ml-2 shrink-0">
+                            {exc.taxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
                         </CommandItem>
                       ))}
                     </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
+              {formData.excursao && (() => {
+                const taxa = excursoesAtivas?.find(e => e.nome === formData.excursao)?.taxa;
+                return taxa != null ? (
+                  <p className="text-sm text-emerald-600 font-medium mt-1">
+                    Taxa: {taxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </p>
+                ) : null;
+              })()}
             </div>
 
             <div className="flex gap-3 pt-4">
