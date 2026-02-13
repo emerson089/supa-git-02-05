@@ -50,7 +50,7 @@ const tipoConfig: Record<string, { label: string; color: string; icon: React.Rea
     icon: <ArrowDown className="h-3 w-3" />
   },
   'VENDA_FEIRA': { 
-    label: 'Venda Feira', 
+    label: 'Venda / Loja', 
     color: 'bg-emerald-500/10 text-emerald-700 border-emerald-700/30',
     icon: <Package className="h-3 w-3" />
   },

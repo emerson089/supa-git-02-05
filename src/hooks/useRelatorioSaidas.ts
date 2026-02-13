@@ -46,7 +46,7 @@ export const TIPOS_SAIDA = [
 
 export const TIPO_LABELS: Record<string, string> = {
   'AJUSTE_SAIDA': 'Ajuste Estoque',
-  'VENDA_FEIRA': 'Venda Feira',
+  'VENDA_FEIRA': 'Venda / Loja',
   'ENVIO_FEIRA': 'Envio Feira',
   'TRANSFERENCIA': 'Transferência',
   'RETORNO_FEIRA': 'Retorno Feira',
