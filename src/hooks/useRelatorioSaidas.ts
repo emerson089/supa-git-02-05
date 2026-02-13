@@ -90,10 +90,29 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
         .order('created_at', { ascending: false });
 
       // Filtrar por tipos (apenas saídas)
-      const tiposParaFiltrar = filtros.tiposMovimento && filtros.tiposMovimento.length > 0
-        ? filtros.tiposMovimento
-        : TIPOS_SAIDA;
-      
+      let tiposParaFiltrar = filtros.tiposMovimento && filtros.tiposMovimento.length > 0
+        ? [...filtros.tiposMovimento]
+        : [...TIPOS_SAIDA];
+
+      // Verificar se VENDA_FEIRA está nos tipos selecionados
+      const incluiVendaLoja = tiposParaFiltrar.includes('VENDA_FEIRA');
+
+      // Buscar IDs de tipos_ajuste com conta_como_venda=true
+      let idsContaComoVenda: string[] = [];
+      if (incluiVendaLoja) {
+        const { data: tiposVenda } = await supabase
+          .from('tipos_ajuste_estoque')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('conta_como_venda', true);
+        idsContaComoVenda = tiposVenda?.map(t => t.id) || [];
+
+        // Adicionar AJUSTE_SAIDA aos tipos da query se não estiver
+        if (!tiposParaFiltrar.includes('AJUSTE_SAIDA')) {
+          tiposParaFiltrar = [...tiposParaFiltrar, 'AJUSTE_SAIDA'];
+        }
+      }
+
       query = query.in('tipo', tiposParaFiltrar);
 
       // Filtrar por local se especificado
@@ -125,8 +144,20 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
         };
       }
 
+      // Pós-processamento: filtrar AJUSTE_SAIDA indesejáveis
+      const tiposOriginais = filtros.tiposMovimento && filtros.tiposMovimento.length > 0
+        ? filtros.tiposMovimento
+        : [...TIPOS_SAIDA];
+      let movFiltradas = movimentacoes;
+      if (incluiVendaLoja && !tiposOriginais.includes('AJUSTE_SAIDA')) {
+        movFiltradas = movimentacoes.filter(m =>
+          m.tipo !== 'AJUSTE_SAIDA' ||
+          (m.tipo_ajuste_id && idsContaComoVenda.includes(m.tipo_ajuste_id))
+        );
+      }
+
       // Buscar informações dos itens
-      const itemIds = [...new Set(movimentacoes.map(m => m.item_id))];
+      const itemIds = [...new Set(movFiltradas.map(m => m.item_id))];
       const { data: itens } = await supabase
         .from('estoque_itens')
         .select('id, nome, preco_unitario')
@@ -135,7 +166,7 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       const itensMap = new Map(itens?.map(i => [i.id, i]) || []);
 
       // Buscar informações dos locais
-      const localIds = [...new Set(movimentacoes.map(m => m.local_id).filter(Boolean))];
+      const localIds = [...new Set(movFiltradas.map(m => m.local_id).filter(Boolean))];
       const { data: locais } = await supabase
         .from('estoque_locais')
         .select('id, nome')
@@ -144,7 +175,7 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       const locaisMap = new Map(locais?.map(l => [l.id, l.nome]) || []);
 
       // Buscar informações de transferências para obter local destino
-      const transferenciaIds = [...new Set(movimentacoes.filter(m => m.transferencia_id).map(m => m.transferencia_id))];
+      const transferenciaIds = [...new Set(movFiltradas.filter(m => m.transferencia_id).map(m => m.transferencia_id))];
       const transferenciasMap = new Map<string, { origemId: string; destinoId: string; destinoNome: string }>();
       
       if (transferenciaIds.length > 0) {
@@ -173,13 +204,18 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       }
 
       // Montar dados detalhados
-      const saidas: SaidaDetalhada[] = movimentacoes.map(mov => {
+      const saidas: SaidaDetalhada[] = movFiltradas.map(mov => {
         const item = itensMap.get(mov.item_id);
         const transferencia = mov.transferencia_id ? transferenciasMap.get(mov.transferencia_id) : null;
         
         // Prioridade de preço: preco_aplicado > preco_unitario do item
         const valorUnitario = mov.preco_aplicado ?? item?.preco_unitario ?? null;
         const valorTotal = valorUnitario !== null ? valorUnitario * mov.quantidade : null;
+
+        // Label: AJUSTE_SAIDA com conta_como_venda mostra "Venda / Loja"
+        const tipoLabel = (mov.tipo === 'AJUSTE_SAIDA' && mov.tipo_ajuste_id && idsContaComoVenda.includes(mov.tipo_ajuste_id))
+          ? 'Venda / Loja'
+          : TIPO_LABELS[mov.tipo] || mov.tipo;
 
         return {
           id: mov.id,
@@ -190,7 +226,7 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
           valorUnitario,
           valorTotal,
           tipo: mov.tipo,
-          tipoLabel: TIPO_LABELS[mov.tipo] || mov.tipo,
+          tipoLabel,
           motivo: mov.motivo,
           localId: mov.local_id,
           localNome: locaisMap.get(mov.local_id) || 'Local não encontrado',
@@ -198,7 +234,6 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
           localDestinoNome: transferencia?.destinoNome,
         };
       });
-
       // Calcular resumo
       const resumo: ResumoSaidas = {
         totalPecas: saidas.reduce((acc, s) => acc + s.quantidade, 0),
