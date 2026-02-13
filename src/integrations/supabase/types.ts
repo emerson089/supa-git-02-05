@@ -949,6 +949,33 @@ export type Database = {
         }
         Relationships: []
       }
+      role_change_audit_log: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: string
+          new_role: string
+          old_role: string | null
+          user_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_role: string
+          old_role?: string | null
+          user_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_role?: string
+          old_role?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       tipos_ajuste_estoque: {
         Row: {
           ativo: boolean
