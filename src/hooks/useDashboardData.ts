@@ -453,6 +453,7 @@ export function useDashboardData(
               .eq("user_id", user.id)
               .gte("created_at", startDate)
               .lte("created_at", endDate)
+              .order("created_at", { ascending: true })
           ).then(data => ({ data, error: null })),
 
           // Pedidos mesmo período do ano passado (YoY) - COM PAGINAÇÃO
@@ -463,6 +464,7 @@ export function useDashboardData(
               .eq("user_id", user.id)
               .gte("created_at", startDateYoY)
               .lte("created_at", endDateYoY)
+              .order("created_at", { ascending: true })
           ).then(data => ({ data, error: null })),
 
           // Estoque baixo (limit 10, no pagination needed)
@@ -482,6 +484,7 @@ export function useDashboardData(
               .eq("pedidos.status_pagamento", "PAGO")
               .gte("pedidos.created_at", startDate)
               .lte("pedidos.created_at", endDate)
+              .order("pedido_id", { ascending: true })
           ).then(data => ({ data, error: null })),
 
           // Produção atual (TODOS os lotes ativos - sem filtro de período)
@@ -534,6 +537,7 @@ export function useDashboardData(
               .eq("status_pagamento", "PAGO")
               .gte("created_at", subMonths(startOfMonth(now), 4).toISOString())
               .lt("created_at", startOfMonth(now).toISOString())
+              .order("created_at", { ascending: true })
           ).then(data => ({ data, error: null })),
 
           // SAZONAL: Buscar média do mesmo mês em anos anteriores
