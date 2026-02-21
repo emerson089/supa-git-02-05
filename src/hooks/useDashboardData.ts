@@ -605,10 +605,17 @@ export function useDashboardData(
               // Manter formato curto mas com ano: jan/25, fev/26
               chave = format(dataCompleta, "MMM/yy", { locale: ptBR });
               break;
-            case "semana":
-              // Para semanas, incluir ano para clareza
-              chave = `Sem ${getWeek(dataCompleta)}/${format(dataCompleta, "yy")}`;
+            case "semana": {
+              // Agrupar por semana ISO, mas exibir intervalo de datas
+              const wStart = startOfWeek(dataCompleta, { weekStartsOn: 1 });
+              const wEnd = new Date(wStart);
+              wEnd.setDate(wEnd.getDate() + 6);
+              const mesIgual = wStart.getMonth() === wEnd.getMonth();
+              chave = mesIgual
+                ? `${wStart.getDate()}–${wEnd.getDate()} ${format(wEnd, "MMM", { locale: ptBR })}`
+                : `${wStart.getDate()} ${format(wStart, "MMM", { locale: ptBR })}–${wEnd.getDate()} ${format(wEnd, "MMM", { locale: ptBR })}`;
               break;
+            }
             default:
               // Para dias, incluir ano para evitar confusão
               chave = format(dataCompleta, "dd/MM/yy");
@@ -629,9 +636,16 @@ export function useDashboardData(
               case "mes":
                 diaCompleto = format(dados.data, "MMMM 'de' yyyy", { locale: ptBR });
                 break;
-              case "semana":
-                diaCompleto = `Semana ${getWeek(dados.data)} de ${format(dados.data, "yyyy")}`;
+              case "semana": {
+                const ws = startOfWeek(dados.data, { weekStartsOn: 1 });
+                const we = new Date(ws);
+                we.setDate(we.getDate() + 6);
+                const mm = ws.getMonth() === we.getMonth();
+                diaCompleto = mm
+                  ? `Semana de ${ws.getDate()} a ${we.getDate()} de ${format(we, "MMMM 'de' yyyy", { locale: ptBR })}`
+                  : `Semana de ${ws.getDate()} de ${format(ws, "MMMM", { locale: ptBR })} a ${we.getDate()} de ${format(we, "MMMM 'de' yyyy", { locale: ptBR })}`;
                 break;
+              }
               default:
                 diaCompleto = format(dados.data, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
             }
