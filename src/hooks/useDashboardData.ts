@@ -292,6 +292,28 @@ function detectBottlenecks(etapas: ProducaoEtapa[]): ProducaoEtapa[] {
   });
 }
 
+// Helper to fetch all rows with pagination (bypasses 1000-row limit)
+async function fetchAllRows<T>(queryBuilder: () => any): Promise<T[]> {
+  const pageSize = 1000;
+  let allData: T[] = [];
+  let page = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await queryBuilder().range(page * pageSize, (page + 1) * pageSize - 1);
+    if (error) throw error;
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      hasMore = data.length === pageSize;
+      page++;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allData;
+}
+
 export function useDashboardData(
   periodo: Periodo,
   dateRange?: DateRange,
@@ -423,23 +445,27 @@ export function useDashboardData(
           // SAZONAL: Curva de ritmo do mês
           curvaMesResult,
         ] = await Promise.all([
-          // Pedidos período atual (inclui paid_at para agrupamento correto)
-          supabase
-            .from("pedidos")
-            .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at, paid_at")
-            .eq("user_id", user.id)
-            .gte("created_at", startDate)
-            .lte("created_at", endDate),
+          // Pedidos período atual - COM PAGINAÇÃO (pode ultrapassar 1000 rows)
+          fetchAllRows<any>(() =>
+            supabase
+              .from("pedidos")
+              .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at, paid_at")
+              .eq("user_id", user.id)
+              .gte("created_at", startDate)
+              .lte("created_at", endDate)
+          ).then(data => ({ data, error: null })),
 
-          // Pedidos mesmo período do ano passado (YoY) - inclui paid_at
-          supabase
-            .from("pedidos")
-            .select("valor_total, total_pecas, status_pagamento, status_pedido, paid_at")
-            .eq("user_id", user.id)
-            .gte("created_at", startDateYoY)
-            .lte("created_at", endDateYoY),
+          // Pedidos mesmo período do ano passado (YoY) - COM PAGINAÇÃO
+          fetchAllRows<any>(() =>
+            supabase
+              .from("pedidos")
+              .select("valor_total, total_pecas, status_pagamento, status_pedido, paid_at")
+              .eq("user_id", user.id)
+              .gte("created_at", startDateYoY)
+              .lte("created_at", endDateYoY)
+          ).then(data => ({ data, error: null })),
 
-          // Estoque baixo
+          // Estoque baixo (limit 10, no pagination needed)
           supabase
             .from("estoque_itens")
             .select("id, nome, quantidade, quantidade_minima, imagem_url")
@@ -447,14 +473,16 @@ export function useDashboardData(
             .order("quantidade", { ascending: true })
             .limit(10),
 
-          // Itens de pedido para top modelos (filtrar por PAGO e respeitar cancelados)
-          supabase
-            .from("pedido_itens")
-            .select("pedido_id, produto_nome, quantidade, pedidos!inner(user_id, created_at, status_pagamento, status_pedido)")
-            .eq("pedidos.user_id", user.id)
-            .eq("pedidos.status_pagamento", "PAGO")
-            .gte("pedidos.created_at", startDate)
-            .lte("pedidos.created_at", endDate),
+          // Itens de pedido para top modelos - COM PAGINAÇÃO
+          fetchAllRows<any>(() =>
+            supabase
+              .from("pedido_itens")
+              .select("pedido_id, produto_nome, quantidade, pedidos!inner(user_id, created_at, status_pagamento, status_pedido)")
+              .eq("pedidos.user_id", user.id)
+              .eq("pedidos.status_pagamento", "PAGO")
+              .gte("pedidos.created_at", startDate)
+              .lte("pedidos.created_at", endDate)
+          ).then(data => ({ data, error: null })),
 
           // Produção atual (TODOS os lotes ativos - sem filtro de período)
           supabase
@@ -497,14 +525,16 @@ export function useDashboardData(
             .gte("created_at", inicioMesAtual.toISOString())
             .lte("created_at", now.toISOString()),
 
-          // Buscar todos os pedidos PAGO dos últimos 4 meses para calcular média (fallback)
-          supabase
-            .from("pedidos")
-            .select("valor_total, paid_at, created_at")
-            .eq("user_id", user.id)
-            .eq("status_pagamento", "PAGO")
-            .gte("created_at", subMonths(startOfMonth(now), 4).toISOString())
-            .lt("created_at", startOfMonth(now).toISOString()),
+          // Buscar todos os pedidos PAGO dos últimos 4 meses - COM PAGINAÇÃO
+          fetchAllRows<any>(() =>
+            supabase
+              .from("pedidos")
+              .select("valor_total, paid_at, created_at")
+              .eq("user_id", user.id)
+              .eq("status_pagamento", "PAGO")
+              .gte("created_at", subMonths(startOfMonth(now), 4).toISOString())
+              .lt("created_at", startOfMonth(now).toISOString())
+          ).then(data => ({ data, error: null })),
 
           // SAZONAL: Buscar média do mesmo mês em anos anteriores
           supabase.rpc('get_media_mes_anos_anteriores', {
