@@ -202,7 +202,7 @@ export default function Dashboard() {
     }
   })();
 
-  const dashboardInsights = useInsightsDashboard({
+  const { insights: dashboardInsights, resumoExecutivo, sugestaoFoco } = useInsightsDashboard({
     kpis: data.kpis,
     metaAutomatica: data.metaAutomatica,
     tendenciaVendas: data.tendenciaVendas,
@@ -754,7 +754,7 @@ export default function Dashboard() {
         </div>
 
         {/* Insights do Período */}
-        <InsightsPanel insights={dashboardInsights} />
+        <InsightsPanel insights={dashboardInsights} resumoExecutivo={resumoExecutivo} sugestaoFoco={sugestaoFoco} />
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
