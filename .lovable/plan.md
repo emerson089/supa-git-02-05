@@ -1,135 +1,154 @@
 
 
-## Evolucao do Dashboard: Insights Automaticos + Contexto Sazonal
+## Resumo Executivo + Prioridade + Foco do Dia
 
 ### Visao Geral
 
-Adicionar uma camada de interpretacao automatica dos dados do dashboard, gerando insights acionaveis e contexto historico sem alterar nenhum calculo, query, layout base ou performance existente.
+Evoluir o bloco "Insights do Periodo" existente para incluir 3 novos elementos: um resumo executivo (1 frase), classificacao visual de prioridade nos insights, e uma sugestao de foco. Tudo derivado dos dados ja calculados, sem queries novas.
 
-### Arquitetura da Solucao
+### Arquitetura
 
-A logica de insights sera 100% derivada dos dados ja existentes no `useDashboardData`. Nenhuma query nova sera adicionada ao banco -- os insights sao calculados no frontend a partir dos dados que ja foram carregados.
+Nenhum arquivo novo. Apenas evolucao dos 2 arquivos existentes:
 
 ```text
-useDashboardData (existente, sem alteracoes)
-        |
-        v
-useInsightsDashboard (NOVO hook)
-  - Recebe: data, periodo, holidayMap
-  - Calcula: insights automaticos + contexto sazonal
-  - Retorna: lista de InsightItem[]
-        |
-        v
-InsightsPanel (NOVO componente)
-  - Renderiza bloco "Insights do Periodo"
-  - Exibe frases curtas e acionaveis
-  - Collapsible: expandido por padrao, pode recolher
+useInsightsDashboard (evolucao)
+  - Retorna: { insights, resumoExecutivo, sugestaoFoco }
+      |
+      v
+InsightsPanel (evolucao)
+  - Exibe resumo executivo acima dos insights
+  - Badges de prioridade por insight
+  - Sugestao de foco no topo (se houver critico)
 ```
 
-### Arquivos Novos
-
-| Arquivo | Responsabilidade |
-|---|---|
-| `src/hooks/useInsightsDashboard.ts` | Hook que gera insights automaticos a partir dos dados do dashboard. Puro calculo, sem side effects, sem queries adicionais. |
-| `src/components/dashboard/InsightsPanel.tsx` | Componente visual do bloco "Insights do Periodo". Card collapsible, discreto, abaixo dos KPIs e acima do grid principal. |
-
-### Arquivo Modificado
+### Arquivos Modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/Dashboard.tsx` | Importar `useInsightsDashboard` e `InsightsPanel`. Inserir o componente entre os KPI cards (linha ~723) e o grid principal (linha ~726). Passar dados existentes como props. Nenhum calculo alterado. |
+| `src/hooks/useInsightsDashboard.ts` | Adicionar campo `prioridade` ao InsightItem. Mudar retorno de InsightItem[] para objeto `{ insights, resumoExecutivo, sugestaoFoco }`. Ordenar insights por prioridade. Gerar resumo e sugestao automaticamente. |
+| `src/components/dashboard/InsightsPanel.tsx` | Receber novo formato de props. Exibir resumo executivo, badges de prioridade, e sugestao de foco. |
+| `src/pages/Dashboard.tsx` | Ajustar chamada para novo formato de retorno (desestruturar objeto em vez de array). |
 
-### 1) Insights Automaticos -- Logica do Hook
+### 1) Mudancas no Hook (`useInsightsDashboard.ts`)
 
-O hook `useInsightsDashboard` recebera os dados ja calculados e gerara frases interpretativas:
+**Nova interface:**
 
-**Regras de geracao de insights (em ordem de prioridade):**
-
-1. **Ritmo vs Meta** (usa `metaAutomatica`):
-   - Se `statusMeta === 'abaixo'` e `diferencaRitmo < -10`: "Faturamento significativamente abaixo do ritmo sazonal (-Xpp). Queda pode estar concentrada nos ultimos dias."
-   - Se `statusMeta === 'acima'`: "Faturamento acima do ritmo esperado (+Xpp). Projecao de R$ X para o mes."
-   - Se `statusMeta === 'atingida'`: "Meta mensal atingida! Faturamento atual: R$ X."
-
-2. **Estoque critico impactando vendas** (usa `estoqueBaixo` + `topModelos`):
-   - Cruzar nomes dos top modelos com itens de estoque zerado/negativo. Se houver match: "Modelo 'X' esta entre os mais vendidos mas com estoque zerado. Pode estar perdendo vendas."
-
-3. **Concentracao de vendas** (usa `faturamentoDiaSemana`):
-   - Se um dia concentra mais de 40% do faturamento: "X% do faturamento esta concentrado em [dia]. Considere acoes para distribuir vendas."
-
-4. **Tendencia de queda** (usa `tendenciaVendas`):
-   - Se os ultimos 3 pontos da tendencia mostram queda consecutiva: "Queda consecutiva de faturamento nos ultimos [3 dias/semanas]. Verifique possiveis causas."
-
-5. **Pedidos pendentes acumulados** (usa `kpis.pedidosPendentes`):
-   - Se pedidos pendentes > 10: "Existem X pedidos pendentes de pagamento no periodo. Considere acao de cobranca."
-
-6. **Comparacao YoY** (usa `kpis.faturamento` vs `kpis.faturamentoYoY`):
-   - Se variacao < -20%: "Faturamento X% abaixo do mesmo periodo de [ano]. Verifique se ha fatores sazonais."
-   - Se variacao > 20%: "Crescimento de X% vs mesmo periodo de [ano]."
-
-7. **Sem anomalias**: Se nenhum insight relevante for gerado, exibir: "Desempenho dentro do esperado para o periodo analisado."
-
-**Interface do insight:**
 ```typescript
-interface InsightItem {
+export interface InsightItem {
   id: string;
-  tipo: 'alerta' | 'positivo' | 'info' | 'neutro';
+  tipo: "alerta" | "positivo" | "info" | "neutro";
+  prioridade: "critico" | "atencao" | "contexto"; // NOVO
   mensagem: string;
-  icone: 'trending-down' | 'trending-up' | 'alert' | 'package' | 'check';
+  icone: "trending-down" | "trending-up" | "alert" | "package" | "check";
+}
+
+export interface InsightsDashboardResult {
+  insights: InsightItem[];
+  resumoExecutivo: string;
+  sugestaoFoco: string | null; // null = nada critico, nao exibir
 }
 ```
 
-Limite maximo: 4 insights por vez (os mais relevantes).
+**Mapeamento de prioridade (automatico, baseado no tipo + id):**
 
-### 2) Contexto de Sazonalidade
+| Condicao | Prioridade |
+|---|---|
+| `tipo === "alerta"` | `critico` |
+| `tipo === "positivo"` ou `tipo === "info"` com ids como `meta-abaixo-leve`, `concentracao-dia` | `atencao` |
+| `tipo === "info"` (historico, feriados) ou `tipo === "neutro"` | `contexto` |
 
-O mesmo hook gerara insights de contexto sazonal automaticamente:
+**Ordenacao:** insights serao ordenados por prioridade antes do slice(0, 4): critico primeiro, depois atencao, depois contexto.
 
-1. **Comparacao com mes anterior** (usa variacao YoY ja calculada nos KPIs):
-   - "Comparado ao mesmo periodo do mes anterior, faturamento [subiu/caiu] X%."
+**Resumo executivo (1 frase, gerado automaticamente):**
 
-2. **Contexto historico do mes** (usa `metaAutomatica.faturamentosPorAno`):
-   - Se ha dados sazonais: "Historicamente, [mes] teve faturamento medio de R$ X nos ultimos Y anos."
+Logica baseada no estado predominante:
+- Se meta atingida/acima: "Desempenho positivo no periodo -- faturamento acima do ritmo esperado."
+- Se meta abaixo forte (>10pp): "Periodo com desempenho abaixo do esperado -- faturamento significativamente abaixo do ritmo sazonal."
+- Se meta abaixo leve: "Desempenho levemente abaixo do ritmo esperado para o periodo."
+- Se crescimento YoY >20%: "Periodo de crescimento -- faturamento acima do mesmo periodo do ano anterior."
+- Se queda YoY >20%: "Atencao: faturamento em queda comparado ao mesmo periodo do ano anterior."
+- Fallback: "Desempenho dentro do esperado para o periodo analisado."
 
-3. **Feriados no periodo** (usa `holidayMap` ja disponivel):
-   - Se ha feriados nacionais no periodo selecionado: "Periodo inclui [feriado1, feriado2]. Isso pode impactar o volume de vendas."
-   - Verificar quais datas do periodo selecionado possuem feriados e listar os nomes.
+**Sugestao de foco:**
 
-### 3) Componente Visual -- InsightsPanel
+Derivada do primeiro insight critico. Mapeamento por id do insight:
+- `meta-abaixo`: "Prioridade: investigar a queda de faturamento em relacao ao ritmo sazonal."
+- `estoque-top-zerado`: "Prioridade: repor estoque dos modelos mais vendidos para evitar perda de vendas."
+- `tendencia-queda`: "Prioridade: entender a queda consecutiva dos ultimos periodos."
+- `pendentes-alto`: "Prioridade: acionar cobranca dos pedidos pendentes acumulados."
+- `yoy-queda`: "Prioridade: analisar os fatores da queda comparado ao ano anterior."
+- Se nao houver insight critico: `null` (nao exibir).
 
-**Design (nao invasivo):**
-- Card com titulo "Insights do Periodo" e icone de lampada (Lightbulb do lucide)
-- Collapsible via `@radix-ui/react-collapsible` (ja instalado)
-- Estado aberto/fechado persistido no localStorage
-- Cada insight e uma linha com icone colorido + texto
-- Cores: alerta (amber), positivo (emerald), info (blue), neutro (gray)
-- Maximo 4 insights visiveis, sem scroll
+### 2) Mudancas no Componente (`InsightsPanel.tsx`)
 
-**Posicionamento:** Entre os KPI cards e o grid "Tendencia de Vendas + Estoque Critico", mantendo a hierarquia visual existente.
+**Props atualizadas:**
 
-**Mobile:** Stack vertical, mesma logica, sem alteracao de layout.
+```typescript
+interface InsightsPanelProps {
+  insights: InsightItem[];
+  resumoExecutivo: string;
+  sugestaoFoco: string | null;
+}
+```
 
-### 4) UX Consistente
+**Layout (dentro do mesmo Card collapsible):**
 
-- Filtros ja persistem no localStorage (implementado)
-- DatePicker ja mantem range (corrigido anteriormente com `defaultMonth`)
-- Feriados ja marcados no calendario (implementado)
-- Nenhum elemento visual muda de posicao
-- Insights aparecem apenas quando ha dados relevantes
-- Estado vazio: "Desempenho dentro do esperado para o periodo analisado."
+```text
++---------------------------------------------------+
+| [lampada] Insights do Periodo (N)          [v]    |
++---------------------------------------------------+
+| Resumo: "Periodo com desempenho abaixo..."        |  <- 1 linha, texto cinza, discreto
+|                                                   |
+| [alvo] Prioridade: investigar a queda...          |  <- sugestao de foco, destaque sutil
+|                                                   |
+| [vermelho] Faturamento abaixo do ritmo...         |  <- badge "Critico"
+| [amarelo] Estoque zerado impactando...            |  <- badge "Atencao"  
+| [azul] Historicamente, fevereiro...               |  <- badge "Contexto"
++---------------------------------------------------+
+```
 
-### Detalhes Tecnicos
+**Badges de prioridade (apenas visual):**
 
-**Performance:**
-- `useInsightsDashboard` usa `useMemo` para recalcular insights apenas quando `data` muda
-- Nenhuma query adicional ao banco
-- Componente `InsightsPanel` e leve (apenas texto + icones)
+| Prioridade | Cor | Label |
+|---|---|---|
+| `critico` | vermelho (`text-red-600`, `bg-red-100`) | "Critico" |
+| `atencao` | amarelo (`text-amber-600`, `bg-amber-100`) | "Atencao" |
+| `contexto` | azul (`text-blue-600`, `bg-blue-100`) | "Contexto" |
 
-**Nenhuma alteracao em:**
-- `useDashboardData.ts` (nenhuma query, calculo ou interface modificada)
-- Layout grid existente
-- Componentes de KPI, graficos, tabelas
-- Logica de filtros, presets, excluirCancelados
-- Edge functions existentes
+Cada badge e um pequeno chip ao lado do icone do insight, sem alterar o layout existente das linhas.
 
-**Dependencias:** Nenhuma nova. Usa apenas `lucide-react`, `@radix-ui/react-collapsible`, e componentes UI ja existentes.
+**Sugestao de foco:**
+- Exibida apenas quando `sugestaoFoco !== null`
+- Icone `Target` do lucide-react
+- Fundo levemente destacado (`bg-primary/5 border border-primary/20`)
+- Texto em `text-sm font-medium`
+
+**Resumo executivo:**
+- 1 linha de texto acima dos insights
+- Cor `text-muted-foreground`, tamanho `text-sm`
+- Sem icone, sem destaque forte
+
+### 3) Mudanca no Dashboard (`Dashboard.tsx`)
+
+Apenas ajustar a desestruturacao:
+
+```typescript
+// Antes:
+const dashboardInsights = useInsightsDashboard({...});
+<InsightsPanel insights={dashboardInsights} />
+
+// Depois:
+const { insights: dashboardInsights, resumoExecutivo, sugestaoFoco } = useInsightsDashboard({...});
+<InsightsPanel insights={dashboardInsights} resumoExecutivo={resumoExecutivo} sugestaoFoco={sugestaoFoco} />
+```
+
+### O que NAO muda
+
+- Nenhuma query ou calculo de dados
+- Nenhum KPI muda de valor
+- Layout grid, filtros, presets -- tudo inalterado
+- Limite de 4 insights mantido
+- Estado collapsible com localStorage mantido
+- Performance: apenas logica adicional no useMemo existente (custo zero)
+- Nenhuma dependencia nova
 
