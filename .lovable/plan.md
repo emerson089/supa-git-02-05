@@ -1,24 +1,82 @@
 
 
-## Ajustar exibição de datas no gráfico "Tendência de Vendas"
+## Correção de Persistência do DatePicker + Feriados Brasileiros
 
-Apenas os textos visíveis ao usuário serão alterados. Nenhuma lógica, query ou cálculo será modificado.
+### A) BUG -- Persistência do filtro de datas
 
-### O que muda
+**Problema**: Ao reabrir o DatePicker, ele reseta para o mês atual mesmo quando um range personalizado está selecionado.
 
-| Local | Antes | Depois |
-|---|---|---|
-| Eixo X do gráfico | `Sem 50/25` | `16–22 dez` |
-| Tooltip (hover) | `Semana 50 de 2025` | `Semana de 16 a 22 de dezembro de 2025` |
+**Causa**: O componente `Calendar` não recebe `defaultMonth`, então sempre abre no mês atual.
 
-### Alterações técnicas
+**Solução** (arquivo `src/pages/Dashboard.tsx`):
 
-**Arquivo**: `src/hooks/useDashboardData.ts`
+1. Adicionar a prop `defaultMonth={dateRange.from}` nos dois `<Calendar mode="range">` (mobile na linha ~452 e desktop na linha ~504). Isso faz o calendário abrir no mês do range selecionado.
+2. O `selected={dateRange}` já está correto e mantém o range visualmente marcado.
+3. O reset continua ocorrendo apenas via "Limpar filtros" ou seleção de preset (já implementado em `handleClearFilters` e `handlePeriodoClick`).
 
-Apenas 2 trechos dentro do bloco `case "semana"` serão ajustados:
+Nenhuma outra lógica é alterada.
 
-1. **Linha ~610 (label do eixo X)**: Usar `startOfWeek` e `endOfWeek` para calcular o intervalo real e formatar como `"16–22 dez"`. Se a semana cruzar meses, mostra ambos (ex: `"28 jan–3 fev"`).
+---
 
-2. **Linha ~633 (tooltip)**: Formatar como `"Semana de 16 a 22 de dezembro de 2025"`. Se cruzar meses: `"Semana de 28 de janeiro a 3 de fevereiro de 2025"`.
+### B) FEATURE -- Feriados brasileiros no DatePicker
 
-Funções `startOfWeek`, `endOfWeek` e `format` do `date-fns` (já importado no arquivo) serão utilizadas. A semana ISO (`getWeek`) continua sendo usada internamente como chave de agrupamento — apenas o texto de exibição muda.
+**Arquitetura**:
+
+```text
+Edge Function (backend)          Frontend
++---------------------------+    +-------------------------+
+| GET /brazilian-holidays   |    | useHolidays() hook      |
+| - Gera feriados fixos     |--->| - Consome JSON          |
+| - Calcula móveis          |    | - Mapeia por data       |
+|   (Páscoa, Carnaval, etc) |    +-------------------------+
+| - Cache 7 dias            |            |
+| - Retorna JSON            |    +-------v-----------------+
++---------------------------+    | Calendar com modifiers   |
+                                 | - Dot visual em feriados |
+                                 | - Tooltip com nome       |
+                                 +-------------------------+
+```
+
+**Arquivos novos**:
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `supabase/functions/brazilian-holidays/index.ts` | Edge function que calcula feriados nacionais fixos + móveis (Carnaval, Corpus Christi, Sexta-feira Santa) para o ano solicitado. Retorna JSON com `{ date, title, type }`. Cache de 7 dias via header. |
+| `src/hooks/useHolidays.ts` | Hook React Query que consome a edge function. Recebe ano(s) e retorna `Map<string, Holiday[]>` indexado por data ISO (YYYY-MM-DD). staleTime de 24h. |
+
+**Arquivo modificado**:
+
+| Arquivo | Alteracao |
+|---|---|
+| `src/pages/Dashboard.tsx` | Importar hook, passar dados para Calendar via `modifiers` e `modifiersStyles` do react-day-picker. Adicionar tooltip ao hover sobre dias com feriado. |
+| `src/components/ui/calendar.tsx` | Adicionar suporte a `modifiers` e `modifiersStyles` passados via props (já suportado pelo DayPicker, apenas garantir repasse). |
+
+**Edge Function -- Logica de feriados**:
+
+Feriados fixos nacionais:
+- 1 jan (Confraternização Universal), 21 abr (Tiradentes), 1 mai (Dia do Trabalho), 7 set (Independência), 12 out (N.S. Aparecida), 2 nov (Finados), 15 nov (Proclamação da República), 25 dez (Natal)
+
+Feriados móveis (calculados a partir da Páscoa via algoritmo de Gauss):
+- Carnaval (Páscoa - 47 dias), Sexta-feira Santa (Páscoa - 2), Corpus Christi (Páscoa + 60)
+
+Tipo: `national` para feriados nacionais, `observance` para Carnaval e outros eventos complementares.
+
+**Visual no calendário**:
+- Pequeno dot colorido abaixo do número do dia
+- Não interfere na seleção de range (é apenas decorativo via `modifiers`)
+- Tooltip ao hover mostra nome do feriado
+
+---
+
+### C) Eventos complementares configuráveis
+
+A edge function aceitará um parâmetro opcional `include_observances=true` (default true) que inclui eventos como Carnaval. Esses eventos terão `type: "observance"` e visual diferenciado (dot em cor mais suave). Nenhuma lógica especial que afete filtros ou métricas.
+
+---
+
+### Criterios de aceite garantidos
+
+- Presets continuam limpando o dateRange como hoje
+- Range selection continua funcionando (modifiers são decorativos)
+- Performance: hook com staleTime longo + edge function com cache header
+- Nenhuma query de dados ou calculo de KPI alterado
