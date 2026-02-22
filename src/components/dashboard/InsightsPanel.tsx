@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Card, CardContent } from "@/components/ui/card";
-import { Lightbulb, TrendingDown, TrendingUp, AlertTriangle, Package, CheckCircle, ChevronDown } from "lucide-react";
+import { Lightbulb, TrendingDown, TrendingUp, AlertTriangle, Package, CheckCircle, ChevronDown, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { InsightItem } from "@/hooks/useInsightsDashboard";
 
 interface InsightsPanelProps {
   insights: InsightItem[];
+  resumoExecutivo: string;
+  sugestaoFoco: string | null;
 }
 
 const STORAGE_KEY = "dashboard-insights-open";
@@ -33,7 +35,22 @@ const BG_MAP: Record<InsightItem["tipo"], string> = {
   neutro: "bg-muted/50",
 };
 
-export function InsightsPanel({ insights }: InsightsPanelProps) {
+const BADGE_MAP: Record<InsightItem["prioridade"], { label: string; className: string }> = {
+  critico: {
+    label: "Crítico",
+    className: "text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/30",
+  },
+  atencao: {
+    label: "Atenção",
+    className: "text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30",
+  },
+  contexto: {
+    label: "Contexto",
+    className: "text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30",
+  },
+};
+
+export function InsightsPanel({ insights, resumoExecutivo, sugestaoFoco }: InsightsPanelProps) {
   const [open, setOpen] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved !== null ? saved === "true" : true;
@@ -71,9 +88,26 @@ export function InsightsPanel({ insights }: InsightsPanelProps) {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardContent className="pt-0 px-4 pb-4 sm:px-6 sm:pb-5">
+            {/* Resumo Executivo */}
+            <p className="text-sm text-muted-foreground mb-3">
+              {resumoExecutivo}
+            </p>
+
+            {/* Sugestão de Foco */}
+            {sugestaoFoco && (
+              <div className="flex items-start gap-2.5 py-2.5 px-3 rounded-lg bg-primary/5 border border-primary/20 mb-3">
+                <Target className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                <p className="text-sm font-medium text-foreground">
+                  {sugestaoFoco}
+                </p>
+              </div>
+            )}
+
+            {/* Insights */}
             <div className="space-y-2">
               {insights.map((insight) => {
                 const Icon = ICON_MAP[insight.icone];
+                const badge = BADGE_MAP[insight.prioridade];
                 return (
                   <div
                     key={insight.id}
@@ -87,9 +121,21 @@ export function InsightsPanel({ insights }: InsightsPanelProps) {
                     >
                       <Icon className={cn("h-3.5 w-3.5", COLOR_MAP[insight.tipo])} />
                     </div>
-                    <p className="text-sm text-foreground/90 leading-relaxed">
-                      {insight.mensagem}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span
+                          className={cn(
+                            "text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded",
+                            badge.className
+                          )}
+                        >
+                          {badge.label}
+                        </span>
+                      </div>
+                      <p className="text-sm text-foreground/90 leading-relaxed">
+                        {insight.mensagem}
+                      </p>
+                    </div>
                   </div>
                 );
               })}
