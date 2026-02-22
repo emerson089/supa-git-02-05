@@ -12,7 +12,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { HolidayCalendar } from "@/components/ui/holiday-calendar";
+import { useHolidays } from "@/hooks/useHolidays";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -145,7 +146,10 @@ export default function Dashboard() {
   });
   const [calendarOpen, setCalendarOpen] = useState(false);
 
-  // NOVO: Estado para configuração do % de crescimento
+  // Holiday data for calendar markers
+  const currentYear = new Date().getFullYear();
+  const holidayYears = [currentYear, currentYear + 1];
+  const { holidayMap } = useHolidays(holidayYears);
   const [percentualCrescimento, setPercentualCrescimento] = useState(() => {
     const saved = localStorage.getItem('dashboard-meta-crescimento');
     return saved ? parseFloat(saved) : 10;
@@ -449,7 +453,7 @@ export default function Dashboard() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="end">
-                        <Calendar mode="range" selected={dateRange} onSelect={handleDateRangeSelect} numberOfMonths={1} locale={ptBR} initialFocus className="pointer-events-auto" />
+                        <HolidayCalendar mode="range" selected={dateRange} onSelect={handleDateRangeSelect} numberOfMonths={1} locale={ptBR} initialFocus className="pointer-events-auto" defaultMonth={dateRange.from} holidayMap={holidayMap} />
                       </PopoverContent>
                     </Popover>
                   </div>
@@ -501,7 +505,7 @@ export default function Dashboard() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="range" selected={dateRange} onSelect={handleDateRangeSelect} numberOfMonths={2} locale={ptBR} initialFocus className="pointer-events-auto" />
+                        <HolidayCalendar mode="range" selected={dateRange} onSelect={handleDateRangeSelect} numberOfMonths={2} locale={ptBR} initialFocus className="pointer-events-auto" defaultMonth={dateRange.from} holidayMap={holidayMap} />
                       </PopoverContent>
                     </Popover>
                     
