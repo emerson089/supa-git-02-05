@@ -1,82 +1,94 @@
 
 
-## Correção de Persistência do DatePicker + Feriados Brasileiros
+## Ajuste de UX -- Mascarar Valor Total por Padrao
 
-### A) BUG -- Persistência do filtro de datas
+### Resumo
 
-**Problema**: Ao reabrir o DatePicker, ele reseta para o mês atual mesmo quando um range personalizado está selecionado.
+Adicionar funcionalidade de mostrar/ocultar o valor financeiro em todos os locais onde "Valor Total" aparece na tela de Pedidos Criados. O valor vem mascarado por padrao e o usuario pode revelar clicando num icone de olho.
 
-**Causa**: O componente `Calendar` não recebe `defaultMonth`, então sempre abre no mês atual.
+### Locais afetados
 
-**Solução** (arquivo `src/pages/Dashboard.tsx`):
+Existem **4 locais** onde o valor total e exibido na pagina:
 
-1. Adicionar a prop `defaultMonth={dateRange.from}` nos dois `<Calendar mode="range">` (mobile na linha ~452 e desktop na linha ~504). Isso faz o calendário abrir no mês do range selecionado.
-2. O `selected={dateRange}` já está correto e mantém o range visualmente marcado.
-3. O reset continua ocorrendo apenas via "Limpar filtros" ou seleção de preset (já implementado em `handleClearFilters` e `handlePeriodoClick`).
+1. **Card desktop** (linha ~834-842) -- card "Valor Total" com icone de cifrao
+2. **Painel de totais filtrados** (linha ~1011-1014) -- "Valor Total Filtrado" abaixo da tabela
+3. **Modal de detalhes** (linha ~1340-1348) -- "Valor Total" dentro do dialog de detalhes do pedido
+4. **Cards mobile** (`MobileSummaryCards.tsx`) -- card "Valor" no grid 3 colunas
 
-Nenhuma outra lógica é alterada.
+### Implementacao
 
----
+**Estado local (sem persistencia)**:
+- Um `useState<boolean>(false)` chamado `showValor` no componente `PedidosCriados`
+- Ao recarregar ou sair da tela, volta para `false` (mascarado)
 
-### B) FEATURE -- Feriados brasileiros no DatePicker
+**Valor mascarado**:
+- Exibir `R$ ••••••` no lugar do valor real
+- Icone `Eye` (mostrar) / `EyeOff` (ocultar) clicavel ao lado do valor no card desktop
+- Click no icone alterna o estado globalmente (todos os 4 locais reagem)
 
-**Arquitetura**:
-
-```text
-Edge Function (backend)          Frontend
-+---------------------------+    +-------------------------+
-| GET /brazilian-holidays   |    | useHolidays() hook      |
-| - Gera feriados fixos     |--->| - Consome JSON          |
-| - Calcula móveis          |    | - Mapeia por data       |
-|   (Páscoa, Carnaval, etc) |    +-------------------------+
-| - Cache 7 dias            |            |
-| - Retorna JSON            |    +-------v-----------------+
-+---------------------------+    | Calendar com modifiers   |
-                                 | - Dot visual em feriados |
-                                 | - Tooltip com nome       |
-                                 +-------------------------+
-```
-
-**Arquivos novos**:
-
-| Arquivo | Responsabilidade |
-|---|---|
-| `supabase/functions/brazilian-holidays/index.ts` | Edge function que calcula feriados nacionais fixos + móveis (Carnaval, Corpus Christi, Sexta-feira Santa) para o ano solicitado. Retorna JSON com `{ date, title, type }`. Cache de 7 dias via header. |
-| `src/hooks/useHolidays.ts` | Hook React Query que consome a edge function. Recebe ano(s) e retorna `Map<string, Holiday[]>` indexado por data ISO (YYYY-MM-DD). staleTime de 24h. |
-
-**Arquivo modificado**:
+### Arquivos modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/Dashboard.tsx` | Importar hook, passar dados para Calendar via `modifiers` e `modifiersStyles` do react-day-picker. Adicionar tooltip ao hover sobre dias com feriado. |
-| `src/components/ui/calendar.tsx` | Adicionar suporte a `modifiers` e `modifiersStyles` passados via props (já suportado pelo DayPicker, apenas garantir repasse). |
+| `src/pages/PedidosCriados.tsx` | Adicionar estado `showValor`, importar `Eye`/`EyeOff` do lucide-react, aplicar mascara nos 3 locais (card desktop, painel filtrado, modal detalhes). Passar prop para MobileSummaryCards. |
+| `src/components/pedidos/MobileSummaryCards.tsx` | Adicionar prop `showValor` e `onToggleValor`, aplicar mascara no card de Valor e incluir icone de toggle. |
 
-**Edge Function -- Logica de feriados**:
+### Detalhes tecnicos
 
-Feriados fixos nacionais:
-- 1 jan (Confraternização Universal), 21 abr (Tiradentes), 1 mai (Dia do Trabalho), 7 set (Independência), 12 out (N.S. Aparecida), 2 nov (Finados), 15 nov (Proclamação da República), 25 dez (Natal)
+**No PedidosCriados.tsx**:
 
-Feriados móveis (calculados a partir da Páscoa via algoritmo de Gauss):
-- Carnaval (Páscoa - 47 dias), Sexta-feira Santa (Páscoa - 2), Corpus Christi (Páscoa + 60)
+```typescript
+const [showValor, setShowValor] = useState(false);
+const maskedValue = "R$ ••••••";
+```
 
-Tipo: `national` para feriados nacionais, `observance` para Carnaval e outros eventos complementares.
+**Card desktop (linha ~834)**:
+```tsx
+<div className="neu-card p-5 flex items-center gap-4">
+  <div className="p-3 rounded-xl bg-emerald-500/10 shadow-inner">
+    <DollarSign className="h-6 w-6 text-emerald-600" />
+  </div>
+  <div className="flex-1">
+    <p className="text-sm text-muted-foreground">Valor Total</p>
+    <p className="text-2xl font-bold text-emerald-600">
+      {showValor ? formatCurrency(calculatedTotals.totalValor) : maskedValue}
+    </p>
+  </div>
+  <Button variant="ghost" size="icon" onClick={() => setShowValor(!showValor)}>
+    {showValor ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+  </Button>
+</div>
+```
 
-**Visual no calendário**:
-- Pequeno dot colorido abaixo do número do dia
-- Não interfere na seleção de range (é apenas decorativo via `modifiers`)
-- Tooltip ao hover mostra nome do feriado
+**Painel filtrado (linha ~1013)**:
+```tsx
+<span className="font-bold text-emerald-600">
+  {showValor ? formatCurrency(calculatedTotals.totalValor) : maskedValue}
+</span>
+```
 
----
+**Modal detalhes (linha ~1345)**:
+```tsx
+<p className="text-2xl font-semibold leading-tight text-emerald-600">
+  {showValor ? formatCurrency(selectedPedido.valor_total || 0) : maskedValue}
+</p>
+```
 
-### C) Eventos complementares configuráveis
+**MobileSummaryCards**:
+```tsx
+// Nova prop
+showValor?: boolean;
+onToggleValor?: () => void;
 
-A edge function aceitará um parâmetro opcional `include_observances=true` (default true) que inclui eventos como Carnaval. Esses eventos terão `type: "observance"` e visual diferenciado (dot em cor mais suave). Nenhuma lógica especial que afete filtros ou métricas.
+// No card de Valor, substituir valor por mascara e adicionar icone
+```
 
----
+### O que NAO muda
 
-### Criterios de aceite garantidos
+- Nenhum calculo ou query e alterado
+- Nenhum outro KPI (Pedidos, Pecas) e afetado
+- Layout permanece identico (apenas conteudo textual muda)
+- Performance zero impacto (e apenas um boolean local)
+- PDF de exportacao continua mostrando o valor real
+- Filtros, paginacao, ordenacao -- tudo inalterado
 
-- Presets continuam limpando o dateRange como hoje
-- Range selection continua funcionando (modifiers são decorativos)
-- Performance: hook com staleTime longo + edge function com cache header
-- Nenhuma query de dados ou calculo de KPI alterado
