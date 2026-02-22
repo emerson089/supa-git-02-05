@@ -1,4 +1,4 @@
-import { ShoppingBag, DollarSign, Package } from 'lucide-react';
+import { ShoppingBag, DollarSign, Package, Eye, EyeOff } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -7,6 +7,8 @@ interface MobileSummaryCardsProps {
   totalValor: number;
   totalPecas: number;
   filterModelo?: string;
+  showValor?: boolean;
+  onToggleValor?: () => void;
 }
 
 const formatCurrency = (value: number) => {
@@ -20,11 +22,15 @@ const formatNumber = (value: number) => {
   return new Intl.NumberFormat('pt-BR').format(value);
 };
 
+const maskedValue = "R$ ••••••";
+
 export function MobileSummaryCards({
   totalPedidos,
   totalValor,
   totalPecas,
   filterModelo,
+  showValor = false,
+  onToggleValor,
 }: MobileSummaryCardsProps) {
   return (
     <div className="grid grid-cols-3 gap-2">
@@ -43,12 +49,24 @@ export function MobileSummaryCards({
       </div>
 
       {/* Total Valor */}
-      <div className="neu-card p-3 flex flex-col items-center text-center">
+      <div
+        className="neu-card p-3 flex flex-col items-center text-center cursor-pointer"
+        onClick={onToggleValor}
+      >
         <div className="p-2 rounded-lg bg-emerald-500/10 mb-2">
           <DollarSign className="h-4 w-4 text-emerald-600" />
         </div>
-        <p className="text-[10px] text-muted-foreground leading-tight">Valor</p>
-        <p className="text-base font-bold text-emerald-600">{formatCurrency(totalValor)}</p>
+        <p className="text-[10px] text-muted-foreground leading-tight flex items-center gap-1">
+          Valor
+          {showValor ? (
+            <EyeOff className="h-3 w-3 text-muted-foreground" />
+          ) : (
+            <Eye className="h-3 w-3 text-muted-foreground" />
+          )}
+        </p>
+        <p className="text-base font-bold text-emerald-600">
+          {showValor ? formatCurrency(totalValor) : maskedValue}
+        </p>
       </div>
 
       {/* Total Peças */}

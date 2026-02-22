@@ -27,7 +27,7 @@ import { statusPagamentoOptions, statusPedidoOptions, statusEntregaOptions } fro
 import { StatusMultiSelect } from '@/components/pedidos/StatusMultiSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Plus, Eye, Trash2, ShoppingBag, DollarSign, Package, MapPin, Phone, Bus, MoreHorizontal, ArrowUpDown, FileText, Pencil, Calendar as CalendarIcon, X, Download, Upload, Loader2, RefreshCw } from 'lucide-react';
+import { Search, Plus, Eye, EyeOff, Trash2, ShoppingBag, DollarSign, Package, MapPin, Phone, Bus, MoreHorizontal, ArrowUpDown, FileText, Pencil, Calendar as CalendarIcon, X, Download, Upload, Loader2, RefreshCw } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay, parse, subDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -188,6 +188,8 @@ export default function PedidosCriados() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
+  const [showValor, setShowValor] = useState(false);
+  const maskedValue = "R$ ••••••";
   const {
     user
   } = useAuth();
@@ -817,7 +819,7 @@ export default function PedidosCriados() {
         <div className={cn("flex-1 overflow-y-auto pb-8", isMobile ? "px-4" : "px-8")}>
           <div className="max-w-full space-y-4">
             {/* Summary Cards - Mobile uses compact 3-column layout */}
-            {isMobile ? <MobileSummaryCards totalPedidos={calculatedTotals.totalPedidos} totalValor={calculatedTotals.totalValor} totalPecas={calculatedTotals.totalPecas} filterModelo={filterModelo} /> : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {isMobile ? <MobileSummaryCards totalPedidos={calculatedTotals.totalPedidos} totalValor={calculatedTotals.totalValor} totalPecas={calculatedTotals.totalPecas} filterModelo={filterModelo} showValor={showValor} onToggleValor={() => setShowValor(v => !v)} /> : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="neu-card p-5 flex items-center gap-4">
                   <div className="p-3 rounded-xl bg-primary/10 shadow-inner">
                     <ShoppingBag className="h-6 w-6 text-primary" />
@@ -835,10 +837,13 @@ export default function PedidosCriados() {
                   <div className="p-3 rounded-xl bg-emerald-500/10 shadow-inner">
                     <DollarSign className="h-6 w-6 text-emerald-600" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm text-muted-foreground">Valor Total</p>
-                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(calculatedTotals.totalValor)}</p>
+                    <p className="text-2xl font-bold text-emerald-600">{showValor ? formatCurrency(calculatedTotals.totalValor) : maskedValue}</p>
                   </div>
+                  <Button variant="ghost" size="icon" onClick={() => setShowValor(v => !v)} className="h-8 w-8">
+                    {showValor ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                  </Button>
                 </div>
 
                 <div className="neu-card p-5 flex items-center gap-4">
@@ -1011,7 +1016,7 @@ export default function PedidosCriados() {
                     <div className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-emerald-600" />
                       <span className="text-muted-foreground">Valor Total Filtrado:</span>
-                      <span className="font-bold text-emerald-600">{formatCurrency(calculatedTotals.totalValor)}</span>
+                      <span className="font-bold text-emerald-600">{showValor ? formatCurrency(calculatedTotals.totalValor) : maskedValue}</span>
                     </div>
                     {filterModelo && <Badge variant="outline" className="text-xs border-primary text-primary">
                         Filtrando modelo: "{filterModelo}"
@@ -1343,7 +1348,7 @@ export default function PedidosCriados() {
                       Valor Total
                     </p>
                     <p className="text-2xl font-semibold leading-tight text-emerald-600">
-                      {formatCurrency(selectedPedido.valor_total || 0)}
+                      {showValor ? formatCurrency(selectedPedido.valor_total || 0) : maskedValue}
                     </p>
                   </div>
                 </div>
