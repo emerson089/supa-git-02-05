@@ -20,6 +20,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tooltip as TooltipUI, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { KpiCardSkeleton, ChartSkeleton, DonutChartSkeleton, ListItemSkeleton, TopModelosSkeleton, ProducaoKanbanSkeleton } from "@/components/ui/dashboard-skeleton";
 import { Banknote, Package, AlertCircle, Factory, TrendingUp, TrendingDown, Calendar as CalendarIcon, AlertTriangle, ChevronRight, Wrench, Wand2, Target, Pencil, X, Filter, Settings } from "lucide-react";
+import { useInsightsDashboard } from "@/hooks/useInsightsDashboard";
+import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
 import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, STATUS_COLORS, MetaYoY, TopModelosCoverage, PrevisaoMensal, MetaAutomatica, FaturamentoDiaSemana } from "@/hooks/useDashboardData";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -183,6 +185,35 @@ export default function Dashboard() {
     data,
     loading
   } = useDashboardData(periodo, dateRange, excluirCancelados);
+
+  // Calcular dateRange efetivo para insights
+  const insightsDateRange = (() => {
+    if (periodo === "personalizado" && dateRange.from && dateRange.to) {
+      return { from: dateRange.from, to: dateRange.to };
+    }
+    const now = new Date();
+    switch (periodo) {
+      case "hoje": return { from: now, to: now };
+      case "30dias": return { from: subDays(now, 30), to: now };
+      case "90dias": return { from: subDays(now, 90), to: now };
+      case "ano_atual": return { from: startOfYear(now), to: now };
+      case "12meses": return { from: subMonths(now, 12), to: now };
+      case "mes": default: return { from: startOfMonth(now), to: now };
+    }
+  })();
+
+  const dashboardInsights = useInsightsDashboard({
+    kpis: data.kpis,
+    metaAutomatica: data.metaAutomatica,
+    tendenciaVendas: data.tendenciaVendas,
+    estoqueBaixo: data.estoqueBaixo,
+    topModelos: data.topModelos,
+    faturamentoDiaSemana: data.faturamentoDiaSemana,
+    holidayMap,
+    dateRange: insightsDateRange,
+    loading,
+  });
+
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const periodos: {
@@ -721,6 +752,9 @@ export default function Dashboard() {
               </CardContent>
             </Card>)}
         </div>
+
+        {/* Insights do Período */}
+        <InsightsPanel insights={dashboardInsights} />
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
