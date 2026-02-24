@@ -29,7 +29,7 @@ import { LotImage } from '@/components/production/LotImage';
 import { useAjustarEstoqueLocal, EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
 import { useTiposAjuste, useCriarTiposPadrao } from '@/hooks/useTiposAjuste';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Loader2, AlertCircle, ArrowUp, ArrowDown, Plus } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AjusteEstoqueModalProps {
@@ -40,8 +40,7 @@ interface AjusteEstoqueModalProps {
 
 export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueModalProps) {
   const [estoqueAtualEditavel, setEstoqueAtualEditavel] = useState('');
-  const [novaQuantidade, setNovaQuantidade] = useState('');
-  const [novoEstoqueManualmenteAlterado, setNovoEstoqueManualmenteAlterado] = useState(false);
+  const [qtdVendida, setQtdVendida] = useState('0');
   const [tipoAjusteId, setTipoAjusteId] = useState<string>('');
   const [observacao, setObservacao] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,8 +53,7 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
   useEffect(() => {
     if (open && item) {
       setEstoqueAtualEditavel(String(item.quantidade));
-      setNovaQuantidade(String(item.quantidade));
-      setNovoEstoqueManualmenteAlterado(false);
+      setQtdVendida('0');
       setTipoAjusteId('');
       setObservacao('');
     }
@@ -80,31 +78,24 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
   if (!item) return null;
 
   const estoqueAtualInt = parseInt(estoqueAtualEditavel) || 0;
-  const novaQtd = parseInt(novaQuantidade) || 0;
-  const diferenca = novaQtd - estoqueAtualInt;
-  const isEntrada = diferenca > 0;
-  const isSaida = diferenca < 0;
-  const semAlteracao = diferenca === 0;
+  const qtdVendidaInt = parseInt(qtdVendida) || 0;
+  const novoEstoqueCalculado = estoqueAtualInt - qtdVendidaInt;
+  const isSaida = qtdVendidaInt > 0;
+  const semAlteracao = qtdVendidaInt === 0;
 
   // Encontrar nome do tipo selecionado para compor o motivo
   const tipoSelecionado = tiposAjuste.find(t => t.id === tipoAjusteId);
 
-  const isValid = novaQtd >= 0 && estoqueAtualInt >= 0 && tipoAjusteId.length > 0;
+  const isValid = novoEstoqueCalculado >= 0 && estoqueAtualInt >= 0 && tipoAjusteId.length > 0;
 
   const handleEstoqueAtualChange = (value: string) => {
     const cleanValue = value.replace(/\D/g, '');
     setEstoqueAtualEditavel(cleanValue);
-    
-    // Sincronizar novoEstoque se ainda não foi alterado manualmente
-    if (!novoEstoqueManualmenteAlterado) {
-      setNovaQuantidade(cleanValue);
-    }
   };
 
-  const handleNovoEstoqueChange = (value: string) => {
+  const handleQtdVendidaChange = (value: string) => {
     const cleanValue = value.replace(/\D/g, '');
-    setNovaQuantidade(cleanValue);
-    setNovoEstoqueManualmenteAlterado(true);
+    setQtdVendida(cleanValue);
   };
 
   const handleSalvar = async () => {
@@ -121,7 +112,7 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
         estoqueLocalId: item.id,
         itemId: item.itemId,
         localId: item.localId,
-        novaQuantidade: novaQtd,
+        novaQuantidade: novoEstoqueCalculado,
         motivo: motivoFinal,
         precoAplicado: item.precoExibido ?? item.itemPrecoUnitario ?? undefined,
         tipoAjusteId,
@@ -162,7 +153,6 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
             Estoque Atual
           </Label>
           <Input
-            ref={inputRef}
             id="estoque-atual"
             type="text"
             inputMode="numeric"
@@ -177,52 +167,44 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
           />
         </div>
 
-        {/* Novo Estoque */}
+        {/* Qtd Vendida */}
         <div className="text-center">
-          <Label htmlFor="nova-quantidade" className="text-[10px] sm:text-xs text-muted-foreground mb-1 block">
-            Novo Estoque
+          <Label htmlFor="qtd-vendida" className="text-[10px] sm:text-xs text-muted-foreground mb-1 block">
+            Qtd Vendida
           </Label>
           <Input
-            id="nova-quantidade"
+            ref={inputRef}
+            id="qtd-vendida"
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
-            value={novaQuantidade}
-            onChange={(e) => handleNovoEstoqueChange(e.target.value)}
+            value={qtdVendida}
+            onChange={(e) => handleQtdVendidaChange(e.target.value)}
             onFocus={(e) => e.target.select()}
-            className={cn(
-              "text-base sm:text-2xl font-bold text-center h-12 sm:h-14",
-              novaQtd < 0 && "border-destructive"
-            )}
+            className="text-base sm:text-2xl font-bold text-center h-12 sm:h-14"
           />
         </div>
 
-        {/* Diferença */}
+        {/* Novo Estoque (calculado) */}
         <div className={cn(
           "text-center p-2 sm:p-4 rounded-lg border",
-          isEntrada && "bg-green-500/10 border-green-500/30",
           isSaida && "bg-red-500/10 border-red-500/30",
           semAlteracao && "bg-muted/30"
         )}>
-          <p className="text-[10px] sm:text-xs text-muted-foreground mb-1">Diferença</p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mb-1">Novo Estoque</p>
           <div className="flex items-center justify-center gap-0.5 sm:gap-1">
-            {isEntrada && <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />}
             {isSaida && <ArrowDown className="h-3 w-3 sm:h-4 sm:w-4 text-red-600" />}
             <span className={cn(
               "text-xl sm:text-2xl font-bold",
-              isEntrada && "text-green-600",
-              isSaida && "text-red-600"
+              isSaida && "text-red-600",
+              novoEstoqueCalculado < 0 && "text-destructive"
             )}>
-              {isEntrada && '+'}{diferenca}
+              {novoEstoqueCalculado}
             </span>
           </div>
-          {!semAlteracao && (
-            <p className={cn(
-              "text-[10px] sm:text-xs mt-1",
-              isEntrada && "text-green-600",
-              isSaida && "text-red-600"
-            )}>
-              {isEntrada ? 'ENTRADA' : 'SAÍDA'}
+          {isSaida && (
+            <p className="text-[10px] sm:text-xs mt-1 text-red-600">
+              -{qtdVendidaInt} peças
             </p>
           )}
         </div>
@@ -279,7 +261,7 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
       </div>
 
       {/* Aviso */}
-      {novaQtd < 0 && (
+      {novoEstoqueCalculado < 0 && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <p className="text-sm">Estoque não pode ser negativo</p>
