@@ -302,18 +302,31 @@ export function useExcluirTipoAjuste() {
 }
 
 // Hook para buscar tipos de ajuste para filtros (apenas ativos)
-export function useTiposAjusteParaFiltro() {
+export function useTiposAjusteParaFiltro(localId?: string | null) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['tipos-ajuste-filtro', user?.id],
+    queryKey: ['tipos-ajuste-filtro', user?.id, localId],
     queryFn: async (): Promise<{ id: string; nome: string }[]> => {
       if (!user) return [];
+
+      // Resolver owner: se tem localId, buscar dono do local
+      let ownerId = user.id;
+      if (localId) {
+        const { data: localData } = await supabase
+          .from('estoque_locais')
+          .select('user_id')
+          .eq('id', localId)
+          .maybeSingle();
+        if (localData?.user_id) {
+          ownerId = localData.user_id;
+        }
+      }
 
       const { data, error } = await supabase
         .from('tipos_ajuste_estoque')
         .select('id, nome')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('ativo', true)
         .order('nome');
 
