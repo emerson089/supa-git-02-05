@@ -1,7 +1,6 @@
 import { createContext, useContext, ReactNode, useCallback, useMemo } from 'react';
 import {
   useEstoqueItens,
-  useEstoqueMovimentacoes,
   useAddItem,
   useUpdateItem,
   useRemoveItem,
@@ -81,14 +80,11 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
   // Ativar realtime para sincronização automática
   useRealtimeEstoque();
   
-  const { data: dbItens = [], isLoading: isLoadingItens } = useEstoqueItens();
-  const { data: movimentacoes = [], isLoading: isLoadingMov } = useEstoqueMovimentacoes();
+  const { data: dbItens = [], isLoading } = useEstoqueItens();
   const addItemMutation = useAddItem();
   const updateItemMutation = useUpdateItem();
   const removeItemMutation = useRemoveItem();
   const addMovimentacaoMutation = useAddMovimentacao();
-
-  const isLoading = isLoadingItens || isLoadingMov;
 
   // Add computed status to items
   const itens: ItemEstoque[] = useMemo(() => 
@@ -317,7 +313,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
     <EstoqueContext.Provider
       value={{
         itens,
-        movimentacoes,
+        movimentacoes: [],
         isLoading,
         addItem,
         updateItem,

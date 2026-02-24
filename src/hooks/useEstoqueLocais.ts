@@ -358,13 +358,15 @@ async function sincronizarTotalGeral(itemId: string, userId: string) {
 export function useDisponivelCentral() {
   const { user } = useAuth();
   const { data: locais } = useLocais();
-  const { data: estoquePorLocal } = useEstoquePorLocal();
+  
+  // Buscar o localId do Central para filtrar a query
+  const centralId = locais?.find(l => l.tipo === 'central')?.id;
+  const { data: estoquePorLocal } = useEstoquePorLocal(centralId);
 
   const getDisponivelCentral = (itemId: string): number => {
-    const central = locais?.find(l => l.tipo === 'central');
-    if (!central) return 0;
+    if (!centralId) return 0;
 
-    const estoque = estoquePorLocal?.find(e => e.itemId === itemId && e.localId === central.id);
+    const estoque = estoquePorLocal?.find(e => e.itemId === itemId && e.localId === centralId);
     if (!estoque) return 0;
 
     return Math.max(0, estoque.quantidade - estoque.quantidadeReservada);
