@@ -29,6 +29,7 @@ import { LotImage } from '@/components/production/LotImage';
 import { useAjustarEstoqueLocal, EstoqueLocalDetalhado } from '@/hooks/useEstoquePorLocalGerenciamento';
 import { useTiposAjuste, useCriarTiposPadrao } from '@/hooks/useTiposAjuste';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useRole } from '@/contexts/RoleContext';
 import { Loader2, AlertCircle, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -44,10 +45,11 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
   const [tipoAjusteId, setTipoAjusteId] = useState<string>('');
   const [observacao, setObservacao] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const { isAdmin } = useRole();
   const isMobile = useIsMobile();
   
   const ajustarEstoque = useAjustarEstoqueLocal();
-  const { data: tiposAjuste = [], isLoading: isLoadingTipos } = useTiposAjuste();
+  const { data: tiposAjuste = [], isLoading: isLoadingTipos } = useTiposAjuste(item?.localId);
   const criarTiposPadrao = useCriarTiposPadrao();
 
   useEffect(() => {
@@ -68,12 +70,12 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
     }
   }, [open]);
 
-  // Criar tipos padrão se não existirem
+  // Criar tipos padrão se não existirem (apenas para admin)
   useEffect(() => {
-    if (open && !isLoadingTipos && tiposAjuste.length === 0 && !criarTiposPadrao.isPending) {
+    if (open && isAdmin && !isLoadingTipos && tiposAjuste.length === 0 && !criarTiposPadrao.isPending) {
       criarTiposPadrao.mutate();
     }
-  }, [open, isLoadingTipos, tiposAjuste.length, criarTiposPadrao]);
+  }, [open, isAdmin, isLoadingTipos, tiposAjuste.length, criarTiposPadrao]);
 
   if (!item) return null;
 
