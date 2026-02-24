@@ -91,12 +91,12 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
   const isValid = novoEstoqueCalculado >= 0 && estoqueAtualInt >= 0 && tipoAjusteId.length > 0;
 
   const handleEstoqueAtualChange = (value: string) => {
-    const cleanValue = value.replace(/\D/g, '');
+    const cleanValue = value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
     setEstoqueAtualEditavel(cleanValue);
   };
 
   const handleQtdVendidaChange = (value: string) => {
-    const cleanValue = value.replace(/\D/g, '');
+    const cleanValue = value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
     setQtdVendida(cleanValue);
   };
 
@@ -161,7 +161,8 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
             pattern="[0-9]*"
             value={estoqueAtualEditavel}
             onChange={(e) => handleEstoqueAtualChange(e.target.value)}
-            onFocus={(e) => e.target.select()}
+            onFocus={(e) => { if (e.target.value === '0') setEstoqueAtualEditavel(''); e.target.select(); }}
+            onBlur={(e) => { if (e.target.value === '') setEstoqueAtualEditavel('0'); }}
             className={cn(
               "text-base sm:text-2xl font-bold text-center h-12 sm:h-14",
               estoqueAtualInt < 0 && "border-destructive"
@@ -182,7 +183,8 @@ export function AjusteEstoqueModal({ open, onOpenChange, item }: AjusteEstoqueMo
             pattern="[0-9]*"
             value={qtdVendida}
             onChange={(e) => handleQtdVendidaChange(e.target.value)}
-            onFocus={(e) => e.target.select()}
+            onFocus={(e) => { if (e.target.value === '0') setQtdVendida(''); e.target.select(); }}
+            onBlur={(e) => { if (e.target.value === '') setQtdVendida('0'); }}
             className="text-base sm:text-2xl font-bold text-center h-12 sm:h-14"
           />
         </div>

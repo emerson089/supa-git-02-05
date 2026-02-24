@@ -91,7 +91,7 @@ export function RelatorioSaidasModal({
   // Queries
   const { data: locais } = useLocaisParaFiltro();
   const { data: modelosDisponiveis, isLoading: isLoadingModelos } = useModelosParaFiltro(modeloBuscaDebounced);
-  const { data: tiposAjusteDisponiveis = [], isLoading: isLoadingTiposAjuste } = useTiposAjusteParaFiltro();
+  const { data: tiposAjusteDisponiveis = [], isLoading: isLoadingTiposAjuste } = useTiposAjusteParaFiltro(localId !== 'todos' ? localId : undefined);
   const { data, isLoading, isFetching } = useRelatorioSaidas(filtrosAplicados);
   const excluirMutation = useExcluirMovimentacoes();
 
