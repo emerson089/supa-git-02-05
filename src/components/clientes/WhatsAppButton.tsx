@@ -33,6 +33,7 @@ import {
 interface WhatsAppButtonProps {
   cliente: Cliente;
   stats?: ClienteCRMStats;
+  onContatoRegistrado?: () => void;
 }
 
 function formatCurrency(value: number): string {
@@ -99,7 +100,7 @@ const templates = [
 ];
 
 export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>(
-  function WhatsAppButton({ cliente, stats }, ref) {
+  function WhatsAppButton({ cliente, stats, onContatoRegistrado }, ref) {
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -187,6 +188,7 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
     }
 
     setModalOpen(false);
+    onContatoRegistrado?.();
   };
 
   const renderTemplateMenu = () => (

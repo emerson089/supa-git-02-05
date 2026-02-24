@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback, memo } from 'react';
-import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw, ChevronLeft, ChevronRight, ChevronsUpDown, Check } from 'lucide-react';
+import { useState, useMemo, useCallback, memo, useEffect } from 'react';
+import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw, ChevronLeft, ChevronRight, ChevronsUpDown, Check, CheckCircle2, PhoneCall, MessageCircle } from 'lucide-react';
 import { useExcursoesAtivas } from '@/hooks/useExcursoes';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -23,9 +23,17 @@ import { WhatsAppButton } from '@/components/clientes/WhatsAppButton';
 import { ClienteGridSkeleton } from '@/components/clientes/ClienteCardSkeleton';
 import { ClienteSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
+import { useClienteContatos, CanalContato } from '@/hooks/useClienteContatos';
+import { calcularPrioridade, PrioridadeNivel } from '@/hooks/useClientePrioridade';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -47,23 +55,63 @@ function formatCurrency(value: number): string {
   });
 }
 
+// localStorage state persistence
+const CLIENTES_STATE_KEY = 'clientes_state';
+
+function loadClientesState() {
+  try {
+    const raw = localStorage.getItem(CLIENTES_STATE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as {
+      filtroStatus: FiltroStatus;
+      ordenacao: Ordenacao;
+      currentPage: number;
+      busca: string;
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Memoized client card component for performance
 const ClienteCard = memo(function ClienteCard({
   cliente,
   stats,
   isMobile,
   onEdit,
-  onDelete
+  onDelete,
+  prioridadeNivel,
+  showPrioridade,
+  contatoInfo,
+  onMarcarContato,
+  onWhatsAppEnviado,
 }: {
   cliente: ClientePaginatedDB;
   stats: ClienteCRMBatchStats | undefined;
   isMobile: boolean;
   onEdit: (cliente: ClientePaginatedDB) => void;
   onDelete: (cliente: ClientePaginatedDB) => void;
+  prioridadeNivel?: PrioridadeNivel;
+  showPrioridade?: boolean;
+  contatoInfo?: { data: string; canal: string } | null;
+  onMarcarContato?: (clienteId: string, canal: CanalContato) => void;
+  onWhatsAppEnviado?: () => void;
 }) {
   const status = getClienteStatusFromStats(stats);
   const isRisk = hasRiskAlertFromStats(stats);
   const dataCadastro = format(new Date(cliente.created_at), "dd/MM/yyyy");
+
+  // Contact days ago
+  const diasDesdeContato = contatoInfo
+    ? differenceInDays(new Date(), new Date(contatoInfo.data))
+    : null;
+
+  // Priority border color (only when showPrioridade)
+  const borderClass = showPrioridade && prioridadeNivel === 'alta'
+    ? 'border-l-4 border-l-destructive'
+    : showPrioridade && prioridadeNivel === 'media'
+    ? 'border-l-4 border-l-yellow-500'
+    : '';
 
   // Convert to Cliente format for WhatsAppButton
   const clienteForWhatsApp: Cliente = {
@@ -76,25 +124,73 @@ const ClienteCard = memo(function ClienteCard({
     dataCadastro
   };
 
-  // Convert stats for WhatsAppButton
-  const statsForWhatsApp = stats ? {
-    ...stats,
-    clienteId: stats.clienteId
-  } : undefined;
-  return <div className="neu-card p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group relative">
-      {/* Status Badge and Risk Alert */}
-      <div className="absolute top-4 right-4 flex items-center gap-2">
-        {isRisk && <div className="w-7 h-7 rounded-full bg-destructive/10 flex items-center justify-center" title="Histórico de cancelamentos">
+  const statsForWhatsApp = stats ? { ...stats, clienteId: stats.clienteId } : undefined;
+
+  return (
+    <div className={cn("neu-card p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group relative", borderClass)}>
+      {/* Status Badge, Priority Badge, and Risk Alert */}
+      <div className="absolute top-4 right-4 flex items-center gap-2 flex-wrap justify-end">
+        {diasDesdeContato !== null && diasDesdeContato < 30 && (
+          <Badge variant="outline" className="text-xs bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
+            <CheckCircle2 size={12} className="mr-1" />
+            {diasDesdeContato === 0 ? 'Contatado hoje' : `Há ${diasDesdeContato}d`}
+          </Badge>
+        )}
+        {showPrioridade && prioridadeNivel === 'alta' && (
+          <Badge className="text-xs bg-destructive/10 text-destructive border-0">
+            Prioridade Alta
+          </Badge>
+        )}
+        {showPrioridade && prioridadeNivel === 'media' && (
+          <Badge className="text-xs bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-400 border-0">
+            Prioridade Média
+          </Badge>
+        )}
+        {isRisk && (
+          <div className="w-7 h-7 rounded-full bg-destructive/10 flex items-center justify-center" title="Histórico de cancelamentos">
             <AlertTriangle size={14} className="text-destructive" />
-          </div>}
-        {status && <Badge className={cn("text-xs px-2 py-0.5", status.color)}>
+          </div>
+        )}
+        {status && (
+          <Badge className={cn("text-xs px-2 py-0.5", status.color)}>
             {status.label}
-          </Badge>}
+          </Badge>
+        )}
       </div>
 
-      {/* Action Buttons */}
-      <div className={cn("absolute top-12 right-4 flex gap-2 transition-opacity z-50", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
-        <WhatsAppButton cliente={clienteForWhatsApp} stats={statsForWhatsApp} />
+      {/* Action Buttons — always visible */}
+      <div className="absolute top-12 right-4 flex gap-2 z-50">
+        <WhatsAppButton cliente={clienteForWhatsApp} stats={statsForWhatsApp} onContatoRegistrado={onWhatsAppEnviado} />
+        {cliente.telefone && (
+          <a
+            href={`tel:${cliente.telefone.replace(/\D/g, '')}`}
+            className="w-8 h-8 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 flex items-center justify-center transition-colors"
+            title="Ligar"
+          >
+            <PhoneCall size={14} className="text-blue-500" />
+          </a>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center transition-colors"
+              title="Marcar como contatado"
+            >
+              <CheckCircle2 size={14} className="text-emerald-500" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={() => onMarcarContato?.(cliente.id, 'whatsapp')} className="cursor-pointer">
+              <MessageCircle size={14} className="mr-2 text-[#25D366]" /> WhatsApp
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onMarcarContato?.(cliente.id, 'ligacao')} className="cursor-pointer">
+              <PhoneCall size={14} className="mr-2 text-blue-500" /> Ligação
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onMarcarContato?.(cliente.id, 'outro')} className="cursor-pointer">
+              <CheckCircle2 size={14} className="mr-2 text-muted-foreground" /> Outro
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <button onClick={() => onEdit(cliente)} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors">
           <Pencil size={14} className="text-muted-foreground hover:text-primary" />
         </button>
@@ -126,16 +222,12 @@ const ClienteCard = memo(function ClienteCard({
           </div>
           <span className="text-foreground">{cliente.telefone}</span>
         </div>
-        
         <div className="flex items-center gap-3 text-sm">
           <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
             <MapPin size={14} className="text-muted-foreground" />
           </div>
-          <span className="text-foreground">
-            {cliente.cidade}, {cliente.estado}
-          </span>
+          <span className="text-foreground">{cliente.cidade}, {cliente.estado}</span>
         </div>
-        
         <div className="flex items-center gap-3 text-sm">
           <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
             <Tag size={14} className="text-muted-foreground" />
@@ -156,18 +248,30 @@ const ClienteCard = memo(function ClienteCard({
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
           <Calendar size={14} />
-          {stats?.ultimaCompra ? <>
+          {stats?.ultimaCompra ? (
+            <>
               <span>Última Compra ({format(stats.ultimaCompra, "dd/MM/yy")}):</span>
               <span className="font-semibold text-foreground">
                 {formatCurrency(stats.ultimoPedidoValor || 0)}
               </span>
-              {stats.ultimoPedidoStatus && <Badge className={cn("text-xs border-0", stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' ? "bg-green-100 text-green-700" : stats.ultimoPedidoStatus.toUpperCase() === 'PENDENTE' ? "bg-yellow-100 text-yellow-700" : stats.ultimoPedidoStatus.toUpperCase() === 'CANCELADO' ? "bg-red-100 text-red-700" : "bg-secondary text-secondary-foreground")}>
+              {stats.ultimoPedidoStatus && (
+                <Badge className={cn("text-xs border-0",
+                  stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' ? "bg-green-100 text-green-700" :
+                  stats.ultimoPedidoStatus.toUpperCase() === 'PENDENTE' ? "bg-yellow-100 text-yellow-700" :
+                  stats.ultimoPedidoStatus.toUpperCase() === 'CANCELADO' ? "bg-red-100 text-red-700" :
+                  "bg-secondary text-secondary-foreground"
+                )}>
                   {stats.ultimoPedidoStatus}
-                </Badge>}
-            </> : <span>Nenhuma compra registrada</span>}
+                </Badge>
+              )}
+            </>
+          ) : (
+            <span>Nenhuma compra registrada</span>
+          )}
         </div>
       </div>
-    </div>;
+    </div>
+  );
 });
 export default function Clientes() {
   const isMobile = useIsMobile();
@@ -183,11 +287,25 @@ export default function Clientes() {
     data: crmData
   } = useClientesCRM();
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(0);
-  const [busca, setBusca] = useState('');
-  const [ordenacao, setOrdenacao] = useState<Ordenacao>('nome');
-  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('todos');
+  // localStorage state persistence
+  const savedState = useMemo(() => loadClientesState(), []);
+  const [currentPage, setCurrentPage] = useState(savedState?.currentPage || 0);
+  const [busca, setBusca] = useState(savedState?.busca || '');
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>(savedState?.ordenacao || 'nome');
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>(savedState?.filtroStatus || 'todos');
+
+  // Contact markers
+  const { contatosMap, marcarContato, getContato } = useClienteContatos();
+
+  // Persist state to localStorage
+  useEffect(() => {
+    localStorage.setItem(CLIENTES_STATE_KEY, JSON.stringify({
+      filtroStatus,
+      ordenacao,
+      currentPage,
+      busca,
+    }));
+  }, [filtroStatus, ordenacao, currentPage, busca]);
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -220,19 +338,29 @@ export default function Clientes() {
     filterByIds: filtroStatus !== 'todos' ? crmFilterIds : null
   });
 
-  // No need for client-side filtering - the query already filters by IDs
-  const filteredClientes = paginatedData?.data || [];
+  const rawClientes = paginatedData?.data || [];
 
   // Get IDs of visible clients for batch CRM stats
   const visibleClienteIds = useMemo(() => {
-    return filteredClientes.map(c => c.id);
-  }, [filteredClientes]);
+    return rawClientes.map(c => c.id);
+  }, [rawClientes]);
 
   // Fetch CRM stats only for visible clients
   const {
     data: crmBatchStats,
     isLoading: crmBatchLoading
   } = useClientesCRMBatch(visibleClienteIds);
+
+  // Sort by priority when "inativo" filter is active
+  const filteredClientes = useMemo(() => {
+    if (filtroStatus !== 'inativo' || !crmBatchStats) return rawClientes;
+    
+    return [...rawClientes].sort((a, b) => {
+      const prioA = calcularPrioridade(crmBatchStats.get(a.id), getContato(a.id));
+      const prioB = calcularPrioridade(crmBatchStats.get(b.id), getContato(b.id));
+      return prioB.score - prioA.score;
+    });
+  }, [rawClientes, filtroStatus, crmBatchStats, contatosMap]);
 
   // Calculate CRM metrics from global data
   const crmMetrics = useMemo(() => {
@@ -531,7 +659,26 @@ export default function Clientes() {
 
         {/* Clients Grid */}
         {isLoading ? <ClienteGridSkeleton count={PAGE_SIZE} /> : filteredClientes.length > 0 ? <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filteredClientes.map(cliente => <ClienteCard key={cliente.id} cliente={cliente} stats={getClienteStats(cliente.id)} isMobile={isMobile} onEdit={handleOpenEdit} onDelete={handleDeleteClick} />)}
+            {filteredClientes.map(cliente => {
+              const stats = getClienteStats(cliente.id);
+              const contato = getContato(cliente.id);
+              const prio = calcularPrioridade(stats, contato);
+              return (
+                <ClienteCard
+                  key={cliente.id}
+                  cliente={cliente}
+                  stats={stats}
+                  isMobile={isMobile}
+                  onEdit={handleOpenEdit}
+                  onDelete={handleDeleteClick}
+                  prioridadeNivel={prio.nivel}
+                  showPrioridade={filtroStatus === 'inativo'}
+                  contatoInfo={contato}
+                  onMarcarContato={marcarContato}
+                  onWhatsAppEnviado={() => marcarContato(cliente.id, 'whatsapp')}
+                />
+              );
+            })}
           </div> : <div className="neu-card p-12 rounded-2xl text-center">
             <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-4">
               <User size={32} className="text-muted-foreground" />
