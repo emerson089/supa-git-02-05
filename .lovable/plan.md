@@ -1,154 +1,62 @@
 
 
-## Resumo Executivo + Prioridade + Foco do Dia
+## Correcao: Vendedor nao consegue ajustar estoque
 
-### Visao Geral
+### Problema
 
-Evoluir o bloco "Insights do Periodo" existente para incluir 3 novos elementos: um resumo executivo (1 frase), classificacao visual de prioridade nos insights, e uma sugestao de foco. Tudo derivado dos dados ja calculados, sem queries novas.
+A funcao RPC `rpc_ajustar_estoque_local` busca o registro de estoque filtrando por `user_id = v_auth_uid` (o ID do vendedor logado). Porem, os registros em `estoque_por_local` pertencem ao admin (o `user_id` e do admin, nao do vendedor). Por isso a busca retorna NULL e a funcao lanca: **"Estoque nao encontrado para este item/local"**.
 
-### Arquitetura
+O mesmo problema afeta a busca do local Central (linha 222), que tambem filtra por `user_id = v_auth_uid`.
 
-Nenhum arquivo novo. Apenas evolucao dos 2 arquivos existentes:
+### Solucao
 
-```text
-useInsightsDashboard (evolucao)
-  - Retorna: { insights, resumoExecutivo, sugestaoFoco }
-      |
-      v
-InsightsPanel (evolucao)
-  - Exibe resumo executivo acima dos insights
-  - Badges de prioridade por insight
-  - Sugestao de foco no topo (se houver critico)
-```
+Alterar a RPC para buscar o `user_id` (owner) a partir da tabela `estoque_locais` usando o `p_local_id`, em vez de assumir que o usuario logado e o dono do estoque. A validacao de permissao do vendedor ja esta correta (via `has_location_access`).
 
-### Arquivos Modificados
+### Arquivo modificado
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/hooks/useInsightsDashboard.ts` | Adicionar campo `prioridade` ao InsightItem. Mudar retorno de InsightItem[] para objeto `{ insights, resumoExecutivo, sugestaoFoco }`. Ordenar insights por prioridade. Gerar resumo e sugestao automaticamente. |
-| `src/components/dashboard/InsightsPanel.tsx` | Receber novo formato de props. Exibir resumo executivo, badges de prioridade, e sugestao de foco. |
-| `src/pages/Dashboard.tsx` | Ajustar chamada para novo formato de retorno (desestruturar objeto em vez de array). |
+| Nova migration SQL | Recriar `rpc_ajustar_estoque_local` corrigindo as queries para usar o owner do local em vez do auth_uid |
 
-### 1) Mudancas no Hook (`useInsightsDashboard.ts`)
+### Mudancas na RPC
 
-**Nova interface:**
+```sql
+-- ANTES (linha 222): busca Central pelo usuario logado
+SELECT id INTO v_central_local_id
+FROM estoque_locais
+WHERE user_id = v_auth_uid AND tipo = 'central';
 
-```typescript
-export interface InsightItem {
-  id: string;
-  tipo: "alerta" | "positivo" | "info" | "neutro";
-  prioridade: "critico" | "atencao" | "contexto"; // NOVO
-  mensagem: string;
-  icone: "trending-down" | "trending-up" | "alert" | "package" | "check";
-}
-
-export interface InsightsDashboardResult {
-  insights: InsightItem[];
-  resumoExecutivo: string;
-  sugestaoFoco: string | null; // null = nada critico, nao exibir
-}
+-- ANTES (linha 227): busca estoque pelo usuario logado
+SELECT * INTO v_estoque_atual
+FROM estoque_por_local
+WHERE item_id = p_item_id AND local_id = p_local_id AND user_id = v_auth_uid;
 ```
 
-**Mapeamento de prioridade (automatico, baseado no tipo + id):**
+```sql
+-- DEPOIS: buscar o owner do local primeiro
+SELECT user_id INTO v_owner_id
+FROM estoque_locais
+WHERE id = p_local_id;
 
-| Condicao | Prioridade |
-|---|---|
-| `tipo === "alerta"` | `critico` |
-| `tipo === "positivo"` ou `tipo === "info"` com ids como `meta-abaixo-leve`, `concentracao-dia` | `atencao` |
-| `tipo === "info"` (historico, feriados) ou `tipo === "neutro"` | `contexto` |
+-- Buscar Central pelo DONO do local
+SELECT id INTO v_central_local_id
+FROM estoque_locais
+WHERE user_id = v_owner_id AND tipo = 'central';
 
-**Ordenacao:** insights serao ordenados por prioridade antes do slice(0, 4): critico primeiro, depois atencao, depois contexto.
-
-**Resumo executivo (1 frase, gerado automaticamente):**
-
-Logica baseada no estado predominante:
-- Se meta atingida/acima: "Desempenho positivo no periodo -- faturamento acima do ritmo esperado."
-- Se meta abaixo forte (>10pp): "Periodo com desempenho abaixo do esperado -- faturamento significativamente abaixo do ritmo sazonal."
-- Se meta abaixo leve: "Desempenho levemente abaixo do ritmo esperado para o periodo."
-- Se crescimento YoY >20%: "Periodo de crescimento -- faturamento acima do mesmo periodo do ano anterior."
-- Se queda YoY >20%: "Atencao: faturamento em queda comparado ao mesmo periodo do ano anterior."
-- Fallback: "Desempenho dentro do esperado para o periodo analisado."
-
-**Sugestao de foco:**
-
-Derivada do primeiro insight critico. Mapeamento por id do insight:
-- `meta-abaixo`: "Prioridade: investigar a queda de faturamento em relacao ao ritmo sazonal."
-- `estoque-top-zerado`: "Prioridade: repor estoque dos modelos mais vendidos para evitar perda de vendas."
-- `tendencia-queda`: "Prioridade: entender a queda consecutiva dos ultimos periodos."
-- `pendentes-alto`: "Prioridade: acionar cobranca dos pedidos pendentes acumulados."
-- `yoy-queda`: "Prioridade: analisar os fatores da queda comparado ao ano anterior."
-- Se nao houver insight critico: `null` (nao exibir).
-
-### 2) Mudancas no Componente (`InsightsPanel.tsx`)
-
-**Props atualizadas:**
-
-```typescript
-interface InsightsPanelProps {
-  insights: InsightItem[];
-  resumoExecutivo: string;
-  sugestaoFoco: string | null;
-}
+-- Buscar estoque usando item_id + local_id (sem filtro user_id, ja que local_id e unico)
+SELECT * INTO v_estoque_atual
+FROM estoque_por_local
+WHERE item_id = p_item_id AND local_id = p_local_id;
 ```
 
-**Layout (dentro do mesmo Card collapsible):**
-
-```text
-+---------------------------------------------------+
-| [lampada] Insights do Periodo (N)          [v]    |
-+---------------------------------------------------+
-| Resumo: "Periodo com desempenho abaixo..."        |  <- 1 linha, texto cinza, discreto
-|                                                   |
-| [alvo] Prioridade: investigar a queda...          |  <- sugestao de foco, destaque sutil
-|                                                   |
-| [vermelho] Faturamento abaixo do ritmo...         |  <- badge "Critico"
-| [amarelo] Estoque zerado impactando...            |  <- badge "Atencao"  
-| [azul] Historicamente, fevereiro...               |  <- badge "Contexto"
-+---------------------------------------------------+
-```
-
-**Badges de prioridade (apenas visual):**
-
-| Prioridade | Cor | Label |
-|---|---|---|
-| `critico` | vermelho (`text-red-600`, `bg-red-100`) | "Critico" |
-| `atencao` | amarelo (`text-amber-600`, `bg-amber-100`) | "Atencao" |
-| `contexto` | azul (`text-blue-600`, `bg-blue-100`) | "Contexto" |
-
-Cada badge e um pequeno chip ao lado do icone do insight, sem alterar o layout existente das linhas.
-
-**Sugestao de foco:**
-- Exibida apenas quando `sugestaoFoco !== null`
-- Icone `Target` do lucide-react
-- Fundo levemente destacado (`bg-primary/5 border border-primary/20`)
-- Texto em `text-sm font-medium`
-
-**Resumo executivo:**
-- 1 linha de texto acima dos insights
-- Cor `text-muted-foreground`, tamanho `text-sm`
-- Sem icone, sem destaque forte
-
-### 3) Mudanca no Dashboard (`Dashboard.tsx`)
-
-Apenas ajustar a desestruturacao:
-
-```typescript
-// Antes:
-const dashboardInsights = useInsightsDashboard({...});
-<InsightsPanel insights={dashboardInsights} />
-
-// Depois:
-const { insights: dashboardInsights, resumoExecutivo, sugestaoFoco } = useInsightsDashboard({...});
-<InsightsPanel insights={dashboardInsights} resumoExecutivo={resumoExecutivo} sugestaoFoco={sugestaoFoco} />
-```
+A movimentacao continua registrada com `v_auth_uid` (o vendedor que fez o ajuste), preservando a auditoria.
 
 ### O que NAO muda
 
-- Nenhuma query ou calculo de dados
-- Nenhum KPI muda de valor
-- Layout grid, filtros, presets -- tudo inalterado
-- Limite de 4 insights mantido
-- Estado collapsible com localStorage mantido
-- Performance: apenas logica adicional no useMemo existente (custo zero)
-- Nenhuma dependencia nova
+- Validacao de autenticacao (auth.uid)
+- Validacao de permissao do vendedor (has_location_access)
+- Registro de movimentacao (continua com o ID do vendedor)
+- Sincronizacao com estoque_itens (trigger automatico)
+- Nenhum arquivo frontend alterado
+- Nenhuma query ou calculo impactado
 
