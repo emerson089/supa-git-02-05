@@ -1,94 +1,59 @@
 
 
-## Correcao: Vendedora nao consegue ver/criar tipos de ajuste
+## Correcoes: Campo "Qtd Vendida" e Tipos de Ajuste no Relatorio
 
-### Problema
+### Problema 1: Campo "Qtd Vendida" com zero persistente
 
-A tabela `tipos_ajuste_estoque` pertence ao admin (os registros tem `user_id` do admin). Quando a vendedora abre o modal de ajuste:
+Quando a vendedora clica no campo "Qtd Vendida", o valor `0` permanece. Ao digitar `6`, o resultado e `06` em vez de `6`. O campo precisa limpar o zero ao receber foco.
 
-1. O hook `useTiposAjuste` busca tipos com `user_id = vendedora` -- nao encontra nada
-2. O hook `useCriarTiposPadrao` tenta criar tipos com `user_id = vendedora` -- RLS bloqueia o INSERT porque a vendedora nao e dona dos tipos originais, e mesmo que passasse, criaria duplicatas separadas dos tipos do admin
+### Problema 2: Tipos de Saida e Tipos de Ajuste desconectados no Relatorio
 
-O mesmo padrao pode afetar `useContagensEstoque` e `useRelatorioSaidas` que tambem filtram `tipos_ajuste_estoque` por `user.id`.
+No "Relatorio de Saidas do Estoque", existem dois filtros separados:
+- **Tipo de Saida**: opcoes fixas no codigo (Ajuste Estoque, Venda/Loja, Envio Feira, Transferencia, Retorno Feira)
+- **Tipo de Ajuste**: tipos cadastrados pelo admin (Ajuste de estoque, Devolucao de cliente, Perda/Avaria, Venda/loja, etc.)
+
+Esses filtros deveriam estar conectados - os tipos de ajuste cadastrados pelo admin sao os mesmos que devem aparecer como opcoes de filtragem. Alem disso, o hook `useTiposAjusteParaFiltro` busca por `user.id` sem resolver o owner, causando o mesmo problema que ja corrigimos nos outros hooks (vendedor nao ve os tipos do admin).
 
 ### Solucao
 
-Duas mudancas:
+---
 
-1. **RLS**: Adicionar politica SELECT para vendedores lerem os tipos do admin (via `has_role`)
-2. **Frontend**: O hook `useTiposAjuste` precisa resolver o owner_id a partir do local (como ja fazemos para estoque), em vez de usar `user.id` diretamente. O modal ja tem o `localId` disponivel.
+### Correcao 1: Campo "Qtd Vendida"
+
+**Arquivo:** `src/components/estoque/AjusteEstoqueModal.tsx`
+
+- No `handleQtdVendidaChange`: quando o valor limpo comeca com zeros a esquerda, remover (ex: `06` vira `6`)
+- No `onFocus` do campo "Qtd Vendida": se o valor for `'0'`, limpar para string vazia para a vendedora poder digitar diretamente
+- No `onBlur`: se o campo ficou vazio, restaurar para `'0'`
+- Mesma logica aplicada ao campo "Estoque Atual" para consistencia
+
+### Correcao 2: Hook `useTiposAjusteParaFiltro` com resolucao de owner
+
+**Arquivo:** `src/hooks/useTiposAjuste.ts`
+
+- Adicionar parametro opcional `localId` ao hook `useTiposAjusteParaFiltro` (mesmo padrao ja aplicado ao `useTiposAjuste`)
+- Resolver o `user_id` (owner) a partir do local antes de buscar os tipos
+- Isso garante que vendedores veem os tipos do admin no relatorio
+
+### Correcao 3: Conectar Tipos de Saida com Tipos de Ajuste no Relatorio
+
+**Arquivo:** `src/components/estoque/RelatorioSaidasModal.tsx`
+
+- Passar o `localId` selecionado para `useTiposAjusteParaFiltro(localId)`
+- Manter os dois niveis de filtro (Tipo de Saida para categorias gerais como Transferencia/Envio Feira, e Tipo de Ajuste para os ajustes cadastrados), pois sao conceitualmente diferentes
+- O filtro "Tipo de Ajuste" ja aparece condicionalmente quando "Ajuste" esta selecionado - isso esta correto
 
 ### Arquivos modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| Nova migration SQL | Adicionar politica SELECT em `tipos_ajuste_estoque` para vendedores |
-| `src/hooks/useTiposAjuste.ts` | Adicionar parametro opcional `localId` ao `useTiposAjuste`. Quando presente, resolver o owner_id do local e buscar tipos desse owner. Remover auto-criacao de tipos padrao para vendedores. |
-| `src/components/estoque/AjusteEstoqueModal.tsx` | Passar `localId` para `useTiposAjuste`. Remover logica de criacao automatica de tipos padrao (vendedora usa os do admin). |
-
-### 1) Migration SQL
-
-```sql
--- Permitir que vendedores leiam tipos de ajuste (do admin/dono)
-CREATE POLICY "vendedor can read tipos_ajuste"
-ON public.tipos_ajuste_estoque
-FOR SELECT
-USING (
-  has_role(auth.uid(), 'vendedor'::app_role)
-);
-```
-
-Isso permite que vendedores facam SELECT em qualquer registro da tabela. Como os tipos sao cadastrados apenas pelo admin, isso da acesso aos tipos corretos.
-
-### 2) Mudancas no hook (`useTiposAjuste.ts`)
-
-O hook `useTiposAjuste` ganha um parametro opcional `localId`. Quando fornecido:
-
-```typescript
-export function useTiposAjuste(localId?: string | null) {
-  const { user } = useAuth();
-
-  return useQuery({
-    queryKey: ['tipos-ajuste', user?.id, localId],
-    queryFn: async (): Promise<TipoAjuste[]> => {
-      if (!user) return [];
-
-      // Resolver owner: se tem localId, buscar dono do local
-      let ownerId = user.id;
-      if (localId) {
-        const { data: localData } = await supabase
-          .from('estoque_locais')
-          .select('user_id')
-          .eq('id', localId)
-          .maybeSingle();
-        if (localData?.user_id) {
-          ownerId = localData.user_id;
-        }
-      }
-
-      const { data, error } = await supabase
-        .from('tipos_ajuste_estoque')
-        .select('id, nome, ativo, conta_como_venda, created_at')
-        .eq('user_id', ownerId)  // Usa o owner resolvido
-        .eq('ativo', true)
-        .order('nome');
-      // ...resto igual
-    },
-    enabled: !!user,
-  });
-}
-```
-
-### 3) Mudancas no Modal (`AjusteEstoqueModal.tsx`)
-
-- Passar `item.localId` para `useTiposAjuste(item?.localId)`
-- Remover o `useEffect` que chama `criarTiposPadrao.mutate()` para vendedores (vendedora usa os tipos do admin, nao cria os proprios)
-- Manter a criacao automatica apenas quando o owner nao tem tipos (admin abrindo pela primeira vez)
+| `src/components/estoque/AjusteEstoqueModal.tsx` | Limpar zero ao focar no campo Qtd Vendida; restaurar zero ao sair se vazio |
+| `src/hooks/useTiposAjuste.ts` | Adicionar `localId` ao `useTiposAjusteParaFiltro` com resolucao de owner |
+| `src/components/estoque/RelatorioSaidasModal.tsx` | Passar `localId` para `useTiposAjusteParaFiltro` |
 
 ### O que NAO muda
 
-- Nenhuma RPC alterada
-- Tabela `tipos_ajuste_estoque` sem mudanca de schema
-- Fluxo do admin continua identico
-- Tela de gerenciamento de tipos (ConfigTiposAjuste) nao muda
-- Nenhum calculo ou KPI impactado
+- Nenhuma RPC ou migration necessaria (a RLS para vendedor ja foi adicionada)
+- Tipos de saida fixos (Transferencia, Envio Feira, etc.) continuam como estao - sao categorias de movimentacao do sistema
+- Calculo de estoque e validacoes inalterados
+- Layout geral dos modais mantido
