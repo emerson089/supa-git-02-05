@@ -1,82 +1,129 @@
 
 
-## Otimizacao de Consumo de Cloud
+## Clientes CRM: Preservacao de Estado, Priorizacao Inteligente e Marcador de Contato
 
-### Diagnostico dos principais pontos de consumo
+### Visao Geral
 
-| Problema | Impacto |
+Implementar 4 melhorias na pagina de Clientes para manter contexto do usuario, priorizar contatos inteligentemente, registrar interacoes e adicionar acoes rapidas -- tudo com minimo impacto no backend.
+
+---
+
+### 1. Preservacao de Estado com localStorage
+
+**O que muda:** Ao sair e voltar na pagina de Clientes, os filtros, busca, ordenacao e pagina serao lembrados automaticamente.
+
+**Como funciona:**
+- Salvar no `localStorage` (chave `clientes_state`): filtro ativo, ordenacao, pagina atual e texto de busca
+- Ao montar a pagina, restaurar esses valores do `localStorage` ao inves de comecar em "Todos / Nome A-Z / Pagina 1"
+- Cada mudanca de filtro/busca/pagina atualiza o `localStorage` automaticamente
+- Zero chamadas extras ao backend
+
+**Arquivo:** `src/pages/Clientes.tsx` -- substituir os `useState` iniciais por valores restaurados do `localStorage`
+
+---
+
+### 2. Clientes Inativos com Score de Prioridade
+
+**O que muda:** Quando o filtro "Inativos" estiver ativo, os clientes serao ordenados por um score de prioridade de contato (quem precisa ser contatado primeiro aparece no topo).
+
+**Formula do score (calculado localmente no frontend):**
+
+```text
+score = (diasSemComprar * 2) + (totalComprado / 100) + (ticketMedio * 0.5) - (cancelamentos * 50)
+```
+
+- **diasSemComprar** (peso 2): quanto mais tempo sem comprar, maior prioridade
+- **totalComprado** (peso positivo): clientes que gastaram mais merecem atencao
+- **ticketMedio**: complementa o valor do cliente
+- **cancelamentos** (peso negativo): clientes com muitos cancelamentos tem prioridade reduzida
+
+**Niveis visuais de prioridade:**
+- **Alta** (score > 200): borda esquerda vermelha + badge "Prioridade Alta"
+- **Media** (score 100-200): borda esquerda amarela + badge "Prioridade Media"
+- **Baixa** (score < 100): sem destaque especial
+
+**Como funciona:**
+- O score e calculado a partir dos dados CRM que ja existem (`useClientesCRMBatch`)
+- A ordenacao por prioridade e feita localmente (sem nova query)
+- Quando o marcador de contato for ativado, o score e reduzido temporariamente
+
+**Arquivos:**
+- `src/hooks/useClientePrioridade.ts` (novo) -- funcao pura que calcula score a partir de `ClienteCRMBatchStats`
+- `src/pages/Clientes.tsx` -- ordenar lista localmente quando filtro = "inativo" e exibir badges de prioridade
+
+---
+
+### 3. Marcador de Contato (localStorage)
+
+**O que muda:** Botao "Marcar como Contatado" no card do cliente. Registra data e canal do ultimo contato. Clientes contatados recentemente tem prioridade reduzida.
+
+**Dados salvos no localStorage** (chave `clientes_contatos`):
+
+```text
+{
+  [clienteId]: {
+    data: "2026-02-24T15:30:00",
+    canal: "whatsapp" | "ligacao" | "outro"
+  }
+}
+```
+
+**Regras:**
+- Se contatado ha menos de 7 dias: score de prioridade reduzido em 80%
+- Badge visual "Contatado ha X dias" aparece no card
+- Ao clicar em "Enviar WhatsApp" e confirmar o envio, o marcador e atualizado automaticamente para canal "whatsapp"
+- Botao manual "Marcar como Contatado" com opcao de canal (WhatsApp, Ligacao, Outro)
+- Tudo em localStorage, zero requests ao backend
+
+**Arquivos:**
+- `src/hooks/useClienteContatos.ts` (novo) -- hook que le/salva contatos no localStorage
+- `src/pages/Clientes.tsx` -- integrar marcador visual no card
+- `src/components/clientes/WhatsAppButton.tsx` -- ao enviar, marcar automaticamente como contatado via callback
+
+---
+
+### 4. UX e Acoes Rapidas no Card
+
+**O que muda:** Acoes diretas visiveis no card + destaque visual de prioridade.
+
+**Acoes no card (sempre visiveis, nao so no hover):**
+- Botao WhatsApp (ja existe)
+- Botao Ligar (abre `tel:` com o telefone)
+- Botao "Marcar como Contatado" (icone de check) -- abre mini-menu com opcoes de canal
+
+**Destaques visuais:**
+- Borda esquerda colorida por prioridade (vermelho/amarelo/neutro) -- apenas quando filtro "Inativos" ativo
+- Badge "Contatado ha X dias" quando aplicavel
+- Badge "Prioridade Alta/Media" quando filtro "Inativos" ativo
+
+**Arquivos:**
+- `src/pages/Clientes.tsx` -- atualizar `ClienteCard` com novas acoes e indicadores visuais
+
+---
+
+### Detalhes Tecnicos
+
+#### Novos arquivos
+
+| Arquivo | Descricao |
 |---|---|
-| **PedidosProvider global** busca TODOS os pedidos + TODOS os pedido_itens em TODAS as paginas | ~6+ requests pesadas por navegacao |
-| **ClientesProvider global** busca TODOS os clientes em TODAS as paginas | ~2+ requests por navegacao |
-| **EstoqueProvider global** busca TODOS os itens + TODAS as movimentacoes em TODAS as paginas | ~3+ requests por navegacao |
-| **Dashboard sem cache** usa useEffect/useState, refaz 12 queries paralelas toda vez que o usuario navega de volta | 12 queries por revisita |
-| **useEstoqueMovimentacoes** busca TODAS as movimentacoes sem limite, carregado globalmente | 1 query pesada sem necessidade |
-| **useDisponivelCentral** chama useEstoquePorLocal() sem localId, buscando TODOS os registros | 1 query desnecessariamente ampla |
+| `src/hooks/useClientePrioridade.ts` | Funcao pura `calcularPrioridade(stats, contato)` que retorna score numerico e nivel (alta/media/baixa) |
+| `src/hooks/useClienteContatos.ts` | Hook com `getContato(id)`, `marcarContato(id, canal)`, `contatosMap` -- tudo localStorage |
 
----
-
-### Plano de Otimizacao
-
-#### 1. Mover Providers para rotas especificas (App.tsx)
-
-Atualmente os 3 providers (ClientesProvider, EstoqueProvider, PedidosProvider) envolvem TODAS as rotas. Vamos criar componentes wrapper que agrupam cada provider apenas nas rotas que precisam dele:
-
-- **EstoqueProvider**: `/estoque`, `/feira`, `/transferencias`, `/producao`, `/pedidos/*`
-- **PedidosProvider**: `/pedidos/*`
-- **ClientesProvider**: `/clientes`, `/pedidos/*`
-
-Rotas como `/dashboard`, `/ajuda`, `/configuracoes/*`, `/alterar-senha` NAO carregarao nenhum desses providers.
-
-#### 2. Converter Dashboard para useQuery (useDashboardData.ts)
-
-Substituir o padrao `useEffect` + `useState` por `useQuery` com:
-- `queryKey` baseada em `[periodo, dateRange, excluirCancelados]`
-- `staleTime: 60000` (60s) - dados ficam em cache ao navegar entre paginas
-- Elimina as 12 queries paralelas repetidas ao revisitar o Dashboard
-
-#### 3. Remover useEstoqueMovimentacoes do contexto global (EstoqueContext.tsx)
-
-As movimentacoes so sao usadas em modais de historico. Remover o carregamento global e expor apenas uma referencia vazia. Os modais que precisam ja usam suas proprias queries locais.
-
-#### 4. Aumentar staleTime dos hooks de contexto
-
-- `useClientes`: de 60s para **5 minutos** (dados de cliente mudam raramente)
-- `usePedidos` (global): de 30s para **2 minutos**
-- `useEstoqueItens`: de 15s para **30 segundos** (realtime ja cuida de updates criticos)
-
-#### 5. Filtrar useDisponivelCentral por local Central
-
-Passar o localId do Central para `useEstoquePorLocal()` ao inves de buscar TODOS os registros de todos os locais.
-
----
-
-### Arquivos modificados
+#### Arquivos modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/App.tsx` | Criar wrappers e mover providers para rotas especificas |
-| `src/hooks/useDashboardData.ts` | Converter de useEffect/useState para useQuery com cache |
-| `src/contexts/EstoqueContext.tsx` | Remover useEstoqueMovimentacoes do carregamento global |
-| `src/hooks/useEstoqueData.ts` | Aumentar staleTime para 30s |
-| `src/hooks/useClientesData.ts` | Aumentar staleTime para 5min |
-| `src/hooks/usePedidosData.ts` | Aumentar staleTime para 2min |
-| `src/hooks/useEstoqueLocais.ts` | Filtrar useDisponivelCentral por localId Central |
+| `src/pages/Clientes.tsx` | Restaurar estado do localStorage; ordenar por prioridade no filtro Inativos; adicionar acoes rapidas (ligar, marcar contatado); destaque visual de prioridade e contato |
+| `src/components/clientes/WhatsAppButton.tsx` | Aceitar callback `onContatoRegistrado` para marcar automaticamente apos envio |
 
-### Estimativa de reducao
+#### Impacto no backend
+- **Zero** novas queries
+- **Zero** novas tabelas
+- **Zero** novas migrations
+- Tudo funciona com dados CRM ja carregados + localStorage
 
-| Otimizacao | Reducao estimada |
-|---|---|
-| Providers em rotas especificas | -60% de queries ao navegar fora dessas paginas |
-| Dashboard com useQuery | -12 queries por revisita |
-| Remover movimentacoes globais | -1 query pesada por page load |
-| staleTime mais agressivo | -40% de refetches |
-| **Total estimado** | **~70% de reducao no consumo** |
-
-### O que NAO muda
-
-- Nenhuma migration ou RPC
-- Nenhum layout ou componente visual
-- Realtime continua funcionando nas paginas de estoque
-- Todas as funcionalidades existentes mantidas
-- Fluxos de criacao/edicao inalterados
+#### Compatibilidade
+- O localStorage e por usuario/navegador -- se trocar de dispositivo, os marcadores de contato nao acompanham (isso e intencional para evitar consumo de Cloud)
+- A preservacao de estado tambem e local ao navegador
 
