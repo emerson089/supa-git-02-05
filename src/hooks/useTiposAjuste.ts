@@ -12,18 +12,32 @@ export interface TipoAjuste {
 }
 
 // Hook para buscar tipos de ajuste ATIVOS (para selects)
-export function useTiposAjuste() {
+// Quando localId é fornecido, resolve o owner do local para buscar os tipos corretos (ex: vendedor usa tipos do admin)
+export function useTiposAjuste(localId?: string | null) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['tipos-ajuste', user?.id],
+    queryKey: ['tipos-ajuste', user?.id, localId],
     queryFn: async (): Promise<TipoAjuste[]> => {
       if (!user) return [];
+
+      // Resolver owner: se tem localId, buscar dono do local
+      let ownerId = user.id;
+      if (localId) {
+        const { data: localData } = await supabase
+          .from('estoque_locais')
+          .select('user_id')
+          .eq('id', localId)
+          .maybeSingle();
+        if (localData?.user_id) {
+          ownerId = localData.user_id;
+        }
+      }
 
       const { data, error } = await supabase
         .from('tipos_ajuste_estoque')
         .select('id, nome, ativo, conta_como_venda, created_at')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('ativo', true)
         .order('nome');
 
