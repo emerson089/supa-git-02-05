@@ -108,13 +108,18 @@ export function RelatorioSaidasModal({
 
   // Construir lista unificada: tipos de sistema + tipos de ajuste do usuário (sem conta_como_venda)
   const opcoesUnificadas = useMemo(() => {
+    const nomesSistema = new Set(TIPOS_SISTEMA.map(t => t.label.toLowerCase().trim()));
+
     const tiposAjusteFiltro: FiltroMovimentacao[] = (tiposAjusteDisponiveis || [])
-      .filter(t => !t.contaComoVenda) // excluir conta_como_venda pois já estão em "Venda / Loja"
-      .map(t => ({
-        kind: 'ajuste' as const,
-        value: t.id,
-        label: t.nome,
-      }));
+      .filter(t => !t.contaComoVenda)
+      .filter(t => !nomesSistema.has(t.nome.toLowerCase().trim()))
+      .reduce((acc, t) => {
+        if (!acc.some(x => x.label.toLowerCase() === t.nome.toLowerCase())) {
+          acc.push({ kind: 'ajuste' as const, value: t.id, label: t.nome });
+        }
+        return acc;
+      }, [] as FiltroMovimentacao[]);
+
     return { sistema: TIPOS_SISTEMA, ajuste: tiposAjusteFiltro };
   }, [tiposAjusteDisponiveis]);
 
