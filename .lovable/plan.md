@@ -1,53 +1,41 @@
 
 
-## Usar Tipos de Ajuste nas Transferencias
+## Unificar Transferencia e Mostrar Estoque no Destino
 
-### Contexto
+### Resumo
 
-Atualmente, o modal "Nova Transferencia" usa um dropdown fixo com 4 opcoes hardcoded (Reposicao, Feira, Ajuste, Devolucao). O usuario quer que esse campo use os mesmos **Tipos de Ajuste** configuráveis da tela "Tipos de Ajuste" (tabela `tipos_ajuste_estoque`), permitindo editar/criar motivos personalizados.
+Duas alteracoes combinadas: (1) remover o botao "+ Adicionar" redundante do Estoque por Local, e (2) melhorar o modal "Nova Transferencia" para mostrar a quantidade que ja existe no destino, assim como o antigo modal de Adicionar fazia com os badges "Central: X pcs" e "Local: X pcs".
 
-### Abordagem
+### Alteracao 1: Remover botao "Adicionar" e modal
 
-O campo `motivo` na tabela `transferencias` ja e `text` livre, entao podemos salvar o **nome** do tipo de ajuste selecionado (ex: "Reposicao", "Defeito") sem precisar alterar o banco. Isso mantem compatibilidade com os dados existentes.
+No arquivo `src/pages/Transferencias.tsx`:
+- Remover o import de `AdicionarProdutoLocalModal`
+- Remover o estado `showAdicionarModal`
+- Remover o botao "Adicionar" da barra de acoes do estoque local (linhas 507-510)
+- Remover o componente `<AdicionarProdutoLocalModal>` do JSX (linha 809)
 
-### Alteracoes
+### Alteracao 2: Mostrar estoque no destino no modal Nova Transferencia
 
-#### 1. Transferencias.tsx -- Substituir dropdown hardcoded por tipos do banco
+No mesmo arquivo, na secao "Produtos Disponiveis" do modal (linhas 897-930), adicionar um badge mostrando a quantidade ja existente no destino quando um destino estiver selecionado:
 
-- Importar `useTiposAjuste` para carregar os tipos ativos do usuario
-- Trocar o Select de motivo para listar os tipos da tabela em vez das 4 opcoes fixas
-- O estado `motivoNovo` passa a armazenar o **nome** do tipo selecionado (string livre) em vez do enum
-- Na listagem de transferencias, exibir o motivo diretamente (ja e texto)
+**Na lista de produtos disponiveis**: Cada produto passara a mostrar:
+- Badge azul: "Origem: X pcs" (quantidade disponivel na origem, substitui o atual "Disp: X")
+- Badge verde: "Destino: X pcs" (quantidade ja existente no destino, visivel apenas quando destino selecionado e quantidade > 0)
 
-#### 2. DetalhesTransferenciaModal.tsx -- Usar tipos do banco na edicao
+Isso replica o comportamento visual do antigo `AdicionarProdutoLocalModal` que mostrava "Central: X pcs" e "Local: X pcs".
 
-- Importar `useTiposAjuste` para popular o dropdown de edicao do motivo
-- Remover referencia ao `MOTIVOS_LABELS` hardcoded
-- O campo motivo editavel mostra os tipos do banco; o campo somente-leitura mostra o texto salvo
+A funcao `getDisponivelNoLocal` ja existe e aceita qualquer localId, entao basta chamar com o `destinoId` para obter a quantidade no destino.
 
-#### 3. FiltrosTransferencias.tsx -- Usar tipos do banco nos filtros
+### Detalhes tecnicos
 
-- Importar `useTiposAjuste` para popular o filtro de motivo
-- Remover o tipo `MotivoTransferencia` enum e usar `string` para o filtro
-- Manter opcao "Todos" + listar tipos ativos dinamicamente
+Na renderizacao de cada produto na lista (linha ~900-923):
+- Calcular `const disponivelDestino = destinoId ? getDisponivelNoLocal(produto.id, destinoId) : 0;`
+- Substituir o texto "Disp: X" por badges visuais semelhantes ao AdicionarProdutoLocalModal
+- Usar as mesmas classes de cor: azul para origem, verde para destino
 
-#### 4. useTransferencias.ts -- Ajustar tipo do motivo
-
-- Mudar o tipo de `motivo` de `MotivoTransferencia` para `string` na interface da mutacao `useCriarTransferencia`
-- Mesma mudanca em `useAtualizarTransferencia`
-
----
-
-### Arquivos modificados
+### Arquivo modificado
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/Transferencias.tsx` | Importar `useTiposAjuste`, trocar dropdown fixo por tipos do banco, ajustar estado e labels |
-| `src/components/transferencias/DetalhesTransferenciaModal.tsx` | Importar `useTiposAjuste`, trocar dropdown fixo por tipos do banco na edicao |
-| `src/components/transferencias/FiltrosTransferencias.tsx` | Importar `useTiposAjuste`, trocar filtro fixo por tipos do banco |
-| `src/hooks/useTransferencias.ts` | Mudar tipo `motivo` de enum para `string` |
-
-### Impacto no backend
-- **Zero** alteracoes no banco -- o campo `motivo` ja e `text` livre
-- Dados antigos com valores como "reposicao" continuam funcionando (exibidos como texto)
+| `src/pages/Transferencias.tsx` | Remover botao Adicionar + estado + modal; adicionar badge de estoque no destino na lista de produtos |
 
