@@ -1,31 +1,48 @@
 
 
-## Corrigir erro "Could not choose the best candidate function" no ajuste de estoque
+## Corrigir scroll do modal Historico de Movimentacoes
 
-### Problema
-Existem **duas versoes** da funcao `rpc_ajustar_estoque_local` no banco de dados:
-- Versao antiga: 5 parametros (p_local_id, p_item_id, p_nova_quantidade, p_user_id, p_motivo)
-- Versao nova: 7 parametros (os mesmos + p_tipo_ajuste_id, p_preco_aplicado)
-
-Quando o codigo envia parametros opcionais condicionalmente, o PostgreSQL nao consegue decidir qual funcao chamar, gerando o erro. O mesmo problema existe com `rpc_criar_transferencia` (duas versoes tambem).
+### Problema raiz
+O DialogContent do Radix aplica estilos internos de grid que sobrescrevem o layout flex, impedindo que a cadeia `flex-col` + `min-h-0` funcione corretamente para restringir a altura e habilitar o scroll.
 
 ### Solucao
+Reestruturar o layout para nao depender da cadeia flex do Radix. Em vez disso, usar altura explicita com `overflow-y-auto` diretamente no container da timeline.
 
-#### 1. Remover funcoes duplicadas (migracao SQL)
-- Dropar a versao antiga de `rpc_ajustar_estoque_local` (5 parametros)
-- Dropar a versao antiga de `rpc_criar_transferencia` (5 parametros, sem p_observacoes)
+### Alteracoes
 
-#### 2. Corrigir o codigo cliente
-**Arquivo:** `src/hooks/useEstoquePorLocalGerenciamento.ts`
-- Sempre enviar **todos os 7 parametros** na chamada RPC, usando `null` para os opcionais quando nao preenchidos, em vez de omiti-los condicionalmente
+**Arquivo:** `src/components/production/HistoricoProducaoModal.tsx`
+
+1. **Desktop (Dialog):** Alterar o DialogContent para usar `max-h-[90vh]` e remover o wrapper intermediario. O conteudo sera dividido em duas partes:
+   - Header info (lote + stats + responsaveis) - fixo, sem scroll
+   - Timeline - com `overflow-y-auto` e `max-h` calculado para ocupar o espaco restante
+
+2. **Mobile (Drawer):** Manter `h-[85vh]` no DrawerContent e garantir que a timeline tenha scroll independente
+
+3. **Refatorar o `content`:** Separar em dois componentes/secoes:
+   - `headerContent` - informacoes do lote (sempre visivel)
+   - `timelineContent` - lista de movimentacoes (scrollavel)
+
+4. **Aplicar `overscroll-contain`** no container de scroll para evitar propagacao do scroll para o body
 
 ### Detalhes tecnicos
 
-**Migracao SQL:**
-```sql
-DROP FUNCTION IF EXISTS public.rpc_ajustar_estoque_local(uuid, uuid, numeric, uuid, text);
-DROP FUNCTION IF EXISTS public.rpc_criar_transferencia(uuid, uuid, jsonb, uuid, text);
+**DialogContent (desktop):**
+```
+className="sm:max-w-md max-h-[90vh] flex flex-col overflow-hidden"
+```
+- Remover `!grid-rows-none` (causa conflitos)
+- Adicionar `overflow-hidden` para conter o scroll interno
+
+**Container da timeline:**
+```
+className="flex-1 overflow-y-auto overscroll-contain min-h-0 mt-4 pr-2"
 ```
 
-**Alteracao no hook (useEstoquePorLocalGerenciamento.ts):**
-Em vez de adicionar `p_tipo_ajuste_id` e `p_preco_aplicado` condicionalmente ao objeto de parametros, sempre inclui-los com valor `null` quando nao fornecidos. Isso garante que o PostgreSQL sempre resolva para a funcao de 7 parametros sem ambiguidade.
+**Container wrapper interno (tanto Dialog quanto Drawer):**
+```
+className="flex-1 flex flex-col overflow-hidden min-h-0"
+```
+
+O ponto chave e garantir que cada nivel da hierarquia (DialogContent -> wrapper -> content -> timeline) tenha `min-h-0` e `overflow-hidden/auto` corretamente aplicados, e que o DialogContent use `flex flex-col` sem conflito com o grid padrao do Radix.
+
+Tambem sera adicionado `[&>div]:!grid-rows-none` ou aplicado via style inline `display: flex` para sobrescrever o grid do Radix de forma mais confiavel.
