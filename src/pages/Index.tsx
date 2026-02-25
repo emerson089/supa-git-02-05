@@ -133,7 +133,20 @@ const Index = () => {
         await callWithRetry(() => Producao.update(editingLote.id, dadosDoForm));
         toast.success("Lote atualizado com sucesso!");
       } else {
-        await callWithRetry(() => Producao.create(dadosDoForm as ProducaoInsert));
+        const newLot = await callWithRetry(() => Producao.create(dadosDoForm as ProducaoInsert));
+        // Criar log inicial para registrar o cortador
+        if (newLot && (dadosDoForm as ProducaoInsert).responsavel) {
+          try {
+            await ProducaoLog.create({
+              producao_id: newLot.id,
+              processo_anterior: undefined,
+              processo_novo: 'Corte',
+              responsavel: (dadosDoForm as ProducaoInsert).responsavel!,
+            });
+          } catch (logErr) {
+            console.error('Erro ao criar log inicial:', logErr);
+          }
+        }
         toast.success("Lote criado com sucesso!");
       }
       setShowForm(false);
@@ -266,6 +279,13 @@ const Index = () => {
         toast.success('Lote movido para Vendas. Abra os Custos para enviar ao estoque com custo médio.');
       } else {
         toast.success(`Movido para ${STAGES.find(s => s.id === newStage)?.label}`);
+      }
+
+      // Abrir checklist automaticamente ao entrar em Aprontamento
+      if (newStage === 'Aprontamento') {
+        const updatedLot = { ...lot, processo_atual: newStage, responsavel: data.responsavel || lot.responsavel };
+        setSelectedLoteForChecklist(updatedLot);
+        setShowChecklistModal(true);
       }
     } catch (error) {
       console.error("Erro ao mover card:", error);

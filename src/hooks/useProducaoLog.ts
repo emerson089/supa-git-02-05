@@ -105,7 +105,7 @@ export function useProducaoLogsComTempo(producaoId: string | null, dataCriacao?:
       // Extrair responsáveis por etapa (primeiro encontrado = mais recente)
       const responsaveisPorEtapa: Record<string, string> = {};
       rawLogs.forEach(log => {
-        if (log.responsavel && !responsaveisPorEtapa[log.processo_novo]) {
+        if (log.responsavel && log.processo_novo !== 'Vendas' && !responsaveisPorEtapa[log.processo_novo]) {
           responsaveisPorEtapa[log.processo_novo] = log.responsavel;
         }
       });
