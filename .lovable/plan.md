@@ -1,28 +1,25 @@
 
 
-## Corrigir nome do Cortador incorreto em lotes antigos
+## Dois ajustes no Historico de Movimentacoes
 
-### Problema
+### 1. Remover duplicacao "Inicio -> Corte" e "Lote Criado - Etapa inicial: Corte"
 
-Para lotes criados antes da implementacao do log inicial, o sistema usa `lot.responsavel` como fallback para o "Cortador". Porem, esse campo e sobrescrito a cada movimentacao de etapa, entao mostra o responsavel da ultima etapa (ex: "Kaysu lavanderia", "Sky Blue") em vez do cortador real.
+O log inicial (processo_anterior: null, processo_novo: 'Corte') e o evento "Lote Criado" mostram a mesma informacao. A solucao e filtrar o log inicial da timeline e manter apenas o evento "Lote Criado" (que ja exibe o cortador).
 
-Isso afeta dois lugares:
-- O badge "Cortador: X" no resumo de "Responsaveis por Etapa"
-- A linha "Cortador: X" no evento "Lote Criado" da timeline
+**Arquivo:** `src/components/production/HistoricoProducaoModal.tsx`
+- Na renderizacao dos logs (linha 161), filtrar logs onde `!log.processo_anterior && log.processo_novo === 'Corte'` para nao renderizar na timeline
+- Manter a busca desse log para extrair o nome do cortador no evento "Lote Criado"
 
-### Solucao
+### 2. Scroll do mouse nao funciona no modal
 
-Remover o fallback para `lot.responsavel`, pois ele nao e confiavel. O cortador so sera exibido quando existir um log inicial (processo_anterior nulo e processo_novo = 'Corte') que foi criado junto com o lote. Para lotes antigos sem esse log, simplesmente nao exibir o cortador ao inves de mostrar informacao errada.
+O `ScrollArea` do Radix bloqueia o scroll nativo do mouse dentro de modais Dialog. A solucao e adicionar `onWheel` com `stopPropagation` no viewport do ScrollArea, e garantir que o container tenha `overflow-y-auto` como fallback.
 
-### Alteracoes
+**Arquivo:** `src/components/production/HistoricoProducaoModal.tsx`
+- Substituir `ScrollArea` por uma `div` com `overflow-y-auto` no container da timeline, que funciona de forma mais confiavel dentro de modais Dialog/Drawer
 
-**Arquivo: `src/hooks/useProducaoLog.ts`**
-- Remover o fallback nas linhas 113-116 que adiciona `responsavelLote` ao mapa de responsaveis por etapa quando nao ha entrada para "Corte"
+### Arquivos modificados
 
-**Arquivo: `src/components/production/HistoricoProducaoModal.tsx`**
-- Na secao "Lote Criado" (linha 189), remover o fallback `|| lot.responsavel`. Usar apenas `logInicial?.responsavel` para que o cortador so apareca se existir o log inicial correto
+| Arquivo | Alteracao |
+|---|---|
+| `src/components/production/HistoricoProducaoModal.tsx` | Filtrar log inicial duplicado; corrigir scroll |
 
-### Impacto
-
-- Lotes novos (criados apos a implementacao do log inicial): continuam mostrando o cortador corretamente
-- Lotes antigos (sem log inicial): nao mostrarao cortador, o que e melhor do que mostrar informacao errada
