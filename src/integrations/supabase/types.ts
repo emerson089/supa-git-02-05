@@ -1245,16 +1245,29 @@ export type Database = {
         }
         Returns: boolean
       }
-      rpc_ajustar_estoque_local: {
-        Args: {
-          p_item_id: string
-          p_local_id: string
-          p_motivo: string
-          p_nova_quantidade: number
-          p_user_id: string
-        }
-        Returns: undefined
-      }
+      rpc_ajustar_estoque_local:
+        | {
+            Args: {
+              p_item_id: string
+              p_local_id: string
+              p_motivo: string
+              p_nova_quantidade: number
+              p_user_id: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_item_id: string
+              p_local_id: string
+              p_motivo: string
+              p_nova_quantidade: number
+              p_preco_aplicado?: number
+              p_tipo_ajuste_id?: string
+              p_user_id: string
+            }
+            Returns: undefined
+          }
       rpc_cancelar_transferencia: {
         Args: { p_transferencia_id: string; p_user_id: string }
         Returns: undefined

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, subDays, startOfMonth } from 'date-fns';
+import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { FileDown, FileSpreadsheet, Loader2, Calendar, Filter, TrendingDown, DollarSign, Package, Search, X, CheckSquare, Trash2 } from 'lucide-react';
 import {
@@ -46,12 +46,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Separator } from '@/components/ui/separator';
 import {
   useRelatorioSaidas,
   useLocaisParaFiltro,
   useModelosParaFiltro,
   FiltrosSaidas,
-  TIPOS_SAIDA,
+  FiltroMovimentacao,
   TIPO_LABELS,
 } from '@/hooks/useRelatorioSaidas';
 import { useTiposAjusteParaFiltro } from '@/hooks/useTiposAjuste';
@@ -59,6 +60,14 @@ import { useExcluirMovimentacoes } from '@/hooks/useExcluirMovimentacoes';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { generateRelatorioSaidasPDF } from '@/utils/generateRelatorioSaidasPDF';
 import { generateRelatorioSaidasExcel } from '@/utils/generateRelatorioSaidasExcel';
+
+// Tipos de sistema para o filtro unificado (sem AJUSTE_SAIDA que é coberto pelos tipos de ajuste)
+const TIPOS_SISTEMA: FiltroMovimentacao[] = [
+  { kind: 'sistema', value: 'VENDA_FEIRA', label: 'Venda / Loja' },
+  { kind: 'sistema', value: 'ENVIO_FEIRA', label: 'Envio Feira' },
+  { kind: 'sistema', value: 'TRANSFERENCIA', label: 'Transferência' },
+  { kind: 'sistema', value: 'RETORNO_FEIRA', label: 'Retorno Feira' },
+];
 
 interface RelatorioSaidasModalProps {
   open: boolean;
@@ -75,10 +84,9 @@ export function RelatorioSaidasModal({
   const [dataInicial, setDataInicial] = useState<Date>(startOfMonth(new Date()));
   const [dataFinal, setDataFinal] = useState<Date>(new Date());
   const [localId, setLocalId] = useState<string>(localIdInicial || 'todos');
-  const [tiposSelecionados, setTiposSelecionados] = useState<string[]>([]);
+  const [filtrosMovimentacao, setFiltrosMovimentacao] = useState<FiltroMovimentacao[]>([]);
   const [modelosSelecionados, setModelosSelecionados] = useState<{ id: string; nome: string; categoria: string }[]>([]);
   const [modeloBusca, setModeloBusca] = useState('');
-  const [tiposAjusteSelecionados, setTiposAjusteSelecionados] = useState<{ id: string; nome: string }[]>([]);
   const [filtrosAplicados, setFiltrosAplicados] = useState<FiltrosSaidas | null>(null);
 
   // Estado de seleção para exclusão
@@ -98,8 +106,17 @@ export function RelatorioSaidasModal({
   const saidas = data?.saidas || [];
   const resumo = data?.resumo || { totalPecas: 0, valorVendaTotal: 0, valorCustoTotal: null, quantidadeSemPreco: 0 };
 
-  // Verificar se AJUSTE_SAIDA está selecionado para exibir filtro de tipos de ajuste
-  const mostrarFiltroTiposAjuste = tiposSelecionados.includes('AJUSTE_SAIDA') || tiposSelecionados.length === 0;
+  // Construir lista unificada: tipos de sistema + tipos de ajuste do usuário (sem conta_como_venda)
+  const opcoesUnificadas = useMemo(() => {
+    const tiposAjusteFiltro: FiltroMovimentacao[] = (tiposAjusteDisponiveis || [])
+      .filter(t => !t.contaComoVenda) // excluir conta_como_venda pois já estão em "Venda / Loja"
+      .map(t => ({
+        kind: 'ajuste' as const,
+        value: t.id,
+        label: t.nome,
+      }));
+    return { sistema: TIPOS_SISTEMA, ajuste: tiposAjusteFiltro };
+  }, [tiposAjusteDisponiveis]);
 
   // Nome do local selecionado para exibição
   const localNomeFiltro = useMemo(() => {
@@ -154,19 +171,25 @@ export function RelatorioSaidasModal({
       dataInicial,
       dataFinal,
       localId: localId !== 'todos' ? localId : undefined,
-      tiposMovimento: tiposSelecionados.length > 0 ? tiposSelecionados : undefined,
+      filtrosMovimentacao: filtrosMovimentacao.length > 0 ? filtrosMovimentacao : undefined,
       modeloIds: modelosSelecionados.length > 0 ? modelosSelecionados.map(m => m.id) : undefined,
-      tipoAjusteIds: tiposAjusteSelecionados.length > 0 ? tiposAjusteSelecionados.map(t => t.id) : undefined,
     });
   };
 
-  // Toggle tipo de movimento
-  const handleToggleTipo = (tipo: string) => {
-    setTiposSelecionados(prev =>
-      prev.includes(tipo)
-        ? prev.filter(t => t !== tipo)
-        : [...prev, tipo]
-    );
+  // Toggle filtro de movimentação unificado
+  const handleToggleFiltroMov = (filtro: FiltroMovimentacao) => {
+    setFiltrosMovimentacao(prev => {
+      const key = `${filtro.kind}:${filtro.value}`;
+      const exists = prev.some(f => `${f.kind}:${f.value}` === key);
+      if (exists) {
+        return prev.filter(f => `${f.kind}:${f.value}` !== key);
+      }
+      return [...prev, filtro];
+    });
+  };
+
+  const isFiltroSelecionado = (filtro: FiltroMovimentacao) => {
+    return filtrosMovimentacao.some(f => f.kind === filtro.kind && f.value === filtro.value);
   };
 
   // Exportar PDF
@@ -203,22 +226,6 @@ export function RelatorioSaidasModal({
   // Limpar modelos selecionados
   const handleLimparModelos = () => {
     setModelosSelecionados([]);
-  };
-
-  // Toggle tipo de ajuste
-  const handleToggleTipoAjuste = (tipo: { id: string; nome: string }) => {
-    setTiposAjusteSelecionados(prev => {
-      const isSelected = prev.some(t => t.id === tipo.id);
-      if (isSelected) {
-        return prev.filter(t => t.id !== tipo.id);
-      }
-      return [...prev, tipo];
-    });
-  };
-
-  // Limpar tipos de ajuste selecionados
-  const handleLimparTiposAjuste = () => {
-    setTiposAjusteSelecionados([]);
   };
 
   // Exportar Excel/CSV
@@ -266,7 +273,7 @@ export function RelatorioSaidasModal({
             Filtros
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Data Inicial */}
             <div className="space-y-1.5">
               <Label className="text-xs">Data Inicial</Label>
@@ -329,40 +336,82 @@ export function RelatorioSaidasModal({
               </Select>
             </div>
 
-            {/* Tipos de Saída */}
+            {/* Tipo de Movimentação (unificado) */}
             <div className="space-y-1.5">
-              <Label className="text-xs">Tipo de Saída</Label>
+              <Label className="text-xs">Tipo de Movimentação</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    {tiposSelecionados.length === 0
+                    {filtrosMovimentacao.length === 0
                       ? 'Todos os tipos'
-                      : `${tiposSelecionados.length} selecionado(s)`}
+                      : `${filtrosMovimentacao.length} selecionado(s)`}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-56" align="start">
-                  <div className="space-y-2">
-                    {TIPOS_SAIDA.map(tipo => (
-                      <div key={tipo} className="flex items-center space-x-2">
+                <PopoverContent className="w-64" align="start">
+                  <div className="space-y-1">
+                    {/* Tipos de sistema */}
+                    {opcoesUnificadas.sistema.map(filtro => (
+                      <div
+                        key={`sistema:${filtro.value}`}
+                        className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer"
+                        onClick={() => handleToggleFiltroMov(filtro)}
+                      >
                         <Checkbox
-                          id={tipo}
-                          checked={tiposSelecionados.includes(tipo)}
-                          onCheckedChange={() => handleToggleTipo(tipo)}
+                          checked={isFiltroSelecionado(filtro)}
+                          onCheckedChange={() => handleToggleFiltroMov(filtro)}
                         />
-                        <label
-                          htmlFor={tipo}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                          {TIPO_LABELS[tipo]}
-                        </label>
+                        <span className="text-sm">{filtro.label}</span>
                       </div>
                     ))}
+
+                    {/* Separador + tipos de ajuste */}
+                    {opcoesUnificadas.ajuste.length > 0 && (
+                      <>
+                        <Separator className="my-2" />
+                        <div className="text-xs text-muted-foreground px-1.5 pb-1">Tipos de ajuste</div>
+                        {isLoadingTiposAjuste ? (
+                          <div className="flex items-center justify-center py-2">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : (
+                          opcoesUnificadas.ajuste.map(filtro => (
+                            <div
+                              key={`ajuste:${filtro.value}`}
+                              className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer"
+                              onClick={() => handleToggleFiltroMov(filtro)}
+                            >
+                              <Checkbox
+                                checked={isFiltroSelecionado(filtro)}
+                                onCheckedChange={() => handleToggleFiltroMov(filtro)}
+                              />
+                              <span className="text-sm">{filtro.label}</span>
+                            </div>
+                          ))
+                        )}
+                      </>
+                    )}
+
+                    {/* Limpar seleção */}
+                    {filtrosMovimentacao.length > 0 && (
+                      <div className="border-t pt-2 mt-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full h-7 text-xs"
+                          onClick={() => setFiltrosMovimentacao([])}
+                        >
+                          Limpar seleção
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </PopoverContent>
               </Popover>
             </div>
+          </div>
 
-            {/* Modelos */}
+          {/* Linha adicional: Modelos */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Modelos</Label>
               <Popover>
@@ -386,7 +435,7 @@ export function RelatorioSaidasModal({
                       />
                     </div>
 
-                    {/* Botão Selecionar Todos (quando há busca com 2+ resultados) */}
+                    {/* Botão Selecionar Todos */}
                     {modeloBusca.length >= 2 && modelosDisponiveis && modelosDisponiveis.length > 1 && (
                       <Button
                         variant="outline"
@@ -399,7 +448,7 @@ export function RelatorioSaidasModal({
                       </Button>
                     )}
 
-                    {/* Lista de modelos com scroll */}
+                    {/* Lista de modelos */}
                     <div 
                       className="max-h-[280px] overflow-y-auto border rounded-md overscroll-contain"
                       onWheel={(e) => e.stopPropagation()}
@@ -441,7 +490,7 @@ export function RelatorioSaidasModal({
                       )}
                     </div>
 
-                    {/* Modelos selecionados e botão limpar */}
+                    {/* Modelos selecionados */}
                     {modelosSelecionados.length > 0 && (
                       <div className="border-t pt-2 space-y-2">
                         <div className="text-xs text-muted-foreground">
@@ -483,68 +532,6 @@ export function RelatorioSaidasModal({
               </Popover>
             </div>
           </div>
-
-          {/* Linha adicional para Tipo de Ajuste (condicional) */}
-          {mostrarFiltroTiposAjuste && tiposAjusteDisponiveis.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div className="space-y-1.5 md:col-span-2">
-                <Label className="text-xs">Tipo de Ajuste</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      {tiposAjusteSelecionados.length === 0
-                        ? 'Todos os tipos de ajuste'
-                        : `${tiposAjusteSelecionados.length} tipo(s) selecionado(s)`}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72" align="start">
-                    <div className="space-y-3">
-                      {isLoadingTiposAjuste ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <div 
-                          className="max-h-[280px] overflow-y-auto space-y-1 overscroll-contain"
-                          onWheel={(e) => e.stopPropagation()}
-                        >
-                          {tiposAjusteDisponiveis.map(tipo => {
-                            const isSelected = tiposAjusteSelecionados.some(t => t.id === tipo.id);
-                            return (
-                              <div
-                                key={tipo.id}
-                                className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer"
-                                onClick={() => handleToggleTipoAjuste(tipo)}
-                              >
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() => handleToggleTipoAjuste(tipo)}
-                                />
-                                <span className="text-sm">{tipo.nome}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {tiposAjusteSelecionados.length > 0 && (
-                        <div className="border-t pt-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full h-7 text-xs"
-                            onClick={handleLimparTiposAjuste}
-                          >
-                            Limpar seleção
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-          )}
 
           <div className="flex justify-end">
             <Button onClick={handleAplicarFiltros} disabled={isLoading}>
@@ -722,7 +709,7 @@ export function RelatorioSaidasModal({
           </div>
         )}
 
-        {/* Estado inicial - antes de aplicar filtros */}
+        {/* Estado inicial */}
         {!filtrosAplicados && (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground py-12">
             <Filter className="h-16 w-16 mb-4 opacity-30" />

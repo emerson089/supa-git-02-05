@@ -67,8 +67,8 @@ export function generateRelatorioSaidasPDF({
   if (localNomeFiltro) {
     filtrosTexto.push(`Local: ${localNomeFiltro}`);
   }
-  if (filtros.tiposMovimento && filtros.tiposMovimento.length > 0) {
-    const tiposLabels = filtros.tiposMovimento.map(t => TIPO_LABELS[t] || t).join(', ');
+  if (filtros.filtrosMovimentacao && filtros.filtrosMovimentacao.length > 0) {
+    const tiposLabels = filtros.filtrosMovimentacao.map(f => f.label).join(', ');
     filtrosTexto.push(`Tipos: ${tiposLabels}`);
   }
   if (filtrosTexto.length > 0) {
