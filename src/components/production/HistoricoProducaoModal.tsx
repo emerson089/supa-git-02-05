@@ -64,16 +64,17 @@ const ICON_MAP = {
 const STAGE_LABELS: Record<string, string> = {
   'Corte': 'Cortador',
   'Costura/Facção': 'Facção / Costureira',
-  'Travete': 'Responsável',
-  'Destroyed': 'Responsável',
+  'Travete': 'Travete',
+  'Destroyed': 'Destroyed',
   'Lavanderia': 'Lavanderia',
-  'Limpado': 'Responsável',
-  'Aprontamento': 'Responsável',
+  'Limpado': 'Limpado',
+  'Aprontamento': 'Aprontamento',
+  'Vendas': 'Vendas',
 };
 
 export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoProducaoModalProps) {
   const isMobile = useIsMobile();
-  const { data, isLoading } = useProducaoLogsComTempo(lot?.id || null, lot?.created_date);
+  const { data, isLoading } = useProducaoLogsComTempo(lot?.id || null, lot?.created_date, lot?.responsavel ?? undefined);
 
   const content = (
     <div className="flex flex-col h-full">

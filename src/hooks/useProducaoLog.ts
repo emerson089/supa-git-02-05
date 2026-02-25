@@ -1,12 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ProducaoLogData, ProducaoLog } from '@/entities/ProducaoLog';
-import { differenceInDays, differenceInHours } from 'date-fns';
+import { differenceInDays, differenceInHours, differenceInMinutes } from 'date-fns';
 
 export interface LogComTempoNaEtapa extends ProducaoLogData {
   tempoNaEtapa: {
     dias: number;
     horas: number;
+    minutos: number;
     label: string;
   };
 }
@@ -44,7 +45,7 @@ export function useProducaoLogs(producaoId: string | null) {
 /**
  * Hook para buscar logs com cálculo de tempo em cada etapa
  */
-export function useProducaoLogsComTempo(producaoId: string | null, dataCriacao?: string) {
+export function useProducaoLogsComTempo(producaoId: string | null, dataCriacao?: string, responsavelLote?: string) {
   return useQuery({
     queryKey: ['producao-logs-tempo', producaoId],
     queryFn: async (): Promise<{ logs: LogComTempoNaEtapa[]; estatisticas: EstatisticasProducao }> => {
@@ -59,24 +60,22 @@ export function useProducaoLogsComTempo(producaoId: string | null, dataCriacao?:
       // Logs vêm ordenados por created_at DESC
       // Calcular tempo que ficou em cada etapa
       const logsComTempo: LogComTempoNaEtapa[] = rawLogs.map((log, index) => {
-        // O log mais recente (index 0) - tempo desde o log até agora
-        // Outros logs - tempo até o próximo log (que é o anterior cronologicamente)
-        let tempoNaEtapa = { dias: 0, horas: 0, label: '-' };
+        let tempoNaEtapa = { dias: 0, horas: 0, minutos: 0, label: '-' };
         
         if (index === 0) {
-          // Último movimento - tempo até agora
           const now = new Date();
           const logDate = new Date(log.created_at);
           const dias = differenceInDays(now, logDate);
           const horas = differenceInHours(now, logDate) % 24;
-          tempoNaEtapa = { dias, horas, label: formatTempo(dias, horas) };
+          const minutos = differenceInMinutes(now, logDate) % 60;
+          tempoNaEtapa = { dias, horas, minutos, label: formatTempo(dias, horas, minutos) };
         } else {
-          // Calcula tempo até o próximo log
           const logDate = new Date(log.created_at);
           const nextLogDate = new Date(rawLogs[index - 1].created_at);
           const dias = differenceInDays(nextLogDate, logDate);
           const horas = differenceInHours(nextLogDate, logDate) % 24;
-          tempoNaEtapa = { dias, horas, label: formatTempo(dias, horas) };
+          const minutos = differenceInMinutes(nextLogDate, logDate) % 60;
+          tempoNaEtapa = { dias, horas, minutos, label: formatTempo(dias, horas, minutos) };
         }
 
         return { ...log, tempoNaEtapa };
@@ -110,6 +109,11 @@ export function useProducaoLogsComTempo(producaoId: string | null, dataCriacao?:
           responsaveisPorEtapa[log.processo_novo] = log.responsavel;
         }
       });
+
+      // Fallback: cortador vem do campo responsavel do lote
+      if (!responsaveisPorEtapa['Corte'] && responsavelLote) {
+        responsaveisPorEtapa['Corte'] = responsavelLote;
+      }
 
       const estatisticas: EstatisticasProducao = {
         totalMovimentacoes: rawLogs.length,
@@ -178,8 +182,11 @@ export function useCreateLogComObservacao() {
 }
 
 // Helpers
-function formatTempo(dias: number, horas: number): string {
-  if (dias === 0 && horas === 0) return 'Agora';
+function formatTempo(dias: number, horas: number, minutos: number = 0): string {
+  if (dias === 0 && horas === 0) {
+    if (minutos > 0) return minutos === 1 ? '1 min' : `${minutos} min`;
+    return 'Agora';
+  }
   if (dias === 0) return horas === 1 ? '1 hora' : `${horas}h`;
   if (dias === 1) return horas > 0 ? `1 dia ${horas}h` : '1 dia';
   return horas > 0 ? `${dias}d ${horas}h` : `${dias} dias`;
