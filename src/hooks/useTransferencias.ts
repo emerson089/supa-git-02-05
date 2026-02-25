@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-export type MotivoTransferencia = 'feira' | 'reposicao' | 'ajuste' | 'devolucao';
 export type StatusTransferencia = 'em_andamento' | 'concluida' | 'cancelada';
 
 export interface Transferencia {
@@ -14,7 +13,7 @@ export interface Transferencia {
   dataSaida: string;
   dataRetorno: string | null;
   observacoes: string | null;
-  motivo: MotivoTransferencia | null;
+  motivo: string | null;
   dataConclusao: string | null;
   concluidoPor: string | null;
   createdAt: string;
@@ -70,7 +69,7 @@ const mapDbToTransferencia = (db: DbTransferencia): Transferencia => ({
   dataSaida: db.data_saida,
   dataRetorno: db.data_retorno,
   observacoes: db.observacoes,
-  motivo: db.motivo as MotivoTransferencia | null,
+  motivo: db.motivo,
   dataConclusao: db.data_conclusao,
   concluidoPor: db.concluido_por,
   createdAt: db.created_at,
@@ -947,7 +946,7 @@ export function useCriarTransferencia() {
       origemId: string;
       destinoId: string;
       itens: { itemId: string; quantidade: number }[];
-      motivo: MotivoTransferencia;
+      motivo: string;
       observacoes?: string;
     }) => {
       if (!user) throw new Error('Usuário não autenticado');

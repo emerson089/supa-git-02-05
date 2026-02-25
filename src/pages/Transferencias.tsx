@@ -34,7 +34,8 @@ import { EditarPrecoLocalModal } from '@/components/estoque/EditarPrecoLocalModa
 import { NovaContagemModal } from '@/components/estoque/NovaContagemModal';
 import { HistoricoContagensModal } from '@/components/estoque/HistoricoContagensModal';
 import { RelatorioSaidasModal } from '@/components/estoque/RelatorioSaidasModal';
-import { FiltrosTransferencias, FiltrosTransferenciasState, MotivoTransferencia, StatusTransferencia } from '@/components/transferencias/FiltrosTransferencias';
+import { FiltrosTransferencias, FiltrosTransferenciasState, StatusTransferencia } from '@/components/transferencias/FiltrosTransferencias';
+import { useTiposAjuste } from '@/hooks/useTiposAjuste';
 import { DetalhesTransferenciaModal } from '@/components/transferencias/DetalhesTransferenciaModal';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
@@ -50,13 +51,6 @@ interface ItemTransferencia {
   quantidade: number;
   disponivelOrigem: number;
 }
-
-const MOTIVOS_LABELS: Record<MotivoTransferencia, string> = {
-  feira: 'Feira',
-  reposicao: 'Reposição',
-  ajuste: 'Ajuste',
-  devolucao: 'Devolução',
-};
 
 const STATUS_CONFIG: Record<StatusTransferencia, { label: string; icon: typeof Clock; className: string }> = {
   em_andamento: { label: 'Pendente', icon: Clock, className: 'bg-amber-100 text-amber-800 border-amber-200' },
@@ -126,7 +120,8 @@ export default function Transferencias() {
   const [showNovaTransferencia, setShowNovaTransferencia] = useState(false);
   const [origemId, setOrigemId] = useState<string>('');
   const [destinoId, setDestinoId] = useState<string>('');
-  const [motivoNovo, setMotivoNovo] = useState<MotivoTransferencia | ''>('');
+  const [motivoNovo, setMotivoNovo] = useState('');
+  const { data: tiposAtivos = [] } = useTiposAjuste();
   const [itensTransferencia, setItensTransferencia] = useState<ItemTransferencia[]>([]);
   const [searchProdutos, setSearchProdutos] = useState('');
 
@@ -742,7 +737,7 @@ export default function Transferencias() {
                     </div>
                     {t.motivo && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Motivo: {MOTIVOS_LABELS[t.motivo]}
+                        Motivo: {t.motivo}
                       </p>
                     )}
                   </CardContent>
@@ -872,15 +867,14 @@ export default function Transferencias() {
             {/* Seleção de Motivo */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Motivo *</Label>
-              <Select value={motivoNovo} onValueChange={(v) => setMotivoNovo(v as MotivoTransferencia)}>
+              <Select value={motivoNovo} onValueChange={setMotivoNovo}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o motivo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="reposicao">Reposição</SelectItem>
-                  <SelectItem value="feira">Feira</SelectItem>
-                  <SelectItem value="ajuste">Ajuste</SelectItem>
-                  <SelectItem value="devolucao">Devolução</SelectItem>
+                  {tiposAtivos.map((tipo) => (
+                    <SelectItem key={tipo.id} value={tipo.nome}>{tipo.nome}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
