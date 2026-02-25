@@ -1,68 +1,40 @@
 
 
-## Correcoes e Melhoria nos Filtros do Relatorio de Saidas
+## Usar Tipos de Ajuste nas Transferencias
 
-### Problema 1: Dados podem nao ser salvos corretamente
+### Contexto
 
-A funcao RPC `rpc_ajustar_estoque_local` cria a movimentacao **sem** `tipo_ajuste_id` e `preco_aplicado`. Depois, o codigo JS faz um UPDATE separado buscando "a ultima movimentacao" para adicionar esses campos. Isso e fragil -- se duas operacoes acontecerem ao mesmo tempo, pode atualizar o registro errado.
+Atualmente, o modal "Nova Transferencia" usa um dropdown fixo com 4 opcoes hardcoded (Reposicao, Feira, Ajuste, Devolucao). O usuario quer que esse campo use os mesmos **Tipos de Ajuste** configuráveis da tela "Tipos de Ajuste" (tabela `tipos_ajuste_estoque`), permitindo editar/criar motivos personalizados.
 
-**Solucao**: Atualizar a RPC para receber `p_tipo_ajuste_id` e `p_preco_aplicado` como parametros opcionais e ja inserir esses valores diretamente no INSERT da movimentacao, de forma atomica.
+### Abordagem
 
-### Problema 2: Filtros funcionam mas a logica e complexa
+O campo `motivo` na tabela `transferencias` ja e `text` livre, entao podemos salvar o **nome** do tipo de ajuste selecionado (ex: "Reposicao", "Defeito") sem precisar alterar o banco. Isso mantem compatibilidade com os dados existentes.
 
-A logica de "Venda/Loja" expandir automaticamente para incluir AJUSTE_SAIDA com `conta_como_venda=true` funciona, mas adiciona complexidade. Isso sera simplificado junto com o problema 3.
+### Alteracoes
 
-### Problema 3: Dois campos de filtro confusos (Tipo de Saida + Tipo de Ajuste)
+#### 1. Transferencias.tsx -- Substituir dropdown hardcoded por tipos do banco
 
-Atualmente existem dois filtros separados:
-- **Tipo de Saida**: Ajuste Estoque, Venda/Loja, Envio Feira, Transferencia, Retorno Feira
-- **Tipo de Ajuste**: Ajuste de estoque, Defeito, Devolucao de cliente, Venda/loja, etc.
+- Importar `useTiposAjuste` para carregar os tipos ativos do usuario
+- Trocar o Select de motivo para listar os tipos da tabela em vez das 4 opcoes fixas
+- O estado `motivoNovo` passa a armazenar o **nome** do tipo selecionado (string livre) em vez do enum
+- Na listagem de transferencias, exibir o motivo diretamente (ja e texto)
 
-A proposta e **unificar em um unico filtro "Tipo de Movimentacao"** com uma lista flat que mistura os tipos do sistema com os tipos de ajuste do usuario:
+#### 2. DetalhesTransferenciaModal.tsx -- Usar tipos do banco na edicao
 
-```text
-Filtro unico "Tipo de Movimentacao":
-  - Venda / Loja          (sistema + ajustes conta_como_venda)
-  - Envio Feira            (sistema)
-  - Transferencia          (sistema)
-  - Retorno Feira          (sistema)
-  --- separador ---
-  - Ajuste de estoque      (tipo de ajuste do usuario)
-  - Defeito                (tipo de ajuste do usuario)
-  - Devolucao de cliente   (tipo de ajuste do usuario)
-  - Devolucao p/ central   (tipo de ajuste do usuario)
-```
+- Importar `useTiposAjuste` para popular o dropdown de edicao do motivo
+- Remover referencia ao `MOTIVOS_LABELS` hardcoded
+- O campo motivo editavel mostra os tipos do banco; o campo somente-leitura mostra o texto salvo
 
-Quando o usuario seleciona "Venda / Loja", a query traz VENDA_FEIRA + AJUSTE_SAIDA com conta_como_venda. Quando seleciona um tipo de ajuste especifico (ex: "Defeito"), traz apenas AJUSTE_SAIDA com aquele tipo_ajuste_id.
+#### 3. FiltrosTransferencias.tsx -- Usar tipos do banco nos filtros
 
----
+- Importar `useTiposAjuste` para popular o filtro de motivo
+- Remover o tipo `MotivoTransferencia` enum e usar `string` para o filtro
+- Manter opcao "Todos" + listar tipos ativos dinamicamente
 
-### Alteracoes tecnicas
+#### 4. useTransferencias.ts -- Ajustar tipo do motivo
 
-#### 1. Migracao SQL -- Atualizar RPC para receber tipo_ajuste_id e preco_aplicado
-
-Adicionar dois parametros opcionais a `rpc_ajustar_estoque_local`:
-
-```text
-p_tipo_ajuste_id UUID DEFAULT NULL
-p_preco_aplicado NUMERIC DEFAULT NULL
-```
-
-E incluir esses valores no INSERT da movimentacao, eliminando a necessidade do UPDATE separado no JS.
-
-#### 2. useEstoquePorLocalGerenciamento.ts -- Simplificar mutacao
-
-Remover o bloco que busca "ultima movimentacao" e faz UPDATE separado. Passar `tipoAjusteId` e `precoAplicado` diretamente na chamada da RPC.
-
-#### 3. RelatorioSaidasModal.tsx -- Unificar filtros
-
-- Remover o estado `tiposAjusteSelecionados` e o filtro separado "Tipo de Ajuste"
-- Substituir o filtro "Tipo de Saida" por um unico "Tipo de Movimentacao" que combina tipos do sistema e tipos de ajuste do usuario
-- Cada opcao tera um identificador que indica se e tipo de sistema ou tipo de ajuste
-
-#### 4. useRelatorioSaidas.ts -- Adaptar query ao filtro unificado
-
-Atualizar `FiltrosSaidas` para usar uma lista unificada de filtros. A logica de query adaptara automaticamente: se o filtro selecionado e um tipo de sistema, filtra por `tipo`; se e um tipo de ajuste, filtra por `tipo_ajuste_id`.
+- Mudar o tipo de `motivo` de `MotivoTransferencia` para `string` na interface da mutacao `useCriarTransferencia`
+- Mesma mudanca em `useAtualizarTransferencia`
 
 ---
 
@@ -70,8 +42,12 @@ Atualizar `FiltrosSaidas` para usar uma lista unificada de filtros. A logica de 
 
 | Arquivo | Alteracao |
 |---|---|
-| Migracao SQL (nova) | Atualizar RPC com parametros tipo_ajuste_id e preco_aplicado |
-| `src/hooks/useEstoquePorLocalGerenciamento.ts` | Passar campos diretamente na RPC, remover UPDATE separado |
-| `src/components/estoque/RelatorioSaidasModal.tsx` | Unificar dois filtros em um unico "Tipo de Movimentacao" |
-| `src/hooks/useRelatorioSaidas.ts` | Adaptar interface de filtros e logica de query |
+| `src/pages/Transferencias.tsx` | Importar `useTiposAjuste`, trocar dropdown fixo por tipos do banco, ajustar estado e labels |
+| `src/components/transferencias/DetalhesTransferenciaModal.tsx` | Importar `useTiposAjuste`, trocar dropdown fixo por tipos do banco na edicao |
+| `src/components/transferencias/FiltrosTransferencias.tsx` | Importar `useTiposAjuste`, trocar filtro fixo por tipos do banco |
+| `src/hooks/useTransferencias.ts` | Mudar tipo `motivo` de enum para `string` |
+
+### Impacto no backend
+- **Zero** alteracoes no banco -- o campo `motivo` ja e `text` livre
+- Dados antigos com valores como "reposicao" continuam funcionando (exibidos como texto)
 
