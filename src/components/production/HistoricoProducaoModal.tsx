@@ -186,7 +186,7 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
                         const logInicial = data?.logs.find(
                           l => !l.processo_anterior && l.processo_novo === 'Corte'
                         );
-                        const cortador = logInicial?.responsavel || lot.responsavel;
+                        const cortador = logInicial?.responsavel;
                         return cortador ? (
                           <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                             <User className="h-3 w-3" />

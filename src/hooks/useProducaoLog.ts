@@ -110,10 +110,7 @@ export function useProducaoLogsComTempo(producaoId: string | null, dataCriacao?:
         }
       });
 
-      // Fallback: cortador vem do campo responsavel do lote
-      if (!responsaveisPorEtapa['Corte'] && responsavelLote) {
-        responsaveisPorEtapa['Corte'] = responsavelLote;
-      }
+      // Sem fallback para lot.responsavel pois esse campo é sobrescrito a cada etapa
 
       const estatisticas: EstatisticasProducao = {
         totalMovimentacoes: rawLogs.length,
