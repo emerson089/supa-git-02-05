@@ -1,59 +1,36 @@
 
 
-## Sincronizar Filtro "Tipo de Movimentação" com Tipos de Ajuste
+## Mostrar Apenas Tipos de Ajuste no Filtro do Relatorio de Saidas
 
 ### Problema
 
-O filtro "Tipo de Movimentação" no Relatório de Saídas mostra opções duplicadas porque combina tipos de sistema fixos (Venda / Loja, Envio Feira, Transferência, Retorno Feira) com tipos de ajuste do usuário. Quando um tipo de ajuste tem o mesmo nome de um tipo de sistema (ex: "Venda / loja"), aparece duplicado.
+O filtro "Tipo de Movimentacao" mostra 4 tipos de sistema fixos (Venda/Loja, Envio Feira, Transferencia, Retorno Feira) que nao refletem a configuracao do usuario. O usuario quer que esse filtro mostre apenas os tipos configurados na tela de "Tipos de Ajuste".
 
-### Solução
+### Solucao
 
-Modificar a lógica de `opcoesUnificadas` no `RelatorioSaidasModal.tsx` para:
+Remover os tipos de sistema (TIPOS_SISTEMA) do filtro visual e mostrar apenas os tipos de ajuste do usuario. No backend, quando nenhum filtro e selecionado, o relatorio continua buscando todos os tipos de saida normalmente.
 
-1. Manter os tipos de sistema (Envio Feira, Transferência, Retorno Feira) -- esses são tipos de movimentação que não são ajustes
-2. Substituir o tipo de sistema "Venda / Loja" pela lógica existente: tipos de ajuste marcados como `contaComoVenda` já são agrupados automaticamente nessa categoria
-3. Filtrar tipos de ajuste para remover nomes que colidem com tipos de sistema (comparação case-insensitive)
-4. Deduplicar tipos de ajuste por nome (caso existam registros duplicados de usuários diferentes)
+Tambem precisa incluir os tipos marcados como `contaComoVenda` na lista (antes eram filtrados), ja que agora sao a unica fonte de opcoes.
 
-### Alterações técnicas
+### Alteracoes
 
 **Arquivo: `src/components/estoque/RelatorioSaidasModal.tsx`**
 
-No `useMemo` de `opcoesUnificadas` (linhas 110-119):
+1. Remover a constante `TIPOS_SISTEMA` (linhas 64-70)
+2. Simplificar `opcoesUnificadas` para listar apenas tipos de ajuste do usuario (todos, incluindo `contaComoVenda`), deduplicados por nome
+3. No JSX do popover (linhas 355-414), remover a secao "Tipos de sistema" e o separador, mostrando apenas a lista de tipos de ajuste como opcoes diretas
+4. Manter o `kind: 'ajuste'` para todos os filtros, ja que nao havera mais `kind: 'sistema'`
 
-- Criar um `Set` com os nomes dos tipos de sistema (lowercase) para comparação
-- Filtrar tipos de ajuste que tenham nomes iguais a tipos de sistema
-- Usar `reduce` para deduplicar por nome (manter apenas o primeiro de cada nome)
+**Arquivo: `src/hooks/useRelatorioSaidas.ts`**
 
-```typescript
-const opcoesUnificadas = useMemo(() => {
-  const nomesSistema = new Set(TIPOS_SISTEMA.map(t => t.label.toLowerCase().trim()));
-  
-  const tiposAjusteFiltro: FiltroMovimentacao[] = (tiposAjusteDisponiveis || [])
-    .filter(t => !t.contaComoVenda)
-    .filter(t => !nomesSistema.has(t.nome.toLowerCase().trim()))
-    .reduce((acc, t) => {
-      if (!acc.some(x => x.label.toLowerCase() === t.nome.toLowerCase())) {
-        acc.push({ kind: 'ajuste', value: t.id, label: t.nome });
-      }
-      return acc;
-    }, [] as FiltroMovimentacao[]);
-    
-  return { sistema: TIPOS_SISTEMA, ajuste: tiposAjusteFiltro };
-}, [tiposAjusteDisponiveis]);
-```
+5. Ajustar a logica de resolucao de filtros: quando filtros com `kind: 'ajuste'` sao selecionados, mapear os que tem `contaComoVenda` para incluir `VENDA_FEIRA` nos tipos de query (mantendo o comportamento atual de "Venda/Loja")
+6. Quando nenhum filtro e selecionado, continuar buscando todos os tipos (sem mudanca)
 
-### Resultado
+### Impacto
 
-O filtro mostrará:
-- **Tipos de sistema** (fixos): Venda / Loja, Envio Feira, Transferência, Retorno Feira
-- **Tipos de ajuste** (do usuário, sem duplicatas): Ajuste de estoque, Defeito, Devolução de cliente, Reposição loja -- conforme configurado na tela de Tipos de Ajuste
-
-Tipos inativos na configuração já não aparecem pois a query filtra por `ativo = true`. Tipos marcados como "Venda" já estão cobertos pela opção "Venda / Loja" do sistema.
-
-### Arquivo modificado
-
-| Arquivo | Alteração |
-|---|---|
-| `src/components/estoque/RelatorioSaidasModal.tsx` | Deduplicar e filtrar colisões no `opcoesUnificadas` |
+- O filtro refletira exatamente o que esta configurado em "Tipos de Ajuste"
+- Tipos como "Venda / loja" (marcados como contaComoVenda) aparecerao na lista
+- Tipos como "Ajuste de estoque", "Defeito", "Devolucao" aparecerao normalmente
+- Sem filtro selecionado, o relatorio continua mostrando tudo
+- A query de dados nao e afetada quando nenhum filtro esta ativo
 
