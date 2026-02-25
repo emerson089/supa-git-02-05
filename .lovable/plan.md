@@ -1,41 +1,45 @@
 
 
-## Unificar Transferencia e Mostrar Estoque no Destino
+## Corrigir: Produtos nao aparecem ao transferir da Loja para Central
 
-### Resumo
+### Causa raiz
 
-Duas alteracoes combinadas: (1) remover o botao "+ Adicionar" redundante do Estoque por Local, e (2) melhorar o modal "Nova Transferencia" para mostrar a quantidade que ja existe no destino, assim como o antigo modal de Adicionar fazia com os badges "Central: X pcs" e "Local: X pcs".
+O hook `useDisponivelCentral` (em `useEstoqueLocais.ts`, linha 364) chama `useEstoquePorLocal(centralId)`, filtrando apenas o estoque do Central. O componente `Transferencias.tsx` usa o array `estoquePorLocal` retornado por esse hook na funcao `getDisponivelNoLocal(itemId, localId)` para verificar disponibilidade em qualquer local.
 
-### Alteracao 1: Remover botao "Adicionar" e modal
+Quando o usuario seleciona "Loja Parque das Feiras" como origem, a funcao busca itens com `localId === lojaId` dentro de um array que so contem itens do Central -- resultado: zero produtos disponiveis.
 
-No arquivo `src/pages/Transferencias.tsx`:
-- Remover o import de `AdicionarProdutoLocalModal`
-- Remover o estado `showAdicionarModal`
-- Remover o botao "Adicionar" da barra de acoes do estoque local (linhas 507-510)
-- Remover o componente `<AdicionarProdutoLocalModal>` do JSX (linha 809)
+### Solucao
 
-### Alteracao 2: Mostrar estoque no destino no modal Nova Transferencia
+Alterar `useDisponivelCentral` para buscar estoque de **todos os locais** (sem filtro de localId), em vez de filtrar apenas pelo Central. Isso permite que `getDisponivelNoLocal` funcione corretamente para qualquer local selecionado como origem ou destino.
 
-No mesmo arquivo, na secao "Produtos Disponiveis" do modal (linhas 897-930), adicionar um badge mostrando a quantidade ja existente no destino quando um destino estiver selecionado:
+### Alteracao tecnica
 
-**Na lista de produtos disponiveis**: Cada produto passara a mostrar:
-- Badge azul: "Origem: X pcs" (quantidade disponivel na origem, substitui o atual "Disp: X")
-- Badge verde: "Destino: X pcs" (quantidade ja existente no destino, visivel apenas quando destino selecionado e quantidade > 0)
+No arquivo `src/hooks/useEstoqueLocais.ts`, linha 364:
 
-Isso replica o comportamento visual do antigo `AdicionarProdutoLocalModal` que mostrava "Central: X pcs" e "Local: X pcs".
+**Antes:**
+```typescript
+const { data: estoquePorLocal } = useEstoquePorLocal(centralId);
+```
 
-A funcao `getDisponivelNoLocal` ja existe e aceita qualquer localId, entao basta chamar com o `destinoId` para obter a quantidade no destino.
+**Depois:**
+```typescript
+const { data: estoquePorLocal } = useEstoquePorLocal();
+```
 
-### Detalhes tecnicos
+Remover tambem a variavel `centralId` que so era usada para esse filtro (ela continua sendo usada em `getDisponivelCentral`, entao manter o calculo mas usar o array completo para busca).
 
-Na renderizacao de cada produto na lista (linha ~900-923):
-- Calcular `const disponivelDestino = destinoId ? getDisponivelNoLocal(produto.id, destinoId) : 0;`
-- Substituir o texto "Disp: X" por badges visuais semelhantes ao AdicionarProdutoLocalModal
-- Usar as mesmas classes de cor: azul para origem, verde para destino
+Na verdade, `centralId` ainda e usado em `getDisponivelCentral` (linha 369), entao so precisa mudar a chamada de `useEstoquePorLocal` para nao passar o filtro.
 
 ### Arquivo modificado
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/Transferencias.tsx` | Remover botao Adicionar + estado + modal; adicionar badge de estoque no destino na lista de produtos |
+| `src/hooks/useEstoqueLocais.ts` | Remover filtro `centralId` da chamada `useEstoquePorLocal` para carregar estoque de todos os locais |
+
+### Impacto
+
+- A funcao `getDisponivelNoLocal` passara a encontrar estoque em qualquer local (Central, Loja, Banca)
+- Transferencias de Loja para Central funcionarao corretamente
+- Os badges "Origem" e "Destino" mostrarao valores corretos para qualquer combinacao de locais
+- Performance: a query buscara todos os registros de `estoque_por_local` em vez de filtrar por um local, mas o volume de dados e pequeno
 
