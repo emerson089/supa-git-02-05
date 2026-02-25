@@ -361,7 +361,7 @@ export function useDisponivelCentral() {
   
   // Buscar o localId do Central para filtrar a query
   const centralId = locais?.find(l => l.tipo === 'central')?.id;
-  const { data: estoquePorLocal } = useEstoquePorLocal(centralId);
+  const { data: estoquePorLocal } = useEstoquePorLocal();
 
   const getDisponivelCentral = (itemId: string): number => {
     if (!centralId) return 0;
