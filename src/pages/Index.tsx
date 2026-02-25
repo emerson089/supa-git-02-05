@@ -135,13 +135,13 @@ const Index = () => {
       } else {
         const newLot = await callWithRetry(() => Producao.create(dadosDoForm as ProducaoInsert));
         // Criar log inicial para registrar o cortador
-        if (newLot && (dadosDoForm as ProducaoInsert).responsavel) {
+        if (newLot) {
           try {
             await ProducaoLog.create({
               producao_id: newLot.id,
               processo_anterior: undefined,
               processo_novo: 'Corte',
-              responsavel: (dadosDoForm as ProducaoInsert).responsavel!,
+              responsavel: (dadosDoForm as ProducaoInsert).responsavel || undefined,
             });
           } catch (logErr) {
             console.error('Erro ao criar log inicial:', logErr);

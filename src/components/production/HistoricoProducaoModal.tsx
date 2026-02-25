@@ -189,12 +189,12 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
                           l => !l.processo_anterior && l.processo_novo === 'Corte'
                         );
                         const cortador = logInicial?.responsavel;
-                        return cortador ? (
+                        return (
                           <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                             <User className="h-3 w-3" />
-                            <span className="font-medium">Cortador:</span> {cortador}
+                            <span className="font-medium">Cortador:</span> {cortador || 'Não registrado'}
                           </p>
-                        ) : null;
+                        );
                       })()}
                     </div>
                   </div>
