@@ -27,7 +27,7 @@ import { PrintEstoqueLocal } from '@/components/estoque/PrintEstoqueLocal';
 import { LotImage } from '@/components/production/LotImage';
 import { ProdutoEstoqueLocalCard } from '@/components/estoque/ProdutoEstoqueLocalCard';
 import { AjusteEstoqueModal } from '@/components/estoque/AjusteEstoqueModal';
-import { AdicionarProdutoLocalModal } from '@/components/estoque/AdicionarProdutoLocalModal';
+
 import { HistoricoMovimentacoesModal } from '@/components/estoque/HistoricoMovimentacoesModal';
 import { ZerarEstoqueModal } from '@/components/estoque/ZerarEstoqueModal';
 import { EditarPrecoLocalModal } from '@/components/estoque/EditarPrecoLocalModal';
@@ -106,7 +106,7 @@ export default function Transferencias() {
   const [searchEstoque, setSearchEstoque] = useState('');
   const debouncedSearchEstoque = useDebouncedValue(searchEstoque, 300);
   const [showAjusteModal, setShowAjusteModal] = useState(false);
-  const [showAdicionarModal, setShowAdicionarModal] = useState(false);
+  
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
   const [showZerarModal, setShowZerarModal] = useState(false);
   const [showEditarPrecoModal, setShowEditarPrecoModal] = useState(false);
@@ -504,10 +504,6 @@ export default function Transferencias() {
               <FileDown className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">PDF</span>
             </Button>
-            <Button size="sm" onClick={() => setShowAdicionarModal(true)} disabled={!lojaId}>
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline ml-1">Adicionar</span>
-            </Button>
           </div>
         </div>
 
@@ -805,8 +801,6 @@ export default function Transferencias() {
       {/* Modal de Ajuste de Estoque */}
       <AjusteEstoqueModal open={showAjusteModal} onOpenChange={setShowAjusteModal} item={itemSelecionado} />
 
-      {/* Modal de Adicionar Produto */}
-      {lojaId && <AdicionarProdutoLocalModal open={showAdicionarModal} onOpenChange={setShowAdicionarModal} localId={lojaId} localNome={lojaNome} />}
 
       {/* Modal de Histórico de Movimentações */}
       <HistoricoMovimentacoesModal open={showHistoricoModal} onOpenChange={setShowHistoricoModal} item={itemSelecionado} />
@@ -898,17 +892,38 @@ export default function Transferencias() {
                   <div className="space-y-2 pr-2">
                     {produtosFiltrados.map(produto => {
                   const disponivel = getDisponivelNoLocal(produto.id, origemId);
+                  const disponivelDestino = destinoId ? getDisponivelNoLocal(produto.id, destinoId) : 0;
                   const jaAdicionado = itensTransferencia.some(i => i.itemId === produto.id);
-                  return <div key={produto.id} className={cn("flex items-center gap-3 p-2 rounded-lg border bg-background transition-colors", jaAdicionado ? "border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20" : disponivel > 0 ? "hover:bg-muted/50 cursor-pointer hover:border-primary/30" : "opacity-40")} onClick={() => !jaAdicionado && disponivel > 0 && handleAddItemTransferencia(produto)}>
+                  return <div key={produto.id} className={cn("flex items-start gap-3 p-2 rounded-lg border bg-background transition-colors", jaAdicionado ? "border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20" : disponivel > 0 ? "hover:bg-muted/50 cursor-pointer hover:border-primary/30" : "opacity-40")} onClick={() => !jaAdicionado && disponivel > 0 && handleAddItemTransferencia(produto)}>
                           <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0 border">
                             <LotImage src={produto.imagemUrl} alt={produto.nome} className="w-full h-full object-cover" />
                           </div>
 
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{produto.nome}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Disp: <span className="font-medium">{disponivel}</span>
-                            </p>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              <Badge 
+                                variant="secondary" 
+                                className={cn(
+                                  "text-xs font-medium",
+                                  disponivel > 0 
+                                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                    : "bg-muted text-muted-foreground"
+                                )}
+                              >
+                                <Box className="h-3 w-3 mr-1" />
+                                Origem: {disponivel} pçs
+                              </Badge>
+                              {destinoId && disponivelDestino > 0 && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                >
+                                  <Store className="h-3 w-3 mr-1" />
+                                  Destino: {disponivelDestino} pçs
+                                </Badge>
+                              )}
+                            </div>
                           </div>
 
                           {!jaAdicionado && disponivel > 0 && <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary hover:bg-primary/10" onClick={e => {
