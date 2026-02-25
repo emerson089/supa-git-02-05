@@ -227,7 +227,7 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-md max-h-[80vh] !grid-rows-none flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />

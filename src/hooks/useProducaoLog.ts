@@ -182,7 +182,7 @@ export function useCreateLogComObservacao() {
 function formatTempo(dias: number, horas: number, minutos: number = 0): string {
   if (dias === 0 && horas === 0) {
     if (minutos > 0) return minutos === 1 ? '1 min' : `${minutos} min`;
-    return 'Agora';
+    return '< 1 min';
   }
   if (dias === 0) return horas === 1 ? '1 hora' : `${horas}h`;
   if (dias === 1) return horas > 0 ? `1 dia ${horas}h` : '1 dia';
