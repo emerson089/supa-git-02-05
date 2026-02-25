@@ -134,59 +134,32 @@ export function useAjustarEstoqueLocal() {
     mutationFn: async ({ estoqueLocalId, itemId, localId, novaQuantidade, motivo, precoAplicado, tipoAjusteId }: AjusteEstoqueParams & { precoAplicado?: number; tipoAjusteId?: string }) => {
       if (!user?.id) throw new Error('Usuário não autenticado');
 
-      // Chamar RPC atômica - tudo ou nada
-      const { error } = await supabase.rpc('rpc_ajustar_estoque_local', {
+      // Chamar RPC atômica com tipo_ajuste_id e preco_aplicado inclusos
+      const rpcParams: Record<string, any> = {
         p_local_id: localId,
         p_item_id: itemId,
         p_nova_quantidade: novaQuantidade,
         p_user_id: user.id,
-        p_motivo: motivo
-      });
+        p_motivo: motivo,
+      };
+
+      if (tipoAjusteId) {
+        rpcParams.p_tipo_ajuste_id = tipoAjusteId;
+      }
+      if (precoAplicado !== undefined && precoAplicado > 0) {
+        rpcParams.p_preco_aplicado = precoAplicado;
+      }
+
+      const { error } = await supabase.rpc('rpc_ajustar_estoque_local', rpcParams as any);
 
       if (error) {
         console.error('[useAjustarEstoqueLocal] Erro RPC:', error);
         throw new Error(error.message || 'Erro ao ajustar estoque');
       }
 
-      // Buscar estoque anterior para determinar tipo (para mensagem)
-      const { data: estoqueAtual } = await supabase
-        .from('estoque_por_local')
-        .select('quantidade')
-        .eq('id', estoqueLocalId)
-        .single();
-
-      const diferenca = novaQuantidade - Number(estoqueAtual?.quantidade || 0);
-      const tipoMovimentacao = diferenca > 0 ? 'AJUSTE_ENTRADA' : 'AJUSTE_SAIDA';
-
-      // Atualizar a última movimentação para incluir preco_aplicado e tipo_ajuste_id
-      const { data: ultimaMov } = await supabase
-        .from('estoque_movimentacoes')
-        .select('id')
-        .eq('item_id', itemId)
-        .eq('local_id', localId)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (ultimaMov) {
-        const updateData: Record<string, any> = {};
-        if (precoAplicado !== undefined && precoAplicado > 0) {
-          updateData.preco_aplicado = precoAplicado;
-        }
-        if (tipoAjusteId) {
-          updateData.tipo_ajuste_id = tipoAjusteId;
-        }
-        
-        if (Object.keys(updateData).length > 0) {
-          await supabase
-            .from('estoque_movimentacoes')
-            .update(updateData)
-            .eq('id', ultimaMov.id);
-        }
-      }
-
-      return { tipoMovimentacao, diferenca };
+      // Determinar tipo para mensagem de sucesso
+      const tipoMovimentacao = novaQuantidade > 0 ? 'AJUSTE_ENTRADA' : 'AJUSTE_SAIDA';
+      return { tipoMovimentacao, diferenca: 0 };
     },
     onSuccess: (result, variables) => {
       // Invalidar TODAS as queries de estoque com predicate para garantir atualização

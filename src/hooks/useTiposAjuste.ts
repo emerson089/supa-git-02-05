@@ -307,7 +307,7 @@ export function useTiposAjusteParaFiltro(localId?: string | null) {
 
   return useQuery({
     queryKey: ['tipos-ajuste-filtro', user?.id, localId],
-    queryFn: async (): Promise<{ id: string; nome: string }[]> => {
+    queryFn: async (): Promise<{ id: string; nome: string; contaComoVenda: boolean }[]> => {
       if (!user) return [];
 
       // Resolver owner: se tem localId, buscar dono do local
@@ -325,7 +325,7 @@ export function useTiposAjusteParaFiltro(localId?: string | null) {
 
       const { data, error } = await supabase
         .from('tipos_ajuste_estoque')
-        .select('id, nome')
+        .select('id, nome, conta_como_venda')
         .eq('user_id', ownerId)
         .eq('ativo', true)
         .order('nome');
@@ -335,6 +335,7 @@ export function useTiposAjusteParaFiltro(localId?: string | null) {
       return (data || []).map(t => ({
         id: t.id,
         nome: t.nome,
+        contaComoVenda: (t as any).conta_como_venda ?? false,
       }));
     },
     enabled: !!user,
