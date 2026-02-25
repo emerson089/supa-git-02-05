@@ -17,7 +17,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { LotImage } from '@/components/production/LotImage';
 import { toast } from 'sonner';
 import { useTransferenciaItens, useConcluirTransferencia, useCancelarTransferencia, useAtualizarTransferencia } from '@/hooks/useTransferencias';
-import type { MotivoTransferencia, StatusTransferencia } from './FiltrosTransferencias';
+import { useTiposAjuste } from '@/hooks/useTiposAjuste';
+import type { StatusTransferencia } from './FiltrosTransferencias';
 
 interface TransferenciaCompleta {
   id: string;
@@ -26,7 +27,7 @@ interface TransferenciaCompleta {
   localDestinoId: string;
   localDestinoNome: string;
   status: StatusTransferencia;
-  motivo: MotivoTransferencia | null;
+  motivo: string | null;
   observacoes: string | null;
   createdAt: string;
   dataConclusao: string | null;
@@ -51,14 +52,6 @@ interface DetalhesTransferenciaModalProps {
   transferencia: TransferenciaCompleta | null;
   itensDetalhados: ItemComDetalhes[];
 }
-
-const MOTIVOS_LABELS: Record<MotivoTransferencia, string> = {
-  feira: 'Feira',
-  reposicao: 'Reposição',
-  ajuste: 'Ajuste',
-  devolucao: 'Devolução',
-};
-
 const STATUS_CONFIG: Record<StatusTransferencia, { label: string; variant: 'default' | 'secondary' | 'destructive'; className: string }> = {
   em_andamento: { label: 'Pendente', variant: 'secondary', className: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400' },
   concluida: { label: 'Concluída', variant: 'default', className: 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400' },
@@ -72,7 +65,8 @@ export function DetalhesTransferenciaModal({
   itensDetalhados,
 }: DetalhesTransferenciaModalProps) {
   const isMobile = useIsMobile();
-  const [motivo, setMotivo] = useState<MotivoTransferencia | ''>('');
+  const [motivo, setMotivo] = useState('');
+  const { data: tiposAtivos = [] } = useTiposAjuste();
   const [observacoes, setObservacoes] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -242,19 +236,19 @@ export function DetalhesTransferenciaModal({
               <Label className="text-sm font-medium">Motivo</Label>
             </div>
             {isPendente ? (
-              <Select value={motivo} onValueChange={(v) => setMotivo(v as MotivoTransferencia)}>
+              <Select value={motivo} onValueChange={setMotivo}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o motivo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(MOTIVOS_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  {tiposAtivos.map((tipo) => (
+                    <SelectItem key={tipo.id} value={tipo.nome}>{tipo.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             ) : (
               <p className="text-sm bg-muted/50 rounded-md px-3 py-2">
-                {transferencia.motivo ? MOTIVOS_LABELS[transferencia.motivo] : '—'}
+                {transferencia.motivo || '—'}
               </p>
             )}
           </div>

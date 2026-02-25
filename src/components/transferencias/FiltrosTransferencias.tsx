@@ -11,8 +11,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { useTiposAjuste } from '@/hooks/useTiposAjuste';
 
-export type MotivoTransferencia = 'feira' | 'reposicao' | 'ajuste' | 'devolucao';
 export type StatusTransferencia = 'em_andamento' | 'concluida' | 'cancelada';
 
 export interface FiltrosTransferenciasState {
@@ -21,7 +21,7 @@ export interface FiltrosTransferenciasState {
   origemId: string;
   destinoId: string;
   status: StatusTransferencia | '';
-  motivo: MotivoTransferencia | '';
+  motivo: string;
 }
 
 interface Local {
@@ -44,13 +44,6 @@ const PERIODOS = [
   { label: 'Personalizado', value: 'custom' },
 ] as const;
 
-const MOTIVOS_LABELS: Record<MotivoTransferencia, string> = {
-  feira: 'Feira',
-  reposicao: 'Reposição',
-  ajuste: 'Ajuste',
-  devolucao: 'Devolução',
-};
-
 const STATUS_LABELS: Record<StatusTransferencia, string> = {
   em_andamento: 'Pendente',
   concluida: 'Concluída',
@@ -59,6 +52,7 @@ const STATUS_LABELS: Record<StatusTransferencia, string> = {
 
 export function FiltrosTransferencias({ filtros, onFiltrosChange, locais, onNovaClick }: FiltrosTransferenciasProps) {
   const isMobile = useIsMobile();
+  const { data: tiposAtivos = [] } = useTiposAjuste();
   const [periodoSelecionado, setPeriodoSelecionado] = useState<string>('');
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -248,15 +242,15 @@ export function FiltrosTransferencias({ filtros, onFiltrosChange, locais, onNova
           <Label className="text-sm font-medium">Motivo</Label>
           <Select 
             value={filtros.motivo} 
-            onValueChange={(v) => onFiltrosChange({ ...filtros, motivo: v === 'all' ? '' : v as MotivoTransferencia })}
+            onValueChange={(v) => onFiltrosChange({ ...filtros, motivo: v === 'all' ? '' : v })}
           >
             <SelectTrigger>
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
-              {Object.entries(MOTIVOS_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>{label}</SelectItem>
+              {tiposAtivos.map((tipo) => (
+                <SelectItem key={tipo.id} value={tipo.nome}>{tipo.nome}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -420,15 +414,15 @@ export function FiltrosTransferencias({ filtros, onFiltrosChange, locais, onNova
       {/* Motivo */}
       <Select 
         value={filtros.motivo} 
-        onValueChange={(v) => onFiltrosChange({ ...filtros, motivo: v === 'all' ? '' : v as MotivoTransferencia })}
+        onValueChange={(v) => onFiltrosChange({ ...filtros, motivo: v === 'all' ? '' : v })}
       >
         <SelectTrigger className="h-9 w-[110px]">
           <SelectValue placeholder="Motivo" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos</SelectItem>
-          {Object.entries(MOTIVOS_LABELS).map(([value, label]) => (
-            <SelectItem key={value} value={value}>{label}</SelectItem>
+          {tiposAtivos.map((tipo) => (
+            <SelectItem key={tipo.id} value={tipo.nome}>{tipo.nome}</SelectItem>
           ))}
         </SelectContent>
       </Select>
