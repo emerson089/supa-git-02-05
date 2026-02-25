@@ -1,50 +1,61 @@
 
 
-## Adicionar Numeracao das Pecas na Transicao Corte para Costura/Faccao
+## Correcoes no Historico de Producao
 
-### Entendimento do Fluxo
+### Problemas identificados
 
-O Corte e a primeira etapa. Quando o corte termina, o usuario move o lote para **Costura/Faccao**. Nesse momento e que ele sabe:
-- Quantos rolos usou (ja capturado ao entrar no Corte)
-- Quantas pecas foram cortadas (ja capturado ao entrar em Costura/Faccao)
-- **Qual a numeracao das pecas** (ex: "34 ao 44") -- campo novo
+1. **Labels inconsistentes no resumo "Responsaveis por Etapa"**: Algumas etapas mostram o nome correto (ex: "Lavanderia: Kaysu lavanderia", "Faccao / Costureira: Regina") mas outras mostram apenas "Responsavel: edjan" ou "Responsavel: Ivan" sem indicar qual etapa. Isso acontece porque as etapas Travete, Destroyed, Limpado e Aprontamento usam o label generico "Responsavel" no mapa STAGE_LABELS.
+
+2. **Cortador nao aparece no resumo**: O Corte e a primeira etapa -- o lote ja nasce nela, sem passar pelo modal de transicao. Por isso, nao existe um log com `processo_novo = 'Corte'`, e o cortador nunca entra no mapa `responsaveisPorEtapa`. Solucao: usar o campo `responsavel` do proprio lote como fallback para a etapa Corte.
+
+3. **"Agora nesta etapa" para todas as entradas**: Quando varias transicoes sao feitas em sequencia rapida (minutos), o calculo usa `differenceInDays` e `differenceInHours`, ambos retornam 0, resultando em "Agora" para todas. Solucao: adicionar `differenceInMinutes` para mostrar "X min" quando o tempo e inferior a 1 hora.
+
+---
 
 ### Alteracoes
 
-#### 1. StageTransitionModal.tsx -- Adicionar campo de numeracao ao Costura/Faccao
+#### 1. HistoricoProducaoModal.tsx -- Padronizar labels no resumo
 
-O campo `numeracao` sera adicionado na configuracao da etapa `Costura/Faccao`, junto com o campo `pecas` que ja existe:
-
-```text
-'Costura/Faccao':
-  - Qtd de pecas cortadas (number) -- ja existe
-  - Numeracao das pecas (text, placeholder "Ex: 34 ao 44") -- novo
-```
-
-#### 2. Index.tsx -- Incluir numeracao no labelMap do log
-
-Atualizar o `labelMap` para incluir `numeracao`, garantindo que o campo apareca formatado na observacao do log:
+Trocar o mapa `STAGE_LABELS` para usar o **nome da etapa** em todos os casos, ao inves de "Responsavel" generico:
 
 ```text
-labelMap: { rolos: 'Rolos', pecas: 'Pecas cortadas', numeracao: 'Numeracao' }
+Corte       -> Cortador
+Costura/Faccao -> Faccao / Costureira
+Travete     -> Travete
+Destroyed   -> Destroyed
+Lavanderia  -> Lavanderia
+Limpado     -> Limpado
+Aprontamento -> Aprontamento
+Vendas      -> Vendas
 ```
 
-Resultado no log: `"Pecas cortadas: 200 | Numeracao: 34 ao 44"`
+Resultado: "Travete: Ivan" em vez de "Responsavel: Ivan"
 
-#### 3. HistoricoProducaoModal.tsx -- Exibir numeracao estruturada na timeline
+#### 2. useProducaoLog.ts -- Incluir cortador no mapa de responsaveis
 
-Parsear o campo `observacao` dos logs para extrair e exibir dados com icones dedicados:
+Receber o campo `responsavel` do lote como parametro opcional. Se nao houver entrada para 'Corte' em `responsaveisPorEtapa` e o lote tiver um `responsavel` definido, usar esse valor como fallback.
 
-- **Rolos: 3** (icone Package)
-- **Pecas cortadas: 200** (icone Scissors)
-- **Numeracao: 34 ao 44** (icone Hash)
-- Texto livre restante continua como observacao normal
+Assinatura atualizada:
+```text
+useProducaoLogsComTempo(producaoId, dataCriacao, responsavelLote?)
+```
 
-Tambem adicionar secao de **Resumo de Responsaveis por Etapa** no topo do modal, mostrando quem foi responsavel em cada etapa que o lote passou.
+#### 3. useProducaoLog.ts -- Corrigir calculo de tempo para transicoes rapidas
 
-#### 4. useProducaoLog.ts -- Adicionar mapa de responsaveis por etapa
+Atualizar `formatTempo` para usar `differenceInMinutes` quando dias e horas sao 0:
 
-Extrair do array de logs um mapa `responsaveisPorEtapa` (o primeiro encontrado para cada `processo_novo`, ja que os logs vem em ordem DESC = mais recente primeiro).
+```text
+Se dias=0 e horas=0:
+  - Calcular minutos
+  - Se minutos > 0: mostrar "X min"
+  - Se minutos = 0: mostrar "Agora"
+```
+
+Tambem atualizar a interface `LogComTempoNaEtapa` para incluir `minutos` no calculo.
+
+#### 4. HistoricoProducaoModal.tsx -- Passar responsavel do lote ao hook
+
+Atualizar a chamada do hook para enviar `lot?.responsavel` como terceiro parametro.
 
 ---
 
@@ -52,11 +63,8 @@ Extrair do array de logs um mapa `responsaveisPorEtapa` (o primeiro encontrado p
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/production/StageTransitionModal.tsx` | Adicionar campo `numeracao` ao config de `Costura/Faccao` |
-| `src/pages/Index.tsx` | Adicionar `pecas: 'Pecas cortadas'` e `numeracao: 'Numeracao'` ao `labelMap` |
-| `src/components/production/HistoricoProducaoModal.tsx` | Parsear extras (rolos/pecas/numeracao) com icones + resumo de responsaveis |
-| `src/hooks/useProducaoLog.ts` | Adicionar `responsaveisPorEtapa` ao retorno |
+| `src/hooks/useProducaoLog.ts` | Receber responsavel do lote; adicionar minutos ao calculo de tempo; corrigir formatTempo |
+| `src/components/production/HistoricoProducaoModal.tsx` | Padronizar STAGE_LABELS com nome da etapa; passar lot.responsavel ao hook |
 
 ### Impacto no backend
-- **Zero** alteracoes no banco
-- Os dados continuam salvos no campo `observacao` do `producao_log` (texto concatenado com `|`)
+- Zero alteracoes no banco de dados
