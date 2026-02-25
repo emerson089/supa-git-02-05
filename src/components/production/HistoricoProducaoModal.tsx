@@ -5,7 +5,7 @@ import { useProducaoLogsComTempo, LogComTempoNaEtapa } from '@/hooks/useProducao
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -134,7 +134,7 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
       )}
 
       {/* Timeline */}
-      <ScrollArea className="flex-1 mt-4">
+      <div className="flex-1 mt-4 overflow-y-auto pr-2">
         <div className="pr-4">
           {isLoading ? (
             <div className="space-y-4">
@@ -158,9 +158,11 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
               <div className="absolute left-[5px] top-2 bottom-2 w-0.5 bg-border" />
 
               <div className="space-y-4">
-                {data.logs.map((log, index) => (
-                  <TimelineEntry key={log.id} log={log} index={index} />
-                ))}
+                {data.logs
+                  .filter(log => !(log.processo_anterior === null && log.processo_novo === 'Corte'))
+                  .map((log, index) => (
+                    <TimelineEntry key={log.id} log={log} index={index} />
+                  ))}
 
                 {/* Creation event */}
                 {lot && (
@@ -201,7 +203,7 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 
