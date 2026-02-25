@@ -61,13 +61,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { generateRelatorioSaidasPDF } from '@/utils/generateRelatorioSaidasPDF';
 import { generateRelatorioSaidasExcel } from '@/utils/generateRelatorioSaidasExcel';
 
-// Tipos de sistema para o filtro unificado (sem AJUSTE_SAIDA que é coberto pelos tipos de ajuste)
-const TIPOS_SISTEMA: FiltroMovimentacao[] = [
-  { kind: 'sistema', value: 'VENDA_FEIRA', label: 'Venda / Loja' },
-  { kind: 'sistema', value: 'ENVIO_FEIRA', label: 'Envio Feira' },
-  { kind: 'sistema', value: 'TRANSFERENCIA', label: 'Transferência' },
-  { kind: 'sistema', value: 'RETORNO_FEIRA', label: 'Retorno Feira' },
-];
+// Tipos de sistema removidos - filtro agora mostra apenas tipos de ajuste do usuário
 
 interface RelatorioSaidasModalProps {
   open: boolean;
@@ -106,13 +100,9 @@ export function RelatorioSaidasModal({
   const saidas = data?.saidas || [];
   const resumo = data?.resumo || { totalPecas: 0, valorVendaTotal: 0, valorCustoTotal: null, quantidadeSemPreco: 0 };
 
-  // Construir lista unificada: tipos de sistema + tipos de ajuste do usuário (sem conta_como_venda)
+  // Construir lista de tipos de ajuste do usuário (todos, incluindo contaComoVenda), deduplicados por nome
   const opcoesUnificadas = useMemo(() => {
-    const nomesSistema = new Set(TIPOS_SISTEMA.map(t => t.label.toLowerCase().trim()));
-
     const tiposAjusteFiltro: FiltroMovimentacao[] = (tiposAjusteDisponiveis || [])
-      .filter(t => !t.contaComoVenda)
-      .filter(t => !nomesSistema.has(t.nome.toLowerCase().trim()))
       .reduce((acc, t) => {
         if (!acc.some(x => x.label.toLowerCase() === t.nome.toLowerCase())) {
           acc.push({ kind: 'ajuste' as const, value: t.id, label: t.nome });
@@ -120,7 +110,7 @@ export function RelatorioSaidasModal({
         return acc;
       }, [] as FiltroMovimentacao[]);
 
-    return { sistema: TIPOS_SISTEMA, ajuste: tiposAjusteFiltro };
+    return tiposAjusteFiltro;
   }, [tiposAjusteDisponiveis]);
 
   // Nome do local selecionado para exibição
@@ -354,46 +344,28 @@ export function RelatorioSaidasModal({
                 </PopoverTrigger>
                 <PopoverContent className="w-64" align="start">
                   <div className="space-y-1">
-                    {/* Tipos de sistema */}
-                    {opcoesUnificadas.sistema.map(filtro => (
-                      <div
-                        key={`sistema:${filtro.value}`}
-                        className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer"
-                        onClick={() => handleToggleFiltroMov(filtro)}
-                      >
-                        <Checkbox
-                          checked={isFiltroSelecionado(filtro)}
-                          onCheckedChange={() => handleToggleFiltroMov(filtro)}
-                        />
-                        <span className="text-sm">{filtro.label}</span>
+                    {isLoadingTiposAjuste ? (
+                      <div className="flex items-center justify-center py-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       </div>
-                    ))}
-
-                    {/* Separador + tipos de ajuste */}
-                    {opcoesUnificadas.ajuste.length > 0 && (
-                      <>
-                        <Separator className="my-2" />
-                        <div className="text-xs text-muted-foreground px-1.5 pb-1">Tipos de ajuste</div>
-                        {isLoadingTiposAjuste ? (
-                          <div className="flex items-center justify-center py-2">
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          </div>
-                        ) : (
-                          opcoesUnificadas.ajuste.map(filtro => (
-                            <div
-                              key={`ajuste:${filtro.value}`}
-                              className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer"
-                              onClick={() => handleToggleFiltroMov(filtro)}
-                            >
-                              <Checkbox
-                                checked={isFiltroSelecionado(filtro)}
-                                onCheckedChange={() => handleToggleFiltroMov(filtro)}
-                              />
-                              <span className="text-sm">{filtro.label}</span>
-                            </div>
-                          ))
-                        )}
-                      </>
+                    ) : opcoesUnificadas.length === 0 ? (
+                      <div className="text-sm text-muted-foreground text-center py-2">
+                        Nenhum tipo configurado
+                      </div>
+                    ) : (
+                      opcoesUnificadas.map(filtro => (
+                        <div
+                          key={`ajuste:${filtro.value}`}
+                          className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer"
+                          onClick={() => handleToggleFiltroMov(filtro)}
+                        >
+                          <Checkbox
+                            checked={isFiltroSelecionado(filtro)}
+                            onCheckedChange={() => handleToggleFiltroMov(filtro)}
+                          />
+                          <span className="text-sm">{filtro.label}</span>
+                        </div>
+                      ))
                     )}
 
                     {/* Limpar seleção */}
