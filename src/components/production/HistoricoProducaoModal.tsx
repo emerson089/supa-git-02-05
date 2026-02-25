@@ -77,7 +77,7 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
   const { data, isLoading } = useProducaoLogsComTempo(lot?.id || null, lot?.created_date, lot?.responsavel ?? undefined);
 
   const content = (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header Info */}
       {lot && (
         <div className="px-1 pb-4 border-b space-y-3">
@@ -134,7 +134,7 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
       )}
 
       {/* Timeline */}
-      <div className="flex-1 mt-4 overflow-y-auto pr-2">
+      <div className="flex-1 mt-4 overflow-y-auto pr-2 min-h-0">
         <div className="pr-4">
           {isLoading ? (
             <div className="space-y-4">
@@ -217,7 +217,7 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
               Histórico de Movimentações
             </DrawerTitle>
           </DrawerHeader>
-          <div className="flex-1 overflow-hidden px-4 pb-4">
+          <div className="flex-1 overflow-hidden min-h-0 px-4 pb-4">
             {content}
           </div>
         </DrawerContent>
@@ -234,7 +234,7 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
             Histórico de Movimentações
           </DialogTitle>
         </DialogHeader>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden min-h-0">
           {content}
         </div>
       </DialogContent>
