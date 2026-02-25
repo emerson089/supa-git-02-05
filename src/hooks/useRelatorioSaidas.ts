@@ -75,24 +75,21 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       const dataFinalAjustada = new Date(filtros.dataFinal);
       dataFinalAjustada.setHours(23, 59, 59, 999);
 
-      // Resolver filtros unificados em tipos de sistema e tipos de ajuste
+      // Resolver filtros unificados - agora todos são 'ajuste'
       const filtrosAtivos = filtros.filtrosMovimentacao || [];
-      const tiposSistema = filtrosAtivos.filter(f => f.kind === 'sistema').map(f => f.value);
-      const tiposAjusteIds = filtrosAtivos.filter(f => f.kind === 'ajuste').map(f => f.value);
+      const tiposAjusteIds = filtrosAtivos.map(f => f.value);
 
-      // Se "Venda / Loja" estiver selecionada, incluir AJUSTE_SAIDA com conta_como_venda
-      const incluiVendaLoja = tiposSistema.includes('VENDA_FEIRA') || filtrosAtivos.length === 0;
-
-      // Buscar IDs de tipos_ajuste com conta_como_venda=true
+      // Buscar IDs de tipos_ajuste com conta_como_venda=true (para mapear para VENDA_FEIRA)
       let idsContaComoVenda: string[] = [];
-      if (incluiVendaLoja) {
-        const { data: tiposVenda } = await supabase
-          .from('tipos_ajuste_estoque')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('conta_como_venda', true);
-        idsContaComoVenda = tiposVenda?.map(t => t.id) || [];
-      }
+      const { data: tiposVenda } = await supabase
+        .from('tipos_ajuste_estoque')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('conta_como_venda', true);
+      idsContaComoVenda = tiposVenda?.map(t => t.id) || [];
+
+      // Verificar se algum filtro selecionado é conta_como_venda
+      const filtroTemVenda = filtrosAtivos.length === 0 || tiposAjusteIds.some(id => idsContaComoVenda.includes(id));
 
       // Montar lista de tipos para a query
       let tiposParaQuery: string[];
@@ -100,14 +97,10 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
         // Sem filtro: todos os tipos de saída
         tiposParaQuery = [...TIPOS_SAIDA];
       } else {
-        tiposParaQuery = [...tiposSistema];
-        // Se há tipos de ajuste selecionados, precisamos incluir AJUSTE_SAIDA
-        if (tiposAjusteIds.length > 0 && !tiposParaQuery.includes('AJUSTE_SAIDA')) {
-          tiposParaQuery.push('AJUSTE_SAIDA');
-        }
-        // Se Venda/Loja selecionado, também incluir AJUSTE_SAIDA para conta_como_venda
-        if (incluiVendaLoja && !tiposParaQuery.includes('AJUSTE_SAIDA') && idsContaComoVenda.length > 0) {
-          tiposParaQuery.push('AJUSTE_SAIDA');
+        tiposParaQuery = ['AJUSTE_SAIDA'];
+        // Se algum filtro selecionado é conta_como_venda, incluir VENDA_FEIRA
+        if (filtroTemVenda) {
+          tiposParaQuery.push('VENDA_FEIRA');
         }
       }
 
@@ -160,20 +153,20 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       let movFiltradas = movimentacoes;
       if (filtrosAtivos.length > 0) {
         movFiltradas = movimentacoes.filter(m => {
-          if (m.tipo !== 'AJUSTE_SAIDA') return true;
+          if (m.tipo === 'VENDA_FEIRA') {
+            // VENDA_FEIRA: incluir apenas se algum filtro selecionado é conta_como_venda
+            return filtroTemVenda;
+          }
+          if (m.tipo !== 'AJUSTE_SAIDA') return false; // outros tipos do sistema não devem aparecer com filtro ativo
           // AJUSTE_SAIDA: incluir se tipo_ajuste_id está nos IDs selecionados
-          if (tiposAjusteIds.length > 0 && m.tipo_ajuste_id && tiposAjusteIds.includes(m.tipo_ajuste_id)) {
+          if (m.tipo_ajuste_id && tiposAjusteIds.includes(m.tipo_ajuste_id)) {
             return true;
           }
-          // AJUSTE_SAIDA: incluir se é conta_como_venda e Venda/Loja está selecionado
-          if (incluiVendaLoja && m.tipo_ajuste_id && idsContaComoVenda.includes(m.tipo_ajuste_id)) {
+          // AJUSTE_SAIDA com conta_como_venda: incluir se filtro de venda está ativo
+          if (m.tipo_ajuste_id && idsContaComoVenda.includes(m.tipo_ajuste_id) && filtroTemVenda) {
             return true;
           }
-          // Se nenhum tipo de ajuste específico foi selecionado e Venda/Loja não está, excluir
-          if (tiposAjusteIds.length === 0 && !incluiVendaLoja) return false;
-          // Se AJUSTE_SAIDA foi incluído apenas por causa de tipos específicos, excluir os não correspondentes
-          if (tiposAjusteIds.length > 0 && !tiposSistema.includes('AJUSTE_SAIDA')) return false;
-          return true;
+          return false;
         });
       }
 
