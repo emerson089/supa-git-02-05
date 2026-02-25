@@ -76,66 +76,63 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
   const isMobile = useIsMobile();
   const { data, isLoading } = useProducaoLogsComTempo(lot?.id || null, lot?.created_date, lot?.responsavel ?? undefined);
 
-  const content = (
-    <div className="flex flex-col h-full min-h-0">
-      {/* Header Info */}
-      {lot && (
-        <div className="px-1 pb-4 border-b space-y-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="font-mono font-semibold text-foreground">{lot.id_producao}</span>
-            <span>•</span>
-            <span className="truncate">{lot.modelo_nome_cache || 'Sem modelo'}</span>
+  const headerContent = lot ? (
+    <div className="px-1 pb-4 border-b space-y-3 flex-shrink-0">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="font-mono font-semibold text-foreground">{lot.id_producao}</span>
+        <span>•</span>
+        <span className="truncate">{lot.modelo_nome_cache || 'Sem modelo'}</span>
+      </div>
+      
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-3">
+          <div className="p-2 rounded-full bg-primary/10">
+            <Clock className="h-4 w-4 text-primary" />
           </div>
-          
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Clock className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-[10px] uppercase text-muted-foreground font-medium">Tempo Total</p>
-                <p className="text-sm font-bold">
-                  {isLoading ? <Skeleton className="h-4 w-12" /> : data?.estatisticas.tempoTotalProducao.label}
-                </p>
-              </div>
-            </div>
-            <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <RefreshCw className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-[10px] uppercase text-muted-foreground font-medium">Movimentações</p>
-                <p className="text-sm font-bold">
-                  {isLoading ? <Skeleton className="h-4 w-8" /> : data?.estatisticas.totalMovimentacoes || 0}
-                </p>
-              </div>
-            </div>
+          <div>
+            <p className="text-[10px] uppercase text-muted-foreground font-medium">Tempo Total</p>
+            <p className="text-sm font-bold">
+              {isLoading ? <Skeleton className="h-4 w-12" /> : data?.estatisticas.tempoTotalProducao.label}
+            </p>
           </div>
+        </div>
+        <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-3">
+          <div className="p-2 rounded-full bg-primary/10">
+            <RefreshCw className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-muted-foreground font-medium">Movimentações</p>
+            <p className="text-sm font-bold">
+              {isLoading ? <Skeleton className="h-4 w-8" /> : data?.estatisticas.totalMovimentacoes || 0}
+            </p>
+          </div>
+        </div>
+      </div>
 
-          {/* Responsáveis por Etapa */}
-          {!isLoading && data?.estatisticas.responsaveisPorEtapa && 
-            Object.keys(data.estatisticas.responsaveisPorEtapa).length > 0 && (
-            <div className="bg-muted/30 rounded-lg p-3 space-y-1.5">
-              <p className="text-[10px] uppercase text-muted-foreground font-medium flex items-center gap-1.5">
-                <User className="h-3 w-3" />
-                Responsáveis por Etapa
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(data.estatisticas.responsaveisPorEtapa).map(([etapa, resp]) => (
-                  <Badge key={etapa} variant="secondary" className="text-xs font-normal gap-1">
-                    <span className="font-medium">{STAGE_LABELS[etapa] || etapa}:</span> {resp}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
+      {/* Responsáveis por Etapa */}
+      {!isLoading && data?.estatisticas.responsaveisPorEtapa && 
+        Object.keys(data.estatisticas.responsaveisPorEtapa).length > 0 && (
+        <div className="bg-muted/30 rounded-lg p-3 space-y-1.5">
+          <p className="text-[10px] uppercase text-muted-foreground font-medium flex items-center gap-1.5">
+            <User className="h-3 w-3" />
+            Responsáveis por Etapa
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(data.estatisticas.responsaveisPorEtapa).map(([etapa, resp]) => (
+              <Badge key={etapa} variant="secondary" className="text-xs font-normal gap-1">
+                <span className="font-medium">{STAGE_LABELS[etapa] || etapa}:</span> {resp}
+              </Badge>
+            ))}
+          </div>
         </div>
       )}
+    </div>
+  ) : null;
 
-      {/* Timeline */}
-      <div className="flex-1 mt-4 overflow-y-auto pr-2 min-h-0">
-        <div className="pr-4">
+  const timelineContent = (
+    <div className="flex-1 overflow-y-auto overscroll-contain min-h-0 mt-4 pr-2">
+      <div className="pr-4">
           {isLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map(i => (
@@ -202,7 +199,6 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
               </div>
             </div>
           )}
-        </div>
       </div>
     </div>
   );
@@ -217,8 +213,9 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
               Histórico de Movimentações
             </DrawerTitle>
           </DrawerHeader>
-          <div className="flex-1 overflow-hidden min-h-0 px-4 pb-4">
-            {content}
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0 px-4 pb-4">
+            {headerContent}
+            {timelineContent}
           </div>
         </DrawerContent>
       </Drawer>
@@ -227,15 +224,16 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[80vh] !grid-rows-none flex flex-col overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col overflow-hidden" style={{ display: 'flex' }}>
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />
             Histórico de Movimentações
           </DialogTitle>
         </DialogHeader>
-        <div className="flex-1 overflow-hidden min-h-0">
-          {content}
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+          {headerContent}
+          {timelineContent}
         </div>
       </DialogContent>
     </Dialog>
