@@ -1,46 +1,28 @@
 
 
-## Corrigir nome do Cortador no evento "Lote Criado"
+## Corrigir nome do Cortador incorreto em lotes antigos
 
 ### Problema
 
-O campo `responsavel` do lote e sobrescrito a cada movimentacao de etapa. Quando o lote vai para Costura/Faccao, o `responsavel` passa a ser "Patricia" (costureira). O evento "Lote Criado" usa `lot.responsavel` diretamente, mostrando o nome errado.
+Para lotes criados antes da implementacao do log inicial, o sistema usa `lot.responsavel` como fallback para o "Cortador". Porem, esse campo e sobrescrito a cada movimentacao de etapa, entao mostra o responsavel da ultima etapa (ex: "Kaysu lavanderia", "Sky Blue") em vez do cortador real.
+
+Isso afeta dois lugares:
+- O badge "Cortador: X" no resumo de "Responsaveis por Etapa"
+- A linha "Cortador: X" no evento "Lote Criado" da timeline
 
 ### Solucao
 
-No `HistoricoProducaoModal.tsx`, em vez de usar `lot.responsavel` para o evento "Lote Criado", buscar o nome do cortador a partir do log inicial (o ultimo log da lista, que tem `processo_novo === 'Corte'` e `processo_anterior` nulo).
+Remover o fallback para `lot.responsavel`, pois ele nao e confiavel. O cortador so sera exibido quando existir um log inicial (processo_anterior nulo e processo_novo = 'Corte') que foi criado junto com o lote. Para lotes antigos sem esse log, simplesmente nao exibir o cortador ao inves de mostrar informacao errada.
 
-### Alteracao
+### Alteracoes
+
+**Arquivo: `src/hooks/useProducaoLog.ts`**
+- Remover o fallback nas linhas 113-116 que adiciona `responsavelLote` ao mapa de responsaveis por etapa quando nao ha entrada para "Corte"
 
 **Arquivo: `src/components/production/HistoricoProducaoModal.tsx`**
+- Na secao "Lote Criado" (linha 189), remover o fallback `|| lot.responsavel`. Usar apenas `logInicial?.responsavel` para que o cortador so apareca se existir o log inicial correto
 
-Na secao "Creation event" (linhas 185-190), substituir `lot.responsavel` por uma busca no log inicial:
+### Impacto
 
-```typescript
-// Antes
-{lot.responsavel && (
-  <span>Cortador: {lot.responsavel}</span>
-)}
-
-// Depois - buscar do log inicial (ultimo da lista, processo_anterior nulo)
-{(() => {
-  const logInicial = data?.logs.find(
-    l => !l.processo_anterior && l.processo_novo === 'Corte'
-  );
-  const cortador = logInicial?.responsavel || lot.responsavel;
-  return cortador ? (
-    <span>Cortador: {cortador}</span>
-  ) : null;
-})()}
-```
-
-Isso garante que:
-- Lotes novos (com log inicial) mostram o cortador correto do log
-- Lotes antigos (sem log inicial) usam o fallback `lot.responsavel` (pode estar errado, mas nao ha outra fonte)
-
-### Arquivo modificado
-
-| Arquivo | Alteracao |
-|---|---|
-| `src/components/production/HistoricoProducaoModal.tsx` | Buscar cortador do log inicial em vez de `lot.responsavel` |
-
+- Lotes novos (criados apos a implementacao do log inicial): continuam mostrando o cortador corretamente
+- Lotes antigos (sem log inicial): nao mostrarao cortador, o que e melhor do que mostrar informacao errada
