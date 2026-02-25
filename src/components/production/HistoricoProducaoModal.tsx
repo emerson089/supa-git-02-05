@@ -182,6 +182,12 @@ export function HistoricoProducaoModal({ open, onOpenChange, lot }: HistoricoPro
                           : lot.processo_atual
                         }
                       </p>
+                      {lot.responsavel && (
+                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                          <User className="h-3 w-3" />
+                          <span className="font-medium">Cortador:</span> {lot.responsavel}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
