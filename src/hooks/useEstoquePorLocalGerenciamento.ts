@@ -134,23 +134,16 @@ export function useAjustarEstoqueLocal() {
     mutationFn: async ({ estoqueLocalId, itemId, localId, novaQuantidade, motivo, precoAplicado, tipoAjusteId }: AjusteEstoqueParams & { precoAplicado?: number; tipoAjusteId?: string }) => {
       if (!user?.id) throw new Error('Usuário não autenticado');
 
-      // Chamar RPC atômica com tipo_ajuste_id e preco_aplicado inclusos
-      const rpcParams: Record<string, any> = {
+      // Sempre enviar TODOS os 7 parâmetros para evitar ambiguidade de overload
+      const { error } = await supabase.rpc('rpc_ajustar_estoque_local', {
         p_local_id: localId,
         p_item_id: itemId,
         p_nova_quantidade: novaQuantidade,
         p_user_id: user.id,
         p_motivo: motivo,
-      };
-
-      if (tipoAjusteId) {
-        rpcParams.p_tipo_ajuste_id = tipoAjusteId;
-      }
-      if (precoAplicado !== undefined && precoAplicado > 0) {
-        rpcParams.p_preco_aplicado = precoAplicado;
-      }
-
-      const { error } = await supabase.rpc('rpc_ajustar_estoque_local', rpcParams as any);
+        p_tipo_ajuste_id: tipoAjusteId || null,
+        p_preco_aplicado: (precoAplicado !== undefined && precoAplicado > 0) ? precoAplicado : null,
+      } as any);
 
       if (error) {
         console.error('[useAjustarEstoqueLocal] Erro RPC:', error);
@@ -212,7 +205,7 @@ export function useAdicionarProdutoLocal() {
         quantidade: quantidade
       }];
 
-      // 3. Chamar RPC atômica - tudo ou nada
+      // Sempre enviar TODOS os 6 parâmetros para evitar ambiguidade de overload
       const { data, error } = await supabase.rpc('rpc_criar_transferencia', {
         p_origem_local_id: localCentral.id,
         p_destino_local_id: localId,
@@ -220,7 +213,7 @@ export function useAdicionarProdutoLocal() {
         p_user_id: user.id,
         p_motivo: motivo || 'reposicao',
         p_observacoes: observacoes || null
-      });
+      } as any);
 
       if (error) {
         console.error('[useAdicionarProdutoLocal] Erro RPC:', error);

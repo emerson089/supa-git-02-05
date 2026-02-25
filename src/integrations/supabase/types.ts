@@ -1245,29 +1245,18 @@ export type Database = {
         }
         Returns: boolean
       }
-      rpc_ajustar_estoque_local:
-        | {
-            Args: {
-              p_item_id: string
-              p_local_id: string
-              p_motivo: string
-              p_nova_quantidade: number
-              p_user_id: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_item_id: string
-              p_local_id: string
-              p_motivo: string
-              p_nova_quantidade: number
-              p_preco_aplicado?: number
-              p_tipo_ajuste_id?: string
-              p_user_id: string
-            }
-            Returns: undefined
-          }
+      rpc_ajustar_estoque_local: {
+        Args: {
+          p_item_id: string
+          p_local_id: string
+          p_motivo: string
+          p_nova_quantidade: number
+          p_preco_aplicado?: number
+          p_tipo_ajuste_id?: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       rpc_cancelar_transferencia: {
         Args: { p_transferencia_id: string; p_user_id: string }
         Returns: undefined
@@ -1276,28 +1265,17 @@ export type Database = {
         Args: { p_transferencia_id: string; p_user_id: string }
         Returns: undefined
       }
-      rpc_criar_transferencia:
-        | {
-            Args: {
-              p_destino_local_id: string
-              p_itens: Json
-              p_motivo?: string
-              p_origem_local_id: string
-              p_user_id: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_destino_local_id: string
-              p_itens: Json
-              p_motivo?: string
-              p_observacoes?: string
-              p_origem_local_id: string
-              p_user_id: string
-            }
-            Returns: string
-          }
+      rpc_criar_transferencia: {
+        Args: {
+          p_destino_local_id: string
+          p_itens: Json
+          p_motivo?: string
+          p_observacoes?: string
+          p_origem_local_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "gerente" | "vendedor" | "vendedor_loja"
