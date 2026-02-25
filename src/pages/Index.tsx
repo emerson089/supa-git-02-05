@@ -239,7 +239,7 @@ const Index = () => {
       if (data.extras) {
         Object.entries(data.extras).forEach(([key, value]) => {
           if (value) {
-            const labelMap: Record<string, string> = { rolos: 'Rolos' };
+            const labelMap: Record<string, string> = { rolos: 'Rolos', pecas: 'Peças cortadas', numeracao: 'Numeração' };
             obsParts.push(`${labelMap[key] || key}: ${value}`);
           }
         });

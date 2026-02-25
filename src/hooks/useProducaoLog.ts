@@ -22,6 +22,7 @@ export interface EstatisticasProducao {
     dias: number;
     horas: number;
   }[];
+  responsaveisPorEtapa: Record<string, string>;
 }
 
 /**
@@ -102,6 +103,14 @@ export function useProducaoLogsComTempo(producaoId: string | null, dataCriacao?:
         horas: tempo.horas % 24,
       }));
 
+      // Extrair responsáveis por etapa (primeiro encontrado = mais recente)
+      const responsaveisPorEtapa: Record<string, string> = {};
+      rawLogs.forEach(log => {
+        if (log.responsavel && !responsaveisPorEtapa[log.processo_novo]) {
+          responsaveisPorEtapa[log.processo_novo] = log.responsavel;
+        }
+      });
+
       const estatisticas: EstatisticasProducao = {
         totalMovimentacoes: rawLogs.length,
         tempoTotalProducao: {
@@ -109,6 +118,7 @@ export function useProducaoLogsComTempo(producaoId: string | null, dataCriacao?:
           label: tempoTotalDias === 1 ? '1 dia' : `${tempoTotalDias} dias`,
         },
         tempoPorEtapa,
+        responsaveisPorEtapa,
       };
 
       return { logs: logsComTempo, estatisticas };
@@ -180,5 +190,6 @@ function getEmptyStats(): EstatisticasProducao {
     totalMovimentacoes: 0,
     tempoTotalProducao: { dias: 0, label: '0 dias' },
     tempoPorEtapa: [],
+    responsaveisPorEtapa: {},
   };
 }

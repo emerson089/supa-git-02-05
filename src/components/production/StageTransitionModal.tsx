@@ -27,7 +27,8 @@ const STAGE_FIELDS: Record<string, StageFieldConfig> = {
     showResponsavel: true,
     responsavelLabel: 'Facção / Costureira',
     extraFields: [
-      { key: 'pecas', label: 'Qtd de peças cortadas', type: 'number' }
+      { key: 'pecas', label: 'Qtd de peças cortadas', type: 'number' },
+      { key: 'numeracao', label: 'Numeração das peças (Ex: 34 ao 44)', type: 'text' }
     ]
   },
   'Travete': {
