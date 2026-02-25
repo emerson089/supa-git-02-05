@@ -1,25 +1,30 @@
 
 
-## Dois ajustes no Historico de Movimentacoes
+## Garantir que o nome do Cortador apareca em "Lote Criado"
 
-### 1. Remover duplicacao "Inicio -> Corte" e "Lote Criado - Etapa inicial: Corte"
+### Diagnostico
 
-O log inicial (processo_anterior: null, processo_novo: 'Corte') e o evento "Lote Criado" mostram a mesma informacao. A solucao e filtrar o log inicial da timeline e manter apenas o evento "Lote Criado" (que ja exibe o cortador).
+O lote 080 (e varios outros) nao possuem o log inicial (null -> Corte) no banco de dados. Isso acontece porque o codigo de criacao de lote so cria esse log quando o campo `responsavel` esta preenchido no formulario. Como resultado, a busca pelo cortador no historico retorna vazio.
 
+### Solucao em 2 partes
+
+#### 1. Corrigir criacao de lotes futuros
+**Arquivo:** `src/pages/Index.tsx`
+- Remover a condicao `if (responsavel)` ao criar o log inicial, para que o log seja sempre criado mesmo sem responsavel preenchido
+- Isso garante que lotes futuros sempre tenham o registro inicial
+
+#### 2. Criar logs iniciais retroativos para lotes existentes
+**Migracao SQL** para inserir o log inicial (null -> Corte) nos lotes que nao possuem, usando a `created_date` do lote como data do log. O campo `responsavel` ficara vazio nesses casos pois a informacao original foi perdida.
+
+#### 3. Ajustar exibicao no modal
 **Arquivo:** `src/components/production/HistoricoProducaoModal.tsx`
-- Na renderizacao dos logs (linha 161), filtrar logs onde `!log.processo_anterior && log.processo_novo === 'Corte'` para nao renderizar na timeline
-- Manter a busca desse log para extrair o nome do cortador no evento "Lote Criado"
-
-### 2. Scroll do mouse nao funciona no modal
-
-O `ScrollArea` do Radix bloqueia o scroll nativo do mouse dentro de modais Dialog. A solucao e adicionar `onWheel` com `stopPropagation` no viewport do ScrollArea, e garantir que o container tenha `overflow-y-auto` como fallback.
-
-**Arquivo:** `src/components/production/HistoricoProducaoModal.tsx`
-- Substituir `ScrollArea` por uma `div` com `overflow-y-auto` no container da timeline, que funciona de forma mais confiavel dentro de modais Dialog/Drawer
+- Mesmo quando o cortador nao e conhecido, exibir "Cortador: Nao registrado" em vez de esconder completamente a informacao
+- Isso deixa claro para o usuario que a informacao nao foi registrada naquele lote
 
 ### Arquivos modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/production/HistoricoProducaoModal.tsx` | Filtrar log inicial duplicado; corrigir scroll |
-
+| `src/pages/Index.tsx` | Sempre criar log inicial ao criar lote |
+| `src/components/production/HistoricoProducaoModal.tsx` | Mostrar "Nao registrado" quando cortador nao existe |
+| Migracao SQL | Criar logs iniciais retroativos para lotes existentes |
