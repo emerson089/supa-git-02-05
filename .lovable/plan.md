@@ -1,66 +1,60 @@
 
 
-## Corrigir filtros do Relatorio de Saidas que nao mostram movimentacoes
+## Corrigir visibilidade de movimentacoes no Relatorio de Saidas
 
 ### Problema identificado
 
-O relatorio filtra movimentacoes por `user_id = usuario_logado`. Porem, quando um vendedor faz um ajuste de estoque em um local do admin, a movimentacao e gravada com `user_id = vendedor` (quem fez o ajuste). Resultado: o admin nunca ve as movimentacoes feitas por vendedores, mesmo sendo dono dos locais.
+Existem **dois problemas** impedindo que as vendas aparecam no relatorio:
 
-Dados confirmados no banco:
-- Vendas feitas pelo vendedor na "Loja Parque das Feiras" (local do admin) tem `user_id = vendedor`
-- Quando o admin filtra por "Venda / loja", a query exige `user_id = admin` e nao encontra nada
+**1. Politica de seguranca (RLS) bloqueia movimentacoes de vendedores**
+A tabela `estoque_movimentacoes` so permite leitura onde `auth.uid() = user_id`. Quando o vendedor registra uma venda no local do admin, o `user_id` da movimentacao e o ID do vendedor. Resultado: o admin nao consegue ver essas movimentacoes, mesmo filtrando por local.
+
+Dados confirmados:
+- Todas as vendas recentes (AJUSTE_SAIDA com tipo "Venda / loja") foram feitas pelo vendedor
+- O admin e dono do local "Loja Parque das Feiras"
+- A query filtra corretamente por `local_id`, mas o banco rejeita os registros antes de retorna-los
+
+**2. Campo "conta como venda" nao esta ativado**
+O tipo "Venda / loja" esta com `conta_como_venda = false`. Isso afeta a logica que inclui automaticamente registros de VENDA_FEIRA nos resultados filtrados.
 
 ### Solucao
 
-Trocar o filtro de `user_id` por filtro baseado em **locais do admin** na query de movimentacoes.
+**Alteracao 1 - Nova politica RLS (migracao SQL)**
 
-### Alteracoes
+Adicionar uma politica que permite admins lerem movimentacoes de locais que eles possuem:
 
-**Arquivo:** `src/hooks/useRelatorioSaidas.ts`
-
-1. **Buscar todos os locais do admin**: Quando `localId` nao esta definido ("todos"), buscar todos os IDs de locais pertencentes ao usuario logado e filtrar movimentacoes por `.in('local_id', meusLocaisIds)`.
-
-2. **Quando local especifico**: Filtrar por `.eq('local_id', localId)` e **remover** o filtro `.eq('user_id', user.id)`.
-
-3. **Resolver owner para tipos de ajuste**: Quando `localId` estiver definido, buscar o `user_id` do local para consultar `tipos_ajuste_estoque` com o owner correto (mesmo padrao ja usado em `useTiposAjusteParaFiltro`).
-
-### Detalhes tecnicos
-
-Na funcao `useRelatorioSaidas`, substituir a linha `.eq('user_id', user.id)` na query de `estoque_movimentacoes` por:
-
-```typescript
-// Se local especifico, filtrar por local_id
-if (filtros.localId) {
-  query = query.eq('local_id', filtros.localId);
-} else {
-  // "Todos" - buscar locais do admin e filtrar por eles
-  const { data: meusLocais } = await supabase
-    .from('estoque_locais')
-    .select('id')
-    .eq('user_id', user.id);
-  const meusLocaisIds = meusLocais?.map(l => l.id) || [];
-  if (meusLocaisIds.length > 0) {
-    query = query.in('local_id', meusLocaisIds);
-  }
-}
+```sql
+CREATE POLICY "admin can read own locations movimentacoes"
+  ON public.estoque_movimentacoes
+  FOR SELECT
+  USING (
+    has_role(auth.uid(), 'admin'::app_role)
+    AND local_id IN (
+      SELECT id FROM public.estoque_locais
+      WHERE user_id = auth.uid()
+    )
+  );
 ```
 
-E para a query de `tipos_ajuste_estoque`, resolver o owner do local:
+Isso garante que o admin veja todas as movimentacoes feitas por qualquer usuario nos locais que ele e dono.
 
-```typescript
-let ownerId = user.id;
-if (filtros.localId) {
-  const { data: localData } = await supabase
-    .from('estoque_locais')
-    .select('user_id')
-    .eq('id', filtros.localId)
-    .maybeSingle();
-  if (localData?.user_id) ownerId = localData.user_id;
-}
+**Alteracao 2 - Corrigir `conta_como_venda` no banco**
+
+Atualizar o tipo "Venda / loja" do admin para `conta_como_venda = true`:
+
+```sql
+UPDATE tipos_ajuste_estoque
+SET conta_como_venda = true
+WHERE nome = 'Venda / loja';
 ```
 
-Isso garante que:
-- Admin ve todas as movimentacoes dos seus locais (incluindo as feitas por vendedores)
-- Vendedor ve movimentacoes do local que tem acesso
-- Filtros de tipo funcionam corretamente para ambos os perfis
+### Impacto
+
+- Admin passa a ver no relatorio todas as vendas feitas por vendedores nos seus locais
+- O filtro "Venda / loja" funciona corretamente, incluindo registros de VENDA_FEIRA quando aplicavel
+- Nenhuma alteracao de codigo e necessaria - as queries ja estao corretas apos a correcao anterior
+
+### Arquivos alterados
+
+Apenas migracoes SQL (sem alteracao de codigo frontend).
 
