@@ -75,16 +75,27 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       const dataFinalAjustada = new Date(filtros.dataFinal);
       dataFinalAjustada.setHours(23, 59, 59, 999);
 
+      // Resolver owner do local para buscar tipos corretos
+      let ownerId = user.id;
+      if (filtros.localId) {
+        const { data: localData } = await supabase
+          .from('estoque_locais')
+          .select('user_id')
+          .eq('id', filtros.localId)
+          .maybeSingle();
+        if (localData?.user_id) ownerId = localData.user_id;
+      }
+
       // Resolver filtros unificados - agora todos são 'ajuste'
       const filtrosAtivos = filtros.filtrosMovimentacao || [];
       const tiposAjusteIds = filtrosAtivos.map(f => f.value);
 
-      // Buscar IDs de tipos_ajuste com conta_como_venda=true (para mapear para VENDA_FEIRA)
+      // Buscar IDs de tipos_ajuste com conta_como_venda=true (usar ownerId)
       let idsContaComoVenda: string[] = [];
       const { data: tiposVenda } = await supabase
         .from('tipos_ajuste_estoque')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('conta_como_venda', true);
       idsContaComoVenda = tiposVenda?.map(t => t.id) || [];
 
@@ -104,7 +115,17 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
         }
       }
 
-      // Query movimentações
+      // Buscar locais do usuário para filtrar por local_id em vez de user_id
+      let meusLocaisIds: string[] = [];
+      if (!filtros.localId) {
+        const { data: meusLocais } = await supabase
+          .from('estoque_locais')
+          .select('id')
+          .eq('user_id', user.id);
+        meusLocaisIds = meusLocais?.map(l => l.id) || [];
+      }
+
+      // Query movimentações - filtrar por local_id em vez de user_id
       let query = supabase
         .from('estoque_movimentacoes')
         .select(`
@@ -119,15 +140,16 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
           transferencia_id,
           tipo_ajuste_id
         `)
-        .eq('user_id', user.id)
         .gte('created_at', filtros.dataInicial.toISOString())
         .lte('created_at', dataFinalAjustada.toISOString())
         .in('tipo', tiposParaQuery)
         .order('created_at', { ascending: false });
 
-      // Filtrar por local se especificado
+      // Filtrar por local (específico ou todos os locais do admin)
       if (filtros.localId) {
         query = query.eq('local_id', filtros.localId);
+      } else if (meusLocaisIds.length > 0) {
+        query = query.in('local_id', meusLocaisIds);
       }
 
       // Filtrar por modelos se especificado
