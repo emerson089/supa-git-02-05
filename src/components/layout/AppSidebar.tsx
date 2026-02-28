@@ -62,7 +62,7 @@ const bottomNavItems: NavItem[] = [{
   path: '/configuracoes/usuarios',
   roles: ['admin']
 }, {
-  label: 'Tipos de Ajuste',
+  label: 'Tipos de Movimentações',
   icon: <Tag size={18} />,
   path: '/configuracoes/tipos-ajuste',
   roles: ['admin', 'gerente']
@@ -96,7 +96,7 @@ export function AppSidebar() {
   useEffect(() => {
     const currentPath = location.pathname;
     const shouldSave = PAGES_WITH_PARAMS.some(p => currentPath.startsWith(p));
-    
+
     if (shouldSave && location.search) {
       sessionStorage.setItem(`lastUrl_${currentPath}`, currentPath + location.search);
     }
@@ -105,7 +105,7 @@ export function AppSidebar() {
   const handleNavigate = useCallback((targetPath: string) => {
     // If already on the same path, don't navigate (preserves current params)
     if (location.pathname === targetPath) return;
-    
+
     // Check if target page has saved URL params
     const savedUrl = sessionStorage.getItem(`lastUrl_${targetPath}`);
     if (savedUrl && savedUrl.startsWith(targetPath)) {
@@ -144,13 +144,13 @@ export function AppSidebar() {
 
         <nav className="space-y-1">
           {visibleNavItems.map(item => (
-            <button 
-              key={item.path} 
-              onClick={() => handleNavigate(item.path)} 
+            <button
+              key={item.path}
+              onClick={() => handleNavigate(item.path)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive(item.path) ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
             >
               <span className="flex-shrink-0">{item.icon}</span>
-              <span className="hidden lg:block">{item.label}</span>
+              <span className="hidden lg:block truncate whitespace-nowrap">{item.label}</span>
             </button>
           ))}
         </nav>
@@ -158,13 +158,13 @@ export function AppSidebar() {
 
       <div className="space-y-1">
         {visibleBottomItems.map(item => (
-          <button 
-            key={item.path} 
-            onClick={() => handleNavigate(item.path)} 
+          <button
+            key={item.path}
+            onClick={() => handleNavigate(item.path)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive(item.path) ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
           >
             <span className="flex-shrink-0">{item.icon}</span>
-            <span className="hidden lg:block">{item.label}</span>
+            <span className="hidden lg:block truncate whitespace-nowrap">{item.label}</span>
           </button>
         ))}
 
@@ -177,8 +177,8 @@ export function AppSidebar() {
               {userEmail}
             </span>
           </div>
-          <button 
-            onClick={handleSignOut} 
+          <button
+            onClick={handleSignOut}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200"
           >
             <LogOut size={18} />

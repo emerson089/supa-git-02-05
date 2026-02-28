@@ -11,7 +11,7 @@ export interface TipoAjuste {
   createdAt: string;
 }
 
-// Hook para buscar tipos de ajuste ATIVOS (para selects)
+// Hook para buscar tipos de movimentação ATIVOS (para selects)
 // Quando localId é fornecido, resolve o owner do local para buscar os tipos corretos (ex: vendedor usa tipos do admin)
 export function useTiposAjuste(localId?: string | null) {
   const { user } = useAuth();
@@ -87,7 +87,7 @@ export function useTodosOsTiposAjuste() {
   });
 }
 
-// Hook para criar tipos de ajuste padrão (primeira vez) - usando upsert
+// Hook para criar tipos de movimentação padrão (primeira vez) - usando upsert
 export function useCriarTiposPadrao() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -121,7 +121,7 @@ export function useCriarTiposPadrao() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tipos-ajuste'] });
       queryClient.invalidateQueries({ queryKey: ['tipos-ajuste-todos'] });
-      toast.success('Tipos de ajuste criados com sucesso!');
+      toast.success('Tipos de movimentação criados com sucesso!');
     },
     onError: (error: any) => {
       toast.error(`Erro ao criar tipos: ${error.message}`);
@@ -137,7 +137,7 @@ export function useCriarTipoAjuste() {
   return useMutation({
     mutationFn: async (nome: string) => {
       if (!user) throw new Error('Usuário não autenticado');
-      
+
       const nomeTrimmed = nome.trim();
       if (!nomeTrimmed) throw new Error('Nome não pode estar vazio');
 
@@ -155,7 +155,7 @@ export function useCriarTipoAjuste() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tipos-ajuste'] });
       queryClient.invalidateQueries({ queryKey: ['tipos-ajuste-todos'] });
-      toast.success('Tipo de ajuste criado!');
+      toast.success('Tipo de movimentação criado!');
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -187,7 +187,7 @@ export function useEditarTipoAjuste() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tipos-ajuste'] });
       queryClient.invalidateQueries({ queryKey: ['tipos-ajuste-todos'] });
-      toast.success('Tipo de ajuste atualizado!');
+      toast.success('Tipo de movimentação atualizado!');
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -293,7 +293,7 @@ export function useExcluirTipoAjuste() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tipos-ajuste'] });
       queryClient.invalidateQueries({ queryKey: ['tipos-ajuste-todos'] });
-      toast.success('Tipo de ajuste excluído!');
+      toast.success('Tipo de movimentação excluído!');
     },
     onError: (error: any) => {
       toast.error(error.message);

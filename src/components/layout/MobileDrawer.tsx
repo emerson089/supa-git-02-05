@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { 
-  Menu, 
-  Users, 
-  ShoppingCart, 
-  Settings, 
-  HelpCircle, 
-  LogOut, 
+import {
+  Menu,
+  Users,
+  ShoppingCart,
+  Settings,
+  HelpCircle,
+  LogOut,
   Package,
   LayoutDashboard,
   Warehouse,
@@ -51,7 +51,7 @@ const drawerOperationsItems: DrawerNavItem[] = [
 
 const drawerBottomItems: DrawerNavItem[] = [
   { label: 'Usuários', icon: Settings, path: '/configuracoes/usuarios', roles: ['admin'] },
-  { label: 'Tipos de Ajuste', icon: Tag, path: '/configuracoes/tipos-ajuste', roles: ['admin', 'gerente'] },
+  { label: 'Tipos de Movimentações', icon: Tag, path: '/configuracoes/tipos-ajuste', roles: ['admin', 'gerente'] },
   { label: 'Excursões', icon: Bus, path: '/configuracoes/excursoes', roles: ['admin', 'gerente'] },
   { label: 'Custos Padrão', icon: DollarSign, path: '/configuracoes/custos-padrao', roles: ['admin', 'gerente'] },
   { label: 'Ajuda', icon: HelpCircle, path: '/ajuda' },
@@ -87,9 +87,9 @@ export function MobileDrawer() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="min-h-[44px] min-w-[44px]"
         >
           <Menu size={24} />

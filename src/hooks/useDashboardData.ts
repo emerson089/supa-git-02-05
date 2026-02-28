@@ -99,18 +99,18 @@ export interface MetaAutomatica {
   metaCalculada: number;          // Média × (1 + %)
   mesesUsados: string[];          // Lista de meses/anos usados no cálculo
   temHistorico: boolean;          // Se há dados suficientes
-  
+
   // Sazonalidade
   temHistoricoSazonal: boolean;   // Se há dados do mesmo mês em anos anteriores
   anosUsados: number[];           // Ex: [2025, 2024]
   faturamentosPorAno: Record<string, number>; // { "2025": 231253, "2024": 0 }
-  
+
   // Ritmo sazonal
   percentualEsperadoHoje: number; // % esperado até hoje baseado na curva histórica
   percentualRealizado: number;    // % realizado (faturamento / meta)
   diferencaRitmo: number;         // realizado - esperado (em pontos percentuais)
   curvaDisponivel: boolean;       // Se há curva histórica
-  
+
   // Faturamento e status
   faturamentoAtualMes: number;    // Faturamento acumulado do mês atual
   percentualAtingido: number;     // % atingido (faturamento / meta)
@@ -275,12 +275,12 @@ function getEstoqueStatus(quantidade: number): "baixo" | "zerado" | "negativo" {
 function detectBottlenecks(etapas: ProducaoEtapa[]): ProducaoEtapa[] {
   // Skip "Vendas" (final stage) for bottleneck detection
   const activeEtapas = etapas.filter(e => e.etapa !== "Vendas");
-  
+
   return etapas.map((etapa) => {
     if (etapa.etapa === "Vendas") {
       return { ...etapa, isBottleneck: false };
     }
-    
+
     const currentIndex = activeEtapas.findIndex(e => e.etapa === etapa.etapa);
     if (currentIndex < activeEtapas.length - 1) {
       const nextEtapa = activeEtapas[currentIndex + 1];
@@ -390,12 +390,15 @@ async function fetchDashboardData(
   const anoAtual = getYear(now);
   const anoPassado = anoAtual - 1;
   const nomeMesAtual = format(now, "MMMM", { locale: ptBR });
-  
+
   const inicioMesAnoPassado = new Date(anoPassado, mesAtual, 1);
   const fimMesAnoPassado = endOfMonth(inicioMesAnoPassado);
   const inicioMesAtual = startOfMonth(now);
   const mesmoDiaAnoPassado = subYears(now, 1);
   const inicioMesmoDiaAnoPassado = new Date(anoPassado, mesAtual, 1);
+
+  // START OF WEEK specifically for Top Modelos
+  const startDateTopModelos = startOfWeek(now, { weekStartsOn: 0 }).toISOString();
 
   const startDateYoY = subYears(new Date(startDate), 1).toISOString();
   const endDateYoY = subYears(new Date(endDate), 1).toISOString();
@@ -449,9 +452,9 @@ async function fetchDashboardData(
         .from("pedido_itens")
         .select("pedido_id, produto_nome, quantidade, pedidos!inner(user_id, created_at, status_pagamento, status_pedido)")
         .eq("pedidos.user_id", userId)
-        .eq("pedidos.status_pagamento", "PAGO")
-        .gte("pedidos.created_at", startDate)
-        .lte("pedidos.created_at", endDate)
+        .in("pedidos.status_pagamento", ["PAGO", "CONCLUIDO"])
+        .gte("pedidos.created_at", startDateTopModelos)
+        .lte("pedidos.created_at", now.toISOString())
         .order("pedido_id", { ascending: true })
     ).then(data => ({ data, error: null })),
 
@@ -526,10 +529,10 @@ async function fetchDashboardData(
     ? pedidosYoYData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
     : pedidosYoYData;
 
-  const pedidosPagos = pedidosSemCancelados.filter(p => 
+  const pedidosPagos = pedidosSemCancelados.filter(p =>
     (p.status_pagamento || "").toUpperCase() === "PAGO"
   );
-  const pedidosYoYPagos = pedidosYoYSemCancelados.filter(p => 
+  const pedidosYoYPagos = pedidosYoYSemCancelados.filter(p =>
     (p.status_pagamento || "").toUpperCase() === "PAGO"
   );
 
@@ -537,11 +540,11 @@ async function fetchDashboardData(
   const faturamentoYoY = pedidosYoYPagos.reduce((sum, p) => sum + (p.valor_total || 0), 0);
   const pecasVendidas = pedidosPagos.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
   const pecasYoY = pedidosYoYPagos.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
-  
-  const pedidosPendentes = pedidosSemCancelados.filter(p => 
+
+  const pedidosPendentes = pedidosSemCancelados.filter(p =>
     p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO"
   ).length;
-  const pedidosYoYPendentes = pedidosYoYSemCancelados.filter(p => 
+  const pedidosYoYPendentes = pedidosYoYSemCancelados.filter(p =>
     p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO"
   ).length;
 
@@ -552,12 +555,12 @@ async function fetchDashboardData(
 
   // Tendência de vendas
   const vendasAgrupadas: Record<string, { valor: number; pedidos: number; pecas: number; data: Date }> = {};
-  
+
   pedidosPagos.forEach(p => {
     const dataEfetiva = p.created_at;
     const dataCompleta = parseISO(dataEfetiva);
     let chave: string;
-    
+
     switch (tipoAgrupamento) {
       case "mes":
         chave = format(dataCompleta, "MMM/yy", { locale: ptBR });
@@ -575,7 +578,7 @@ async function fetchDashboardData(
       default:
         chave = format(dataCompleta, "dd/MM/yy");
     }
-    
+
     if (!vendasAgrupadas[chave]) {
       vendasAgrupadas[chave] = { valor: 0, pedidos: 0, pecas: 0, data: dataCompleta };
     }
@@ -640,11 +643,11 @@ async function fetchDashboardData(
   const pedidoItensData = pedidoItens.data || [];
   const pedidoItensFiltrados = excluirCancelados
     ? pedidoItensData.filter((item: any) => {
-        const statusPedido = (item.pedidos?.status_pedido || "").toUpperCase();
-        return !STATUS_CANCELADOS.includes(statusPedido);
-      })
+      const statusPedido = (item.pedidos?.status_pedido || "").toUpperCase();
+      return !STATUS_CANCELADOS.includes(statusPedido);
+    })
     : pedidoItensData;
-  
+
   const modelosMap: Record<string, number> = {};
   pedidoItensFiltrados.forEach((item: any) => {
     const nome = item.produto_nome || "Sem nome";
@@ -656,9 +659,18 @@ async function fetchDashboardData(
     .slice(0, 5);
 
   const pedidoIdsComItens = new Set(pedidoItensFiltrados.map((item: any) => item.pedido_id));
-  const totalPedidosPagos = pedidosPagos.length;
+
+  // Calculate total paid orders IN THIS WEEK precisely for the coverage denominator
+  const totalPedidosPagosNaSemana = pedidosSemCancelados.filter(p => {
+    const isPago = ["PAGO", "CONCLUIDO"].includes((p.status_pagamento || "").toUpperCase());
+    const isEstaSemana = p.created_at >= startDateTopModelos;
+    return isPago && isEstaSemana;
+  }).length;
+
   const pedidosComItens = pedidoIdsComItens.size;
-  const coverage = totalPedidosPagos > 0 ? pedidosComItens / totalPedidosPagos : 0;
+  const coverage = totalPedidosPagosNaSemana > 0 ? pedidosComItens / totalPedidosPagosNaSemana : 0;
+  // If we somehow get more items than orders due to timing/cache, cap at 1.0 (100%)
+  const finalCoverage = Math.min(coverage, 1);
 
   // Status de pedidos
   const statusMap: Record<string, number> = {};
@@ -678,10 +690,10 @@ async function fetchDashboardData(
     const etapa = p.processo_atual || "Corte";
     etapaMap[etapa] = (etapaMap[etapa] || 0) + (p.quantidade || 0);
   });
-  
+
   const etapasDoDb = Object.keys(etapaMap);
   const etapasOrdenadas = sortEtapas(etapasDoDb);
-  
+
   const producaoKanbanBase = etapasOrdenadas.map(etapa => ({
     etapa,
     pecas: etapaMap[etapa] || 0,
@@ -700,19 +712,19 @@ async function fetchDashboardData(
   const faturamentoAtualAcumulado = (pedidosMesAtualAcumulado.data || []).reduce(
     (sum, p) => sum + (p.valor_total || 0), 0
   );
-  
+
   const temDadosAnoPassado = faturamentoAnoPassadoTotal > 0;
   const metaAnual = faturamentoAnoPassadoTotal * 1.15;
   const percentualAtingido = metaAnual > 0 ? (faturamentoAtualAcumulado / metaAnual) * 100 : 0;
   const faltaParaMeta = Math.max(0, faturamentoAnoPassadoTotal - faturamentoAtualAcumulado);
-  const variacaoVsMesmoDia = faturamentoMesmoDiaAnoPassadoTotal > 0 
+  const variacaoVsMesmoDia = faturamentoMesmoDiaAnoPassadoTotal > 0
     ? ((faturamentoAtualAcumulado - faturamentoMesmoDiaAnoPassadoTotal) / faturamentoMesmoDiaAnoPassadoTotal) * 100
     : 0;
 
   // Meta com sazonalidade
   const pedidosHistorico = pedidosUltimos4Meses.data || [];
   const faturamentoPorMes: Record<string, number> = {};
-  
+
   pedidosHistorico.forEach(p => {
     const dataEfetiva = p.created_at;
     const mesAno = format(parseISO(dataEfetiva), "yyyy-MM");
@@ -724,37 +736,37 @@ async function fetchDashboardData(
     format(subMonths(now, 2), "yyyy-MM"),
     format(subMonths(now, 3), "yyyy-MM"),
   ];
-  
+
   const somaMeses = meses3anteriores.map(m => faturamentoPorMes[m] || 0);
   const mesesComDados = somaMeses.filter(v => v > 0);
-  const media3Meses = mesesComDados.length > 0 
-    ? mesesComDados.reduce((a, b) => a + b, 0) / mesesComDados.length 
+  const media3Meses = mesesComDados.length > 0
+    ? mesesComDados.reduce((a, b) => a + b, 0) / mesesComDados.length
     : 0;
 
   const mediaSazonalData = mediaSazonalResult.data;
   const curvaMesData = curvaMesResult.data || [];
-  
-  const mediaSazonal = mediaSazonalData && mediaSazonalData.length > 0 
+
+  const mediaSazonal = mediaSazonalData && mediaSazonalData.length > 0
     ? Number(mediaSazonalData[0]?.media_faturamento || 0)
     : 0;
-  const anosUsados: number[] = mediaSazonalData && mediaSazonalData.length > 0 
+  const anosUsados: number[] = mediaSazonalData && mediaSazonalData.length > 0
     ? (mediaSazonalData[0]?.anos_usados || [])
     : [];
-  const faturamentosPorAno: Record<string, number> = mediaSazonalData && mediaSazonalData.length > 0 
+  const faturamentosPorAno: Record<string, number> = mediaSazonalData && mediaSazonalData.length > 0
     ? (mediaSazonalData[0]?.faturamentos_por_ano as Record<string, number> || {})
     : {};
-  
+
   const temHistoricoSazonal = anosUsados.length > 0 && mediaSazonal > 0;
-  
+
   const mediaBase = temHistoricoSazonal ? mediaSazonal : media3Meses;
   const metaCalculada = mediaBase * (1 + percentualCrescimento);
-  
+
   const diasDecorridosCalc = getDate(now);
   const diasTotaisCalc = getDaysInMonth(now);
   const curvaDisponivel = curvaMesData.length > 0;
-  
+
   let percentualEsperadoHoje = (diasDecorridosCalc / diasTotaisCalc) * 100;
-  
+
   if (curvaDisponivel) {
     const curvaAteDia = curvaMesData.filter((c: { dia: number }) => c.dia <= diasDecorridosCalc);
     if (curvaAteDia.length > 0) {
@@ -762,30 +774,30 @@ async function fetchDashboardData(
       percentualEsperadoHoje = Number(ultimoDiaCurva.percentual_acumulado || 0);
     }
   }
-  
-  const percentualRealizado = metaCalculada > 0 
-    ? (faturamentoAtualAcumulado / metaCalculada) * 100 
+
+  const percentualRealizado = metaCalculada > 0
+    ? (faturamentoAtualAcumulado / metaCalculada) * 100
     : 0;
   const diferencaRitmo = percentualRealizado - percentualEsperadoHoje;
-  
-  const mediaDiariaCalc = diasDecorridosCalc > 0 
-    ? faturamentoAtualAcumulado / diasDecorridosCalc 
+
+  const mediaDiariaCalc = diasDecorridosCalc > 0
+    ? faturamentoAtualAcumulado / diasDecorridosCalc
     : 0;
   const projecaoMensalCalc = mediaDiariaCalc * diasTotaisCalc;
   const diferencaPrevisao = projecaoMensalCalc - metaCalculada;
-  
-  const statusMeta: 'acima' | 'abaixo' | 'atingida' | 'noritmo' = 
+
+  const statusMeta: 'acima' | 'abaixo' | 'atingida' | 'noritmo' =
     percentualRealizado >= 100 ? 'atingida' :
-    diferencaRitmo >= 5 ? 'acima' :
-    diferencaRitmo >= -5 ? 'noritmo' : 'abaixo';
-  
+      diferencaRitmo >= 5 ? 'acima' :
+        diferencaRitmo >= -5 ? 'noritmo' : 'abaixo';
+
   const mesesUsados = temHistoricoSazonal
     ? anosUsados.map(ano => `${format(now, "MMM", { locale: ptBR })}/${String(ano).slice(-2)}`)
     : [
-        format(subMonths(now, 1), "MMM/yy", { locale: ptBR }),
-        format(subMonths(now, 2), "MMM/yy", { locale: ptBR }),
-        format(subMonths(now, 3), "MMM/yy", { locale: ptBR }),
-      ];
+      format(subMonths(now, 1), "MMM/yy", { locale: ptBR }),
+      format(subMonths(now, 2), "MMM/yy", { locale: ptBR }),
+      format(subMonths(now, 3), "MMM/yy", { locale: ptBR }),
+    ];
 
   const metaAutomatica: MetaAutomatica = {
     mediaBase,
@@ -810,13 +822,13 @@ async function fetchDashboardData(
   // Previsão Mensal
   const diasDecorridos = getDate(now);
   const diasTotais = getDaysInMonth(now);
-  const mediaDiaria = diasDecorridos > 0 
-    ? faturamentoAtualAcumulado / diasDecorridos 
+  const mediaDiaria = diasDecorridos > 0
+    ? faturamentoAtualAcumulado / diasDecorridos
     : 0;
   const projecaoMensal = mediaDiaria * diasTotais;
 
-  const variacaoVsMetaAuto = metaAutomatica.metaCalculada > 0 
-    ? ((projecaoMensal - metaAutomatica.metaCalculada) / metaAutomatica.metaCalculada) * 100 
+  const variacaoVsMetaAuto = metaAutomatica.metaCalculada > 0
+    ? ((projecaoMensal - metaAutomatica.metaCalculada) / metaAutomatica.metaCalculada) * 100
     : 0;
 
   const previsaoMensal: PrevisaoMensal = {
@@ -825,10 +837,10 @@ async function fetchDashboardData(
     diasDecorridos,
     diasTotais,
     variacaoVsMeta: variacaoVsMetaAuto,
-    acimaOuAbaixo: projecaoMensal > metaAutomatica.metaCalculada 
-      ? 'acima' 
-      : projecaoMensal < metaAutomatica.metaCalculada 
-        ? 'abaixo' 
+    acimaOuAbaixo: projecaoMensal > metaAutomatica.metaCalculada
+      ? 'acima'
+      : projecaoMensal < metaAutomatica.metaCalculada
+        ? 'abaixo'
         : 'igual',
   };
 
@@ -882,8 +894,8 @@ async function fetchDashboardData(
     topModelos,
     topModelosCoverage: {
       pedidosComItens,
-      totalPedidos: totalPedidosPagos,
-      coverage,
+      totalPedidos: totalPedidosPagosNaSemana,
+      coverage: finalCoverage,
     },
     statusPedidos,
     producaoKanban,

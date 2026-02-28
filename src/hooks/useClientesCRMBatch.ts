@@ -24,27 +24,27 @@ export interface ClienteStatusInfo {
 
 export function getClienteStatusFromStats(stats: ClienteCRMBatchStats | undefined): ClienteStatusInfo | null {
   if (!stats) return null;
-  
+
   const hoje = new Date();
-  const diasDesdeUltimaCompra = stats.ultimaCompra 
-    ? differenceInDays(hoje, stats.ultimaCompra) 
+  const diasDesdeUltimaCompra = stats.ultimaCompra
+    ? differenceInDays(hoje, stats.ultimaCompra)
     : Infinity;
-  
+
   // VIP: Total comprado acima de R$ 10.000
   if (stats.totalComprado >= 10000) {
     return { label: 'VIP', color: 'bg-amber-500 text-white' };
   }
-  
-  // Inativo: Última compra há mais de 45 dias
-  if (diasDesdeUltimaCompra > 45) {
+
+  // Inativo: Última compra há 25 dias ou mais
+  if (diasDesdeUltimaCompra >= 25) {
     return { label: 'Inativo', color: 'bg-gray-400 text-white' };
   }
-  
+
   // Frequente: 5 ou mais pedidos pagos
   if (stats.pedidosPagos >= 5) {
     return { label: 'Frequente', color: 'bg-blue-500 text-white' };
   }
-  
+
   return null;
 }
 
@@ -142,18 +142,25 @@ export function useClientesCRMBatch(clienteIds: string[]) {
 interface ClienteWithPendingDate {
   id: string;
   oldestPendingDate: Date | null;
+  totalComprado: number;
+  diasDesdeUltimaCompra?: number;
 }
 
 /**
  * Hook to get IDs of clients that match a CRM status filter.
  * Used for hybrid filtering (server-side base + CRM filter).
- * Returns IDs sorted appropriately (e.g., oldest pending first for 'pendente' filter).
+ * Returns IDs sorted appropriately (e.g., oldest pending first for 'pendente' filter,
+ * or highest total purchased for 'maior_historico' sorting).
  */
-export function useClientesCRMFilter(filtroStatus: 'vip' | 'frequente' | 'inativo' | 'risco' | 'pendente' | null) {
+export function useClientesCRMFilter(
+  filtroStatus: 'vip' | 'frequente' | 'inativo' | 'risco' | 'pendente' | null,
+  ordenacao?: 'nome' | 'recente' | 'maior_historico',
+  subFiltroInativo?: 'critico' | 'alerta' | null
+) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['clientes-crm-filter', user?.id, filtroStatus],
+    queryKey: ['clientes-crm-filter', user?.id, filtroStatus, ordenacao, subFiltroInativo],
     queryFn: async () => {
       if (!user?.id || !filtroStatus) {
         return null; // No filter applied
@@ -175,7 +182,7 @@ export function useClientesCRMFilter(filtroStatus: 'vip' | 'frequente' | 'inativ
         if (!pedido.cliente_id) continue;
 
         const clienteId = pedido.cliente_id;
-        
+
         if (!statsMap.has(clienteId)) {
           statsMap.set(clienteId, {
             clienteId,
@@ -226,8 +233,8 @@ export function useClientesCRMFilter(filtroStatus: 'vip' | 'frequente' | 'inativ
       const hoje = new Date();
 
       for (const [clienteId, stats] of statsMap) {
-        const diasDesdeUltimaCompra = stats.ultimaCompra 
-          ? differenceInDays(hoje, stats.ultimaCompra) 
+        const diasDesdeUltimaCompra = stats.ultimaCompra
+          ? differenceInDays(hoje, stats.ultimaCompra)
           : Infinity;
 
         let matches = false;
@@ -237,10 +244,16 @@ export function useClientesCRMFilter(filtroStatus: 'vip' | 'frequente' | 'inativ
             matches = stats.totalComprado >= 10000;
             break;
           case 'frequente':
-            matches = stats.pedidosPagos >= 5 && stats.totalComprado < 10000 && diasDesdeUltimaCompra <= 45;
+            matches = stats.pedidosPagos >= 5 && stats.totalComprado < 10000 && diasDesdeUltimaCompra < 25;
             break;
           case 'inativo':
-            matches = diasDesdeUltimaCompra > 45;
+            if (subFiltroInativo === 'critico') {
+              matches = diasDesdeUltimaCompra > 40 && diasDesdeUltimaCompra !== Infinity;
+            } else if (subFiltroInativo === 'alerta') {
+              matches = diasDesdeUltimaCompra >= 25 && diasDesdeUltimaCompra <= 40;
+            } else {
+              matches = diasDesdeUltimaCompra >= 25;
+            }
             break;
           case 'risco':
             matches = stats.cancelamentos >= 2;
@@ -255,6 +268,8 @@ export function useClientesCRMFilter(filtroStatus: 'vip' | 'frequente' | 'inativ
           matchingClients.push({
             id: clienteId,
             oldestPendingDate: stats.ultimoPedidoPendenteData,
+            totalComprado: stats.totalComprado,
+            diasDesdeUltimaCompra,
           });
         }
       }
@@ -266,6 +281,12 @@ export function useClientesCRMFilter(filtroStatus: 'vip' | 'frequente' | 'inativ
           if (!b.oldestPendingDate) return -1;
           return a.oldestPendingDate.getTime() - b.oldestPendingDate.getTime();
         });
+      } else if (ordenacao === 'maior_historico') {
+        // Sort by highest total purchased globally
+        matchingClients.sort((a, b) => b.totalComprado - a.totalComprado);
+      } else if (filtroStatus === 'inativo') {
+        // Default sorting for Inativos: Highest days without purchase first
+        matchingClients.sort((a, b) => (b.diasDesdeUltimaCompra || 0) - (a.diasDesdeUltimaCompra || 0));
       }
 
       return matchingClients.map(c => c.id);

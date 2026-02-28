@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { usePrestadoresServico } from '@/hooks/usePrestadoresServico';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { UserPlus, Loader2 } from 'lucide-react';
+import { GerenciarResponsaveisModal } from '@/components/production/GerenciarResponsaveisModal';
 
 interface ResponsavelSelectorProps {
   value: string;
@@ -14,26 +13,8 @@ interface ResponsavelSelectorProps {
 }
 
 export function ResponsavelSelector({ value, onChange, etapaAtual, disabled }: ResponsavelSelectorProps) {
-  const { todosResponsaveis, loading, addPrestador } = usePrestadoresServico(etapaAtual);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [novoNome, setNovoNome] = useState('');
-  const [adding, setAdding] = useState(false);
-
-  const handleAddPrestador = async () => {
-    if (!novoNome.trim()) return;
-    
-    setAdding(true);
-    try {
-      await addPrestador(novoNome.trim(), [etapaAtual]);
-      onChange(novoNome.trim());
-      setNovoNome('');
-      setShowAddModal(false);
-    } catch {
-      // Error already handled in hook
-    } finally {
-      setAdding(false);
-    }
-  };
+  const { todosResponsaveis, loading } = usePrestadoresServico(etapaAtual);
+  const [showManagerModal, setShowManagerModal] = useState(false);
 
   if (loading) {
     return (
@@ -65,55 +46,24 @@ export function ResponsavelSelector({ value, onChange, etapaAtual, disabled }: R
             )}
           </SelectContent>
         </Select>
-        
+
         <Button
           type="button"
           variant="outline"
           size="icon"
-          onClick={() => setShowAddModal(true)}
+          onClick={() => setShowManagerModal(true)}
           disabled={disabled}
-          title="Adicionar novo responsável"
+          title="Gerenciar responsáveis"
         >
           <UserPlus className="h-4 w-4" />
         </Button>
       </div>
 
-      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>Adicionar Responsável</DialogTitle>
-            <DialogDescription>
-              Adicione um novo prestador de serviço para a etapa "{etapaAtual}"
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <Input
-              placeholder="Nome do responsável"
-              value={novoNome}
-              onChange={(e) => setNovoNome(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddPrestador()}
-              disabled={adding}
-            />
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddModal(false)} disabled={adding}>
-              Cancelar
-            </Button>
-            <Button onClick={handleAddPrestador} disabled={adding || !novoNome.trim()}>
-              {adding ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adicionando...
-                </>
-              ) : (
-                'Adicionar'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <GerenciarResponsaveisModal
+        open={showManagerModal}
+        onOpenChange={setShowManagerModal}
+        etapaAtual={etapaAtual}
+      />
     </>
   );
 }

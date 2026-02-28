@@ -102,11 +102,27 @@
 }
 
 #print-estoque-area.print-preview-mode .print-qty-cell {
-  width: 50px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
+
+#print-estoque-area.print-preview-mode .print-qty-value {
+  font-weight: 700;
+  font-size: 13px;
+  min-width: 28px;
+  text-align: right;
+  color: hsl(var(--foreground));
+}
+
+#print-estoque-area.print-preview-mode .print-qty-box {
+  width: 40px;
   height: 24px;
   border: 1px solid hsl(var(--border));
   background-color: hsl(var(--background));
   border-radius: 4px;
+  flex-shrink: 0;
 }
 
 #print-estoque-area.print-preview-mode .print-footer {
@@ -235,14 +251,29 @@
     print-color-adjust: exact;
   }
   
-  /* Coluna de quantidade em branco para preenchimento manual */
+  /* Coluna de quantidade: valor do sistema + caixinha para contagem manual */
   #print-estoque-area .print-qty-cell {
-    width: 50px;
-    height: 20px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: center;
+  }
+
+  #print-estoque-area .print-qty-value {
+    font-weight: 700;
+    font-size: 9pt;
+    min-width: 22px;
+    text-align: right;
+  }
+
+  #print-estoque-area .print-qty-box {
+    width: 36px;
+    height: 18px;
     border: 1px solid #d1d5db !important;
     background-color: white !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    flex-shrink: 0;
   }
   
   /* Header do relatório */

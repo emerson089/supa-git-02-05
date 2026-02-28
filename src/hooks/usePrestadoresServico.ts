@@ -51,7 +51,7 @@ export function usePrestadoresServico(etapaAtual?: string) {
 
   // Combina com os responsáveis padrão da etapa
   const responsaveisPadrao = etapaAtual ? RESPONSAVEIS_POR_ETAPA[etapaAtual] || [] : [];
-  
+
   // Lista final: responsáveis padrão + prestadores do banco (sem duplicados)
   const nomesDosPrestadores = prestadoresFiltrados.map(p => p.nome);
   const todosResponsaveis = [
@@ -90,11 +90,57 @@ export function usePrestadoresServico(etapaAtual?: string) {
     }
   };
 
+  // Função para renomear prestador
+  const updatePrestador = async (id: string, novoNome: string) => {
+    try {
+      const { error } = await supabase
+        .from('prestadores_servico')
+        .update({ nome: novoNome })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setPrestadores(prev =>
+        prev.map(p => p.id === id ? { ...p, nome: novoNome } : p)
+      );
+      toast.success('Responsável atualizado com sucesso');
+    } catch (error) {
+      console.error('Erro ao atualizar prestador:', error);
+      toast.error('Erro ao atualizar responsável');
+      throw error;
+    }
+  };
+
+  // Função para excluir prestador logicamente (ativo = false) ou fisicamente se preferir 
+  // O prompt pede: "remova o responsável do banco de dados"
+  // "Implemente a exclusão mesmo que o responsável esteja vinculado a lotes antigos"
+  // Como é campo string na Producao, excluir não quebra, então removeremos fisicamente.
+  const deletePrestador = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('prestadores_servico')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setPrestadores(prev => prev.filter(p => p.id !== id));
+      toast.success('Responsável removido');
+    } catch (error) {
+      console.error('Erro ao excluir prestador:', error);
+      toast.error('Erro ao excluir responsável');
+      throw error;
+    }
+  };
+
   return {
-    prestadores: prestadoresFiltrados,
-    todosResponsaveis,
+    prestadores,       // Todos os prestadores do banco
+    prestadoresFiltrados, // Filtrados por etapaAtual
+    todosResponsaveis, // Padrão + banco 
     loading,
     addPrestador,
+    updatePrestador,
+    deletePrestador,
     refetch: fetchPrestadores
   };
 }

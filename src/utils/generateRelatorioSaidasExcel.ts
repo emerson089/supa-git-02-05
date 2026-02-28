@@ -43,18 +43,18 @@ export function generateRelatorioSaidasExcel({
   const lines: string[] = [];
 
   // Cabeçalho do relatório
-  lines.push('RELATÓRIO DE SAÍDAS DO ESTOQUE');
+  lines.push('RELATÓRIO DE MOVIMENTAÇÕES DO ESTOQUE');
   lines.push(`Período: ${formatarDataCurta(filtros.dataInicial)} a ${formatarDataCurta(filtros.dataFinal)}`);
-  
+
   if (localNomeFiltro) {
     lines.push(`Local: ${localNomeFiltro}`);
   }
-  
+
   if (filtros.filtrosMovimentacao && filtros.filtrosMovimentacao.length > 0) {
     const tiposLabels = filtros.filtrosMovimentacao.map(f => f.label).join(', ');
     lines.push(`Tipos: ${tiposLabels}`);
   }
-  
+
   lines.push(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`);
   lines.push('');
 
@@ -86,14 +86,14 @@ export function generateRelatorioSaidasExcel({
   // Dados
   for (const saida of saidas) {
     const row = [
-      formatarData(saida.data),
-      saida.modeloNome,
-      saida.quantidade,
-      saida.valorUnitario !== null ? saida.valorUnitario.toFixed(2) : '',
-      saida.valorTotal !== null ? saida.valorTotal.toFixed(2) : '',
-      saida.tipoLabel,
+      saida.data ? formatarData(saida.data) : '',
+      saida.modeloNome || '',
+      saida.quantidade ?? 0,
+      saida.valorUnitario !== null && saida.valorUnitario !== undefined ? Number(saida.valorUnitario).toFixed(2) : '',
+      saida.valorTotal !== null && saida.valorTotal !== undefined ? Number(saida.valorTotal).toFixed(2) : '',
+      saida.tipoLabel || '',
       saida.motivo || '',
-      saida.localNome,
+      saida.localNome || '',
       saida.localDestinoNome || '',
     ];
     lines.push(row.map(escapeCSV).join(','));
@@ -112,12 +112,28 @@ export function generateRelatorioSaidasExcel({
   const dataFim = format(filtros.dataFinal, 'yyyy-MM-dd');
   const fileName = `relatorio-saidas-${dataInicio}-a-${dataFim}.csv`;
 
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  try {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (error) {
+    console.error("Erro ao simular clique no link:", error);
+  }
+
+  // Fallback robusto para iframes (ex: Preview do Lovable ou CodeSandbox)
+  // Alguns navegadores silenciosamente bloqueiam o download dentro de iframes.
+  try {
+    if (window.self !== window.top) {
+      window.open(url, '_blank');
+    }
+  } catch (e) {
+    console.error("Falha ao abrir Excel/CSV em nova guia:", e);
+  }
+
+  // Dá um tempo maior antes de revogar a URL para garantir que novos links tiveram tempo de ler
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }

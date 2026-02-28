@@ -8,6 +8,8 @@ export interface Transferencia {
   id: string;
   localOrigemId: string;
   localDestinoId: string;
+  localOrigemNome: string | null;
+  localDestinoNome: string | null;
   tipo: 'transferencia' | 'carga_feira';
   status: StatusTransferencia;
   dataSaida: string;
@@ -17,6 +19,7 @@ export interface Transferencia {
   dataConclusao: string | null;
   concluidoPor: string | null;
   createdAt: string;
+  userId: string;
 }
 
 export interface TransferenciaItem {
@@ -60,10 +63,12 @@ interface DbTransferenciaItem {
   created_at: string;
 }
 
-const mapDbToTransferencia = (db: DbTransferencia): Transferencia => ({
+const mapDbToTransferencia = (db: DbTransferencia, locaisMap?: Map<string, string>): Transferencia => ({
   id: db.id,
   localOrigemId: db.local_origem_id,
   localDestinoId: db.local_destino_id,
+  localOrigemNome: locaisMap?.get(db.local_origem_id) || null,
+  localDestinoNome: locaisMap?.get(db.local_destino_id) || null,
   tipo: db.tipo as 'transferencia' | 'carga_feira',
   status: db.status as StatusTransferencia,
   dataSaida: db.data_saida,
@@ -73,6 +78,7 @@ const mapDbToTransferencia = (db: DbTransferencia): Transferencia => ({
   dataConclusao: db.data_conclusao,
   concluidoPor: db.concluido_por,
   createdAt: db.created_at,
+  userId: db.user_id,
 });
 
 const mapDbToItem = (db: DbTransferenciaItem): TransferenciaItem => ({
@@ -106,7 +112,7 @@ export function useTransferencias(tipo?: 'transferencia' | 'carga_feira') {
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data as DbTransferencia[]).map(mapDbToTransferencia);
+      return (data as DbTransferencia[]).map(t => mapDbToTransferencia(t));
     },
     enabled: !!user,
   });
@@ -255,18 +261,18 @@ export function useCriarCargaFeira() {
       const banca = locais?.find(l => l.tipo === 'banca');
 
       if (!central || !banca) {
-        console.error('[useCriarCargaFeira] Locais não configurados:', { 
-          central: !!central, 
+        console.error('[useCriarCargaFeira] Locais não configurados:', {
+          central: !!central,
           banca: !!banca,
           userId: user.id,
-          locaisRetornados: locais 
+          locaisRetornados: locais
         });
         throw new Error('Locais não configurados. Recarregue a página para sincronizar a configuração inicial.');
       }
 
       // OTIMIZADO: Buscar todos os estoques de uma vez
       const itemIds = itens.map(i => i.itemId);
-      
+
       const { data: estoquesOriginais } = await supabase
         .from('estoque_por_local')
         .select('*')
@@ -276,13 +282,13 @@ export function useCriarCargaFeira() {
       // Mapear estoques por item e local
       const mapEstoquesCentral = new Map<string, { id: string; quantidade: number; quantidade_reservada: number }>();
       const mapEstoquesBanca = new Map<string, { id: string; quantidade: number }>();
-      
+
       estoquesOriginais?.forEach(e => {
         if (e.local_id === central.id) {
-          mapEstoquesCentral.set(e.item_id, { 
-            id: e.id, 
-            quantidade: Number(e.quantidade), 
-            quantidade_reservada: Number(e.quantidade_reservada) 
+          mapEstoquesCentral.set(e.item_id, {
+            id: e.id,
+            quantidade: Number(e.quantidade),
+            quantidade_reservada: Number(e.quantidade_reservada)
           });
         } else if (e.local_id === banca.id) {
           mapEstoquesBanca.set(e.item_id, { id: e.id, quantidade: Number(e.quantidade) });
@@ -308,12 +314,12 @@ export function useCriarCargaFeira() {
           .from('estoque_itens')
           .select('id, nome')
           .in('id', itensComProblema);
-        
+
         const primeiroProblema = itensComProblema[0];
         const estoque = mapEstoquesCentral.get(primeiroProblema);
         const disponivel = estoque ? estoque.quantidade - estoque.quantidade_reservada : 0;
         const nomeItem = itensNomes?.find(i => i.id === primeiroProblema)?.nome || 'Item';
-        
+
         throw new Error(`${nomeItem}: apenas ${disponivel} disponível no Central. Estoque insuficiente.`);
       }
 
@@ -341,11 +347,11 @@ export function useCriarCargaFeira() {
         quantidade_enviada: item.quantidade,
         preco_unitario: item.precoUnitario || null,
       }));
-      
+
       const { error: itensError } = await supabase
         .from('transferencia_itens')
         .insert(itensParaInserir);
-      
+
       if (itensError) throw itensError;
 
       // OTIMIZADO: Registrar todas as movimentações em lote
@@ -381,7 +387,7 @@ export function useCriarCargaFeira() {
       const updatePromises = itens.map(async (item) => {
         const estoqueCentral = mapEstoquesCentral.get(item.itemId);
         const estoqueBanca = mapEstoquesBanca.get(item.itemId);
-        
+
         // Reduzir no Central
         if (estoqueCentral) {
           const { error: updateCentralError } = await supabase
@@ -442,12 +448,12 @@ export function useCriarCargaFeira() {
       queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
       queryClient.invalidateQueries({ queryKey: ['resumo-feira'] });
       // Invalidar TODAS as queries de estoque com predicate para garantir atualização
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
-          (query.queryKey[0] === 'estoque-por-local' || 
-           query.queryKey[0] === 'estoque-detalhado-por-local' ||
-           query.queryKey[0] === 'estoque-itens'),
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          (query.queryKey[0] === 'estoque-por-local' ||
+            query.queryKey[0] === 'estoque-detalhado-por-local' ||
+            query.queryKey[0] === 'estoque-itens'),
         refetchType: 'all'
       });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
@@ -494,11 +500,11 @@ export function useRegistrarRetornoFeira() {
       const banca = locais?.find(l => l.tipo === 'banca');
 
       if (!central || !banca) {
-        console.error('[useRegistrarRetornoFeira] Locais não configurados:', { 
-          central: !!central, 
+        console.error('[useRegistrarRetornoFeira] Locais não configurados:', {
+          central: !!central,
           banca: !!banca,
           userId: user.id,
-          locaisRetornados: locais 
+          locaisRetornados: locais
         });
         throw new Error('Locais não configurados. Recarregue a página para sincronizar a configuração inicial.');
       }
@@ -827,7 +833,7 @@ export function useEditarCargaFeira() {
 
             // Registrar movimentação
             const tipo = diferenca > 0 ? 'ENVIO_FEIRA' : 'ESTORNO_ENVIO';
-            const motivo = diferenca > 0 
+            const motivo = diferenca > 0
               ? `Aumento qtd carga - #${transferenciaId.slice(0, 8)}`
               : `Redução qtd carga - #${transferenciaId.slice(0, 8)}`;
 
@@ -917,12 +923,12 @@ export function useEditarCargaFeira() {
       queryClient.invalidateQueries({ queryKey: ['cargas-periodo'] });
       queryClient.invalidateQueries({ queryKey: ['todas-cargas-ativas'] });
       queryClient.invalidateQueries({ queryKey: ['resumo-feira'] });
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
-          (query.queryKey[0] === 'estoque-por-local' || 
-           query.queryKey[0] === 'estoque-detalhado-por-local' ||
-           query.queryKey[0] === 'estoque-itens'),
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          (query.queryKey[0] === 'estoque-por-local' ||
+            query.queryKey[0] === 'estoque-detalhado-por-local' ||
+            query.queryKey[0] === 'estoque-itens'),
         refetchType: 'all'
       });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
@@ -980,12 +986,12 @@ export function useCriarTransferencia() {
     onSuccess: () => {
       // Invalidar TODAS as queries de estoque com predicate para garantir atualização
       queryClient.invalidateQueries({ queryKey: ['transferencias'] });
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
-          (query.queryKey[0] === 'estoque-por-local' || 
-           query.queryKey[0] === 'estoque-detalhado-por-local' ||
-           query.queryKey[0] === 'estoque-itens'),
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          (query.queryKey[0] === 'estoque-por-local' ||
+            query.queryKey[0] === 'estoque-detalhado-por-local' ||
+            query.queryKey[0] === 'estoque-itens'),
         refetchType: 'all'
       });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
@@ -1062,12 +1068,12 @@ export function useConcluirTransferencia() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transferencias'] });
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
-          (query.queryKey[0] === 'estoque-por-local' || 
-           query.queryKey[0] === 'estoque-detalhado-por-local' ||
-           query.queryKey[0] === 'estoque-itens'),
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          (query.queryKey[0] === 'estoque-por-local' ||
+            query.queryKey[0] === 'estoque-detalhado-por-local' ||
+            query.queryKey[0] === 'estoque-itens'),
         refetchType: 'all'
       });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
@@ -1106,12 +1112,12 @@ export function useAtualizarTransferencia() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ 
-      transferenciaId, 
-      motivo, 
-      observacoes 
-    }: { 
-      transferenciaId: string; 
+    mutationFn: async ({
+      transferenciaId,
+      motivo,
+      observacoes
+    }: {
+      transferenciaId: string;
       motivo?: string | null;
       observacoes?: string | null;
     }) => {
@@ -1186,7 +1192,26 @@ export function useTransferenciasFiltradas(tipo: 'transferencia' | 'carga_feira'
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data as DbTransferencia[]).map(mapDbToTransferencia);
+      if (!data || data.length === 0) return [];
+
+      // Buscar nomes dos locais (sem filtro ativo, para incluir inativas e locais de outros owners)
+      const localIds = [...new Set([
+        ...data.map(t => t.local_origem_id),
+        ...data.map(t => t.local_destino_id),
+      ].filter(Boolean))];
+
+      const locaisMap = new Map<string, string>();
+      if (localIds.length > 0) {
+        const { data: locaisData } = await supabase
+          .from('estoque_locais')
+          .select('id, nome')
+          .in('id', localIds);
+        for (const l of locaisData || []) {
+          locaisMap.set(l.id, l.nome);
+        }
+      }
+
+      return (data as DbTransferencia[]).map(t => mapDbToTransferencia(t, locaisMap));
     },
     enabled: !!user,
   });

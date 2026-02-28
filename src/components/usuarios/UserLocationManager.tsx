@@ -18,17 +18,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { 
-  useUserLocationManagement, 
-  UserLocationPermission 
+import {
+  useUserLocationManagement,
+  UserLocationPermission
 } from '@/hooks/useUserLocationManagement';
-import { 
-  Loader2, 
-  MapPin, 
-  Plus, 
-  Trash2, 
-  Eye, 
-  Package, 
+import {
+  Loader2,
+  MapPin,
+  Plus,
+  Trash2,
+  Eye,
+  Package,
   DollarSign,
   AlertCircle
 } from 'lucide-react';
@@ -51,10 +51,10 @@ interface AvailableLocation {
   tipo: string;
 }
 
-export function UserLocationManager({ 
-  open, 
-  onOpenChange, 
-  user 
+export function UserLocationManager({
+  open,
+  onOpenChange,
+  user
 }: UserLocationManagerProps) {
   const {
     loading,
@@ -96,7 +96,7 @@ export function UserLocationManager({
 
   const handleAddLocation = async () => {
     if (!selectedLocalId) return;
-    
+
     const success = await addUserLocation(user.user_id, selectedLocalId, newPermissions);
     if (success) {
       await loadData();
@@ -119,7 +119,7 @@ export function UserLocationManager({
 
     const success = await updateUserLocation(location.id, updatedPermissions);
     if (success) {
-      setUserLocations(prev => 
+      setUserLocations(prev =>
         prev.map(ul => ul.id === location.id ? { ...ul, [field]: !ul[field] } : ul)
       );
     }
@@ -176,7 +176,7 @@ export function UserLocationManager({
               {/* Current Locations */}
               <div className="space-y-3">
                 <Label className="text-sm font-medium">Locais com Acesso</Label>
-                
+
                 {userLocations.length === 0 ? (
                   <div className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-4 text-center">
                     Nenhum local configurado. Adicione um local abaixo.
@@ -245,7 +245,7 @@ export function UserLocationManager({
               {unassignedLocations.length > 0 && (
                 <div className="space-y-3 pt-4 border-t">
                   <Label className="text-sm font-medium">Adicionar Novo Local</Label>
-                  
+
                   <Select value={selectedLocalId} onValueChange={setSelectedLocalId}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um local" />
@@ -269,7 +269,7 @@ export function UserLocationManager({
                         <label className="flex items-center gap-2 text-sm cursor-pointer">
                           <Checkbox
                             checked={newPermissions.can_view}
-                            onCheckedChange={(checked) => 
+                            onCheckedChange={(checked) =>
                               setNewPermissions(prev => ({ ...prev, can_view: !!checked }))
                             }
                           />
@@ -279,17 +279,17 @@ export function UserLocationManager({
                         <label className="flex items-center gap-2 text-sm cursor-pointer">
                           <Checkbox
                             checked={newPermissions.can_adjust_stock}
-                            onCheckedChange={(checked) => 
+                            onCheckedChange={(checked) =>
                               setNewPermissions(prev => ({ ...prev, can_adjust_stock: !!checked }))
                             }
                           />
                           <Package className="h-4 w-4" />
-                          Ajustar Estoque
+                          Movimentações
                         </label>
                         <label className="flex items-center gap-2 text-sm cursor-pointer">
                           <Checkbox
                             checked={newPermissions.can_edit_price}
-                            onCheckedChange={(checked) => 
+                            onCheckedChange={(checked) =>
                               setNewPermissions(prev => ({ ...prev, can_edit_price: !!checked }))
                             }
                           />
@@ -298,8 +298,8 @@ export function UserLocationManager({
                         </label>
                       </div>
 
-                      <Button 
-                        onClick={handleAddLocation} 
+                      <Button
+                        onClick={handleAddLocation}
                         disabled={loading}
                         className="w-full"
                       >

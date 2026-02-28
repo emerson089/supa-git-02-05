@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -32,13 +32,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
-  Plus, 
-  Search, 
-  MoreVertical, 
-  Pencil, 
-  Power, 
-  PowerOff, 
+import {
+  Plus,
+  Search,
+  MoreVertical,
+  Pencil,
+  Power,
+  PowerOff,
   Trash2,
   Tag,
   AlertTriangle,
@@ -101,7 +101,7 @@ export default function ConfigTiposAjuste() {
 
   const handleSave = async () => {
     const nomeTrimmed = novoNome.trim();
-    
+
     if (!nomeTrimmed) {
       setValidationError('O nome não pode estar vazio');
       return;
@@ -111,7 +111,7 @@ export default function ConfigTiposAjuste() {
     const nomeExiste = tipos.some(
       t => t.nome.toLowerCase() === nomeTrimmed.toLowerCase() && t.id !== editingTipo?.id
     );
-    
+
     if (nomeExiste) {
       setValidationError('Este nome já existe');
       return;
@@ -137,7 +137,7 @@ export default function ConfigTiposAjuste() {
 
   const handleExcluir = async () => {
     if (!deletingTipo) return;
-    
+
     if (tipoEmUsoInfo?.emUso) {
       // Se está em uso, apenas desativar
       await alternarAtivoMutation.mutateAsync({ id: deletingTipo.id, ativo: false });
@@ -145,7 +145,7 @@ export default function ConfigTiposAjuste() {
       // Se não está em uso, pode excluir
       await excluirMutation.mutateAsync(deletingTipo.id);
     }
-    
+
     setDeleteDialogOpen(false);
     setDeletingTipo(null);
   };
@@ -159,7 +159,7 @@ export default function ConfigTiposAjuste() {
         {isMobile && (
           <div className="flex items-center gap-3 mb-6">
             <MobileDrawer />
-            <h1 className="text-lg font-semibold">Tipos de Ajuste</h1>
+            <h1 className="text-lg font-semibold">Tipos de Movimentações</h1>
           </div>
         )}
 
@@ -171,9 +171,9 @@ export default function ConfigTiposAjuste() {
                 <Tag size={20} />
               </div>
               <div>
-                <h1 className="text-xl font-semibold">Tipos de Ajuste</h1>
+                <h1 className="text-xl font-semibold">Tipos de Movimentações</h1>
                 <p className="text-sm text-muted-foreground">
-                  Gerencie os tipos de ajuste de estoque
+                  Gerencie os tipos de movimentação de estoque
                 </p>
               </div>
             </div>
@@ -246,39 +246,39 @@ export default function ConfigTiposAjuste() {
                     />
                   </div>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="shrink-0">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleOpenEdit(tipo)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Editar nome
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleAlternarAtivo(tipo.id, tipo.ativo)}>
-                      {tipo.ativo ? (
-                        <>
-                          <PowerOff className="mr-2 h-4 w-4" />
-                          Desativar
-                        </>
-                      ) : (
-                        <>
-                          <Power className="mr-2 h-4 w-4" />
-                          Reativar
-                        </>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => handleOpenDelete(tipo)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Excluir
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="shrink-0">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleOpenEdit(tipo)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Editar nome
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleAlternarAtivo(tipo.id, tipo.ativo)}>
+                        {tipo.ativo ? (
+                          <>
+                            <PowerOff className="mr-2 h-4 w-4" />
+                            Desativar
+                          </>
+                        ) : (
+                          <>
+                            <Power className="mr-2 h-4 w-4" />
+                            Reativar
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleOpenDelete(tipo)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </Card>
             ))
@@ -293,7 +293,7 @@ export default function ConfigTiposAjuste() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingTipo ? 'Editar Tipo de Ajuste' : 'Novo Tipo de Ajuste'}
+              {editingTipo ? 'Editar Tipo de Movimentação' : 'Novo Tipo de Movimentação'}
             </DialogTitle>
           </DialogHeader>
 
@@ -322,7 +322,7 @@ export default function ConfigTiposAjuste() {
             <Button variant="outline" onClick={() => setModalOpen(false)}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleSave}
               disabled={criarMutation.isPending || editarMutation.isPending}
             >
@@ -336,13 +336,13 @@ export default function ConfigTiposAjuste() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir Tipo de Ajuste</AlertDialogTitle>
+            <AlertDialogTitle>Excluir Tipo de Movimentação</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
                 <p className="mb-4">
                   Deseja excluir permanentemente o tipo "{deletingTipo?.nome}"?
                 </p>
-                
+
                 {tipoEmUsoInfo?.emUso ? (
                   <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
                     <div className="flex items-start gap-2">

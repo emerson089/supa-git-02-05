@@ -17,7 +17,8 @@ function formatarDataCurta(data: Date): string {
   return format(data, 'dd/MM/yyyy', { locale: ptBR });
 }
 
-function truncateText(text: string, maxLength: number): string {
+function truncateText(text: string | null | undefined, maxLength: number): string {
+  if (!text) return '—';
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength - 3) + '...';
 }
@@ -54,7 +55,7 @@ export function generateRelatorioSaidasPDF({
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.setTextColor(255, 255, 255);
-  doc.text('RELATÓRIO DE SAÍDAS DO ESTOQUE', margin, 8);
+  doc.text('RELATÓRIO DE MOVIMENTAÇÕES DO ESTOQUE', margin, 8);
 
   // Período
   doc.setFont('helvetica', 'normal');
@@ -140,15 +141,15 @@ export function generateRelatorioSaidasPDF({
   const tableStartY = cardY + cardHeight + 8;
 
   const tableData = saidas.map(saida => [
-    formatarData(saida.data),
+    saida.data ? formatarData(saida.data) : '—',
     truncateText(saida.modeloNome, 35),
-    saida.quantidade.toString(),
+    (saida.quantidade ?? 0).toString(),
     formatarMoeda(saida.valorUnitario),
     formatarMoeda(saida.valorTotal),
-    saida.tipoLabel,
-    truncateText(saida.motivo || '—', 25),
+    saida.tipoLabel || '—',
+    truncateText(saida.motivo, 25),
     truncateText(saida.localNome, 20),
-    saida.localDestinoNome ? truncateText(saida.localDestinoNome, 20) : '—',
+    truncateText(saida.localDestinoNome, 20),
   ]);
 
   autoTable(doc, {
@@ -197,5 +198,22 @@ export function generateRelatorioSaidasPDF({
   const dataFim = format(filtros.dataFinal, 'yyyy-MM-dd');
   const fileName = `relatorio-saidas-${dataInicio}-a-${dataFim}.pdf`;
 
-  doc.save(fileName);
+  try {
+    doc.save(fileName);
+  } catch (error) {
+    console.error("Erro no doc.save():", error);
+  }
+
+  // Fallback robusto para iframes (ex: Preview do Lovable ou CodeSandbox)
+  // Alguns navegadores silenciosamente bloqueiam o doc.save() dentro de iframes.
+  try {
+    if (window.self !== window.top) {
+      const pdfBlob = doc.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      window.open(blobUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+    }
+  } catch (e) {
+    console.error("Falha ao abrir PDF em nova guia:", e);
+  }
 }

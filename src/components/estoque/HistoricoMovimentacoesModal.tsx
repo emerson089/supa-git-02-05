@@ -24,48 +24,48 @@ interface HistoricoMovimentacoesModalProps {
 }
 
 const tipoConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  'AJUSTE_ENTRADA': { 
-    label: 'Ajuste Entrada', 
+  'AJUSTE_ENTRADA': {
+    label: 'Movimentação Entrada',
     color: 'bg-green-500/10 text-green-700 border-green-500/30',
     icon: <ArrowUp className="h-3 w-3" />
   },
-  'AJUSTE_SAIDA': { 
-    label: 'Ajuste Saída', 
+  'AJUSTE_SAIDA': {
+    label: 'Movimentação Saída',
     color: 'bg-red-500/10 text-red-700 border-red-500/30',
     icon: <ArrowDown className="h-3 w-3" />
   },
-  'TRANSFERENCIA': { 
-    label: 'Transferência', 
+  'TRANSFERENCIA': {
+    label: 'Transferência',
     color: 'bg-blue-500/10 text-blue-700 border-blue-500/30',
     icon: <ArrowLeftRight className="h-3 w-3" />
   },
-  'ENVIO_FEIRA': { 
-    label: 'Envio Feira', 
+  'ENVIO_FEIRA': {
+    label: 'Envio Feira',
     color: 'bg-purple-500/10 text-purple-700 border-purple-500/30',
     icon: <ArrowUp className="h-3 w-3" />
   },
-  'RETORNO_FEIRA': { 
-    label: 'Retorno Feira', 
+  'RETORNO_FEIRA': {
+    label: 'Retorno Feira',
     color: 'bg-orange-500/10 text-orange-700 border-orange-500/30',
     icon: <ArrowDown className="h-3 w-3" />
   },
-  'VENDA_FEIRA': { 
-    label: 'Venda / Loja', 
+  'VENDA_FEIRA': {
+    label: 'Venda / Loja',
     color: 'bg-emerald-500/10 text-emerald-700 border-emerald-700/30',
     icon: <Package className="h-3 w-3" />
   },
-  'ESTORNO_FEIRA': { 
-    label: 'Estorno Feira', 
+  'ESTORNO_FEIRA': {
+    label: 'Estorno Feira',
     color: 'bg-yellow-500/10 text-yellow-700 border-yellow-500/30',
     icon: <ArrowLeftRight className="h-3 w-3" />
   },
-  'entrada': { 
-    label: 'Entrada', 
+  'entrada': {
+    label: 'Entrada',
     color: 'bg-green-500/10 text-green-700 border-green-500/30',
     icon: <ArrowUp className="h-3 w-3" />
   },
-  'saida': { 
-    label: 'Saída', 
+  'saida': {
+    label: 'Saída',
     color: 'bg-red-500/10 text-red-700 border-red-500/30',
     icon: <ArrowDown className="h-3 w-3" />
   },
@@ -74,7 +74,7 @@ const tipoConfig: Record<string, { label: string; color: string; icon: React.Rea
 export function HistoricoMovimentacoesModal({ open, onOpenChange, item }: HistoricoMovimentacoesModalProps) {
   const [semLimite, setSemLimite] = useState(false);
   const queryClient = useQueryClient();
-  
+
   const { data: historico = [], isLoading, refetch } = useHistoricoMovimentacoesItem(
     item?.itemId || null,
     item?.localId || null,
@@ -84,8 +84,8 @@ export function HistoricoMovimentacoesModal({ open, onOpenChange, item }: Histor
   if (!item) return null;
 
   // Calcular período consultado
-  const periodoConsultado = semLimite 
-    ? 'Todo o histórico' 
+  const periodoConsultado = semLimite
+    ? 'Todo o histórico'
     : 'Últimas 50 movimentações';
 
   const handleBuscarDesdeInicio = () => {
@@ -96,10 +96,10 @@ export function HistoricoMovimentacoesModal({ open, onOpenChange, item }: Histor
     refetch();
   };
 
-  const isEntrada = (tipo: string) => 
+  const isEntrada = (tipo: string) =>
     tipo.includes('ENTRADA') || tipo === 'entrada' || tipo === 'RETORNO_FEIRA';
-  
-  const isSaida = (tipo: string) => 
+
+  const isSaida = (tipo: string) =>
     tipo.includes('SAIDA') || tipo === 'saida' || tipo === 'VENDA_FEIRA' || tipo === 'ENVIO_FEIRA';
 
   return (
@@ -133,11 +133,11 @@ export function HistoricoMovimentacoesModal({ open, onOpenChange, item }: Histor
               <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
                 <Package className="h-8 w-8 text-muted-foreground/50" />
               </div>
-              
+
               <h3 className="font-medium text-lg mb-1">
                 Nenhuma movimentação encontrada
               </h3>
-              
+
               <p className="text-sm text-muted-foreground mb-4">
                 {periodoConsultado}
               </p>
@@ -162,8 +162,8 @@ export function HistoricoMovimentacoesModal({ open, onOpenChange, item }: Histor
 
               <div className="flex flex-wrap gap-2 justify-center">
                 {!semLimite && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={handleBuscarDesdeInicio}
                   >
@@ -171,8 +171,8 @@ export function HistoricoMovimentacoesModal({ open, onOpenChange, item }: Histor
                     Buscar desde o início
                   </Button>
                 )}
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={handleAtualizar}
                 >
@@ -188,8 +188,8 @@ export function HistoricoMovimentacoesModal({ open, onOpenChange, item }: Histor
                 <span>{historico.length} movimentação(ões) • {periodoConsultado}</span>
                 <div className="flex gap-2">
                   {!semLimite && historico.length >= 50 && (
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       className="h-6 text-xs"
                       onClick={handleBuscarDesdeInicio}
@@ -197,8 +197,8 @@ export function HistoricoMovimentacoesModal({ open, onOpenChange, item }: Histor
                       Ver todo histórico
                     </Button>
                   )}
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
                     className="h-6 text-xs"
                     onClick={handleAtualizar}
@@ -277,7 +277,7 @@ export function HistoricoMovimentacoesModal({ open, onOpenChange, item }: Histor
                         </div>
                       )}
 
-                      {/* Tipo de Ajuste */}
+                      {/* Tipo de Movimentação */}
                       {mov.tipoAjusteNome && (
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <Tag className="h-3.5 w-3.5" />

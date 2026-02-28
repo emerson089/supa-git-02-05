@@ -22,6 +22,7 @@ export interface SaidaDetalhada {
   data: Date;
   itemId: string;
   modeloNome: string;
+  imagemUrl: string | null;
   quantidade: number;
   valorUnitario: number | null;
   valorTotal: number | null;
@@ -32,6 +33,7 @@ export interface SaidaDetalhada {
   localNome: string;
   localDestinoId?: string;
   localDestinoNome?: string;
+  usuarioNome: string | null;
 }
 
 export interface ResumoSaidas {
@@ -41,9 +43,10 @@ export interface ResumoSaidas {
   quantidadeSemPreco: number;
 }
 
-// Tipos de movimentação que são saídas
+// Tipos de movimentação registrados no relatório (saídas + entradas por ajuste)
 export const TIPOS_SAIDA = [
   'AJUSTE_SAIDA',
+  'AJUSTE_ENTRADA',
   'VENDA_FEIRA',
   'ENVIO_FEIRA',
   'TRANSFERENCIA',
@@ -51,7 +54,8 @@ export const TIPOS_SAIDA = [
 ] as const;
 
 export const TIPO_LABELS: Record<string, string> = {
-  'AJUSTE_SAIDA': 'Ajuste Estoque',
+  'AJUSTE_SAIDA': 'Movimentação Saída',
+  'AJUSTE_ENTRADA': 'Movimentação Entrada',
   'VENDA_FEIRA': 'Venda / Loja',
   'ENVIO_FEIRA': 'Envio Feira',
   'TRANSFERENCIA': 'Transferência',
@@ -105,10 +109,11 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       // Montar lista de tipos para a query
       let tiposParaQuery: string[];
       if (filtrosAtivos.length === 0) {
-        // Sem filtro: todos os tipos de saída
+        // Sem filtro: todos os tipos de movimentação (saídas + entradas)
         tiposParaQuery = [...TIPOS_SAIDA];
       } else {
-        tiposParaQuery = ['AJUSTE_SAIDA'];
+        // Com filtro: incluir AJUSTE_SAIDA e AJUSTE_ENTRADA (filtro pós-query determina quais aparecem)
+        tiposParaQuery = ['AJUSTE_SAIDA', 'AJUSTE_ENTRADA'];
         // Se algum filtro selecionado é conta_como_venda, incluir VENDA_FEIRA
         if (filtroTemVenda) {
           tiposParaQuery.push('VENDA_FEIRA');
@@ -138,7 +143,8 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
           local_id,
           preco_aplicado,
           transferencia_id,
-          tipo_ajuste_id
+          tipo_ajuste_id,
+          user_id
         `)
         .gte('created_at', filtros.dataInicial.toISOString())
         .lte('created_at', dataFinalAjustada.toISOString())
@@ -171,7 +177,7 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
         };
       }
 
-      // Pós-processamento: filtrar AJUSTE_SAIDA conforme filtros selecionados
+      // Pós-processamento: filtrar conforme filtros selecionados
       let movFiltradas = movimentacoes;
       if (filtrosAtivos.length > 0) {
         movFiltradas = movimentacoes.filter(m => {
@@ -179,7 +185,12 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
             // VENDA_FEIRA: incluir apenas se algum filtro selecionado é conta_como_venda
             return filtroTemVenda;
           }
-          if (m.tipo !== 'AJUSTE_SAIDA') return false; // outros tipos do sistema não devem aparecer com filtro ativo
+          // AJUSTE_ENTRADA: incluir se tipo_ajuste_id está nos IDs selecionados
+          if (m.tipo === 'AJUSTE_ENTRADA') {
+            if (!m.tipo_ajuste_id) return false;
+            return tiposAjusteIds.includes(m.tipo_ajuste_id);
+          }
+          if (m.tipo !== 'AJUSTE_SAIDA') return false; // outros tipos do sistema não aparecem com filtro ativo
           // AJUSTE_SAIDA: incluir se tipo_ajuste_id está nos IDs selecionados
           if (m.tipo_ajuste_id && tiposAjusteIds.includes(m.tipo_ajuste_id)) {
             return true;
@@ -196,7 +207,7 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       const itemIds = [...new Set(movFiltradas.map(m => m.item_id))];
       const { data: itens } = await supabase
         .from('estoque_itens')
-        .select('id, nome, preco_unitario')
+        .select('id, nome, preco_unitario, imagem_url')
         .in('id', itemIds);
 
       const itensMap = new Map(itens?.map(i => [i.id, i]) || []);
@@ -210,10 +221,23 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
 
       const locaisMap = new Map(locais?.map(l => [l.id, l.nome]) || []);
 
+      // Buscar nomes dos usuários que realizaram as movimentações
+      const userIds = [...new Set(movFiltradas.map(m => (m as any).user_id).filter(Boolean))];
+      const usuariosMap = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: perfis } = await supabase
+          .from('profiles')
+          .select('user_id, nome, email')
+          .in('user_id', userIds);
+        for (const p of perfis || []) {
+          usuariosMap.set(p.user_id, p.nome || p.email || 'Desconhecido');
+        }
+      }
+
       // Buscar informações de transferências para obter local destino
       const transferenciaIds = [...new Set(movFiltradas.filter(m => m.transferencia_id).map(m => m.transferencia_id))];
       const transferenciasMap = new Map<string, { origemId: string; destinoId: string; destinoNome: string }>();
-      
+
       if (transferenciaIds.length > 0) {
         const { data: transferencias } = await supabase
           .from('transferencias')
@@ -243,7 +267,7 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
       const saidas: SaidaDetalhada[] = movFiltradas.map(mov => {
         const item = itensMap.get(mov.item_id);
         const transferencia = mov.transferencia_id ? transferenciasMap.get(mov.transferencia_id) : null;
-        
+
         // Prioridade de preço: preco_aplicado > preco_unitario do item
         const valorUnitario = mov.preco_aplicado ?? item?.preco_unitario ?? null;
         const valorTotal = valorUnitario !== null ? valorUnitario * mov.quantidade : null;
@@ -258,6 +282,7 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
           data: new Date(mov.created_at),
           itemId: mov.item_id,
           modeloNome: item?.nome || 'Item não encontrado',
+          imagemUrl: (item as any)?.imagem_url || null,
           quantidade: mov.quantidade,
           valorUnitario,
           valorTotal,
@@ -268,14 +293,17 @@ export function useRelatorioSaidas(filtros: FiltrosSaidas | null) {
           localNome: locaisMap.get(mov.local_id) || 'Local não encontrado',
           localDestinoId: transferencia?.destinoId,
           localDestinoNome: transferencia?.destinoNome,
+          usuarioNome: (mov as any).user_id ? (usuariosMap.get((mov as any).user_id) || null) : null,
         };
       });
-      // Calcular resumo
+      // Calcular resumo — separar entradas e saídas
+      const isTipoEntrada = (tipo: string) => tipo === 'AJUSTE_ENTRADA' || tipo === 'RETORNO_FEIRA';
+      const saidasApenasMovs = saidas.filter(s => !isTipoEntrada(s.tipo));
       const resumo: ResumoSaidas = {
-        totalPecas: saidas.reduce((acc, s) => acc + s.quantidade, 0),
-        valorVendaTotal: saidas.reduce((acc, s) => acc + (s.valorTotal || 0), 0),
+        totalPecas: saidasApenasMovs.reduce((acc, s) => acc + s.quantidade, 0),
+        valorVendaTotal: saidasApenasMovs.reduce((acc, s) => acc + (s.valorTotal || 0), 0),
         valorCustoTotal: null, // TODO: implementar quando houver custo_unitario
-        quantidadeSemPreco: saidas.filter(s => s.valorUnitario === null).length,
+        quantidadeSemPreco: saidasApenasMovs.filter(s => s.valorUnitario === null).length,
       };
 
       return { saidas, resumo };

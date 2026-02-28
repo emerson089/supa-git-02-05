@@ -19,8 +19,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ClienteSchema, PedidoItemSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
+import { ChevronsUpDown, Check } from 'lucide-react';
+
+function formatPhone(phone: string): string {
+  if (!phone) return '';
+  const numbers = phone.replace(/\D/g, '');
+  if (numbers.length === 0) return '';
+  if (numbers.length <= 2) return `(${numbers}`;
+  if (numbers.length <= 6) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+  if (numbers.length <= 10) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`;
+  return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+}
 const STORAGE_KEY = 'novo-pedido-draft';
 const NovoPedido = () => {
   const isMobile = useIsMobile();
@@ -108,6 +122,7 @@ const NovoPedido = () => {
 
   // Add Cliente Modal
   const [showAddCliente, setShowAddCliente] = useState(false);
+  const [novoClienteExcursaoOpen, setNovoClienteExcursaoOpen] = useState(false);
   const [novoCliente, setNovoCliente] = useState({
     nome: '',
     telefone: '',
@@ -268,8 +283,24 @@ const NovoPedido = () => {
     setShowAddCliente(true);
   };
   const handleSaveNovoCliente = async () => {
+    // Custom pre-flight validations for UI alerts
+    if (!novoCliente.telefone) {
+      toast.error('O telefone é obrigatório.');
+      return;
+    }
+    if (!novoCliente.excursao) {
+      toast.error('Por favor, selecione a excursão.');
+      return;
+    }
+
+    // Pass the raw string to Zod for strict constraints (only digits)
+    const rawData = {
+      ...novoCliente,
+      telefone: novoCliente.telefone.replace(/\D/g, '')
+    };
+
     // Validate with Zod schema
-    const result = ClienteSchema.safeParse(novoCliente);
+    const result = ClienteSchema.safeParse(rawData);
     if (!result.success) {
       const firstError = result.error.errors[0]?.message || 'Dados inválidos';
       toast.error(firstError);
@@ -278,7 +309,7 @@ const NovoPedido = () => {
     try {
       const validData = {
         nome: result.data.nome,
-        telefone: result.data.telefone,
+        telefone: result.data.telefone, // Already stripped of non-digits
         cidade: result.data.cidade,
         estado: result.data.estado,
         excursao: result.data.excursao
@@ -292,9 +323,9 @@ const NovoPedido = () => {
       setEstado(cliente.estado);
       setTelefone(cliente.telefone);
       setExcursao(cliente.excursao);
-      
+
       // Buscar taxa da excursão se existir
-      const excursaoMatch = excursoesAtivas?.find(e => 
+      const excursaoMatch = excursoesAtivas?.find(e =>
         e.nome.toLowerCase() === cliente.excursao.toLowerCase()
       );
       if (excursaoMatch) {
@@ -317,103 +348,129 @@ const NovoPedido = () => {
     }
   };
   return <div className="min-h-screen bg-background flex overflow-hidden">
-      {/* Mobile Header */}
-      {isMobile && <MobileHeader title="Novo Pedido" />}
-      
-      {/* Sidebar */}
-      {!isMobile && <AppSidebar />}
+    {/* Mobile Header */}
+    {isMobile && <MobileHeader title="Novo Pedido" />}
 
-      {/* Main Content */}
-      <main className={cn("flex-1 flex flex-col h-screen overflow-hidden", isMobile && "pt-14 pb-20")}>
-        {/* Header - Desktop only */}
-        {!isMobile && <header className="px-8 py-6 flex-shrink-0">
-            <h1 className="text-2xl font-bold text-foreground">NOVO PEDIDO</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Cadastre pedidos vinculados a clientes e estoque
-            </p>
-          </header>}
+    {/* Sidebar */}
+    {!isMobile && <AppSidebar />}
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto px-8 pb-8">
-          <div className="max-w-5xl space-y-8">
-            {/* Cliente Info Card */}
-            <ClienteInfoCard clienteId={clienteId} cidade={cidade} estado={estado} telefone={telefone} excursao={excursao} excursaoId={excursaoId} taxaExcursao={taxaExcursao} onClienteChange={setClienteId} onCidadeChange={setCidade} onEstadoChange={setEstado} onTelefoneChange={setTelefone} onExcursaoChange={setExcursao} onExcursaoIdChange={setExcursaoId} onTaxaExcursaoChange={setTaxaExcursao} onAddCliente={handleAddCliente} />
+    {/* Main Content */}
+    <main className={cn("flex-1 flex flex-col h-screen overflow-hidden", isMobile && "pt-14 pb-20")}>
+      {/* Header - Desktop only */}
+      {!isMobile && <header className="px-8 py-6 flex-shrink-0">
+        <h1 className="text-2xl font-bold text-foreground">NOVO PEDIDO</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Cadastre pedidos vinculados a clientes e estoque
+        </p>
+      </header>}
 
-            {/* Insights do Cliente - Apenas para consulta interna */}
-            <ClienteInsightsCard clienteId={clienteId} />
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto px-8 pb-8">
+        <div className="max-w-5xl space-y-8">
+          {/* Cliente Info Card */}
+          <ClienteInfoCard clienteId={clienteId} cidade={cidade} estado={estado} telefone={telefone} excursao={excursao} excursaoId={excursaoId} taxaExcursao={taxaExcursao} onClienteChange={setClienteId} onCidadeChange={setCidade} onEstadoChange={setEstado} onTelefoneChange={setTelefone} onExcursaoChange={setExcursao} onExcursaoIdChange={setExcursaoId} onTaxaExcursaoChange={setTaxaExcursao} onAddCliente={handleAddCliente} />
 
-            {/* Status padrão: PENDENTE, NÃO SEPARADO, NÃO ENTREGUE - configurável apenas ao editar pedido */}
+          {/* Insights do Cliente - Apenas para consulta interna */}
+          <ClienteInsightsCard clienteId={clienteId} />
 
-            {/* Resumo Card - agora acima dos itens */}
-            <ResumoCard totalPecas={totalPecas} valorItens={valorItens} taxaExcursao={taxaExcursao} nomeExcursao={excursao} valorTotal={valorTotal} quantidadeModelos={quantidadeModelos} onLimpar={handleLimpar} onCriarPedido={handleCriarPedido} isLoading={isLoading} disabled={hasEstoqueInsuficiente} />
+          {/* Status padrão: PENDENTE, NÃO SEPARADO, NÃO ENTREGUE - configurável apenas ao editar pedido */}
 
-            {/* Items Card - agora abaixo do resumo */}
-            <ItensPedidoCard items={items} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
-          </div>
+          {/* Resumo Card - agora acima dos itens */}
+          <ResumoCard totalPecas={totalPecas} valorItens={valorItens} taxaExcursao={taxaExcursao} nomeExcursao={excursao} valorTotal={valorTotal} quantidadeModelos={quantidadeModelos} onLimpar={handleLimpar} onCriarPedido={handleCriarPedido} isLoading={isLoading} disabled={hasEstoqueInsuficiente} />
+
+          {/* Items Card - agora abaixo do resumo */}
+          <ItensPedidoCard items={items} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
         </div>
-      </main>
+      </div>
+    </main>
 
-      {/* Add Cliente Modal */}
-      <Dialog open={showAddCliente} onOpenChange={setShowAddCliente}>
-        <DialogContent className="sm:max-w-[450px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-foreground">Novo Cliente</DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Cadastre um novo cliente rapidamente
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label htmlFor="novo-nome">Nome</Label>
-              <Input id="novo-nome" value={novoCliente.nome} onChange={e => setNovoCliente(prev => ({
+    {/* Add Cliente Modal */}
+    <Dialog open={showAddCliente} onOpenChange={setShowAddCliente}>
+      <DialogContent className="sm:max-w-[450px]">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold text-foreground">Novo Cliente</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Cadastre um novo cliente rapidamente
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 mt-4">
+          <div className="space-y-2">
+            <Label htmlFor="novo-nome">Nome</Label>
+            <Input id="novo-nome" value={novoCliente.nome} onChange={e => setNovoCliente(prev => ({
               ...prev,
               nome: e.target.value
             }))} placeholder="Nome do cliente" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="novo-telefone">Telefone</Label>
-              <Input id="novo-telefone" value={novoCliente.telefone} onChange={e => setNovoCliente(prev => ({
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="novo-telefone">Telefone</Label>
+            <Input id="novo-telefone" value={novoCliente.telefone} onChange={e => setNovoCliente(prev => ({
               ...prev,
-              telefone: e.target.value
-            }))} placeholder="(00) 00000-0000" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="novo-cidade">Cidade</Label>
-                <Input id="novo-cidade" value={novoCliente.cidade} onChange={e => setNovoCliente(prev => ({
+              telefone: formatPhone(e.target.value)
+            }))} placeholder="(00) 00000-0000" maxLength={15} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="novo-cidade">Cidade</Label>
+              <Input id="novo-cidade" value={novoCliente.cidade} onChange={e => setNovoCliente(prev => ({
                 ...prev,
                 cidade: e.target.value
               }))} placeholder="Cidade" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="novo-estado">Estado</Label>
-                <Input id="novo-estado" value={novoCliente.estado} onChange={e => setNovoCliente(prev => ({
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="novo-estado">Estado</Label>
+              <Input id="novo-estado" value={novoCliente.estado} onChange={e => setNovoCliente(prev => ({
                 ...prev,
                 estado: e.target.value
               }))} placeholder="UF" maxLength={2} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="novo-excursao">Excursão</Label>
-              <Input id="novo-excursao" value={novoCliente.excursao} onChange={e => setNovoCliente(prev => ({
-              ...prev,
-              excursao: e.target.value
-            }))} placeholder="Nome da excursão" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
             </div>
           </div>
-          <div className="flex gap-3 pt-4">
-            <Button variant="outline" onClick={() => setShowAddCliente(false)} className="flex-1 h-11 rounded-xl border-0 text-muted-foreground hover:text-foreground">
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveNovoCliente} className="flex-1 h-11 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground">
-              Salvar Cliente
-            </Button>
+          <div className="space-y-2">
+            <Label htmlFor="novo-excursao">Excursão</Label>
+            <Popover open={novoClienteExcursaoOpen} onOpenChange={setNovoClienteExcursaoOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={novoClienteExcursaoOpen} className="w-full justify-between font-normal shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0 h-10 overflow-hidden text-muted-foreground">
+                  <span className="truncate block max-w-[calc(100%-2rem)] text-foreground">
+                    {novoCliente.excursao || <span className="text-muted-foreground">Selecione a excursão</span>}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0 overflow-hidden" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar excursão..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhuma excursão encontrada</CommandEmpty>
+                    {(excursoesAtivas || []).map(exc => (
+                      <CommandItem key={exc.id} value={exc.nome} onSelect={() => {
+                        setNovoCliente(prev => ({ ...prev, excursao: exc.nome }));
+                        setNovoClienteExcursaoOpen(false);
+                      }} className="flex items-center">
+                        <Check className={cn("mr-2 h-4 w-4 shrink-0", novoCliente.excursao === exc.nome ? "opacity-100" : "opacity-0")} />
+                        <span className="flex-1 truncate">{exc.nome}</span>
+                        <span className="text-xs text-emerald-600 font-semibold ml-2 shrink-0">
+                          {exc.taxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </span>
+                      </CommandItem>
+                    ))}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Bottom Navigation */}
-      <BottomNavigation />
-    </div>;
+        </div>
+        <div className="flex gap-3 pt-4">
+          <Button variant="outline" onClick={() => setShowAddCliente(false)} className="flex-1 h-11 rounded-xl border-0 text-muted-foreground hover:text-foreground">
+            Cancelar
+          </Button>
+          <Button onClick={handleSaveNovoCliente} className="flex-1 h-11 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground">
+            Salvar Cliente
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Bottom Navigation */}
+    <BottomNavigation />
+  </div>;
 };
 export default NovoPedido;

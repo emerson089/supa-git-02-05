@@ -58,9 +58,9 @@ const STATUS_CONFIG: Record<StatusTransferencia, { label: string; variant: 'defa
   cancelada: { label: 'Cancelada', variant: 'destructive', className: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400' },
 };
 
-export function DetalhesTransferenciaModal({ 
-  open, 
-  onOpenChange, 
+export function DetalhesTransferenciaModal({
+  open,
+  onOpenChange,
   transferencia,
   itensDetalhados,
 }: DetalhesTransferenciaModalProps) {
@@ -120,7 +120,7 @@ export function DetalhesTransferenciaModal({
           observacoes: observacoes || null,
         });
       }
-      
+
       await concluir.mutateAsync({ transferenciaId: transferencia.id });
       toast.success('Transferência concluída com sucesso!');
       onOpenChange(false);
@@ -195,39 +195,6 @@ export function DetalhesTransferenciaModal({
             )}
           </div>
 
-          {/* Usuários */}
-          <div className="space-y-2">
-            {transferencia.criadorNome && (
-              <div className="flex items-start gap-2">
-                <User className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Criado por</p>
-                  <p className="text-sm font-medium">
-                    {transferencia.criadorNome}
-                    {transferencia.criadorRole && (
-                      <span className="text-xs text-muted-foreground ml-1">({transferencia.criadorRole})</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            )}
-            {transferencia.concluidoPorNome && (
-              <div className="flex items-start gap-2">
-                <User className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">
-                    {transferencia.status === 'concluida' ? 'Concluído por' : 'Cancelado por'}
-                  </p>
-                  <p className="text-sm font-medium">
-                    {transferencia.concluidoPorNome}
-                    {transferencia.concluidoPorRole && (
-                      <span className="text-xs text-muted-foreground ml-1">({transferencia.concluidoPorRole})</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Motivo */}
           <div className="space-y-2">
@@ -253,6 +220,17 @@ export function DetalhesTransferenciaModal({
             )}
           </div>
 
+          {/* Realizado por */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <Label className="text-sm font-medium">Realizado por</Label>
+            </div>
+            <p className="text-sm bg-muted/50 rounded-md px-3 py-2">
+              {transferencia.criadorNome || 'Não identificado'}
+            </p>
+          </div>
+
           {/* Observação */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -260,8 +238,8 @@ export function DetalhesTransferenciaModal({
               <Label className="text-sm font-medium">Observação</Label>
             </div>
             {isPendente ? (
-              <Textarea 
-                value={observacoes} 
+              <Textarea
+                value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 placeholder="Observações sobre a transferência..."
                 className="min-h-[60px] resize-none"
@@ -297,7 +275,7 @@ export function DetalhesTransferenciaModal({
                         </div>
                       </TableCell>
                       <TableCell className="py-2">
-                        <p className="text-sm font-medium truncate max-w-[150px]">{item.itemNome}</p>
+                        <p className="text-sm font-medium">{item.itemNome}</p>
                       </TableCell>
                       <TableCell className="text-right py-2 font-medium">
                         {item.quantidadeEnviada}
@@ -315,8 +293,8 @@ export function DetalhesTransferenciaModal({
       {isPendente && (
         <div className="shrink-0 pt-4 border-t mt-4 space-y-2">
           {hasChanges && (
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="w-full"
               onClick={handleSalvarAlteracoes}
               disabled={atualizar.isPending}
@@ -342,7 +320,7 @@ export function DetalhesTransferenciaModal({
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Voltar</AlertDialogCancel>
-                  <AlertDialogAction 
+                  <AlertDialogAction
                     onClick={handleCancelar}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >

@@ -18,7 +18,7 @@ export interface ClientesPaginatedParams {
   page: number;
   pageSize: number;
   search?: string;
-  ordenacao?: 'nome' | 'recente';
+  ordenacao?: 'nome' | 'recente' | 'maior_historico';
   filterByIds?: string[] | null; // Filter by specific client IDs (for CRM filters)
 }
 
@@ -31,7 +31,7 @@ export interface ClientesPaginatedResult {
 export function useClientesPaginated(params: ClientesPaginatedParams) {
   const { user } = useAuth();
   const { page, pageSize, search = '', ordenacao = 'nome', filterByIds } = params;
-  
+
   // Debounce search by 400ms
   const debouncedSearch = useDebouncedValue(search, 400);
 
@@ -70,25 +70,52 @@ export function useClientesPaginated(params: ClientesPaginatedParams) {
       // Apply search filter (server-side)
       if (debouncedSearch) {
         const searchTerm = `%${debouncedSearch}%`;
-        countQuery = countQuery.or(
-          `nome.ilike.${searchTerm},telefone.ilike.${searchTerm},cidade.ilike.${searchTerm},excursao.ilike.${searchTerm}`
-        );
-        dataQuery = dataQuery.or(
-          `nome.ilike.${searchTerm},telefone.ilike.${searchTerm},cidade.ilike.${searchTerm},excursao.ilike.${searchTerm}`
-        );
+        const searchClause = `nome.ilike.${searchTerm},telefone.ilike.${searchTerm},cidade.ilike.${searchTerm},excursao.ilike.${searchTerm}`;
+        countQuery = countQuery.or(searchClause);
+        dataQuery = dataQuery.or(searchClause);
       }
 
-      // Apply sorting (server-side)
+      // If we are filtering by CRM IDs, doing Server-Side sorting/pagination ruins out custom
+      // frontend order (like "highest days without purchase" or "maior_historico").
+      // So we fetch all matching rows, sort them by filterByIds, and paginate locally.
+      if (filterByIds) {
+        // Execute queries (no range)
+        const [countResult, dataResult] = await Promise.all([
+          countQuery,
+          dataQuery,
+        ]);
+
+        if (countResult.error) throw countResult.error;
+        if (dataResult.error) throw dataResult.error;
+
+        let allData = dataResult.data || [];
+
+        // Sort locally respecting the exact order of filterByIds
+        allData.sort((a, b) => {
+          return filterByIds.indexOf(a.id) - filterByIds.indexOf(b.id);
+        });
+
+        // Apply pagination locally
+        const totalCount = allData.length;
+        const totalPages = Math.ceil(totalCount / pageSize);
+        const paginatedData = allData.slice(from, to);
+
+        return {
+          data: paginatedData,
+          count: totalCount,
+          totalPages,
+        };
+      }
+
+      // NO CRM filter: Apply normal server-side sorting and pagination
       if (ordenacao === 'recente') {
         dataQuery = dataQuery.order('created_at', { ascending: false });
       } else {
         dataQuery = dataQuery.order('nome', { ascending: true });
       }
 
-      // Apply pagination
       dataQuery = dataQuery.range(from, to);
 
-      // Execute both queries in parallel
       const [countResult, dataResult] = await Promise.all([
         countQuery,
         dataQuery,

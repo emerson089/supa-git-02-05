@@ -25,6 +25,14 @@ function extrairReferencia(nome: string): string {
 }
 
 /**
+ * Remove a referência do nome do produto para evitar duplicata na exibição
+ * Exemplo: "Short Alfa. botoes salmao - 170" → "Short Alfa. botoes salmao"
+ */
+function removerReferenciaDoNome(nome: string): string {
+  return nome.replace(/\s*-\s*\d+$/, '').trim();
+}
+
+/**
  * Ordena itens por referência numérica
  */
 function ordenarPorReferencia(itens: EstoqueLocalDetalhado[]): EstoqueLocalDetalhado[] {
@@ -45,15 +53,15 @@ function ordenarPorReferencia(itens: EstoqueLocalDetalhado[]): EstoqueLocalDetal
  */
 function PrintImage({ src, alt }: { src: string | null; alt: string }) {
   const { signedUrl, loading } = useSignedUrl(src);
-  
+
   if (!src) {
     return (
       <div className="print-placeholder">
-        <span>Sem<br/>foto</span>
+        <span>Sem<br />foto</span>
       </div>
     );
   }
-  
+
   if (loading) {
     return (
       <div className="print-placeholder">
@@ -61,11 +69,11 @@ function PrintImage({ src, alt }: { src: string | null; alt: string }) {
       </div>
     );
   }
-  
+
   return (
     <>
-      <img 
-        src={signedUrl || ''} 
+      <img
+        src={signedUrl || ''}
         alt={alt}
         className="print-thumbnail"
         onError={(e) => {
@@ -76,7 +84,7 @@ function PrintImage({ src, alt }: { src: string | null; alt: string }) {
         }}
       />
       <div className="print-placeholder" style={{ display: 'none' }}>
-        <span>Sem<br/>foto</span>
+        <span>Sem<br />foto</span>
       </div>
     </>
   );
@@ -87,16 +95,20 @@ function PrintImage({ src, alt }: { src: string | null; alt: string }) {
  */
 function PrintRow({ item }: { item: EstoqueLocalDetalhado }) {
   const referencia = extrairReferencia(item.itemNome);
-  
+  const nomeExibido = removerReferenciaDoNome(item.itemNome);
+
   return (
     <tr>
       <td>
         <PrintImage src={item.itemImagemUrl} alt={item.itemNome} />
       </td>
-      <td>{item.itemNome}</td>
+      <td>{nomeExibido}</td>
       <td>{referencia}</td>
       <td>
-        <div className="print-qty-cell" />
+        <div className="print-qty-cell">
+          <span className="print-qty-value">{item.quantidade}</span>
+          <div className="print-qty-box" />
+        </div>
       </td>
     </tr>
   );
@@ -106,8 +118,8 @@ function PrintRow({ item }: { item: EstoqueLocalDetalhado }) {
  * Componente de layout para impressão do relatório de estoque
  * Pode funcionar em modo preview (tela cheia com botões) ou oculto para impressão direta
  */
-export function PrintEstoqueLocal({ 
-  itens, 
+export function PrintEstoqueLocal({
+  itens,
   localNome,
   showPreview = false,
   onClose,
@@ -115,24 +127,24 @@ export function PrintEstoqueLocal({
 }: PrintEstoqueLocalProps) {
   const itensOrdenados = useMemo(() => ordenarPorReferencia(itens), [itens]);
   const dataHora = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-  
+
   return (
-    <div 
+    <div
       id="print-estoque-area"
       className={cn(showPreview && "print-preview-mode")}
     >
       {/* Barra de ações - visível apenas no preview */}
       {showPreview && (
         <div className="print-preview-actions no-print">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={onClose}
             className="h-11"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Voltar
           </Button>
-          <Button 
+          <Button
             onClick={onPrint}
             className="h-11"
           >
@@ -141,13 +153,13 @@ export function PrintEstoqueLocal({
           </Button>
         </div>
       )}
-      
+
       {/* Header */}
       <div className="print-header">
         <h1>ESTOQUE – {localNome.toUpperCase()}</h1>
         <p>Gerado em {dataHora} • {itensOrdenados.length} modelos</p>
       </div>
-      
+
       {/* Tabela */}
       <table>
         <thead>
@@ -155,7 +167,7 @@ export function PrintEstoqueLocal({
             <th>Foto</th>
             <th>Modelo</th>
             <th>Ref.</th>
-            <th>Quantidade</th>
+            <th>Sistema / Contagem</th>
           </tr>
         </thead>
         <tbody>
@@ -164,7 +176,7 @@ export function PrintEstoqueLocal({
           ))}
         </tbody>
       </table>
-      
+
       {/* Footer */}
       <div className="print-footer">
         <p>Relatório de Estoque para Contagem Manual</p>
