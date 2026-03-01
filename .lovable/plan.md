@@ -1,33 +1,21 @@
 
 
-## Corrigir campo Motivo nas transferencias para usar Tipos de Ajuste
+## Fix: Build error in Feira.tsx - missing properties
 
-### Problema
+The `convertToTransferenciaComItens` function in `src/pages/Feira.tsx` (line 307) converts a `TransferenciaComItensHistorico` to `TransferenciaComItens`, but is missing 3 required properties from the `Transferencia` interface:
 
-O campo "Motivo" no modal "Nova Transferencia" ja puxa os nomes dos Tipos de Ajuste configurados (ex: "Ajuste de estoque", "Defeito", "Venda / loja"). Porem, a tabela `transferencias` tem um CHECK constraint que so aceita os valores fixos: `feira`, `reposicao`, `ajuste`, `devolucao`.
+- `localOrigemNome` (string | null)
+- `localDestinoNome` (string | null)  
+- `userId` (string)
 
-Quando o vendedor seleciona um motivo como "Ajuste de estoque" ou "Devolucao de cliente", o banco rejeita o registro com o erro:
-```
-new row for relation "transferencias" violates check constraint "transferencias_motivo_check"
-```
+### Changes
 
-### Solucao
+**File: `src/pages/Feira.tsx` (line ~307-331)**
 
-Remover o CHECK constraint `transferencias_motivo_check` da tabela `transferencias`. O campo `motivo` deve aceitar qualquer texto, pois agora ele armazena o nome do tipo de ajuste configurado pelo usuario.
+Add the 3 missing properties to the conversion object:
+- `localOrigemNome`: use `carga.localOrigemNome` if available in `TransferenciaComItensHistorico`, otherwise `null`
+- `localDestinoNome`: use `carga.localDestinoNome` if available, otherwise `null`
+- `userId`: use `user?.id` from the auth context (already available in the component) or extract from `carga` if present
 
-### Alteracao
-
-**Migracao SQL** - Remover o CHECK constraint:
-
-```sql
-ALTER TABLE transferencias DROP CONSTRAINT IF EXISTS transferencias_motivo_check;
-```
-
-Nenhuma alteracao de codigo frontend e necessaria. O modal ja funciona corretamente, puxando os tipos de ajuste e enviando o nome como motivo.
-
-### Impacto
-
-- Vendedores e demais usuarios poderao criar transferencias com qualquer motivo dos Tipos de Ajuste configurados
-- O historico existente nao e afetado (os valores antigos como "feira", "ajuste" continuam validos)
-- Sem risco de seguranca, pois o campo motivo e apenas descritivo/informativo
+I will check the `TransferenciaComItensHistorico` interface to map the correct fields.
 
