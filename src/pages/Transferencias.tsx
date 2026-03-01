@@ -109,7 +109,7 @@ export default function Transferencias() {
   } = useUserLocations();
 
   // Estados para gestão de estoque local
-  const [activeTab, setActiveTab] = useState('estoque');
+  const [activeTab, setActiveTab] = useState(isVendedor ? 'historico' : 'estoque');
   const [searchEstoque, setSearchEstoque] = useState('');
   const debouncedSearchEstoque = useDebouncedValue(searchEstoque, 300);
   const [showAjusteModal, setShowAjusteModal] = useState(false);
@@ -767,7 +767,7 @@ export default function Transferencias() {
     </div>;
   }
   return <div className="min-h-screen bg-background flex max-w-full overflow-x-hidden">
-    {isMobile && <MobileHeader title="Estoque por Local" />}
+    {isMobile && <MobileHeader title="Movimentações" />}
     {!isMobile && <AppSidebar />}
 
     <main className={cn("flex-1 flex flex-col h-screen overflow-y-auto overflow-x-hidden w-full max-w-full", isMobile && "pt-14 pb-20")}>
@@ -784,13 +784,13 @@ export default function Transferencias() {
       {/* Conteúdo - Mobile: Tabs, Desktop: Layout dividido */}
       {isMobile ? <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
         <TabsList className="mx-4 mt-2 grid w-auto grid-cols-2 shrink-0">
-          <TabsTrigger value="estoque" className="gap-1.5">
-            <Store className="h-4 w-4" />
-            Estoque
-          </TabsTrigger>
           <TabsTrigger value="historico" className="gap-1.5">
             <ArrowLeftRight className="h-4 w-4" />
             Transferências
+          </TabsTrigger>
+          <TabsTrigger value="estoque" className="gap-1.5">
+            <Store className="h-4 w-4" />
+            Estoque
           </TabsTrigger>
         </TabsList>
 

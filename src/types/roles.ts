@@ -96,7 +96,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, string[]> = {
 export const ROLE_LANDING_PAGES: Record<AppRole, string> = {
   admin: '/dashboard',
   gerente: '/pedidos/criados',
-  vendedor: '/feira',
+  vendedor: '/transferencias',
 };
 
 // Role display names

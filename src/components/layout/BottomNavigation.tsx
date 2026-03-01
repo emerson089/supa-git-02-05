@@ -1,9 +1,9 @@
 import { forwardRef, useState, useEffect, useCallback } from 'react';
-import { 
-  LayoutDashboard, 
-  ShoppingCart, 
-  Warehouse, 
-  Plus, 
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  Warehouse,
+  Plus,
   MoreHorizontal,
   Store,
   ArrowLeftRight,
@@ -14,7 +14,7 @@ import {
   HelpCircle,
   UserPlus,
   LogOut,
-  LucideIcon 
+  LucideIcon
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -42,6 +42,7 @@ interface QuickActionType {
 const leftNavItems: NavItemType[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['admin', 'gerente'] },
   { label: 'Vendas', icon: ShoppingCart, path: '/pedidos/criados', roles: ['admin', 'gerente'] },
+  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['vendedor'] },
 ];
 
 const rightNavItems: NavItemType[] = [
@@ -50,7 +51,7 @@ const rightNavItems: NavItemType[] = [
 ];
 
 const moreMenuItems: NavItemType[] = [
-  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente', 'vendedor'] },
+  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente'] },
   { label: 'Clientes', icon: Users, path: '/clientes', roles: ['admin', 'gerente'] },
   { label: 'Produção', icon: Factory, path: '/producao', roles: ['admin', 'gerente'] },
   { label: 'Pedidos Criados', icon: FileText, path: '/pedidos/criados', roles: ['admin', 'gerente'] },
@@ -82,8 +83,8 @@ const NavItem = forwardRef<HTMLButtonElement, NavItemProps>(
         onClick={onClick}
         className={cn(
           "flex flex-col items-center justify-center flex-1 h-full min-w-[60px] min-h-[44px] gap-1 transition-colors rounded-lg",
-          isActive 
-            ? "text-primary" 
+          isActive
+            ? "text-primary"
             : "text-muted-foreground active:text-foreground"
         )}
       >
@@ -113,7 +114,7 @@ export function BottomNavigation() {
   useEffect(() => {
     const currentPath = location.pathname;
     const shouldSave = PAGES_WITH_PARAMS.some(p => currentPath.startsWith(p));
-    
+
     if (shouldSave && location.search) {
       sessionStorage.setItem(`lastUrl_${currentPath}`, currentPath + location.search);
     }
@@ -141,7 +142,7 @@ export function BottomNavigation() {
       setQuickActionsOpen(false);
       return;
     }
-    
+
     // Check if target page has saved URL params
     const savedUrl = sessionStorage.getItem(`lastUrl_${targetPath}`);
     if (savedUrl && savedUrl.startsWith(targetPath)) {
@@ -166,14 +167,14 @@ export function BottomNavigation() {
         <div className="relative flex justify-around items-center h-16 px-2">
           {/* Left items */}
           {visibleLeftItems.map((item) => (
-            <NavItem 
-              key={item.path} 
-              item={item} 
+            <NavItem
+              key={item.path}
+              item={item}
               isActive={isActive(item.path)}
               onClick={() => navigate(item.path)}
             />
           ))}
-          
+
           {/* FAB Central - Quick Actions */}
           <div className="flex-1 flex items-center justify-center">
             <button
@@ -183,12 +184,12 @@ export function BottomNavigation() {
               <Plus size={28} strokeWidth={2.5} />
             </button>
           </div>
-          
+
           {/* Right items */}
           {visibleRightItems.map((item) => (
-            <NavItem 
-              key={item.path} 
-              item={item} 
+            <NavItem
+              key={item.path}
+              item={item}
               isActive={isActive(item.path)}
               onClick={() => navigate(item.path)}
             />
@@ -199,8 +200,8 @@ export function BottomNavigation() {
             onClick={() => setMoreMenuOpen(true)}
             className={cn(
               "flex flex-col items-center justify-center flex-1 h-full min-w-[60px] min-h-[44px] gap-1 transition-colors rounded-lg",
-              moreMenuOpen 
-                ? "text-primary" 
+              moreMenuOpen
+                ? "text-primary"
                 : "text-muted-foreground active:text-foreground"
             )}
           >
@@ -239,7 +240,7 @@ export function BottomNavigation() {
           <SheetHeader className="pb-2 flex-shrink-0">
             <SheetTitle className="text-left">Mais opções</SheetTitle>
           </SheetHeader>
-          
+
           {/* Scrollable menu items */}
           <div className="flex-1 overflow-y-auto py-2 space-y-1">
             {visibleMoreItems.map((item) => {
