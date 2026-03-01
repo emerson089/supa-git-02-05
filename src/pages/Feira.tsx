@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
@@ -50,6 +51,7 @@ interface ItemCarga {
   imagemUrl: string | null;
 }
 export default function Feira() {
+  const { user } = useAuth();
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const {
@@ -308,6 +310,9 @@ export default function Feira() {
     id: carga.id,
     localOrigemId: carga.localOrigemId,
     localDestinoId: carga.localDestinoId,
+    localOrigemNome: carga.localOrigemNome ?? null,
+    localDestinoNome: carga.localDestinoNome ?? null,
+    userId: user?.id ?? '',
     tipo: carga.tipo as 'transferencia' | 'carga_feira',
     status: carga.status as 'em_andamento' | 'concluida' | 'cancelada',
     dataSaida: carga.dataSaida,
