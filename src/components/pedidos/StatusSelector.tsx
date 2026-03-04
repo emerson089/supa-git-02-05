@@ -93,6 +93,7 @@ export const statusEntregaOptions: StatusOption[] = [
   { value: 'RETIRADA', label: 'RETIRADA', color: 'blue' },
   { value: 'PRÓX. SEMANA', label: 'PRÓX. SEMANA', color: 'blue' },
   { value: 'ENTREGOU ERRADO', label: 'ENTREGOU ERRADO', color: 'red' },
+  { value: 'ENTREGA TORITAMA', label: 'ENTREGA TORITAMA', color: 'purple' },
   { value: 'CANCELADO', label: 'CANCELADO', color: 'red' },
 ];
 

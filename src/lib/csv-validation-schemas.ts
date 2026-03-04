@@ -3,7 +3,7 @@ import { z } from 'zod';
 // ==================== PEDIDOS ====================
 const STATUS_PAGAMENTO_VALUES = ['PAGO', 'PENDENTE', 'CANCELADO', 'INCOMPLETO', 'PEND. ENTREGA', 'GOLPE CANCELADO'] as const;
 const STATUS_PEDIDO_VALUES = ['SEPARADO', 'NÃO SEPARADO', 'AMANHÃ', 'INCOMPLETO', 'CANCELADO', 'GOLPE CANCELADO'] as const;
-const STATUS_ENTREGA_VALUES = ['ENTREGUE', 'RETIRADA', 'PRÓX. SEMANA', 'PEND. ENTREGA', 'NÃO ENTREGOU', 'ENTREGOU ERRADO', 'CANCELADO'] as const;
+const STATUS_ENTREGA_VALUES = ['ENTREGUE', 'RETIRADA', 'PRÓX. SEMANA', 'PEND. ENTREGA', 'NÃO ENTREGOU', 'ENTREGOU ERRADO', 'ENTREGA TORITAMA', 'CANCELADO'] as const;
 
 export const PedidoCSVRowSchema = z.object({
   data: z.string().max(50, 'Data muito longa'),
