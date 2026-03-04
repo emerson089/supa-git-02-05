@@ -1,21 +1,16 @@
 
 
-## Fix: Build error in Feira.tsx - missing properties
+## Adicionar opção "ENTREGA TORITAMA" ao status de entrega
 
-The `convertToTransferenciaComItens` function in `src/pages/Feira.tsx` (line 307) converts a `TransferenciaComItensHistorico` to `TransferenciaComItens`, but is missing 3 required properties from the `Transferencia` interface:
+Adicionar a nova opção em todos os locais onde os status de entrega são definidos:
 
-- `localOrigemNome` (string | null)
-- `localDestinoNome` (string | null)  
-- `userId` (string)
+### Arquivos a alterar
 
-### Changes
+1. **`src/components/pedidos/StatusSelector.tsx`** — Adicionar `{ value: 'ENTREGA TORITAMA', label: 'ENTREGA TORITAMA', color: 'purple' }` ao array `statusEntregaOptions`.
 
-**File: `src/pages/Feira.tsx` (line ~307-331)**
+2. **`src/lib/csv-validation-schemas.ts`** — Adicionar `'ENTREGA TORITAMA'` ao array `STATUS_ENTREGA_VALUES`.
 
-Add the 3 missing properties to the conversion object:
-- `localOrigemNome`: use `carga.localOrigemNome` if available in `TransferenciaComItensHistorico`, otherwise `null`
-- `localDestinoNome`: use `carga.localDestinoNome` if available, otherwise `null`
-- `userId`: use `user?.id` from the auth context (already available in the component) or extract from `carga` if present
+3. **`src/components/pedidos/MobileFiltersSheet.tsx`** e **`src/hooks/usePedidosPaginated.ts`** — Verificar se usam os arrays centralizados (provavelmente sim, sem alteração necessária).
 
-I will check the `TransferenciaComItensHistorico` interface to map the correct fields.
+A cor `purple` foi escolhida para diferenciar visualmente, similar ao "NO CARRO". Posso ajustar se preferir outra cor.
 
