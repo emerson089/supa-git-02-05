@@ -22,25 +22,16 @@ import { KpiCardSkeleton, ChartSkeleton, DonutChartSkeleton, ListItemSkeleton, T
 import { Banknote, Package, AlertCircle, Factory, TrendingUp, TrendingDown, Calendar as CalendarIcon, AlertTriangle, ChevronRight, Wrench, Wand2, Target, Pencil, X, Filter, Settings } from "lucide-react";
 import { useInsightsDashboard } from "@/hooks/useInsightsDashboard";
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
-import { useDashboardData, Periodo, DateRange, TendenciaVenda, TipoAgrupamento, STATUS_COLORS, MetaYoY, TopModelosCoverage, PrevisaoMensal, MetaAutomatica, FaturamentoDiaSemana } from "@/hooks/useDashboardData";
+import { useDashboardData, Periodo, DateRange, STATUS_COLORS, MetaYoY, TopModelo, StatusPedido, TopModelosCoverage, PrevisaoMensal, MetaAutomatica, FaturamentoDiaSemana } from "@/hooks/useDashboardData";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { format, startOfMonth, getYear, subDays, subMonths, startOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Line, ComposedChart } from "recharts";
+import { useSalesTrendChart, TrendDataPoint } from "@/hooks/useSalesTrendChart";
 
-// Types for modals
-interface TopModelo {
-  nome: string;
-  quantidade: number;
-}
 
-interface StatusPedido {
-  status: string;
-  count: number;
-  color: string;
-}
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -66,30 +57,86 @@ function calcVariation(atual: number, anterior: number): {
 }
 
 // Custom tooltip for sales trend chart
-function CustomTooltip({
+function TrendTooltip({
   active,
   payload,
-  tipoAgrupamento
-}: {
-  active?: boolean;
-  payload?: Array<{
-    payload: TendenciaVenda;
-  }>;
-  tipoAgrupamento?: TipoAgrupamento;
-}) {
-  if (active && payload?.[0]) {
-    const data = payload[0].payload;
-    return <div className="bg-card p-3 rounded-lg border shadow-lg">
-      <p className="font-medium text-sm">{data.diaCompleto}</p>
-      <p className="text-primary font-bold text-lg">{formatCurrency(data.valor)}</p>
-      <div className="flex gap-4 text-xs text-muted-foreground mt-1">
-        <span>{data.pedidos} pedidos</span>
-        <span>{data.pecas} peças</span>
+  label,
+  granularity,
+  currentYear,
+  previousYear
+}: any) {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload as TrendDataPoint;
+    const isAno = granularity === "ano";
+
+    const diff = data.atual - data.anterior;
+    const isPositive = diff >= 0;
+    const perc = data.anterior > 0 ? Math.abs((diff / data.anterior) * 100) : (data.atual > 0 ? 100 : 0);
+
+    return (
+      <div className="bg-card p-3 rounded-lg border shadow-xl min-w-[200px] z-50">
+        <p className="font-medium text-sm border-b pb-2 mb-2">
+          {isAno ? `${label}` : `Dia ${label}`}
+        </p>
+
+        <div className="flex flex-col gap-2">
+          {/* Atual */}
+          <div className="flex justify-between items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-primary"></div>
+              <span className="text-xs font-semibold text-foreground">{currentYear}</span>
+            </div>
+            <span className="text-sm font-bold text-primary">{formatCurrency(data.atual)}</span>
+          </div>
+
+          {/* Anterior */}
+          {data.anterior > 0 && (
+            <div className="flex justify-between items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full border border-muted-foreground bg-transparent"></div>
+                <span className="text-xs text-muted-foreground">{previousYear}</span>
+              </div>
+              <span className="text-sm font-medium text-muted-foreground">{formatCurrency(data.anterior)}</span>
+            </div>
+          )}
+
+          {/* Diferença */}
+          {data.anterior > 0 && (
+            <div className={`flex justify-between items-center mt-1 pt-2 border-t text-xs font-semibold ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
+              <span>Comparativo</span>
+              <div className="flex items-center gap-1">
+                {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                {formatCurrency(Math.abs(diff))} ({perc.toFixed(1)}%)
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>;
+    );
   }
   return null;
 }
+
+// Renderiza pontos apenas nos picos (valores maiores ou menores significativos)
+const renderCustomDot = (props: any) => {
+  const { cx, cy, payload, index, value } = props;
+  // payload é o elemento inteiro. data é o array?
+  // O Recharts não passa o array inteiro facilmente via propriedades simples do dot, 
+  // mas podemos apenas desenhar o dot se o valor atual > 0 
+  // e se for um dia importante (ex: index % 5 === 0) no mes, ou todo mes no ano
+  if (!value || payload.isFuture) return null;
+
+  // Desenha no primeiro, último, ou a cada N pontos. Para 'ano', desenha todos.
+  const isMes = payload.label.length <= 2; // "01", "02" vs "Jan", "Fev"
+  const isRelevant = !isMes || index === 0 || index % 5 === 0 || value > 5000;
+
+  if (isRelevant) {
+    return (
+      <circle cx={cx} cy={cy} r={3} fill="hsl(var(--background))" stroke="hsl(var(--primary))" strokeWidth={2} />
+    );
+  }
+  return null;
+};
 
 // Custom tooltip for weekday chart
 function WeekdayTooltip({
@@ -183,8 +230,18 @@ export default function Dashboard() {
   };
   const {
     data,
-    loading
-  } = useDashboardData(periodo, dateRange, excluirCancelados);
+    loading,
+    isError
+  } = useDashboardData(periodo, dateRange, excluirCancelados, percentualCrescimento);
+
+  const {
+    granularity,
+    setGranularity,
+    chartData: trendData,
+    isLoading: trendLoading,
+    currentYear: trendCurrentYear,
+    previousYear: trendPreviousYear
+  } = useSalesTrendChart(excluirCancelados);
 
   // Calcular dateRange efetivo para insights
   const insightsDateRange = (() => {
@@ -205,7 +262,7 @@ export default function Dashboard() {
   const { insights: dashboardInsights, resumoExecutivo, sugestaoFoco } = useInsightsDashboard({
     kpis: data.kpis,
     metaAutomatica: data.metaAutomatica,
-    tendenciaVendas: data.tendenciaVendas,
+    tendenciaVendas: trendData,
     estoqueBaixo: data.estoqueBaixo,
     topModelos: data.topModelos,
     faturamentoDiaSemana: data.faturamentoDiaSemana,
@@ -753,6 +810,20 @@ export default function Dashboard() {
         </Card>)}
       </div>
 
+      {/* Error banner - shown when data fetch fails */}
+      {isError && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm mb-2">
+          <AlertCircle size={16} className="flex-shrink-0" />
+          <span>Erro ao carregar dados do dashboard. Verifique sua conexão e tente recarregar a página.</span>
+          <button
+            onClick={() => window.location.reload()}
+            className="ml-auto text-xs underline hover:no-underline font-medium"
+          >
+            Recarregar
+          </button>
+        </div>
+      )}
+
       {/* Insights do Período */}
       <InsightsPanel insights={dashboardInsights} resumoExecutivo={resumoExecutivo} sugestaoFoco={sugestaoFoco} />
 
@@ -761,103 +832,109 @@ export default function Dashboard() {
         {/* Tendência de Vendas - Takes 2 columns */}
         <Card className="neu-card lg:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Tendência de Vendas</CardTitle>
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm text-muted-foreground">
-                Receita {data.tipoAgrupamento === "dia" ? "diária" : data.tipoAgrupamento === "semana" ? "semanal" : "mensal"} no período
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <CardTitle className="text-base font-semibold">Tendência de Vendas</CardTitle>
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary"></span> {trendCurrentYear}</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full border border-muted-foreground bg-transparent"></span> {trendPreviousYear}</span>
+                  </p>
+                </div>
+              </div>
+              <div className="flex bg-muted/50 p-1 rounded-lg">
+                <button
+                  onClick={() => setGranularity("ano")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${granularity === "ano" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Ano
+                </button>
+                <button
+                  onClick={() => setGranularity("mes")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${granularity === "mes" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Mês
+                </button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {trendLoading ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : trendData.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-16">
+                Nenhuma venda no período
               </p>
-              <Badge variant="outline" className="text-xs font-normal">
-                {formatPeriodoExplicito()}
-              </Badge>
-              {periodoAcrossaAnos && (
-                <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                  📅 Cruza anos
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? <Skeleton className="h-[200px] w-full" /> : data.tendenciaVendas.length === 0 ? <p className="text-sm text-muted-foreground text-center py-16">
-              Nenhuma venda no período
-            </p> : <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.tendenciaVendas}>
-                  <defs>
-                    <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="dia" fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" tickFormatter={value => `R$${(value / 1000).toFixed(0)}k`} />
-                  <Tooltip content={<CustomTooltip tipoAgrupamento={data.tipoAgrupamento} />} />
-                  <Area type="monotone" dataKey="valor" stroke="hsl(var(--primary))" strokeWidth={2} fillOpacity={1} fill="url(#colorValor)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>}
-          </CardContent>
-        </Card>
-
-        {/* Estoque Baixo */}
-        <Card className="neu-card">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={18} className="text-amber-500" />
-                <CardTitle className="text-base font-semibold">Estoque Crítico</CardTitle>
-              </div>
-              <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => navigate("/estoque")}>
-                Ver tudo <ChevronRight size={14} />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? <div className="space-y-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
-            </div> : data.estoqueBaixo.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">
-              Nenhum item com estoque baixo
-            </p> : <ScrollArea className="h-[200px]">
-              <div className="space-y-2">
-                {data.estoqueBaixo.map(item => {
-                  const statusConfig = getEstoqueStatusConfig(item.status);
-                  const ActionIcon = statusConfig.actionIcon;
-                  return <div key={item.id} className={cn("flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01]", statusConfig.bgColor)} onClick={() => navigate(`/estoque?search=${encodeURIComponent(item.nome)}`)}>
-                    <div className="w-10 h-10 rounded-lg bg-white/80 flex items-center justify-center overflow-hidden">
-                      <LotImage
-                        src={item.imagem_url}
-                        alt={item.nome}
-                        className="w-full h-full object-cover"
+            ) : (
+              <div>
+                <div className="h-[200px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorAtual" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis
+                        dataKey="label"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        stroke="hsl(var(--muted-foreground))"
+                        interval={granularity === "mes" ? 4 : 0}
                       />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.nome}</p>
-                      <div className="flex items-center gap-2">
-                        <span className={cn("text-xs font-semibold", statusConfig.textColor)}>
-                          Restam: {item.quantidade}
-                        </span>
-                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0", statusConfig.textColor)}>
-                          {statusConfig.label}
-                        </Badge>
-                      </div>
-                    </div>
-                    <Button size="sm" variant="ghost" className={cn("h-7 text-xs gap-1", statusConfig.textColor)} onClick={e => {
-                      e.stopPropagation();
-                      navigate(`/estoque?search=${encodeURIComponent(item.nome)}`);
-                    }}>
-                      <ActionIcon size={12} />
-                      {statusConfig.actionLabel}
-                    </Button>
-                  </div>;
-                })}
+                      <YAxis
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        stroke="hsl(var(--muted-foreground))"
+                        tickFormatter={(value: number) => value >= 1000 ? `R$${(value / 1000).toFixed(0)}k` : `R$${value}`}
+                        width={55}
+                      />
+                      <Tooltip
+                        content={<TrendTooltip granularity={granularity} currentYear={trendCurrentYear} previousYear={trendPreviousYear} />}
+                        cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
+                      />
+                      {/* Linha do ano anterior - em ambos os modos */}
+                      <Line
+                        type="monotone"
+                        dataKey={(d) => d.anterior > 0 ? d.anterior : null}
+                        stroke="hsl(var(--muted-foreground))"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "hsl(var(--muted-foreground))" }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey={(d) => d.isFuture && d.atual === 0 ? null : d.atual}
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorAtual)"
+                        dot={renderCustomDot}
+                        activeDot={{ r: 6, strokeWidth: 2, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))" }}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                {/* Nota informativa no modo Mês */}
+                {granularity === "mes" && (
+                  <p className="text-xs text-muted-foreground/60 text-center mt-2 flex items-center justify-center gap-1">
+                    <span>📊</span>
+                    <span>Comparativo com os mesmos dias de {trendPreviousYear} (período equivalente)</span>
+                  </p>
+                )}
               </div>
-            </ScrollArea>}
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Bottom Grid - AGORA COM 4 COLUNAS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Bottom Grid - Ajustado para 3 COLUNAS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Top 5 Modelos */}
         <Card className="neu-card">
           <CardHeader className="pb-2">
@@ -934,6 +1011,14 @@ export default function Dashboard() {
             </div>
             <p className="text-sm text-muted-foreground">
               Faturamento por dia da semana
+              <span className="ml-1 text-xs text-muted-foreground/60">
+                ({periodo === "hoje" ? "hoje" :
+                  periodo === "30dias" ? "30 dias" :
+                    periodo === "90dias" ? "90 dias" :
+                      periodo === "mes" ? "este mês" :
+                        periodo === "ano_atual" ? "este ano" :
+                          periodo === "12meses" ? "12 meses" : "período selecionado"})
+              </span>
             </p>
           </CardHeader>
           <CardContent>

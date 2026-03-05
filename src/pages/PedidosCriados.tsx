@@ -598,12 +598,143 @@ export default function PedidosCriados() {
       locale: ptBR
     }), pageWidth - 70, 62);
 
-    // Items table
+    // Items grouping
     const itens = pedido.pedido_itens || [];
-    const tableData = itens.map(item => [item.produto_nome, formatCurrency(item.valor_unitario), item.quantidade.toString(), formatCurrency(item.quantidade * item.valor_unitario)]);
+
+    const parseItem = (item: typeof itens[number]) => {
+      const produtoId = item.produto_id || '';
+      const produto = estoqueItens.find(p => p.id === produtoId);
+      let refStr = '';
+      if (produto) {
+        try {
+          if (produto.localizacao) {
+            const loc = JSON.parse(produto.localizacao);
+            if (loc.referencia) refStr = loc.referencia;
+          }
+        } catch (e) { }
+      } else if (item.produto_nome?.includes(' | REF: ')) {
+        refStr = item.produto_nome.split(' | REF: ')[1] || '';
+      }
+
+      if (refStr) {
+        const m = refStr.match(/^(.+)-(P|M|G|GG|G1|G2|G3|XGG|\d{2})$/);
+        if (m) {
+          const refBase = m[1];
+          const tamanho = m[2];
+          let nomeModelo = item.produto_nome || 'Produto';
+          if (produto && produto.nome) nomeModelo = produto.nome;
+          if (nomeModelo.includes(' | REF: ')) nomeModelo = nomeModelo.split(' | REF: ')[0];
+          nomeModelo = nomeModelo.replace(` — ${refStr}`, '').trim();
+          return { refBase, tamanho, nomeModelo, refStr };
+        }
+      }
+      return null;
+    };
+
+    const gradeGroups = new Map<string, { refBase: string; nomeModelo: string; itens: Array<{ item: typeof itens[number]; tamanho: string }> }>();
+    const avulsosItems: typeof itens = [];
+
+    itens.forEach(item => {
+      const parsed = parseItem(item);
+      if (parsed) {
+        const key = `${parsed.refBase}|${item.valor_unitario}`;
+        if (!gradeGroups.has(key)) {
+          gradeGroups.set(key, { refBase: parsed.refBase, nomeModelo: parsed.nomeModelo, itens: [] });
+        }
+        gradeGroups.get(key)!.itens.push({ item, tamanho: parsed.tamanho });
+      } else {
+        avulsosItems.push(item);
+      }
+    });
+
+    const gradeGroupsFinal: typeof gradeGroups = new Map();
+    gradeGroups.forEach((v, k) => {
+      if (v.itens.length >= 2) gradeGroupsFinal.set(k, v);
+      else avulsosItems.push(v.itens[0].item);
+    });
+
+    const hasGrades = gradeGroupsFinal.size > 0;
+    const hasAvulsos = avulsosItems.length > 0;
+
+    const tableData: any[] = [];
+
+    if (hasGrades) {
+      if (hasGrades && hasAvulsos) {
+        tableData.push([{ content: 'GRADES', colSpan: 5, styles: { fillColor: [240, 240, 240], fontStyle: 'bold', textColor: [100, 100, 100], halign: 'left' } }]);
+      }
+
+      const ORDEM = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', '34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54'];
+
+      gradeGroupsFinal.forEach(grupo => {
+        const totalPecas = grupo.itens.reduce((s, { item }) => s + item.quantidade, 0);
+        const valorUnit = grupo.itens[0].item.valor_unitario;
+        const subtotal = totalPecas * valorUnit;
+
+        const itensSorted = [...grupo.itens].sort((a, b) => ORDEM.indexOf(a.tamanho) - ORDEM.indexOf(b.tamanho));
+
+        // chunk the tamanhosStr to wrap every 4 sizes nicely, jspdf-autotable handles newlines
+        let tamanhosStr = '';
+        itensSorted.forEach((it, idx) => {
+          tamanhosStr += `${it.tamanho}(${it.item.quantidade})`;
+          if (idx < itensSorted.length - 1) {
+            tamanhosStr += ((idx + 1) % 4 === 0) ? '\n' : ' ';
+          }
+        });
+
+        tableData.push([
+          `${grupo.nomeModelo}\n(Ref: ${grupo.refBase})`,
+          tamanhosStr,
+          totalPecas.toString(),
+          formatCurrency(valorUnit),
+          formatCurrency(subtotal)
+        ]);
+      });
+    }
+
+    if (hasAvulsos) {
+      if (hasGrades && hasAvulsos) {
+        tableData.push([{ content: 'AVULSOS', colSpan: 5, styles: { fillColor: [240, 240, 240], fontStyle: 'bold', textColor: [100, 100, 100], halign: 'left' } }]);
+      }
+
+      avulsosItems.forEach(item => {
+        const produtoId = item.produto_id || '';
+        const produto = estoqueItens.find(p => p.id === produtoId);
+        let nomeStr = item.produto_nome || 'Produto';
+        let refStr = '';
+
+        if (produto) {
+          if (produto.nome) nomeStr = produto.nome;
+          try {
+            if (produto.localizacao) {
+              const loc = JSON.parse(produto.localizacao);
+              if (loc.referencia) refStr = loc.referencia;
+            }
+          } catch (e) { }
+        } else if (nomeStr.includes(' | REF: ')) {
+          refStr = nomeStr.split(' | REF: ')[1] || '';
+          nomeStr = nomeStr.split(' | REF: ')[0];
+        }
+
+        if (refStr && nomeStr.includes(` — ${refStr}`)) {
+          const tamanho = refStr.split('-').pop();
+          if (tamanho) nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
+        }
+
+        const modeloStr = refStr ? `${nomeStr}\n(Ref: ${refStr})` : nomeStr;
+
+        tableData.push([
+          modeloStr,
+          '-',
+          item.quantidade.toString(),
+          formatCurrency(item.valor_unitario),
+          formatCurrency(item.quantidade * item.valor_unitario)
+        ]);
+      });
+    }
+
     autoTable(doc, {
       startY: 75,
-      head: [['Modelo', 'Valor Unitário', 'Qtd', 'Subtotal']],
+      head: [['Modelo', 'Tamanhos', 'Qtd', 'Unit.', 'Subtotal']],
       body: tableData,
       theme: 'striped',
       headStyles: {
@@ -612,23 +743,16 @@ export default function PedidosCriados() {
         fontStyle: 'bold'
       },
       styles: {
-        fontSize: 10,
-        cellPadding: 4
+        fontSize: 9,
+        cellPadding: 4,
+        valign: 'middle'
       },
       columnStyles: {
-        0: {
-          cellWidth: 80
-        },
-        1: {
-          halign: 'right'
-        },
-        2: {
-          halign: 'center'
-        },
-        3: {
-          halign: 'right',
-          fontStyle: 'bold'
-        }
+        0: { cellWidth: 55 },
+        1: { cellWidth: 'auto' },
+        2: { halign: 'center', cellWidth: 15 },
+        3: { halign: 'right', cellWidth: 25 },
+        4: { halign: 'right', fontStyle: 'bold', cellWidth: 25 }
       }
     });
 
@@ -1276,19 +1400,207 @@ export default function PedidosCriados() {
           {/* Items */}
           <div className="neu-card p-4 rounded-xl">
             <h3 className="font-semibold text-foreground mb-3">Itens do Pedido</h3>
-            <div className="space-y-2">
-              {(selectedPedido.pedido_itens || []).map((item, index) => <div key={item.id || index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                <div>
-                  <p className="font-medium text-foreground">{item.produto_nome || 'Produto'}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {item.quantidade} x {formatCurrency(item.valor_unitario)}
-                  </p>
+            {(() => {
+              const allItems = selectedPedido.pedido_itens || [];
+
+              // Helper: extract base ref from produto_nome and estoque information
+              // Returns { refBase: 'SH2603-0004', tamanho: '40', nomeModelo: 'Nome' } or null if avulso
+              const parseItem = (item: typeof allItems[number]) => {
+                const produtoId = item.produto_id || '';
+                const produto = estoqueItens.find(p => p.id === produtoId);
+
+                let refStr = '';
+                if (produto) {
+                  try {
+                    if (produto.localizacao) {
+                      const loc = JSON.parse(produto.localizacao);
+                      if (loc.referencia) refStr = loc.referencia;
+                    }
+                  } catch (e) { }
+                } else if (item.produto_nome?.includes(' | REF: ')) {
+                  refStr = item.produto_nome.split(' | REF: ')[1] || '';
+                }
+
+                if (refStr) {
+                  // Assume pattern BASE-TAMANHO, e.g. SH2603-0004-40
+                  // Matches word characters/hyphens for base, then specific sizes
+                  const m = refStr.match(/^(.+)-(P|M|G|GG|G1|G2|G3|XGG|\d{2})$/);
+                  if (m) {
+                    const refBase = m[1];
+                    const tamanho = m[2];
+
+                    let nomeModelo = item.produto_nome || 'Produto';
+                    if (produto && produto.nome) nomeModelo = produto.nome;
+                    if (nomeModelo.includes(' | REF: ')) nomeModelo = nomeModelo.split(' | REF: ')[0];
+                    nomeModelo = nomeModelo.replace(` — ${refStr}`, '').trim();
+
+                    return { refBase, tamanho, nomeModelo };
+                  }
+                }
+                return null;
+              };
+
+              // Group items: key = refBase + '|' + valorUnitario
+              const gradeGroups = new Map<string, { refBase: string; nomeModelo: string; itens: Array<{ item: typeof allItems[number]; tamanho: string }> }>();
+              const avulsosItems: typeof allItems = [];
+
+              allItems.forEach(item => {
+                const parsed = parseItem(item);
+                if (parsed) {
+                  const key = `${parsed.refBase}|${item.valor_unitario}`;
+                  if (!gradeGroups.has(key)) {
+                    gradeGroups.set(key, { refBase: parsed.refBase, nomeModelo: parsed.nomeModelo, itens: [] });
+                  }
+                  gradeGroups.get(key)!.itens.push({ item, tamanho: parsed.tamanho });
+                } else {
+                  avulsosItems.push(item);
+                }
+              });
+
+              // Only treat as grade if group has 2+ items (a single item with a size ref could be avulso)
+              const gradeGroupsFinal: typeof gradeGroups = new Map();
+              gradeGroups.forEach((v, k) => {
+                if (v.itens.length >= 2) gradeGroupsFinal.set(k, v);
+                else avulsosItems.push(v.itens[0].item);
+              });
+
+              const hasGrades = gradeGroupsFinal.size > 0;
+              const hasAvulsos = avulsosItems.length > 0;
+
+              return (
+                <div className="space-y-4">
+                  {/* ── Grades ── */}
+                  {hasGrades && (
+                    <div className="space-y-3">
+                      {hasAvulsos && (
+                        <p className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-indigo-500" />
+                          Grades
+                        </p>
+                      )}
+                      {Array.from(gradeGroupsFinal.entries()).map(([key, grupo]) => {
+                        const totalPecas = grupo.itens.reduce((s, { item }) => s + item.quantidade, 0);
+                        const valorUnit = grupo.itens[0].item.valor_unitario;
+                        const subtotal = totalPecas * valorUnit;
+
+                        // Sort sizes canonically
+                        const ORDEM = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', '34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54'];
+                        const itensSorted = [...grupo.itens].sort(
+                          (a, b) => ORDEM.indexOf(a.tamanho) - ORDEM.indexOf(b.tamanho)
+                        );
+
+                        return (
+                          <div key={key} className="rounded-xl border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/30 dark:bg-indigo-950/10 overflow-hidden">
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-100/60 dark:bg-indigo-950/30 border-b border-indigo-200 dark:border-indigo-900/30">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300 truncate">
+                                  {grupo.nomeModelo}
+                                </p>
+                                <p className="text-[11px] text-indigo-500/80 font-mono">{grupo.refBase}</p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-[10px] font-semibold bg-indigo-600 text-white px-1.5 py-0.5 rounded-md">
+                                  GRADE
+                                </span>
+                                <span className="text-[11px] font-bold text-emerald-600">
+                                  R$ {subtotal.toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Tabela de tamanhos */}
+                            <div className="px-4 py-3">
+                              <div className="overflow-x-auto">
+                                <table className="text-center text-xs">
+                                  <thead>
+                                    <tr>
+                                      {itensSorted.map(({ tamanho }) => (
+                                        <td key={tamanho} className="pb-1 px-2">
+                                          <span className="font-mono font-bold text-muted-foreground text-[11px]">{tamanho}</span>
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr>
+                                      {itensSorted.map(({ item, tamanho }) => (
+                                        <td key={tamanho} className="px-2">
+                                          <span className="text-sm font-bold text-foreground">{item.quantidade}×</span>
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground mt-2">
+                                {totalPecas} peças · R$ {valorUnit.toFixed(2)} un.
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Separador */}
+                  {hasGrades && hasAvulsos && (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-px bg-border/50" />
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avulso</span>
+                      <div className="flex-1 h-px bg-border/50" />
+                    </div>
+                  )}
+
+                  {/* ── Avulsos ── */}
+                  {hasAvulsos && (
+                    <div className="space-y-0">
+                      {avulsosItems.map((item, index) => {
+                        const produtoId = item.produto_id || '';
+                        const produto = estoqueItens.find(p => p.id === produtoId);
+                        let nomeStr = item.produto_nome || 'Produto';
+                        let refStr = '';
+                        if (produto) {
+                          if (produto.nome) nomeStr = produto.nome;
+                          try {
+                            if (produto.localizacao) {
+                              const loc = JSON.parse(produto.localizacao);
+                              if (loc.referencia) refStr = loc.referencia;
+                            }
+                          } catch (e) { }
+                        }
+                        if (nomeStr.includes(' | REF: ')) {
+                          const parts = nomeStr.split(' | REF: ');
+                          nomeStr = parts[0];
+                          if (!refStr && parts.length > 1) refStr = parts[1];
+                        }
+                        if (refStr && nomeStr.includes(` — ${refStr}`)) {
+                          const tamanho = refStr.split('-').pop();
+                          if (tamanho) nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
+                        }
+                        return (
+                          <div key={item.id || index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
+                            <div>
+                              <p className="font-medium text-foreground">{nomeStr}</p>
+                              <p className="text-sm text-muted-foreground mt-0.5">
+                                {refStr && `Ref: ${refStr} · `}{item.quantidade} x {formatCurrency(item.valor_unitario)}
+                              </p>
+                            </div>
+                            <p className="font-bold text-emerald-600">
+                              {formatCurrency(item.quantidade * item.valor_unitario)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {allItems.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">Nenhum item</p>
+                  )}
                 </div>
-                <p className="font-bold text-emerald-600">
-                  {formatCurrency(item.quantidade * item.valor_unitario)}
-                </p>
-              </div>)}
-            </div>
+              );
+            })()}
           </div>
 
           {/* Totals */}

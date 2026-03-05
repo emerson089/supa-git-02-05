@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { EditableItemRow, EditableItem } from './EditableItemRow';
 import { AddItemSelector } from './AddItemSelector';
 import { useAddPedidoItem, useUpdatePedidoItem, useRemovePedidoItem } from '@/hooks/usePedidoItensData';
+import { GradeCompactCardEditable } from './GradeCompactCardEditable';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -26,7 +27,7 @@ interface EditPedidoModalProps {
 
 export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps) {
   const { itens: estoqueItens, updateItem: updateEstoqueItem } = useEstoque();
-  
+
   const addItemMutation = useAddPedidoItem();
   const updateItemMutation = useUpdatePedidoItem();
   const removeItemMutation = useRemovePedidoItem();
@@ -83,9 +84,9 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
       // Se a quantidade mudou, ajustar estoque
       if (data.quantidade !== undefined && data.quantidade !== itemDB.quantidade) {
         const diferenca = itemDB.quantidade - data.quantidade; // positivo = devolve, negativo = subtrai
-        
+
         let produtoId = itemDB.produto_id;
-        
+
         // Fallback: se não tem produto_id, tentar encontrar pelo nome
         if (!produtoId) {
           const { data: estoqueByName } = await supabase
@@ -94,7 +95,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
             .eq('tipo', 'acabado')
             .ilike('nome', itemDB.produto_nome)
             .maybeSingle();
-          
+
           if (estoqueByName) {
             produtoId = estoqueByName.id;
           }
@@ -166,7 +167,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
       }
 
       let produtoId = itemDB.produto_id;
-      
+
       // Fallback: se não tem produto_id, tentar encontrar pelo nome
       if (!produtoId) {
         const { data: estoqueByName } = await supabase
@@ -175,7 +176,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
           .eq('tipo', 'acabado')
           .ilike('nome', itemDB.produto_nome)
           .maybeSingle();
-        
+
         if (estoqueByName) {
           produtoId = estoqueByName.id;
         }
@@ -346,16 +347,136 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                 <p className="text-sm">Nenhum item no pedido</p>
               </div>
             ) : (
-              pedido.itens.map((item) => (
-                <EditableItemRow
-                  key={item.id}
-                  item={item}
-                  onUpdate={handleUpdateItem}
-                  onRemove={handleRemoveItem}
-                  isUpdating={updatingItemId === item.id}
-                  isRemoving={removingItemId === item.id}
-                />
-              ))
+              (() => {
+                // Grouping Logic
+                const parseItem = (item: EditableItem) => {
+                  const produtoId = item.produto_id || '';
+                  const produto = estoqueItens.find(p => p.id === produtoId);
+                  let refStr = '';
+
+                  if (produto) {
+                    try {
+                      if (produto.localizacao) {
+                        const loc = JSON.parse(produto.localizacao);
+                        if (loc.referencia) refStr = loc.referencia;
+                      }
+                    } catch (e) { }
+                  } else if (item.produto_nome.includes(' | REF: ')) {
+                    refStr = item.produto_nome.split(' | REF: ')[1] || '';
+                  }
+
+                  if (refStr) {
+                    const m = refStr.match(/^(.+)-(P|M|G|GG|G1|G2|G3|XGG|\d{2})$/);
+                    if (m) {
+                      const refBase = m[1];
+                      const tamanho = m[2];
+                      let nomeModelo = item.produto_nome;
+                      if (produto && produto.nome) nomeModelo = produto.nome;
+                      if (nomeModelo.includes(' | REF: ')) nomeModelo = nomeModelo.split(' | REF: ')[0];
+                      nomeModelo = nomeModelo.replace(` — ${refStr}`, '').trim();
+                      return { refBase, tamanho, nomeModelo, refStr };
+                    }
+                  }
+                  return null;
+                };
+
+                const gradeGroups = new Map<string, { refBase: string; nomeModelo: string; itens: Array<{ item: EditableItem; tamanho: string }> }>();
+                const avulsosItems: EditableItem[] = [];
+
+                pedido.itens.forEach(item => {
+                  const parsed = parseItem(item);
+                  if (parsed) {
+                    const key = `${parsed.refBase}|${item.valor_unitario}`;
+                    if (!gradeGroups.has(key)) {
+                      gradeGroups.set(key, { refBase: parsed.refBase, nomeModelo: parsed.nomeModelo, itens: [] });
+                    }
+                    gradeGroups.get(key)!.itens.push({ item, tamanho: parsed.tamanho });
+                  } else {
+                    avulsosItems.push(item);
+                  }
+                });
+
+                const gradeGroupsFinal: typeof gradeGroups = new Map();
+                gradeGroups.forEach((v, k) => {
+                  if (v.itens.length >= 2) gradeGroupsFinal.set(k, v);
+                  else avulsosItems.push(v.itens[0].item);
+                });
+
+                const hasGrades = gradeGroupsFinal.size > 0;
+                const hasAvulsos = avulsosItems.length > 0;
+
+                return (
+                  <div className="space-y-4">
+                    {/* ── GRADES ── */}
+                    {hasGrades && (
+                      <div className="space-y-3">
+                        {hasAvulsos && (
+                          <p className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wider flex items-center gap-1.5">
+                            <span className="inline-block w-2 h-2 rounded-full bg-indigo-500" />
+                            Grades
+                          </p>
+                        )}
+                        {Array.from(gradeGroupsFinal.entries()).map(([key, grupo]) => {
+                          // Check if any item in group is updating/removing
+                          const hasPendingUpdates = grupo.itens.some(({ item }) => updatingItemId === item.id);
+                          const hasRemovingUpdates = grupo.itens.some(({ item }) => removingItemId === item.id);
+
+                          return (
+                            <GradeCompactCardEditable
+                              key={key}
+                              grupo={grupo}
+                              onUpdate={handleUpdateItem}
+                              onRemove={handleRemoveItem}
+                              hasPendingUpdates={hasPendingUpdates}
+                              hasRemovingUpdates={hasRemovingUpdates}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Separador */}
+                    {hasGrades && hasAvulsos && (
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-px bg-border/50" />
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avulso</span>
+                        <div className="flex-1 h-px bg-border/50" />
+                      </div>
+                    )}
+
+                    {/* ── AVULSOS ── */}
+                    {hasAvulsos && (
+                      <div className="space-y-2">
+                        {avulsosItems.map((item) => {
+                          const parsed = parseItem(item);
+                          let displayName = item.produto_nome;
+
+                          if (parsed) {
+                            displayName = `${parsed.nomeModelo} — Tamanho ${parsed.tamanho} | REF: ${parsed.refStr}`;
+                          } else {
+                            const produtoId = item.produto_id || '';
+                            const produto = estoqueItens.find(p => p.id === produtoId);
+                            if (produto && produto.nome) displayName = produto.nome;
+                          }
+
+                          const enhancedItem = { ...item, produto_nome: displayName };
+
+                          return (
+                            <EditableItemRow
+                              key={item.id}
+                              item={enhancedItem}
+                              onUpdate={handleUpdateItem}
+                              onRemove={handleRemoveItem}
+                              isUpdating={updatingItemId === item.id}
+                              isRemoving={removingItemId === item.id}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
             )}
           </div>
         </div>

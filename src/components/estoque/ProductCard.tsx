@@ -32,19 +32,19 @@ interface ProductCardProps {
   vendasSemana?: number;
 }
 
-function ProductImage({ 
-  imagemUrl, 
-  nome, 
-  onImageClick 
-}: { 
-  imagemUrl?: string; 
+function ProductImage({
+  imagemUrl,
+  nome,
+  onImageClick
+}: {
+  imagemUrl?: string;
   nome: string;
   onImageClick: () => void;
 }) {
   const { signedUrl, loading } = useSignedUrl(imagemUrl);
-  
+
   return (
-    <div 
+    <div
       className="relative aspect-[4/3] w-full overflow-hidden rounded-t-2xl bg-muted/30 group cursor-pointer"
       onClick={onImageClick}
     >
@@ -53,7 +53,7 @@ function ProductImage({
           <Package className="h-8 w-8 text-muted-foreground/30" />
         </div>
       ) : imagemUrl && signedUrl ? (
-        <LazyImage 
+        <LazyImage
           src={signedUrl}
           alt={nome}
           className="w-full h-full object-cover object-center block"
@@ -67,7 +67,7 @@ function ProductImage({
           </div>
         </div>
       )}
-      
+
       {/* Hover overlay */}
       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center rounded-t-2xl">
         <Camera className="w-8 h-8 text-white mb-2" />
@@ -119,7 +119,7 @@ export function ProductCard({
   return (
     <div className="overflow-hidden rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-soft transition-all duration-300 hover:shadow-lg relative">
       {/* Stock status indicator */}
-      <div 
+      <div
         className={cn(
           "absolute top-3 right-3 w-3 h-3 rounded-full z-10 shadow-sm",
           stockStatus.color
@@ -136,8 +136,8 @@ export function ProductCard({
       />
 
       {/* Product Image - 4:3 aspect ratio */}
-      <ProductImage 
-        imagemUrl={item.imagemUrl} 
+      <ProductImage
+        imagemUrl={item.imagemUrl}
         nome={item.nome}
         onImageClick={handleImageClick}
       />
@@ -147,12 +147,17 @@ export function ProductCard({
         {/* Header: Name and Category */}
         <div className="mb-3 pb-3 border-b border-gray-100 dark:border-gray-700">
           <h3 className="font-bold text-lg text-foreground line-clamp-2">{item.nome}</h3>
-          <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mt-1">
-            {item.categoria}
-            {item.producaoId && (
-              <span className="ml-2 text-primary">• {item.producaoId}</span>
-            )}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs text-muted-foreground/70 uppercase tracking-wider">
+              {item.categoria}
+              {item.producaoId && (
+                <span className="ml-2 text-primary">• {item.producaoId}</span>
+              )}
+            </p>
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground/60 uppercase tracking-wider border border-border/40 shrink-0">
+              Manual
+            </span>
+          </div>
         </div>
 
         {/* Product Info */}

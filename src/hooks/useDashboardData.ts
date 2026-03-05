@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { fetchAllRows } from "@/lib/supabase-utils";
 import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, startOfYear, getWeek, endOfMonth, subYears, getMonth, getYear, subMonths, getDate, getDaysInMonth, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -129,7 +130,6 @@ export interface FaturamentoDiaSemana {
 
 interface DashboardData {
   kpis: KPIs;
-  tendenciaVendas: TendenciaVenda[];
   estoqueBaixo: EstoqueBaixoItem[];
   topModelos: TopModelo[];
   topModelosCoverage: TopModelosCoverage;
@@ -137,7 +137,7 @@ interface DashboardData {
   producaoKanban: ProducaoEtapa[];
   tipoAgrupamento: TipoAgrupamento;
   metaYoY: MetaYoY;
-  // NOVOS CAMPOS: Inteligência de Vendas
+  // Inteligência de Vendas
   previsaoMensal: PrevisaoMensal;
   metaAutomatica: MetaAutomatica;
   faturamentoDiaSemana: FaturamentoDiaSemana[];
@@ -292,27 +292,6 @@ function detectBottlenecks(etapas: ProducaoEtapa[]): ProducaoEtapa[] {
   });
 }
 
-// Helper to fetch all rows with pagination (bypasses 1000-row limit)
-async function fetchAllRows<T>(queryBuilder: () => any): Promise<T[]> {
-  const pageSize = 1000;
-  let allData: T[] = [];
-  let page = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data, error } = await queryBuilder().range(page * pageSize, (page + 1) * pageSize - 1);
-    if (error) throw error;
-    if (data && data.length > 0) {
-      allData = [...allData, ...data];
-      hasMore = data.length === pageSize;
-      page++;
-    } else {
-      hasMore = false;
-    }
-  }
-
-  return allData;
-}
 
 const DASHBOARD_DEFAULTS: DashboardData = {
   kpis: {
@@ -327,7 +306,6 @@ const DASHBOARD_DEFAULTS: DashboardData = {
     anoPassado: new Date().getFullYear() - 1,
     producaoFiltrada: false,
   },
-  tendenciaVendas: [],
   estoqueBaixo: [],
   topModelos: [],
   topModelosCoverage: { pedidosComItens: 0, totalPedidos: 0, coverage: 0 },
@@ -889,7 +867,6 @@ async function fetchDashboardData(
       anoPassado,
       producaoFiltrada: true,
     },
-    tendenciaVendas,
     estoqueBaixo,
     topModelos,
     topModelosCoverage: {
@@ -921,16 +898,26 @@ async function fetchDashboardData(
 export function useDashboardData(
   periodo: Periodo,
   dateRange?: DateRange,
-  excluirCancelados: boolean = true
+  excluirCancelados: boolean = true,
+  percentualCrescimento?: number
 ) {
   const { user } = useAuth();
 
-  const { data, isLoading: loading } = useQuery({
-    queryKey: ['dashboard-data', periodo, dateRange?.from?.getTime(), dateRange?.to?.getTime(), excluirCancelados, user?.id],
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: [
+      'dashboard-data',
+      periodo,
+      dateRange?.from?.getTime(),
+      dateRange?.to?.getTime(),
+      excluirCancelados,
+      user?.id,
+      percentualCrescimento, // Ensures refetch when growth % changes
+    ],
     queryFn: () => fetchDashboardData(periodo, dateRange, user!.id, excluirCancelados),
     enabled: !!user,
-    staleTime: 60000, // 60s - dados ficam em cache ao navegar entre páginas
+    staleTime: 60000, // 60s cache
+    retry: 2,
   });
 
-  return { data: data || DASHBOARD_DEFAULTS, loading };
+  return { data: data || DASHBOARD_DEFAULTS, loading, isError };
 }

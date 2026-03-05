@@ -1,10 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 @import './styles/print.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 /* Delookii ERP - Neumorphic Design System */
 
 @layer base {
@@ -45,13 +44,13 @@
     /* Neumorphic Shadows - Softer and more subtle */
     --shadow-light: 0 0% 100%;
     --shadow-dark: 216 26% 86%;
-    
+
     /* Custom Neumorphic tokens - Refined with larger blur and lower opacity */
     --neu-bg: 210 20% 94%;
     --neu-shadow-outset: 8px 8px 20px hsl(216 26% 84% / 0.6), -8px -8px 20px hsl(0 0% 100% / 0.8);
     --neu-shadow-inset: inset 3px 3px 8px hsl(216 26% 86% / 0.5), inset -3px -3px 8px hsl(0 0% 100% / 0.7);
     --neu-shadow-sm: 4px 4px 10px hsl(216 26% 84% / 0.5), -4px -4px 10px hsl(0 0% 100% / 0.7);
-    
+
     /* Stage Colors */
     --stage-corte: 217 91% 60%;
     --stage-costura: 243 75% 59%;
@@ -98,7 +97,7 @@
     --border: 220 15% 25%;
     --input: 220 15% 25%;
     --ring: 243 75% 65%;
-    
+
     --shadow-light: 220 20% 20%;
     --shadow-dark: 220 20% 8%;
   }
@@ -106,26 +105,32 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
+
 @layer components {
+
   /* Neumorphic Button Styles */
   .neu-button {
-    @apply bg-background rounded-xl transition-all duration-200;
+    background-color: hsl(var(--background));
+    @apply rounded-xl transition-all duration-200;
     box-shadow: var(--neu-shadow-outset);
   }
-  
+
   .neu-button:hover {
     box-shadow: 4px 4px 8px hsl(var(--shadow-dark)), -4px -4px 8px hsl(var(--shadow-light));
   }
-  
+
   .neu-button:active,
   .neu-button-pressed {
     box-shadow: var(--neu-shadow-inset);
@@ -133,25 +138,28 @@
 
   /* Neumorphic Card - Refined shadows */
   .neu-card {
-    @apply bg-background rounded-2xl border border-white/40;
+    background-color: hsl(var(--background));
+    @apply rounded-2xl border border-white/40;
     box-shadow: var(--neu-shadow-outset);
     transition: all 0.25s ease;
   }
-  
+
 
   /* Neumorphic Input */
   .neu-input {
-    @apply bg-background rounded-xl outline-none transition-all;
+    background-color: hsl(var(--background));
+    @apply rounded-xl outline-none transition-all;
     box-shadow: var(--neu-shadow-inset);
   }
-  
+
   .neu-input:focus {
     @apply ring-2 ring-primary/30;
   }
 
   /* Neumorphic Container */
   .neu-container {
-    @apply bg-background rounded-3xl;
+    background-color: hsl(var(--background));
+    @apply rounded-3xl;
     box-shadow: inset 5px 5px 10px hsl(var(--shadow-dark)), inset -5px -5px 10px hsl(var(--shadow-light));
   }
 
@@ -159,7 +167,7 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
-  
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -170,55 +178,56 @@
   .shadow-neu {
     box-shadow: var(--neu-shadow-outset);
   }
-  
+
   .shadow-neu-sm {
     box-shadow: var(--neu-shadow-sm);
   }
-  
+
   .shadow-neu-inset {
     box-shadow: var(--neu-shadow-inset);
   }
 }
 
 @layer components {
+
   /* Neumorphic Card Hover - Enhanced elevation */
   .neu-card:hover {
-    box-shadow: 10px 10px 25px hsl(216 26% 82% / 0.7), 
-                -10px -10px 25px hsl(0 0% 100% / 0.9);
+    box-shadow: 10px 10px 25px hsl(216 26% 82% / 0.7),
+      -10px -10px 25px hsl(0 0% 100% / 0.9);
     transform: translateY(-2px);
   }
 
   /* Extruded button style */
   .neu-button-extruded {
     @apply bg-background;
-    box-shadow: 4px 4px 8px hsl(216 26% 85%), 
-                -4px -4px 8px hsl(0 0% 100%);
+    box-shadow: 4px 4px 8px hsl(216 26% 85%),
+      -4px -4px 8px hsl(0 0% 100%);
   }
 
   .neu-button-extruded:hover {
-    box-shadow: 3px 3px 6px hsl(216 26% 85%), 
-                -3px -3px 6px hsl(0 0% 100%);
+    box-shadow: 3px 3px 6px hsl(216 26% 85%),
+      -3px -3px 6px hsl(0 0% 100%);
   }
 
   .neu-button-extruded:active {
-    box-shadow: inset 2px 2px 5px hsl(216 26% 85%), 
-                inset -2px -2px 5px hsl(0 0% 100%);
+    box-shadow: inset 2px 2px 5px hsl(216 26% 85%),
+      inset -2px -2px 5px hsl(0 0% 100%);
   }
 
   /* Dark mode adjustments */
   .dark .neu-card:hover {
-    box-shadow: 10px 10px 25px hsl(220 20% 8% / 0.8), 
-                -10px -10px 25px hsl(220 20% 20% / 0.4);
+    box-shadow: 10px 10px 25px hsl(220 20% 8% / 0.8),
+      -10px -10px 25px hsl(220 20% 20% / 0.4);
   }
 
   .dark .neu-button-extruded {
-    box-shadow: 4px 4px 8px hsl(220 20% 8%), 
-                -4px -4px 8px hsl(220 20% 20%);
+    box-shadow: 4px 4px 8px hsl(220 20% 8%),
+      -4px -4px 8px hsl(220 20% 20%);
   }
 
   .dark .neu-button-extruded:active {
-    box-shadow: inset 2px 2px 5px hsl(220 20% 8%), 
-                inset -2px -2px 5px hsl(220 20% 20%);
+    box-shadow: inset 2px 2px 5px hsl(220 20% 8%),
+      inset -2px -2px 5px hsl(220 20% 20%);
   }
 }
 
@@ -274,7 +283,9 @@ body[data-scroll-locked] {
 
 /* Prevent horizontal scroll on mobile */
 @media (max-width: 767px) {
-  html, body {
+
+  html,
+  body {
     overflow-x: hidden;
     max-width: 100vw;
   }

@@ -12,6 +12,16 @@ export interface ItemPedido {
   quantidade: number;
   valorUnitario: number;
   quantidadeDisponivel?: number;
+  // Campos opcionales para itens de grade
+  tipo?: 'avulso' | 'grade';
+  gradeId?: string;
+  gradeNome?: string;
+  quantidadeGrades?: number;      // quantas grades foram pedidas
+  gradeTotalPecas?: number;       // peças por grade
+  modeloId?: string;              // id do modelo pai
+  modeloNome?: string;
+  // Itens expandidos: preenchido ao criar pedido (uma entrada por variação)
+  gradeItensExpandidos?: { variacaoId: string; tamanho: string; quantidade: number }[];
 }
 
 interface ItemPedidoRowProps {
@@ -31,7 +41,7 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
   const rowRef = useRef<HTMLDivElement>(null);
 
   const total = item.quantidade * item.valorUnitario;
-  
+
   // Verificar disponibilidade
   const produtoSelecionado = produtos.find(p => p.id === item.produtoId);
   const quantidadeDisponivel = produtoSelecionado?.quantidadeDisponivel || 0;
@@ -127,7 +137,7 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
   };
 
   return (
-    <div 
+    <div
       ref={rowRef}
       className={cn(
         "neu-card p-6 space-y-4",
@@ -161,14 +171,34 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                   />
                 </div>
               ) : (
-                <div className="flex items-center justify-between w-full px-4">
-                  <span className={cn(
-                    "text-sm truncate",
-                    item.produtoId ? "text-foreground font-medium" : "text-muted-foreground"
-                  )}>
-                    {item.produtoId ? getDisplayText() : "Selecione um produto"}
-                  </span>
-                  <ChevronDown size={16} className="text-muted-foreground flex-shrink-0" />
+                <div className="flex items-center justify-between w-full px-4 h-full">
+                  <div className="flex flex-col items-start min-w-0 flex-1 justify-center py-1">
+                    {item.produtoId ? (
+                      <>
+                        <span className="text-sm font-medium text-foreground truncate w-full text-left">
+                          {(() => {
+                            let nomeStr = produtoSelecionado?.nome || item.produtoNome || 'Produto';
+                            const refStr = produtoSelecionado?.referencia;
+                            if (refStr && nomeStr.includes(` — ${refStr}`)) {
+                              const tamanho = refStr.split('-').pop();
+                              if (tamanho) {
+                                nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
+                              }
+                            }
+                            return nomeStr;
+                          })()}
+                        </span>
+                        {produtoSelecionado?.referencia && (
+                          <span className="text-[10px] text-muted-foreground mt-0.5 truncate w-full text-left">
+                            Ref: {produtoSelecionado.referencia}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Selecione um produto</span>
+                    )}
+                  </div>
+                  <ChevronDown size={16} className="text-muted-foreground flex-shrink-0 ml-2" />
                 </div>
               )}
             </div>
@@ -191,23 +221,34 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                       )}
                       onClick={() => produto.quantidadeDisponivel > 0 && handleProdutoChange(produto.id)}
                     >
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-foreground">
-                          {produto.referencia ? `${produto.referencia} - ` : ''}{produto.nome}
+                      <div className="flex-1 flex flex-col min-w-0">
+                        <span className="text-sm font-medium text-foreground truncate">
+                          {(() => {
+                            let nomeStr = produto.nome;
+                            const refStr = produto.referencia;
+                            if (refStr && nomeStr.includes(` — ${refStr}`)) {
+                              const tamanho = refStr.split('-').pop();
+                              if (tamanho) {
+                                nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
+                              }
+                            }
+                            return nomeStr;
+                          })()}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                          {produto.referencia ? `${produto.referencia} · ` : ''}
+                          {produto.quantidadeDisponivel === 0
+                            ? 'Esgotado'
+                            : `${produto.quantidadeDisponivel} em estoque`}
                         </span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground/70 ml-3 flex-shrink-0">
-                        {produto.quantidadeDisponivel === 0 
-                          ? 'Esgotado' 
-                          : `${produto.quantidadeDisponivel} em estoque`}
-                      </span>
                     </div>
                   ))
                 )}
               </div>
             )}
           </div>
-          
+
           {/* Indicador discreto de disponibilidade */}
           {item.produtoId && (
             <div className="flex justify-end">
@@ -261,8 +302,8 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
           />
           {item.valorUnitario > 0 && (
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground/50 text-right">
-              {produtoSelecionado && item.valorUnitario !== produtoSelecionado.preco 
-                ? 'Valor editado' 
+              {produtoSelecionado && item.valorUnitario !== produtoSelecionado.preco
+                ? 'Valor editado'
                 : 'Auto do estoque'}
             </p>
           )}

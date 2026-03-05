@@ -3,7 +3,6 @@ import { format, eachDayOfInterval } from "date-fns";
 import type { Holiday } from "@/hooks/useHolidays";
 import type {
   MetaAutomatica,
-  TendenciaVenda,
   EstoqueBaixoItem,
   TopModelo,
   FaturamentoDiaSemana,
@@ -31,7 +30,8 @@ interface InsightsDashboardParams {
     anoPassado: number;
   };
   metaAutomatica: MetaAutomatica;
-  tendenciaVendas: TendenciaVenda[];
+  /** Simplified trend array — only `atual` (current year value) is needed for drop detection */
+  tendenciaVendas: { atual: number }[];
   estoqueBaixo: EstoqueBaixoItem[];
   topModelos: TopModelo[];
   faturamentoDiaSemana: FaturamentoDiaSemana[];
@@ -190,12 +190,12 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       }
     }
 
-    // 4. Tendência de queda
+    // 4. Tendência de queda (uses current year 'atual' values)
     if (tendenciaVendas.length >= 3) {
       const ultimos3 = tendenciaVendas.slice(-3);
       const quedaConsecutiva =
-        ultimos3[2].valor < ultimos3[1].valor && ultimos3[1].valor < ultimos3[0].valor;
-      if (quedaConsecutiva && ultimos3[0].valor > 0) {
+        ultimos3[2].atual < ultimos3[1].atual && ultimos3[1].atual < ultimos3[0].atual;
+      if (quedaConsecutiva && ultimos3[0].atual > 0) {
         raw.push({
           id: "tendencia-queda",
           tipo: "alerta",

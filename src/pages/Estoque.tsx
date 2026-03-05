@@ -16,13 +16,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download, FileText, Image, ChevronDown, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download, FileText, Image, ChevronDown, RefreshCw, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { supabase } from '@/integrations/supabase/client';
 import { ImportModelosCSVModal } from '@/components/estoque/ImportModelosCSVModal';
 import { ProductCard } from '@/components/estoque/ProductCard';
 import { MobileProductCard } from '@/components/estoque/MobileProductCard';
+import { NovoModeloPadronizadoModal } from '@/components/estoque/NovoModeloPadronizadoModal';
+import { DetalhesModeloPadronizadoModal } from '@/components/estoque/DetalhesModeloPadronizadoModal';
+import { ModeloPadronizadoCard } from '@/components/estoque/ModeloPadronizadoCard';
+import { useModelosPadronizados, ModeloPadronizado, CATEGORIA_MODELO_PAD, CATEGORIA_VARIACAO_PAD } from '@/hooks/useModelosPadronizados';
 import { useVendasSemana } from '@/hooks/useVendasSemana';
 import { EstoqueItemSchema, NovoModeloAcabadoSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
@@ -67,15 +71,15 @@ function ProductImage({
   } = useSignedUrl(imagemUrl);
   if (!imagemUrl) {
     return <div className="p-2 rounded-lg bg-primary/10">
-        <Package size={20} className="text-primary" />
-      </div>;
+      <Package size={20} className="text-primary" />
+    </div>;
   }
   if (loading) {
     return <div className="w-12 h-12 rounded-lg bg-muted/50 animate-pulse" />;
   }
   return <div className="w-12 h-12 rounded-lg overflow-hidden shadow-[inset_1px_1px_3px_hsl(var(--muted)/0.4)] border border-border/30">
-      <img src={signedUrl || imagemUrl} alt={nome} className="w-full h-full object-cover" />
-    </div>;
+    <img src={signedUrl || imagemUrl} alt={nome} className="w-full h-full object-cover" />
+  </div>;
 }
 const SCROLL_KEY = 'estoque_scroll';
 export default function Estoque() {
@@ -141,6 +145,15 @@ export default function Estoque() {
 
   // Modal para importação CSV
   const [showImportModal, setShowImportModal] = useState(false);
+
+  // Modal para Novo Modelo Padronizado
+  const [showNovoModeloPadronizadoModal, setShowNovoModeloPadronizadoModal] = useState(false);
+
+  // Modal de detalhes do Modelo Padronizado
+  const [modeloDetalhes, setModeloDetalhes] = useState<ModeloPadronizado | null>(null);
+
+  // Hook de Modelos Padronizados
+  const { modelosPadronizados } = useModelosPadronizados();
 
   // Mapear tipo de tab para tipo de estoque
   const tipoEstoque = activeTab === 'materia_prima' ? 'materia-prima' : 'acabado';
@@ -543,7 +556,7 @@ export default function Estoque() {
     // Buscar todas as referências numéricas já usadas (1+ dígitos no final)
     const referenciasUsadas = new Set<number>();
     const produtosAcabadosExistentes = itens.filter(item => item.tipo === 'acabado');
-    
+
     produtosAcabadosExistentes.forEach(item => {
       // Captura qualquer sequência de dígitos no final do nome (após " - ")
       const match = item.nome.match(/ - (\d+)$/);
@@ -560,7 +573,7 @@ export default function Estoque() {
     let nextRefNum: number;
     const maxTentativas = 1000;
     let tentativas = 0;
-    
+
     // Se ainda há números disponíveis na faixa 001-999
     if (referenciasUsadas.size < 999) {
       do {
@@ -575,7 +588,7 @@ export default function Estoque() {
 
     // Formatar sempre com 3 dígitos
     const nextRef = String(nextRefNum).padStart(3, '0');
-    
+
     setNovoModeloForm({
       nome: '',
       referencia: nextRef,
@@ -681,200 +694,244 @@ export default function Estoque() {
     setProdutoDuplicado(null);
   };
   return <div className="min-h-screen bg-background flex overflow-hidden">
-      {/* Mobile Header */}
-      {isMobile && <MobileHeader title="Estoque" />}
-      
-      {/* Sidebar - Desktop only */}
-      {!isMobile && <AppSidebar />}
+    {/* Mobile Header */}
+    {isMobile && <MobileHeader title="Estoque" />}
 
-      <main className={cn("flex-1 flex flex-col h-screen overflow-hidden", isMobile && "pt-14 pb-20")}>
-        {/* Header - Desktop only */}
-        {!isMobile && <header className="px-6 py-4 border-b border-border bg-card/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">CONTROLE DE ESTOQUE</h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {itens.length} itens cadastrados
-                </p>
-              </div>
+    {/* Sidebar - Desktop only */}
+    {!isMobile && <AppSidebar />}
 
-              <div className="flex items-center gap-4">
-                {/* Botão de Refresh */}
-                <Button variant="ghost" size="icon" onClick={handleRefreshData} disabled={isRefreshing} title="Atualizar dados">
-                  <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-                </Button>
+    <main className={cn("flex-1 flex flex-col h-screen overflow-hidden", isMobile && "pt-14 pb-20")}>
+      {/* Header - Desktop only */}
+      {!isMobile && <header className="px-6 py-4 border-b border-border bg-card/50">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">CONTROLE DE ESTOQUE</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {itens.length} itens cadastrados
+            </p>
+          </div>
 
-                {/* Alerta de baixo estoque */}
-                {itensAlerta > 0 && <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
-                    <AlertTriangle size={16} className="text-amber-600" />
-                    <span className="text-sm text-amber-700 font-medium">
-                      {itensAlerta} itens com estoque baixo
-                    </span>
-                  </div>}
+          <div className="flex items-center gap-4">
+            {/* Botão de Refresh */}
+            <Button variant="ghost" size="icon" onClick={handleRefreshData} disabled={isRefreshing} title="Atualizar dados">
+              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+            </Button>
 
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                  <Input placeholder="Buscar item..." value={search} onChange={e => handleSearchChange(e.target.value)} className="pl-10 pr-8 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-                  {search && <button onClick={handleClearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted" title="Limpar busca">
-                      <X size={14} className="text-muted-foreground" />
-                    </button>}
-                </div>
-              </div>
-            </div>
-          </header>}
-        
-        {/* Mobile Search */}
-        {isMobile && <div className="px-4 py-3">
+            {/* Alerta de baixo estoque */}
+            {itensAlerta > 0 && <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertTriangle size={16} className="text-amber-600" />
+              <span className="text-sm text-amber-700 font-medium">
+                {itensAlerta} itens com estoque baixo
+              </span>
+            </div>}
+
+            {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-              <Input placeholder="Buscar item..." value={search} onChange={e => handleSearchChange(e.target.value)} className="pl-10 pr-8 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+              <Input placeholder="Buscar item..." value={search} onChange={e => handleSearchChange(e.target.value)} className="pl-10 pr-8 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
               {search && <button onClick={handleClearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted" title="Limpar busca">
-                  <X size={14} className="text-muted-foreground" />
-                </button>}
+                <X size={14} className="text-muted-foreground" />
+              </button>}
             </div>
-          </div>}
+          </div>
+        </div>
+      </header>}
 
-        {/* Content */}
-        <div ref={scrollContainerRef} className={cn("flex-1 overflow-auto", isMobile ? "p-4" : "p-6")}>
-          {/* Metrics Cards */}
-          <div className={cn("grid gap-3 mb-4", isMobile ? "grid-cols-3" : "grid-cols-4")}>
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Package className="h-4 w-4 text-primary" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Total Peças</p>
-                  <p className="font-bold text-sm sm:text-lg">{totalPecas.toLocaleString()}</p>
-                </div>
+      {/* Mobile Search */}
+      {isMobile && <div className="px-4 py-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+          <Input placeholder="Buscar item..." value={search} onChange={e => handleSearchChange(e.target.value)} className="pl-10 pr-8 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+          {search && <button onClick={handleClearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted" title="Limpar busca">
+            <X size={14} className="text-muted-foreground" />
+          </button>}
+        </div>
+      </div>}
+
+      {/* Content */}
+      <div ref={scrollContainerRef} className={cn("flex-1 overflow-auto", isMobile ? "p-4" : "p-6")}>
+        {/* Metrics Cards */}
+        <div className={cn("grid gap-3 mb-4", isMobile ? "grid-cols-3" : "grid-cols-4")}>
+          <Card className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Package className="h-4 w-4 text-primary" />
               </div>
-            </Card>
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-emerald-500/10">
-                  <DollarSign className="h-4 w-4 text-emerald-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Valor Total</p>
-                  <p className="font-bold text-sm sm:text-lg text-emerald-600">
-                    {isMobile ? `${(valorTotal / 1000).toFixed(1)}k` : `R$ ${valorTotal.toLocaleString('pt-BR', {
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Total Peças</p>
+                <p className="font-bold text-sm sm:text-lg">{totalPecas.toLocaleString()}</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-emerald-500/10">
+                <DollarSign className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Valor Total</p>
+                <p className="font-bold text-sm sm:text-lg text-emerald-600">
+                  {isMobile ? `${(valorTotal / 1000).toFixed(1)}k` : `R$ ${valorTotal.toLocaleString('pt-BR', {
                     minimumFractionDigits: 2
                   })}`}
-                  </p>
+                </p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-amber-500/10">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Em Alerta</p>
+                <p className="font-bold text-sm sm:text-lg text-amber-600">{itensAlerta}</p>
+              </div>
+            </div>
+          </Card>
+          {!isMobile && <Card className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-red-500/10">
+                <PackageX className="h-4 w-4 text-red-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Esgotados</p>
+                <p className="font-bold text-lg text-red-600">{itensEsgotados}</p>
+              </div>
+            </div>
+          </Card>}
+        </div>
+
+        {/* Quick Filters */}
+        <div className="flex gap-2 mb-4 flex-wrap">
+          <Button variant={filtroRapido === 'todos' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('todos')} className="h-8">
+            Ver Todos
+          </Button>
+          <Button variant={filtroRapido === 'esgotado' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('esgotado')} className={cn("h-8 gap-1", filtroRapido === 'esgotado' ? "bg-red-600 hover:bg-red-700" : "text-red-600 border-red-200 hover:bg-red-50")}>
+            <div className="w-2 h-2 rounded-full bg-red-500" />
+            Esgotados ({itensEsgotados})
+          </Button>
+          <Button variant={filtroRapido === 'baixo' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('baixo')} className={cn("h-8 gap-1", filtroRapido === 'baixo' ? "bg-amber-600 hover:bg-amber-700" : "text-amber-600 border-amber-200 hover:bg-amber-50")}>
+            <div className="w-2 h-2 rounded-full bg-amber-500" />
+            Estoque Baixo ({itensAlerta})
+          </Button>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={v => handleTabChange(v as 'materia_prima' | 'produto_acabado')}>
+          {/* Mobile: Scrollable tabs */}
+          {isMobile ? <ScrollArea className="w-full mb-4">
+            <div className="flex gap-2 pb-2">
+              <button onClick={() => handleTabChange('materia_prima')} className={cn("flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap", "border text-sm font-medium", activeTab === 'materia_prima' ? "bg-primary/10 text-primary border-primary/30 shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted")}>
+                <Layers className="h-4 w-4 shrink-0" />
+                <span>Matéria-Prima</span>
+                <span className={cn("inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold", activeTab === 'materia_prima' ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
+                  {materiasPrimas.length}
+                </span>
+              </button>
+              <button onClick={() => handleTabChange('produto_acabado')} className={cn("flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap", "border text-sm font-medium", activeTab === 'produto_acabado' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted")}>
+                <PackageCheck className="h-4 w-4 shrink-0" />
+                <span>Produtos</span>
+                <span className={cn("inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold", activeTab === 'produto_acabado' ? "bg-emerald-500/20 text-emerald-600" : "bg-muted text-muted-foreground")}>
+                  {produtosAcabados.length}
+                </span>
+              </button>
+            </div>
+            <ScrollBar orientation="horizontal" className="h-2" />
+          </ScrollArea> : (/* Desktop: Original tabs */
+            <div className="flex items-center justify-between mb-6">
+              <TabsList className="shadow-[3px_3px_6px_hsl(var(--muted)/0.3),-3px_-3px_6px_hsl(var(--background))] bg-muted/30">
+                <TabsTrigger value="materia_prima" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
+                  <Layers size={16} />
+                  Matéria-Prima ({materiasPrimas.length})
+                </TabsTrigger>
+                <TabsTrigger value="produto_acabado" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
+                  <PackageCheck size={16} />
+                  Produtos Acabados ({produtosAcabados.length})
+                </TabsTrigger>
+              </TabsList>
+
+              {activeTab === 'produto_acabado' && <div className="flex items-center gap-3">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
+                      <Download size={18} />
+                      Exportar Modelos
+                      <ChevronDown size={14} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleExportModelos} className="gap-2 cursor-pointer">
+                      <FileText size={16} />
+                      Exportar CSV (texto)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportModelosPDF} className="gap-2 cursor-pointer">
+                      <Image size={16} />
+                      Exportar PDF (com imagens)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button onClick={() => setShowImportModal(true)} variant="outline" className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
+                  <FileSpreadsheet size={18} />
+                  Importar Lista de Modelos
+                </Button>
+                <Button onClick={handleOpenNovoModelo} variant="outline" className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
+                  <Plus size={18} />
+                  Novo Modelo Acabado
+                </Button>
+                <Button onClick={() => setShowNovoModeloPadronizadoModal(true)} className="gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]">
+                  <Sparkles size={18} />
+                  + Novo Modelo Padronizado
+                </Button>
+              </div>}
+              {activeTab === 'materia_prima' && <Button onClick={() => handleOpenModal()} className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]">
+                <Plus size={18} />
+                Novo Item
+              </Button>}
+            </div>)}
+
+          <TabsContent value={activeTab} className="mt-0">
+            {/* ── Seção: Modelos Padronizados ───────────────────── */}
+            {activeTab === 'produto_acabado' && modelosPadronizados.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-px flex-1 bg-gradient-to-r from-purple-200 to-transparent" />
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-full">
+                    <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                    <span className="text-xs font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider">
+                      Modelos Padronizados ({modelosPadronizados.length})
+                    </span>
+                  </div>
+                  <div className="h-px flex-1 bg-gradient-to-l from-purple-200 to-transparent" />
+                </div>
+                <div className={cn("grid gap-3", isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6")}>
+                  {modelosPadronizados.map(modelo => (
+                    <ModeloPadronizadoCard
+                      key={modelo.id}
+                      modelo={modelo}
+                      onVerDetalhes={m => setModeloDetalhes(m)}
+                      onImageUpdate={handleProductImageUpdate}
+                    />
+                  ))}
                 </div>
               </div>
-            </Card>
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-amber-500/10">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Em Alerta</p>
-                  <p className="font-bold text-sm sm:text-lg text-amber-600">{itensAlerta}</p>
-                </div>
+            )}
+
+            {/* ── Seção: Modelos Manuais ────────────────────────── */}
+            {activeTab === 'produto_acabado' && itensFiltrados.filter(i => i.tipo === 'acabado' && i.categoria !== CATEGORIA_MODELO_PAD && i.categoria !== CATEGORIA_VARIACAO_PAD).length > 0 && (
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-px flex-1 bg-gradient-to-r from-border to-transparent" />
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-2">
+                  Modelos Manuais
+                </span>
+                <div className="h-px flex-1 bg-gradient-to-l from-border to-transparent" />
               </div>
-            </Card>
-            {!isMobile && <Card className="p-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-red-500/10">
-                    <PackageX className="h-4 w-4 text-red-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">Esgotados</p>
-                    <p className="font-bold text-lg text-red-600">{itensEsgotados}</p>
-                  </div>
-                </div>
-              </Card>}
-          </div>
+            )}
 
-          {/* Quick Filters */}
-          <div className="flex gap-2 mb-4 flex-wrap">
-            <Button variant={filtroRapido === 'todos' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('todos')} className="h-8">
-              Ver Todos
-            </Button>
-            <Button variant={filtroRapido === 'esgotado' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('esgotado')} className={cn("h-8 gap-1", filtroRapido === 'esgotado' ? "bg-red-600 hover:bg-red-700" : "text-red-600 border-red-200 hover:bg-red-50")}>
-              <div className="w-2 h-2 rounded-full bg-red-500" />
-              Esgotados ({itensEsgotados})
-            </Button>
-            <Button variant={filtroRapido === 'baixo' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('baixo')} className={cn("h-8 gap-1", filtroRapido === 'baixo' ? "bg-amber-600 hover:bg-amber-700" : "text-amber-600 border-amber-200 hover:bg-amber-50")}>
-              <div className="w-2 h-2 rounded-full bg-amber-500" />
-              Estoque Baixo ({itensAlerta})
-            </Button>
-          </div>
-
-          <Tabs value={activeTab} onValueChange={v => handleTabChange(v as 'materia_prima' | 'produto_acabado')}>
-            {/* Mobile: Scrollable tabs */}
-            {isMobile ? <ScrollArea className="w-full mb-4">
-                <div className="flex gap-2 pb-2">
-                  <button onClick={() => handleTabChange('materia_prima')} className={cn("flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap", "border text-sm font-medium", activeTab === 'materia_prima' ? "bg-primary/10 text-primary border-primary/30 shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted")}>
-                    <Layers className="h-4 w-4 shrink-0" />
-                    <span>Matéria-Prima</span>
-                    <span className={cn("inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold", activeTab === 'materia_prima' ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
-                      {materiasPrimas.length}
-                    </span>
-                  </button>
-                  <button onClick={() => handleTabChange('produto_acabado')} className={cn("flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap", "border text-sm font-medium", activeTab === 'produto_acabado' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted")}>
-                    <PackageCheck className="h-4 w-4 shrink-0" />
-                    <span>Produtos</span>
-                    <span className={cn("inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold", activeTab === 'produto_acabado' ? "bg-emerald-500/20 text-emerald-600" : "bg-muted text-muted-foreground")}>
-                      {produtosAcabados.length}
-                    </span>
-                  </button>
-                </div>
-                <ScrollBar orientation="horizontal" className="h-2" />
-              </ScrollArea> : (/* Desktop: Original tabs */
-          <div className="flex items-center justify-between mb-6">
-                <TabsList className="shadow-[3px_3px_6px_hsl(var(--muted)/0.3),-3px_-3px_6px_hsl(var(--background))] bg-muted/30">
-                  <TabsTrigger value="materia_prima" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
-                    <Layers size={16} />
-                    Matéria-Prima ({materiasPrimas.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="produto_acabado" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
-                    <PackageCheck size={16} />
-                    Produtos Acabados ({produtosAcabados.length})
-                  </TabsTrigger>
-                </TabsList>
-
-                {activeTab === 'produto_acabado' && <div className="flex items-center gap-3">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
-                          <Download size={18} />
-                          Exportar Modelos
-                          <ChevronDown size={14} />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={handleExportModelos} className="gap-2 cursor-pointer">
-                          <FileText size={16} />
-                          Exportar CSV (texto)
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleExportModelosPDF} className="gap-2 cursor-pointer">
-                          <Image size={16} />
-                          Exportar PDF (com imagens)
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <Button onClick={() => setShowImportModal(true)} variant="outline" className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
-                      <FileSpreadsheet size={18} />
-                      Importar Lista de Modelos
-                    </Button>
-                    <Button onClick={handleOpenNovoModelo} className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]">
-                      <Plus size={18} />
-                      Novo Modelo Acabado
-                    </Button>
-                  </div>}
-                {activeTab === 'materia_prima' && <Button onClick={() => handleOpenModal()} className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]">
-                    <Plus size={18} />
-                    Novo Item
-                  </Button>}
-              </div>)}
-
-            <TabsContent value={activeTab} className="mt-0">
-              <div className={cn("grid gap-3", isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6")}>
-                {itensFiltrados.map(item => item.tipo === 'acabado' ? isMobile ? <MobileProductCard key={item.id} item={{
+            <div className={cn("grid gap-3", isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6")}>
+              {itensFiltrados.filter(i =>
+                i.tipo !== 'acabado' ||
+                (i.categoria !== CATEGORIA_MODELO_PAD && i.categoria !== CATEGORIA_VARIACAO_PAD)
+              ).map(item => item.tipo === 'acabado' ? isMobile ? <MobileProductCard key={item.id} item={{
                 id: item.id,
                 nome: item.nome,
                 categoria: item.categoria,
@@ -887,408 +944,421 @@ export default function Estoque() {
                 setEditingPriceId(id);
                 setEditingPriceValue(price);
               }} onSavePrice={handleSavePrice} onCancelEditPrice={handleCancelEditPrice} onPriceChange={v => setEditingPriceValue(Number(v))} onEdit={handleOpenModal} onDelete={handleDeleteClick} onImageUpdate={handleProductImageUpdate} vendasSemana={vendasSemanaMap?.get(item.id) || 0} /> : <ProductCard key={item.id} item={item} editingPriceId={editingPriceId} editingPriceValue={editingPriceValue} onEditPrice={handleStartEditPrice} onSavePrice={handleSavePrice} onCancelEditPrice={handleCancelEditPrice} onPriceValueChange={setEditingPriceValue} onEdit={handleOpenModal} onDelete={handleDeleteClick} onImageUpdate={handleProductImageUpdate} vendasSemana={vendasSemanaMap?.get(item.id) || 0} /> : <Card key={item.id} className="overflow-hidden shadow-soft border border-border/50 bg-card rounded-2xl">
-                      <CardContent className={cn("p-6", isMobile && "p-4")}>
-                        {/* Two column layout */}
-                        <div className="flex gap-4 mb-4 pb-4 border-b border-border/30">
-                          {/* Left: Image */}
-                          <ProductImage imagemUrl={item.imagemUrl} nome={item.nome} />
-                          
-                          {/* Right: Main info */}
-                          <div className="flex-1 min-w-0">
-                            <h3 className={cn("font-bold text-foreground", isMobile ? "text-sm line-clamp-2" : "text-lg truncate")}>{item.nome}</h3>
-                            <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mt-1">{item.categoria}</p>
-                          </div>
-                          
-                          {/* Calculate status based on quantity */}
-                          {(() => {
+                <CardContent className={cn("p-6", isMobile && "p-4")}>
+                  {/* Two column layout */}
+                  <div className="flex gap-4 mb-4 pb-4 border-b border-border/30">
+                    {/* Left: Image */}
+                    <ProductImage imagemUrl={item.imagemUrl} nome={item.nome} />
+
+                    {/* Right: Main info */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className={cn("font-bold text-foreground", isMobile ? "text-sm line-clamp-2" : "text-lg truncate")}>{item.nome}</h3>
+                      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mt-1">{item.categoria}</p>
+                    </div>
+
+                    {/* Calculate status based on quantity */}
+                    {(() => {
                       const status: StatusEstoque = item.quantidade === 0 ? 'baixo_estoque' : item.quantidade <= 20 ? 'baixo_estoque' : 'disponivel';
                       return <Badge className={statusConfig[status].color + " h-fit shrink-0"}>
-                                {statusConfig[status].label}
-                              </Badge>;
+                        {statusConfig[status].label}
+                      </Badge>;
                     })()}
-                        </div>
+                  </div>
 
-                        {/* Technical data - clean aligned layout */}
-                        <div className="space-y-3 text-sm">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Quantidade</span>
-                            <span className="font-bold text-lg text-foreground">
-                              {item.quantidade} <span className="text-xs font-normal text-muted-foreground">{item.unidade}</span>
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Mínimo</span>
-                            <span className="text-sm text-muted-foreground">{item.quantidadeMinima} {item.unidade}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Preço unit.</span>
-                            <span className="font-semibold text-primary">R$ {(item.precoUnitario ?? 0).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Localização</span>
-                            <span className="text-sm text-muted-foreground">{item.localizacao}</span>
-                          </div>
-                        </div>
+                  {/* Technical data - clean aligned layout */}
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Quantidade</span>
+                      <span className="font-bold text-lg text-foreground">
+                        {item.quantidade} <span className="text-xs font-normal text-muted-foreground">{item.unidade}</span>
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Mínimo</span>
+                      <span className="text-sm text-muted-foreground">{item.quantidadeMinima} {item.unidade}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Preço unit.</span>
+                      <span className="font-semibold text-primary">R$ {(item.precoUnitario ?? 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Localização</span>
+                      <span className="text-sm text-muted-foreground">{item.localizacao}</span>
+                    </div>
+                  </div>
 
-                        <div className="flex gap-3 mt-5 pt-4 border-t border-border/30">
-                          <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-10" onClick={() => handleOpenModal(item)}>
-                            <Edit size={14} />
-                            Editar
-                          </Button>
-                          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive h-10 px-3" onClick={() => handleDeleteClick(item)}>
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>)}
-
-                {itensFiltrados.length === 0 && !isPaginatedLoading && <div className="col-span-full text-center py-12 text-muted-foreground">
-                    {search ? 'Nenhum item encontrado para a busca.' : activeTab === 'materia_prima' ? 'Nenhuma matéria-prima cadastrada.' : 'Nenhum produto acabado no estoque.'}
-                  </div>}
-
-                {isPaginatedLoading && <div className="col-span-full text-center py-12 text-muted-foreground">
-                    Carregando...
-                  </div>}
-              </div>
-
-              {/* Paginação */}
-              {totalCount > 0 && <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t">
-                  <span className="text-sm text-muted-foreground">
-                    Mostrando {fromItem}-{toItem} de {totalCount} itens
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handlePageChange(Math.max(0, currentPage - 1))} disabled={currentPage === 0 || isPaginatedFetching} className="gap-1">
-                      <ChevronLeft className="h-4 w-4" />
-                      Anterior
+                  <div className="flex gap-3 mt-5 pt-4 border-t border-border/30">
+                    <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-10" onClick={() => handleOpenModal(item)}>
+                      <Edit size={14} />
+                      Editar
                     </Button>
-                    <span className="text-sm text-muted-foreground px-2">
-                      Página {currentPage + 1} de {totalPages}
-                    </span>
-                    <Button variant="outline" size="sm" onClick={() => handlePageChange(Math.min(totalPages - 1, currentPage + 1))} disabled={currentPage >= totalPages - 1 || isPaginatedFetching} className="gap-1">
-                      Próxima
-                      <ChevronRight className="h-4 w-4" />
+                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive h-10 px-3" onClick={() => handleDeleteClick(item)}>
+                      <Trash2 size={14} />
                     </Button>
                   </div>
-                </div>}
-            </TabsContent>
-          </Tabs>
-        </div>
+                </CardContent>
+              </Card>)}
 
-        {/* Mobile FAB for adding items */}
-        {isMobile && activeTab === 'produto_acabado' && <Button onClick={handleOpenNovoModelo} className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90">
-            <Plus size={24} />
-          </Button>}
-        {isMobile && activeTab === 'materia_prima' && <Button onClick={() => handleOpenModal()} className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90">
-            <Plus size={24} />
-          </Button>}
-      </main>
+              {itensFiltrados.length === 0 && !isPaginatedLoading && <div className="col-span-full text-center py-12 text-muted-foreground">
+                {search ? 'Nenhum item encontrado para a busca.' : activeTab === 'materia_prima' ? 'Nenhuma matéria-prima cadastrada.' : 'Nenhum produto acabado no estoque.'}
+              </div>}
 
-      {/* Modal de Novo/Editar Item */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="sm:max-w-[450px]">
-          <DialogHeader>
-            <DialogTitle>{editingItem ? 'Editar Item' : 'Novo Item de Estoque'}</DialogTitle>
-            <DialogDescription>
-              {editingItem ? 'Atualize as informações do item' : 'Adicione um novo item ao estoque'}
-            </DialogDescription>
-          </DialogHeader>
+              {isPaginatedLoading && <div className="col-span-full text-center py-12 text-muted-foreground">
+                Carregando...
+              </div>}
+            </div>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="nome">Nome do Item</Label>
-              <Input id="nome" value={formData.nome} onChange={e => setFormData({
+            {/* Paginação */}
+            {totalCount > 0 && <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t">
+              <span className="text-sm text-muted-foreground">
+                Mostrando {fromItem}-{toItem} de {totalCount} itens
+              </span>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => handlePageChange(Math.max(0, currentPage - 1))} disabled={currentPage === 0 || isPaginatedFetching} className="gap-1">
+                  <ChevronLeft className="h-4 w-4" />
+                  Anterior
+                </Button>
+                <span className="text-sm text-muted-foreground px-2">
+                  Página {currentPage + 1} de {totalPages}
+                </span>
+                <Button variant="outline" size="sm" onClick={() => handlePageChange(Math.min(totalPages - 1, currentPage + 1))} disabled={currentPage >= totalPages - 1 || isPaginatedFetching} className="gap-1">
+                  Próxima
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Mobile FAB for adding items */}
+      {isMobile && activeTab === 'produto_acabado' && <Button onClick={handleOpenNovoModelo} className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90">
+        <Plus size={24} />
+      </Button>}
+      {isMobile && activeTab === 'materia_prima' && <Button onClick={() => handleOpenModal()} className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90">
+        <Plus size={24} />
+      </Button>}
+    </main>
+
+    {/* Modal de Novo/Editar Item */}
+    <Dialog open={showModal} onOpenChange={setShowModal}>
+      <DialogContent className="sm:max-w-[450px]">
+        <DialogHeader>
+          <DialogTitle>{editingItem ? 'Editar Item' : 'Novo Item de Estoque'}</DialogTitle>
+          <DialogDescription>
+            {editingItem ? 'Atualize as informações do item' : 'Adicione um novo item ao estoque'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="nome">Nome do Item</Label>
+            <Input id="nome" value={formData.nome} onChange={e => setFormData({
               ...formData,
               nome: e.target.value
             })} placeholder="Ex: Jeans Azul Escuro" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-            </div>
+          </div>
 
-            {/* Campos apenas para matéria-prima */}
-            {(!editingItem || editingItem.tipo === 'materia-prima') && <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="categoria">Categoria</Label>
-                    <Select value={formData.categoria} onValueChange={v => setFormData({
+          {/* Campos apenas para matéria-prima */}
+          {(!editingItem || editingItem.tipo === 'materia-prima') && <>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="categoria">Categoria</Label>
+                <Select value={formData.categoria} onValueChange={v => setFormData({
                   ...formData,
                   categoria: v
                 })}>
-                      <SelectTrigger className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0">
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categoriasMateriaPrima.map(cat => <SelectItem key={cat} value={cat}>
-                            {cat}
-                          </SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <SelectTrigger className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categoriasMateriaPrima.map(cat => <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="unidade">Unidade</Label>
-                    <Select value={formData.unidade} onValueChange={v => setFormData({
+              <div className="space-y-2">
+                <Label htmlFor="unidade">Unidade</Label>
+                <Select value={formData.unidade} onValueChange={v => setFormData({
                   ...formData,
                   unidade: v
                 })}>
-                      <SelectTrigger className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="metros">Metros</SelectItem>
-                        <SelectItem value="unidades">Unidades</SelectItem>
-                        <SelectItem value="cones">Cones</SelectItem>
-                        <SelectItem value="peças">Peças</SelectItem>
-                        <SelectItem value="kg">Quilos (kg)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                  <SelectTrigger className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="metros">Metros</SelectItem>
+                    <SelectItem value="unidades">Unidades</SelectItem>
+                    <SelectItem value="cones">Cones</SelectItem>
+                    <SelectItem value="peças">Peças</SelectItem>
+                    <SelectItem value="kg">Quilos (kg)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="quantidade">Quantidade</Label>
-                    <Input id="quantidade" type="number" value={formData.quantidade} onChange={e => setFormData({
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="quantidade">Quantidade</Label>
+                <Input id="quantidade" type="number" value={formData.quantidade} onChange={e => setFormData({
                   ...formData,
                   quantidade: e.target.value === '' ? '' : Number(e.target.value)
                 })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-                  </div>
+              </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="quantidadeMinima">Qtd. Mínima</Label>
-                    <Input id="quantidadeMinima" type="number" value={formData.quantidadeMinima} onChange={e => setFormData({
+              <div className="space-y-2">
+                <Label htmlFor="quantidadeMinima">Qtd. Mínima</Label>
+                <Input id="quantidadeMinima" type="number" value={formData.quantidadeMinima} onChange={e => setFormData({
                   ...formData,
                   quantidadeMinima: e.target.value === '' ? '' : Number(e.target.value)
                 })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-                  </div>
-                </div>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="precoUnitario">Preço Unitário (R$)</Label>
-                    <Input id="precoUnitario" type="number" step="0.01" value={formData.precoUnitario} onChange={e => setFormData({
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="precoUnitario">Preço Unitário (R$)</Label>
+                <Input id="precoUnitario" type="number" step="0.01" value={formData.precoUnitario} onChange={e => setFormData({
                   ...formData,
                   precoUnitario: e.target.value === '' ? '' : Number(e.target.value)
                 })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-                  </div>
+              </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="localizacao">Localização</Label>
-                    <Input id="localizacao" value={formData.localizacao} onChange={e => setFormData({
+              <div className="space-y-2">
+                <Label htmlFor="localizacao">Localização</Label>
+                <Input id="localizacao" value={formData.localizacao} onChange={e => setFormData({
                   ...formData,
                   localizacao: e.target.value
                 })} placeholder="Ex: Prateleira A1" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-                  </div>
-                </div>
-              </>}
+              </div>
+            </div>
+          </>}
 
-            {/* Campos para produtos acabados */}
-            {editingItem?.tipo === 'acabado' && <>
-                <div className="space-y-2">
-                  <Label htmlFor="quantidade">Quantidade (peças)</Label>
-                  <Input id="quantidade" type="number" value={formData.quantidade} onChange={e => setFormData({
+          {/* Campos para produtos acabados */}
+          {editingItem?.tipo === 'acabado' && <>
+            <div className="space-y-2">
+              <Label htmlFor="quantidade">Quantidade (peças)</Label>
+              <Input id="quantidade" type="number" value={formData.quantidade} onChange={e => setFormData({
                 ...formData,
                 quantidade: e.target.value === '' ? '' : Number(e.target.value)
               })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-                </div>
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="localizacao">Localização</Label>
-                  <Input id="localizacao" value={formData.localizacao} onChange={e => setFormData({
+            <div className="space-y-2">
+              <Label htmlFor="localizacao">Localização</Label>
+              <Input id="localizacao" value={formData.localizacao} onChange={e => setFormData({
                 ...formData,
                 localizacao: e.target.value
               })} placeholder="Ex: Estoque Produção" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+            </div>
+          </>}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowModal(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave}>
+            {editingItem ? 'Atualizar' : 'Adicionar'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal de Confirmação de Exclusão */}
+    <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+      <DialogContent className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <Trash2 size={20} />
+            Remover Item
+          </DialogTitle>
+          <DialogDescription>
+            Deseja remover este lote do estoque?
+          </DialogDescription>
+        </DialogHeader>
+
+        {itemToDelete && <div className="py-4">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))]">
+            <ProductImage imagemUrl={itemToDelete.imagemUrl} nome={itemToDelete.nome} />
+            <div>
+              <p className="font-medium text-foreground">{itemToDelete.nome}</p>
+              <p className="text-sm text-muted-foreground">
+                {itemToDelete.quantidade} {itemToDelete.unidade}
+              </p>
+            </div>
+          </div>
+        </div>}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
+            Cancelar
+          </Button>
+          <Button variant="destructive" onClick={handleConfirmDelete}>
+            <Trash2 size={16} className="mr-2" />
+            Confirmar Exclusão
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal de Novo Modelo Acabado */}
+    <Dialog open={showNovoModeloModal} onOpenChange={setShowNovoModeloModal}>
+      <DialogContent className="sm:max-w-[480px] bg-muted/95 shadow-[12px_12px_30px_hsl(216_26%_80%/0.6),-12px_-12px_30px_hsl(0_0%_100%/0.9)]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <PackageCheck size={20} className="text-primary" />
+            Novo Modelo Acabado
+          </DialogTitle>
+          <DialogDescription>
+            Cadastre um produto acabado manualmente no estoque
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5 py-4">
+          {/* Upload de Imagem */}
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Imagem do Produto</Label>
+            <div onClick={() => fileInputRef.current?.click()} className="relative w-full h-32 rounded-xl bg-background shadow-[inset_3px_3px_8px_hsl(var(--muted)/0.4),inset_-3px_-3px_8px_hsl(var(--background))] border border-border/30 cursor-pointer hover:border-primary/50 transition-colors flex items-center justify-center overflow-hidden group">
+              {novoModeloForm.imagemPreview ? <>
+                <img src={novoModeloForm.imagemPreview} alt="Preview" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <span className="text-white text-sm font-medium">Trocar imagem</span>
                 </div>
-              </>}
+              </> : <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                {uploadingImage ? <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /> : <>
+                  <ImagePlus size={32} className="text-muted-foreground/50" />
+                  <span className="text-xs uppercase tracking-wider">Clique para adicionar</span>
+                </>}
+              </div>}
+            </div>
+            <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowModal(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSave}>
-              {editingItem ? 'Atualizar' : 'Adicionar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal de Confirmação de Exclusão */}
-      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <Trash2 size={20} />
-              Remover Item
-            </DialogTitle>
-            <DialogDescription>
-              Deseja remover este lote do estoque?
-            </DialogDescription>
-          </DialogHeader>
-
-          {itemToDelete && <div className="py-4">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))]">
-                <ProductImage imagemUrl={itemToDelete.imagemUrl} nome={itemToDelete.nome} />
-                <div>
-                  <p className="font-medium text-foreground">{itemToDelete.nome}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {itemToDelete.quantidade} {itemToDelete.unidade}
-                  </p>
-                </div>
-              </div>
-            </div>}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete}>
-              <Trash2 size={16} className="mr-2" />
-              Confirmar Exclusão
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal de Novo Modelo Acabado */}
-      <Dialog open={showNovoModeloModal} onOpenChange={setShowNovoModeloModal}>
-        <DialogContent className="sm:max-w-[480px] bg-muted/95 shadow-[12px_12px_30px_hsl(216_26%_80%/0.6),-12px_-12px_30px_hsl(0_0%_100%/0.9)]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <PackageCheck size={20} className="text-primary" />
-              Novo Modelo Acabado
-            </DialogTitle>
-            <DialogDescription>
-              Cadastre um produto acabado manualmente no estoque
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5 py-4">
-            {/* Upload de Imagem */}
+          {/* Nome e Referência */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Imagem do Produto</Label>
-              <div onClick={() => fileInputRef.current?.click()} className="relative w-full h-32 rounded-xl bg-background shadow-[inset_3px_3px_8px_hsl(var(--muted)/0.4),inset_-3px_-3px_8px_hsl(var(--background))] border border-border/30 cursor-pointer hover:border-primary/50 transition-colors flex items-center justify-center overflow-hidden group">
-                {novoModeloForm.imagemPreview ? <>
-                    <img src={novoModeloForm.imagemPreview} alt="Preview" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">Trocar imagem</span>
-                    </div>
-                  </> : <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    {uploadingImage ? <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /> : <>
-                        <ImagePlus size={32} className="text-muted-foreground/50" />
-                        <span className="text-xs uppercase tracking-wider">Clique para adicionar</span>
-                      </>}
-                  </div>}
-              </div>
-              <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
-            </div>
-
-            {/* Nome e Referência */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Nome do Modelo</Label>
-                <Input value={novoModeloForm.nome} onChange={e => setNovoModeloForm({
+              <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Nome do Modelo</Label>
+              <Input value={novoModeloForm.nome} onChange={e => setNovoModeloForm({
                 ...novoModeloForm,
                 nome: e.target.value
               })} placeholder="Ex: Short Jeans" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Referência</Label>
-                <Input value={novoModeloForm.referencia} onChange={e => setNovoModeloForm({
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Referência</Label>
+              <Input value={novoModeloForm.referencia} onChange={e => setNovoModeloForm({
                 ...novoModeloForm,
                 referencia: e.target.value
               })} placeholder="Ex: 164" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-                <span className="text-[10px] text-muted-foreground">
-                  Sugestão automática. Edite para usar referência existente.
-                </span>
-              </div>
+              <span className="text-[10px] text-muted-foreground">
+                Sugestão automática. Edite para usar referência existente.
+              </span>
             </div>
+          </div>
 
-            {/* Quantidade e Preço */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Quantidade Inicial</Label>
-                <Input type="number" min={1} value={novoModeloForm.quantidade === 0 ? '' : novoModeloForm.quantidade} onChange={e => setNovoModeloForm({
+          {/* Quantidade e Preço */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Quantidade Inicial</Label>
+              <Input type="number" min={1} value={novoModeloForm.quantidade === 0 ? '' : novoModeloForm.quantidade} onChange={e => setNovoModeloForm({
                 ...novoModeloForm,
                 quantidade: e.target.value === '' ? 0 : Number(e.target.value)
               })} placeholder="0" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Preço de Venda (R$)</Label>
-                <Input type="number" step="0.01" min={0} value={novoModeloForm.precoVenda === 0 ? '' : novoModeloForm.precoVenda} onChange={e => setNovoModeloForm({
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Preço de Venda (R$)</Label>
+              <Input type="number" step="0.01" min={0} value={novoModeloForm.precoVenda === 0 ? '' : novoModeloForm.precoVenda} onChange={e => setNovoModeloForm({
                 ...novoModeloForm,
                 precoVenda: e.target.value === '' ? 0 : Number(e.target.value)
               })} placeholder="0.00" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowNovoModeloModal(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSaveNovoModelo} disabled={uploadingImage} className="gap-2 bg-gradient-to-r from-primary to-primary/80">
+            <Check size={16} />
+            Adicionar ao Estoque
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal de Confirmação de Duplicado */}
+    <Dialog open={showDuplicadoModal} onOpenChange={setShowDuplicadoModal}>
+      <DialogContent className="sm:max-w-[450px] bg-muted/95 shadow-[12px_12px_30px_hsl(216_26%_80%/0.6),-12px_-12px_30px_hsl(0_0%_100%/0.9)]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-amber-600">
+            <AlertTriangle size={20} />
+            Produto Já Existe
+          </DialogTitle>
+          <DialogDescription>
+            Um produto com esse nome já existe no estoque. O que deseja fazer?
+          </DialogDescription>
+        </DialogHeader>
+
+        {produtoDuplicado && <div className="py-4">
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))]">
+            <ProductImage imagemUrl={produtoDuplicado.imagemUrl} nome={produtoDuplicado.nome} />
+            <div className="flex-1">
+              <p className="font-bold text-lg text-foreground">{produtoDuplicado.nome}</p>
+              <div className="flex items-center gap-4 mt-1">
+                <span className="text-sm text-muted-foreground">
+                  Estoque atual: <span className="font-semibold text-foreground">{produtoDuplicado.quantidade} peças</span>
+                </span>
               </div>
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNovoModeloModal(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveNovoModelo} disabled={uploadingImage} className="gap-2 bg-gradient-to-r from-primary to-primary/80">
-              <Check size={16} />
-              Adicionar ao Estoque
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
+            <p className="text-sm text-amber-800">
+              Você está tentando adicionar <strong>{novoModeloForm.quantidade} peças</strong>.
+            </p>
+          </div>
+        </div>}
 
-      {/* Modal de Confirmação de Duplicado */}
-      <Dialog open={showDuplicadoModal} onOpenChange={setShowDuplicadoModal}>
-        <DialogContent className="sm:max-w-[450px] bg-muted/95 shadow-[12px_12px_30px_hsl(216_26%_80%/0.6),-12px_-12px_30px_hsl(0_0%_100%/0.9)]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-600">
-              <AlertTriangle size={20} />
-              Produto Já Existe
-            </DialogTitle>
-            <DialogDescription>
-              Um produto com esse nome já existe no estoque. O que deseja fazer?
-            </DialogDescription>
-          </DialogHeader>
-
-          {produtoDuplicado && <div className="py-4">
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))]">
-                <ProductImage imagemUrl={produtoDuplicado.imagemUrl} nome={produtoDuplicado.nome} />
-                <div className="flex-1">
-                  <p className="font-bold text-lg text-foreground">{produtoDuplicado.nome}</p>
-                  <div className="flex items-center gap-4 mt-1">
-                    <span className="text-sm text-muted-foreground">
-                      Estoque atual: <span className="font-semibold text-foreground">{produtoDuplicado.quantidade} peças</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
-                <p className="text-sm text-amber-800">
-                  Você está tentando adicionar <strong>{novoModeloForm.quantidade} peças</strong>.
-                </p>
-              </div>
-            </div>}
-
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setShowDuplicadoModal(false)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button onClick={() => {
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={() => setShowDuplicadoModal(false)} className="flex-1">
+            Cancelar
+          </Button>
+          <Button onClick={() => {
             const nomeCompleto = novoModeloForm.referencia ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` : novoModeloForm.nome;
             criarNovoModeloAcabado(nomeCompleto + ` (${Date.now()})`, false);
           }} variant="outline" className="flex-1">
-              Criar Novo Registro
-            </Button>
-            <Button onClick={() => {
+            Criar Novo Registro
+          </Button>
+          <Button onClick={() => {
             const nomeCompleto = novoModeloForm.referencia ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` : novoModeloForm.nome;
             criarNovoModeloAcabado(nomeCompleto, true);
           }} className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500">
-              Somar Quantidade
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            Somar Quantidade
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-      {/* Modal de Importação CSV */}
-      <ImportModelosCSVModal open={showImportModal} onOpenChange={setShowImportModal} />
-      
-      {/* Bottom Navigation */}
-      <BottomNavigation />
-    </div>;
+    {/* Modal de Importação CSV */}
+    <ImportModelosCSVModal open={showImportModal} onOpenChange={setShowImportModal} />
+
+    {/* Modal de Novo Modelo Padronizado */}
+    <NovoModeloPadronizadoModal
+      open={showNovoModeloPadronizadoModal}
+      onClose={() => setShowNovoModeloPadronizadoModal(false)}
+    />
+
+    {/* Modal de Detalhes do Modelo Padronizado */}
+    <DetalhesModeloPadronizadoModal
+      open={!!modeloDetalhes}
+      modelo={modeloDetalhes}
+      onClose={() => setModeloDetalhes(null)}
+    />
+
+    {/* Bottom Navigation */}
+    <BottomNavigation />
+  </div>;
 }

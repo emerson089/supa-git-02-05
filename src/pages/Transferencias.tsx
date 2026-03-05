@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck, History, BarChart3, AlertTriangle, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowRight, Plus, Loader2, Minus, X, Check, ArrowLeftRight, Package, Package2, Search, Store, Box, Info, FileDown, DollarSign, TrendingUp, ClipboardCheck, History, BarChart3, AlertTriangle, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PrintEstoqueLocal } from '@/components/estoque/PrintEstoqueLocal';
 import { LotImage } from '@/components/production/LotImage';
@@ -44,6 +44,8 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Transferencia } from '@/hooks/useTransferencias';
+import { AddGradeModal } from '@/components/pedidos/AddGradeModal';
+import { ItemPedido } from '@/components/pedidos/ItemPedidoRow';
 
 interface ItemTransferencia {
   itemId: string;
@@ -136,10 +138,44 @@ export default function Transferencias() {
   const [showDetalhesModal, setShowDetalhesModal] = useState(false);
   const [transferenciaSelecionada, setTransferenciaSelecionada] = useState<Transferencia | null>(null);
 
+  // Estados Nova Transferência por Grade
+  const [showAddGrade, setShowAddGrade] = useState(false);
+
   // Buscar itens da transferência selecionada
   const { data: itensTransferenciaSelecionada = [] } = useTransferenciaItens(transferenciaSelecionada?.id);
 
   const produtosAcabados = getProdutosAcabados();
+
+  // ======= NOVA TRANSFERÊNCIA (AVULSA E GRADES) =======
+  const handleAddGradeItems = (novosItens: ItemPedido[]) => {
+    // novosItens vem da Grade, mapeamos para ItemTransferencia
+    const itensMapeados: ItemTransferencia[] = novosItens.map(item => {
+      // Procuramos o produto no estoque para pegar a imagem original e disponivel
+      const produtoEstoque = produtosAcabados.find(p => p.id === item.produtoId);
+      const disponivelOrigem = produtoEstoque ? getDisponivelNoLocal(produtoEstoque.id, origemId) : 0;
+
+      return {
+        itemId: item.produtoId,
+        nome: `${item.modeloNome} — Tamanho ${item.produtoNome.split('-').pop()}`,
+        imagemUrl: produtoEstoque?.imagemUrl || null,
+        quantidade: item.quantidade,
+        disponivelOrigem: disponivelOrigem
+      };
+    });
+
+    setItensTransferencia(prev => {
+      const result = [...prev];
+      for (const novo of itensMapeados) {
+        const existenteIdx = result.findIndex(i => i.itemId === novo.itemId);
+        if (existenteIdx >= 0) {
+          result[existenteIdx].quantidade += novo.quantidade;
+        } else {
+          result.push(novo);
+        }
+      }
+      return result;
+    });
+  };
 
   // Mapear itens da transferência selecionada com dados dos produtos
   const itensDetalhados = useMemo(() => {
@@ -888,6 +924,33 @@ export default function Transferencias() {
             </Select>
           </div>
 
+          {/* Seletor de Modo de Transferência */}
+          {origemId && destinoId && (
+            <div className="flex bg-muted/50 p-1.5 rounded-xl mt-2 border border-border/50">
+              <button
+                type="button"
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all",
+                  "bg-background shadow-sm ring-1 ring-border/50 text-foreground"
+                )}
+              >
+                <Plus className="h-4 w-4" />
+                Modo Avulso
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all",
+                  "text-muted-foreground hover:text-foreground hover:bg-muted"
+                )}
+                onClick={() => setShowAddGrade(true)}
+              >
+                <Package2 className="h-4 w-4" />
+                Por Grade
+              </button>
+            </div>
+          )}
+
           {/* Seção: Produtos Disponíveis */}
           {origemId && <div className="rounded-xl border bg-muted/30 p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -974,44 +1037,66 @@ export default function Transferencias() {
               <p>Nenhum item selecionado</p>
               <p className="text-xs mt-1">Selecione produtos da lista acima</p>
             </div> : <div className="space-y-2">
-              {itensTransferencia.map(item => <div key={item.itemId} className="flex items-center gap-3 p-3 rounded-lg border bg-background">
-                <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0 border">
-                  <LotImage src={item.imagemUrl} alt={item.nome} className="w-full h-full object-cover" />
-                </div>
+              {itensTransferencia.map(item => {
+                const isShortage = item.quantidade > item.disponivelOrigem;
+                return (
+                  <div key={item.itemId} className={cn(
+                    "flex items-center gap-3 p-3 rounded-lg border",
+                    isShortage ? "bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800" : "bg-background"
+                  )}>
+                    <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0 border">
+                      <LotImage src={item.imagemUrl} alt={item.nome} className="w-full h-full object-cover" />
+                    </div>
 
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{item.nome}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Máx: {item.disponivelOrigem}
-                  </p>
-                </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.nome}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className={cn("text-xs", isShortage ? "text-amber-600 font-semibold" : "text-muted-foreground")}>
+                          Disp: {item.disponivelOrigem}
+                        </p>
+                        {isShortage && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <AlertTriangle className="h-3 w-3 text-amber-500" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Quantidade excede o estoque na origem.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                    </div>
 
-                <div className="flex items-center gap-1">
-                  <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleUpdateQuantidade(item.itemId, -1)} disabled={item.quantidade <= 1}>
-                    <Minus size={14} />
-                  </Button>
+                    <div className="flex items-center gap-1">
+                      <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleUpdateQuantidade(item.itemId, -1)} disabled={item.quantidade <= 1}>
+                        <Minus size={14} />
+                      </Button>
 
-                  <Input ref={el => {
-                    if (el) {
-                      quantidadeInputRefs.current.set(item.itemId, el);
-                    } else {
-                      quantidadeInputRefs.current.delete(item.itemId);
-                    }
-                  }} type="text" inputMode="numeric" pattern="[0-9]*" value={item.quantidade || ''} onChange={e => handleQuantidadeChange(item.itemId, e.target.value.replace(/\D/g, ''))} onBlur={() => handleQuantidadeBlur(item.itemId)} onFocus={e => e.target.select()} onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.blur();
-                    }
-                  }} className="w-14 h-8 text-center font-medium" />
+                      <Input ref={el => {
+                        if (el) {
+                          quantidadeInputRefs.current.set(item.itemId, el);
+                        } else {
+                          quantidadeInputRefs.current.delete(item.itemId);
+                        }
+                      }} type="text" inputMode="numeric" pattern="[0-9]*" value={item.quantidade || ''} onChange={e => handleQuantidadeChange(item.itemId, e.target.value.replace(/\D/g, ''))} onBlur={() => handleQuantidadeBlur(item.itemId)} onFocus={e => e.target.select()} onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                        }
+                      }} className={cn("w-14 h-8 text-center font-medium", isShortage && "border-amber-300 focus-visible:ring-amber-400")} />
 
-                  <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleUpdateQuantidade(item.itemId, 1)} disabled={item.quantidade >= item.disponivelOrigem}>
-                    <Plus size={14} />
-                  </Button>
+                      <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleUpdateQuantidade(item.itemId, 1)}>
+                        <Plus size={14} />
+                      </Button>
 
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleRemoveItem(item.itemId)}>
-                    <X size={14} />
-                  </Button>
-                </div>
-              </div>)}
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleRemoveItem(item.itemId)}>
+                        <X size={14} />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>}
           </div>
         </div>
@@ -1048,5 +1133,14 @@ export default function Transferencias() {
       transferencia={transferenciaCompleta}
       itensDetalhados={itensDetalhados}
     />
+
+    {/* Modal de Adicionar Itens por Grade */}
+    {origemId && (
+      <AddGradeModal
+        open={showAddGrade}
+        onClose={() => setShowAddGrade(false)}
+        onAdd={handleAddGradeItems}
+      />
+    )}
   </div>;
 }

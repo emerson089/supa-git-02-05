@@ -175,6 +175,9 @@ const NovoPedido = () => {
   const handleRemoveItem = useCallback((id: string) => {
     setItems(prev => prev.filter(item => item.id !== id));
   }, []);
+  const handleAddGradeItems = useCallback((novosItens: ItemPedido[]) => {
+    setItems(prev => [...novosItens, ...prev]);
+  }, []);
 
   // Form actions
   const handleLimpar = () => {
@@ -379,7 +382,7 @@ const NovoPedido = () => {
           <ResumoCard totalPecas={totalPecas} valorItens={valorItens} taxaExcursao={taxaExcursao} nomeExcursao={excursao} valorTotal={valorTotal} quantidadeModelos={quantidadeModelos} onLimpar={handleLimpar} onCriarPedido={handleCriarPedido} isLoading={isLoading} disabled={hasEstoqueInsuficiente} />
 
           {/* Items Card - agora abaixo do resumo */}
-          <ItensPedidoCard items={items} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
+          <ItensPedidoCard items={items} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} onAddGradeItems={handleAddGradeItems} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
         </div>
       </div>
     </main>

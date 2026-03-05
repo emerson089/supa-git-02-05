@@ -20,6 +20,7 @@ export interface ResumoFeiraPeriodo {
   quantidadeCargas: number;
   cargasAtivas: number;
   cargasConcluidas: number;
+  taxaVenda: number; // % de peças vendidas (0-100)
 }
 
 export interface TransferenciaItemComProduto {
@@ -239,6 +240,7 @@ export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
         quantidadeCargas: 0,
         cargasAtivas: 0,
         cargasConcluidas: 0,
+        taxaVenda: 0,
       };
     }
 
@@ -266,6 +268,7 @@ export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
       quantidadeCargas: cargas.length,
       cargasAtivas,
       cargasConcluidas,
+      taxaVenda: totalCarga > 0 ? Math.round((Math.max(0, totalCarga - totalRetorno) / totalCarga) * 100) : 0,
     };
   };
 
@@ -366,7 +369,7 @@ export function useExcluirCargaFeira() {
 
       if (cargaError || !carga) throw new Error('Carga não encontrada');
       if (carga.deleted_at) throw new Error('Esta carga já foi excluída');
-      
+
       // VALIDAÇÃO DE STATUS: Apenas cargas em_andamento podem ser excluídas
       if (carga.status === 'concluida') {
         throw new Error('Cargas concluídas não podem ser excluídas. Use a opção "Estornar" para reverter a venda.');

@@ -79,7 +79,7 @@ const EstoqueContext = createContext<EstoqueContextType | undefined>(undefined);
 export function EstoqueProvider({ children }: { children: ReactNode }) {
   // Ativar realtime para sincronização automática
   useRealtimeEstoque();
-  
+
   const { data: dbItens = [], isLoading } = useEstoqueItens();
   const addItemMutation = useAddItem();
   const updateItemMutation = useUpdateItem();
@@ -87,7 +87,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
   const addMovimentacaoMutation = useAddMovimentacao();
 
   // Add computed status to items
-  const itens: ItemEstoque[] = useMemo(() => 
+  const itens: ItemEstoque[] = useMemo(() =>
     dbItens.map(item => ({ ...item, status: calcularStatus(item) })),
     [dbItens]
   );
@@ -142,7 +142,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
     imagemUrl: string;
   }>): Promise<void> => {
     const updates: Partial<ItemEstoque> & { id: string } = { id };
-    
+
     if (data.nome !== undefined) updates.nome = data.nome;
     if (data.tipo !== undefined) updates.tipo = normalizeTipo(data.tipo);
     if (data.categoria !== undefined) updates.categoria = data.categoria;
@@ -152,7 +152,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
     if (data.precoUnitario !== undefined) updates.precoUnitario = data.precoUnitario;
     if (data.localizacao !== undefined) updates.localizacao = data.localizacao;
     if (data.imagemUrl !== undefined) updates.imagemUrl = data.imagemUrl;
-    
+
     await updateItemMutation.mutateAsync(updates);
   }, [updateItemMutation]);
 
@@ -174,7 +174,11 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
   }, [itens]);
 
   const getProdutosAcabados = useCallback((): ItemEstoque[] => {
-    return itens.filter(item => item.tipo === 'acabado');
+    // Exclui os itens PAI "Modelo Padronizado" - apenas variações e modelos manuais
+    return itens.filter(item =>
+      item.tipo === 'acabado' &&
+      item.categoria !== 'Modelo Padronizado'
+    );
   }, [itens]);
 
   const verificarDisponibilidade = useCallback((itemId: string, quantidade: number): boolean => {
@@ -263,7 +267,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
 
     if (produtoExistente) {
       const novaQuantidade = produtoExistente.quantidade + quantidade;
-      
+
       await updateItemMutation.mutateAsync({
         id: produtoExistente.id,
         quantidade: novaQuantidade,
