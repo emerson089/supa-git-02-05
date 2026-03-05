@@ -25,6 +25,8 @@ import { NovaCargaBottomSheet } from '@/components/feira/NovaCargaBottomSheet';
 import { NovaCargaBottomBar } from '@/components/feira/NovaCargaBottomBar';
 import { EditarCargaModal } from '@/components/feira/EditarCargaModal';
 import { RetornoEmMassaModal } from '@/components/feira/RetornoEmMassaModal';
+import { OfflineBanner } from '@/components/feira/OfflineBanner';
+import { useFeiraOffline } from '@/hooks/useFeiraOffline';
 import { RoleGate } from '@/components/RoleGate';
 import { useRole } from '@/contexts/RoleContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -80,6 +82,19 @@ export default function Feira() {
   const recalcularEstoque = useRecalcularEstoque();
   const estornarCarga = useEstornarCarga();
   const editarRetornoCarga = useEditarRetornoCarga();
+
+  // Offline mode
+  const {
+    isOnline,
+    isSyncing,
+    queue: offlineQueue,
+    pendingCount: offlinePendingCount,
+    errorCount: offlineErrorCount,
+    cacheCargas,
+    getCachedCargas,
+    saveOfflineRetorno,
+    syncAll: syncOfflineRetornos,
+  } = useFeiraOffline();
 
   // Estado do período - carregado do localStorage
   const [periodo, setPeriodo] = useState<PeriodoFeira>(() => carregarFiltroPeriodo());
@@ -393,6 +408,27 @@ export default function Feira() {
   };
   const handleRegistrarRetorno = async () => {
     if (!cargaSelecionada) return;
+
+    // ── Offline path: save locally and close modal ─────
+    if (!isOnline) {
+      const itensParaSalvar = itensRetorno.map(i => ({
+        itemId: i.itemId,
+        quantidadeRetornada: i.quantidadeRetornada,
+      }));
+      saveOfflineRetorno(cargaSelecionada, itensParaSalvar);
+      toast.success('Retorno salvo! Será sincronizado quando a internet voltar 📶');
+      setShowRetorno(false);
+      setCargaSelecionada(null);
+      setItensRetorno([]);
+      setRetornosSalvos(prev => {
+        const novo = { ...prev };
+        delete novo[cargaSelecionada.id];
+        return novo;
+      });
+      return;
+    }
+
+    // ── Online path: normal Supabase mutation ──────────
     try {
       await registrarRetorno.mutateAsync({
         transferenciaId: cargaSelecionada.id,
@@ -606,6 +642,16 @@ export default function Feira() {
         <div className={cn("p-4 space-y-4", !isMobile && "p-6 space-y-6", isMobile && "pb-6")}>
           {/* Filtro de Período */}
           <FiltroPeriodo periodo={periodo} onChange={setPeriodo} />
+
+          {/* Offline Banner */}
+          <OfflineBanner
+            isOnline={isOnline}
+            isSyncing={isSyncing}
+            queue={offlineQueue}
+            pendingCount={offlinePendingCount}
+            errorCount={offlineErrorCount}
+            onSyncNow={syncOfflineRetornos}
+          />
 
           {/* Resumo do Período */}
           <div className={cn("grid gap-3 overflow-hidden", isMobile ? "grid-cols-2" : "grid-cols-5")}>
