@@ -13,6 +13,7 @@ import { EditPedidoModal } from '@/components/pedidos/EditPedidoModal';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { ImportPedidosCSVModal } from '@/components/pedidos/ImportPedidosCSVModal';
 import { ClearPedidosDataModal } from '@/components/pedidos/ClearPedidosDataModal';
+import { ProductSummaryModal } from '@/components/pedidos/ProductSummaryModal';
 import { MobileOrderCard } from '@/components/pedidos/MobileOrderCard';
 import { MobileFiltersSheet } from '@/components/pedidos/MobileFiltersSheet';
 import { MobileSummaryCards } from '@/components/pedidos/MobileSummaryCards';
@@ -28,7 +29,7 @@ import { StatusMultiSelect } from '@/components/pedidos/StatusMultiSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Search, Plus, Eye, EyeOff, Trash2, ShoppingBag, DollarSign, Package, MapPin, Phone, Bus, MoreHorizontal, ArrowUpDown, FileText, Pencil, Calendar as CalendarIcon, X, Download, Upload, Loader2, RefreshCw } from 'lucide-react';
-import { format, isWithinInterval, startOfDay, endOfDay, parse, subDays } from 'date-fns';
+import { format, isWithinInterval, startOfDay, endOfDay, parse, subDays, startOfWeek, addDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { ptBR } from 'date-fns/locale';
@@ -134,7 +135,7 @@ export default function PedidosCriados() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     removePedido,
     updatePedido,
@@ -144,13 +145,28 @@ export default function PedidosCriados() {
     itens: estoqueItens,
     updateItem: updateEstoqueItem
   } = useEstoque();
+
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Carregar filtros persistidos uma única vez
   const [persistedFilters] = useState(() => loadPersistedFilters());
-  const [searchTerm, setSearchTerm] = useState(persistedFilters.searchTerm);
+
+  // Date filters - Semana atual (Segunda a Quinta) como default se não houver persistência
+  const [startDate, setStartDate] = useState<Date | undefined>(() => {
+    if (persistedFilters.startDate) return new Date(persistedFilters.startDate);
+    // Default: Segunda-feira desta semana
+    return startOfWeek(new Date(), { weekStartsOn: 1 });
+  });
+  const [endDate, setEndDate] = useState<Date | undefined>(() => {
+    if (persistedFilters.endDate) return new Date(persistedFilters.endDate);
+    // Default: Sexta-feira desta semana (Segunda + 4 dias)
+    return addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4);
+  });
+
+  // App state
+  const [searchTerm, setSearchTerm] = useState(persistedFilters.searchTerm || '');
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [selectedPedido, setSelectedPedido] = useState<PedidoPaginatedDB | null>(null);
+  const [selectedPedido, setSelectedPedido] = useState<any | null>(null);
   const [editingPedidoId, setEditingPedidoId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -159,19 +175,18 @@ export default function PedidosCriados() {
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
 
-  // Date filters - carregar do localStorage ou usar HOJE como default
-  const [startDate, setStartDate] = useState<Date | undefined>(() => {
-    if (persistedFilters.startDate) return new Date(persistedFilters.startDate);
-    // Default: HOJE se não houver filtro persistido
-    return new Date();
-  });
-  const [endDate, setEndDate] = useState<Date | undefined>(() => {
-    if (persistedFilters.endDate) return new Date(persistedFilters.endDate);
-    // Default: HOJE se não houver filtro persistido
-    return new Date();
-  });
+  // Flag: indica se os filtros vieram de parâmetros na URL (atalhos do dashboard)
+  const isFromUrl = !!searchParams.get('status');
 
-  // Advanced filters - priorizar URL sobre localStorage
+  // Limpa o localStorage preventivamente se estivermos acessando via atalho URL
+  // Isso impede que filtros temporários fiquem presos caso o usuário saia da página
+  if (isFromUrl) {
+    try {
+      localStorage.removeItem(FILTERS_STORAGE_KEY);
+    } catch (e) { }
+  }
+
+  // Advanced filters - priorizam URL, caso contrário usa localStorage
   const [filterStatusPagamento, setFilterStatusPagamento] = useState<string[]>(() => {
     const urlStatus = searchParams.get('status');
     if (urlStatus) {
@@ -180,13 +195,32 @@ export default function PedidosCriados() {
     }
     return persistedFilters.filterStatusPagamento;
   });
-  const [filterStatusPedido, setFilterStatusPedido] = useState<string[]>(persistedFilters.filterStatusPedido);
-  const [filterStatusEntrega, setFilterStatusEntrega] = useState<string[]>(persistedFilters.filterStatusEntrega);
-  const [filterModelo, setFilterModelo] = useState(persistedFilters.filterModelo);
 
-  // CSV import modal
+  // Limpa a URL imediatamente após os estados iniciais serem lidos.
+  // Isso evita que a barra de endereços continue forçando filtros reativamente após o usuário tentar desmarcá-los.
+  useEffect(() => {
+    if (searchParams.has('status')) {
+      const currentParams = new URLSearchParams(searchParams);
+      currentParams.delete('status');
+      setSearchParams(currentParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const [filterStatusPedido, setFilterStatusPedido] = useState<string[]>(() =>
+    isFromUrl ? [] : persistedFilters.filterStatusPedido
+  );
+  const [filterStatusEntrega, setFilterStatusEntrega] = useState<string[]>(() =>
+    isFromUrl ? [] : persistedFilters.filterStatusEntrega
+  );
+  const [filterModelo, setFilterModelo] = useState(
+    isFromUrl ? '' : persistedFilters.filterModelo
+  );
+
+  // Modals
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+
   const [exportingCSV, setExportingCSV] = useState(false);
   const [showValor, setShowValor] = useState(false);
   const maskedValue = "R$ ••••••";
@@ -234,7 +268,16 @@ export default function PedidosCriados() {
   }, [searchTerm, filterStatusPagamento, filterStatusPedido, filterStatusEntrega, startDate, endDate, filterModelo]);
 
   // Persistir filtros no localStorage quando mudarem
+  // Quando os filtros vêm da URL (atalhos do dashboard), ignora a primeira execução
+  // para não 'contaminar' o localStorage com filtros temporários
+  const isFirstRender = React.useRef(isFromUrl);
+
   useEffect(() => {
+    // Se veio da URL, pula apenas a PRIMEIRA execução (montagem inicial com valores da URL)
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     savePersistedFilters({
       startDate: startDate?.toISOString(),
       endDate: endDate?.toISOString(),
@@ -379,7 +422,19 @@ export default function PedidosCriados() {
         toast.success('Status atualizado com sucesso!');
       }
     } else {
-      toast.success('Status atualizado com sucesso!');
+      if (field === 'statusPedido' && value === 'SEPARADO') {
+        const telefoneApenasNumeros = pedido.telefone?.replace(/\\D/g, '') || '';
+        const mensagem = `Olá ${pedido.clienteNome}, seu pedido já foi separado e está pronto!`;
+        toast.success('Pedido marcado como SEPARADO!', {
+          action: telefoneApenasNumeros ? {
+            label: 'Avisar no WhatsApp',
+            onClick: () => window.open(`https://wa.me/55${telefoneApenasNumeros}?text=${encodeURIComponent(mensagem)}`, '_blank')
+          } : undefined,
+          duration: 8000,
+        });
+      } else {
+        toast.success('Status atualizado com sucesso!');
+      }
     }
     updatePedido(pedidoId, updates);
   };
@@ -1021,6 +1076,9 @@ export default function PedidosCriados() {
                 <div className="flex-1">
                   <MobileFiltersSheet filterStatusPagamento={filterStatusPagamento} filterStatusPedido={filterStatusPedido} filterStatusEntrega={filterStatusEntrega} filterModelo={filterModelo} startDate={startDate} endDate={endDate} onFilterStatusPagamentoChange={setFilterStatusPagamento} onFilterStatusPedidoChange={setFilterStatusPedido} onFilterStatusEntregaChange={setFilterStatusEntrega} onFilterModeloChange={setFilterModelo} onStartDateChange={setStartDate} onEndDateChange={setEndDate} onClearAll={clearAllFilters} activeCount={activeFilterCount} />
                 </div>
+                <Button onClick={() => setSummaryModalOpen(true)} variant="outline" className="h-11 px-3 rounded-xl border-primary/20 text-primary hover:bg-primary/10">
+                  <ShoppingBag className="h-5 w-5" />
+                </Button>
                 <Button onClick={() => navigate('/pedidos/novo')} className="h-11 px-4 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-medium gap-2">
                   <Plus className="h-4 w-4" />
                   Novo
@@ -1112,7 +1170,12 @@ export default function PedidosCriados() {
                     Limpar Dados
                   </Button>
 
-                  <Button variant="outline" onClick={exportCSV} className="h-10 rounded-xl neu-button border-0 bg-background gap-2">
+                  <Button variant="outline" onClick={() => setSummaryModalOpen(true)} className="h-10 rounded-xl border-primary/20 text-primary hover:bg-primary/10 gap-2">
+                    <ShoppingBag className="h-4 w-4" />
+                    Modelo/Cat.
+                  </Button>
+
+                  <Button variant="outline" onClick={exportCSV} disabled={exportingCSV || pedidosList.length === 0} className="h-10 rounded-xl neu-button border-0 bg-background gap-2">
                     <Download className="h-4 w-4" />
                     Exportar CSV
                   </Button>
@@ -1677,6 +1740,13 @@ export default function PedidosCriados() {
 
     {/* Clear Data Modal */}
     <ClearPedidosDataModal open={clearDataModalOpen} onOpenChange={setClearDataModalOpen} />
+
+    {/* Product Summary Modal */}
+    <ProductSummaryModal
+      open={summaryModalOpen}
+      onOpenChange={setSummaryModalOpen}
+      pedidos={pedidosList}
+    />
   </div>;
 }
 

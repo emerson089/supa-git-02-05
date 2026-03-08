@@ -67,7 +67,7 @@ const quickActions: QuickActionType[] = [
 ];
 
 // Pages that should preserve their URL params
-const PAGES_WITH_PARAMS = ['/estoque', '/producao', '/clientes', '/pedidos/criados'];
+const PAGES_WITH_PARAMS = ['/estoque', '/producao', '/clientes'];
 
 interface NavItemProps {
   item: NavItemType;

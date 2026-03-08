@@ -461,8 +461,13 @@ export default function Dashboard() {
     bgColor: "bg-amber-100",
     invertVariation: true,
     clickable: true,
-    onClick: () => navigate("/pedidos/criados?status=PENDENTE,INCOMPLETO"),
-    showBruto: false
+    onClick: () => navigate("/pedidos/criados?status=PENDENTE,INCOMPLETO,PEND. ENTREGA"),
+    showBruto: false,
+    breakdown: [
+      { label: "Pendente", value: data.kpis.pedidosPendentesSimples, colorClass: "bg-amber-100 text-amber-700" },
+      { label: "Pend. Entrega", value: data.kpis.pedidosPendEntrega, colorClass: "bg-blue-100 text-blue-700" },
+      { label: "Incompleto", value: data.kpis.pedidosIncompletos, colorClass: "bg-orange-100 text-orange-700" },
+    ],
   }, {
     title: "Produção Ativa",
     value: `${formatNumber(data.kpis.producaoAtiva)} pçs`,
@@ -471,7 +476,7 @@ export default function Dashboard() {
     color: "text-violet-600",
     bgColor: "bg-violet-100",
     clickable: true,
-    onClick: () => navigate("/"),
+    onClick: () => navigate("/producao"),
     showBruto: false
   }];
   const maxModelo = Math.max(...data.topModelos.map(m => m.quantidade), 1);
@@ -629,6 +634,54 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* KPI Cards - 2 columns on mobile */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        {loading ? <>
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+        </> : kpiCards.map(kpi => <Card key={kpi.title} className={cn("neu-card transition-all duration-200 relative", kpi.clickable && "cursor-pointer hover:scale-[1.02] hover:shadow-lg")} onClick={kpi.clickable ? kpi.onClick : undefined}>
+          {kpi.showBruto && <Badge variant="outline" className="absolute top-2 right-2 text-[10px] bg-amber-50 text-amber-600 border-amber-200">
+            Bruto
+          </Badge>}
+          <CardContent className="p-3 sm:p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl ${kpi.bgColor} flex items-center justify-center mb-2 sm:mb-3`}>
+                  <kpi.icon size={isMobile ? 16 : 20} className={kpi.color} />
+                </div>
+                <p className="text-xl sm:text-3xl font-bold text-foreground tracking-tight">{kpi.value}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground/70 uppercase tracking-wide mt-1 line-clamp-1">{kpi.title}</p>
+                {kpi.breakdown && (
+                  <div className="flex flex-nowrap items-center gap-1 mt-2 overflow-x-auto pb-1 w-full hide-scrollbar">
+                    {kpi.breakdown
+                      .filter((item: { label: string; value: number; colorClass: string }) => item.value >= 0)
+                      .map((item: { label: string; value: number; colorClass: string }) => (
+                        <span
+                          key={item.label}
+                          className={`inline-flex items-center flex-shrink-0 gap-0.5 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-semibold whitespace-nowrap ${item.colorClass}`}
+                        >
+                          {item.value} {item.label}
+                        </span>
+                      ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col items-end">
+                <div className={`flex items-center gap-1 text-[10px] sm:text-xs font-semibold ${(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? "text-emerald-600" : "text-red-500"}`}>
+                  {(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? <TrendingUp size={isMobile ? 12 : 14} /> : <TrendingDown size={isMobile ? 12 : 14} />}
+                  <span>{kpi.variation.value.toFixed(1)}%</span>
+                </div>
+                <span className="text-[8px] sm:text-[10px] text-muted-foreground/50 mt-0.5">
+                  vs. mesmo período de {anoPassado}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>)}
+      </div>
+
       {/* Card de Meta Automática + Faturamento + Ritmo Sazonal */}
       <div className="mb-6">
         <Card className="neu-card border-primary/20 shadow-lg bg-gradient-to-br from-card to-primary/5">
@@ -776,39 +829,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* KPI Cards - 2 columns on mobile */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        {loading ? <>
-          <KpiCardSkeleton />
-          <KpiCardSkeleton />
-          <KpiCardSkeleton />
-          <KpiCardSkeleton />
-        </> : kpiCards.map(kpi => <Card key={kpi.title} className={cn("neu-card transition-all duration-200 relative", kpi.clickable && "cursor-pointer hover:scale-[1.02] hover:shadow-lg")} onClick={kpi.clickable ? kpi.onClick : undefined}>
-          {kpi.showBruto && <Badge variant="outline" className="absolute top-2 right-2 text-[10px] bg-amber-50 text-amber-600 border-amber-200">
-            Bruto
-          </Badge>}
-          <CardContent className="p-3 sm:p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl ${kpi.bgColor} flex items-center justify-center mb-2 sm:mb-3`}>
-                  <kpi.icon size={isMobile ? 16 : 20} className={kpi.color} />
-                </div>
-                <p className="text-xl sm:text-3xl font-bold text-foreground tracking-tight">{kpi.value}</p>
-                <p className="text-[10px] sm:text-xs text-muted-foreground/70 uppercase tracking-wide mt-1 line-clamp-1">{kpi.title}</p>
-              </div>
-              <div className="flex flex-col items-end">
-                <div className={`flex items-center gap-1 text-[10px] sm:text-xs font-semibold ${(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? "text-emerald-600" : "text-red-500"}`}>
-                  {(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? <TrendingUp size={isMobile ? 12 : 14} /> : <TrendingDown size={isMobile ? 12 : 14} />}
-                  <span>{kpi.variation.value.toFixed(1)}%</span>
-                </div>
-                <span className="text-[8px] sm:text-[10px] text-muted-foreground/50 mt-0.5">
-                  vs. mesmo período de {anoPassado}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>)}
-      </div>
+
 
       {/* Error banner - shown when data fetch fails */}
       {isError && (
@@ -824,114 +845,118 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Insights do Período */}
-      <InsightsPanel insights={dashboardInsights} resumoExecutivo={resumoExecutivo} sugestaoFoco={sugestaoFoco} />
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Tendência de Vendas - Takes 2 columns */}
-        <Card className="neu-card lg:col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <CardTitle className="text-base font-semibold">Tendência de Vendas</CardTitle>
-                <div className="flex items-center gap-2 flex-wrap mt-1">
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary"></span> {trendCurrentYear}</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full border border-muted-foreground bg-transparent"></span> {trendPreviousYear}</span>
-                  </p>
-                </div>
-              </div>
-              <div className="flex bg-muted/50 p-1 rounded-lg">
-                <button
-                  onClick={() => setGranularity("ano")}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${granularity === "ano" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  Ano
-                </button>
-                <button
-                  onClick={() => setGranularity("mes")}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${granularity === "mes" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  Mês
-                </button>
+      {/* Tendência de Vendas - Full Width, antes dos Insights */}
+      <Card className="neu-card">
+        <CardHeader className="pb-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <CardTitle className="text-base font-semibold">Tendência de Vendas</CardTitle>
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary"></span> {trendCurrentYear}</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full border border-muted-foreground bg-transparent"></span> {trendPreviousYear}</span>
+                </p>
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            {trendLoading ? (
-              <Skeleton className="h-[200px] w-full" />
-            ) : trendData.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-16">
-                Nenhuma venda no período
-              </p>
-            ) : (
-              <div>
-                <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorAtual" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis
-                        dataKey="label"
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                        stroke="hsl(var(--muted-foreground))"
-                        interval={granularity === "mes" ? 4 : 0}
-                      />
-                      <YAxis
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                        stroke="hsl(var(--muted-foreground))"
-                        tickFormatter={(value: number) => value >= 1000 ? `R$${(value / 1000).toFixed(0)}k` : `R$${value}`}
-                        width={55}
-                      />
-                      <Tooltip
-                        content={<TrendTooltip granularity={granularity} currentYear={trendCurrentYear} previousYear={trendPreviousYear} />}
-                        cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
-                      />
-                      {/* Linha do ano anterior - em ambos os modos */}
-                      <Line
-                        type="monotone"
-                        dataKey={(d) => d.anterior > 0 ? d.anterior : null}
-                        stroke="hsl(var(--muted-foreground))"
-                        strokeWidth={2}
-                        strokeDasharray="4 4"
-                        dot={false}
-                        activeDot={{ r: 4, fill: "hsl(var(--muted-foreground))" }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey={(d) => d.isFuture && d.atual === 0 ? null : d.atual}
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={2}
-                        fillOpacity={1}
-                        fill="url(#colorAtual)"
-                        dot={renderCustomDot}
-                        activeDot={{ r: 6, strokeWidth: 2, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))" }}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-                {/* Nota informativa no modo Mês */}
-                {granularity === "mes" && (
-                  <p className="text-xs text-muted-foreground/60 text-center mt-2 flex items-center justify-center gap-1">
-                    <span>📊</span>
-                    <span>Comparativo com os mesmos dias de {trendPreviousYear} (período equivalente)</span>
-                  </p>
-                )}
+            <div className="flex bg-muted/50 p-1 rounded-lg">
+              <button
+                onClick={() => setGranularity("ano")}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${granularity === "ano" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Ano
+              </button>
+              <button
+                onClick={() => setGranularity("mes")}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${granularity === "mes" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Mês
+              </button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {trendLoading ? (
+            <Skeleton className="h-[280px] w-full" />
+          ) : trendData.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-16">
+              Nenhuma venda no período
+            </p>
+          ) : (
+            <div>
+              <div className="h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorAtual" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="label"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      stroke="hsl(var(--muted-foreground))"
+                      interval={granularity === "mes" ? 4 : 0}
+                    />
+                    <YAxis
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      stroke="hsl(var(--muted-foreground))"
+                      tickFormatter={(value: number) => value >= 1000 ? `R$${(value / 1000).toFixed(0)}k` : `R$${value}`}
+                      width={55}
+                    />
+                    <Tooltip
+                      content={<TrendTooltip granularity={granularity} currentYear={trendCurrentYear} previousYear={trendPreviousYear} />}
+                      cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
+                    />
+                    {/* Linha do ano anterior */}
+                    <Line
+                      type="monotone"
+                      dataKey="anterior"
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeWidth={1.5}
+                      strokeDasharray="5 3"
+                      strokeOpacity={0.7}
+                      connectNulls={true}
+                      dot={(props: any) => {
+                        const { cx, cy, payload } = props;
+                        const key = props.key ?? `dot-ant-${cx}-${cy}`;
+                        if (!payload?.anterior || payload.anterior === 0) return <g key={key} />;
+                        return <circle key={key} cx={cx} cy={cy} r={3} fill="hsl(var(--muted-foreground))" fillOpacity={0.7} stroke="none" />;
+                      }}
+                      activeDot={{ r: 4, fill: "hsl(var(--muted-foreground))", fillOpacity: 0.9 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey={(d) => d.isFuture && d.atual === 0 ? null : d.atual}
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#colorAtual)"
+                      dot={renderCustomDot}
+                      activeDot={{ r: 6, strokeWidth: 2, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))" }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              {/* Nota informativa no modo Mês */}
+              {granularity === "mes" && (
+                <p className="text-xs text-muted-foreground/60 text-center mt-2 flex items-center justify-center gap-1">
+                  <span>📊</span>
+                  <span>Comparativo com os mesmos dias de {trendPreviousYear} (período equivalente)</span>
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Insights do Período */}
+      <InsightsPanel insights={dashboardInsights} resumoExecutivo={resumoExecutivo} sugestaoFoco={sugestaoFoco} />
 
       {/* Bottom Grid - Ajustado para 3 COLUNAS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

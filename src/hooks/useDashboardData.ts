@@ -19,7 +19,10 @@ interface KPIs {
   faturamentoYoY: number; // Mesmo período do ano passado
   pecasVendidas: number;
   pecasYoY: number; // Mesmo período do ano passado
-  pedidosPendentes: number;
+  pedidosPendentes: number;       // Total: PENDENTE + INCOMPLETO + PEND. ENTREGA
+  pedidosPendentesSimples: number; // Apenas PENDENTE
+  pedidosIncompletos: number;      // Apenas INCOMPLETO
+  pedidosPendEntrega: number;      // Apenas PEND. ENTREGA
   pedidosYoY: number; // Mesmo período do ano passado
   producaoAtiva: number;
   producaoYoY: number; // Mesmo período do ano passado
@@ -300,6 +303,9 @@ const DASHBOARD_DEFAULTS: DashboardData = {
     pecasVendidas: 0,
     pecasYoY: 0,
     pedidosPendentes: 0,
+    pedidosPendentesSimples: 0,
+    pedidosIncompletos: 0,
+    pedidosPendEntrega: 0,
     pedidosYoY: 0,
     producaoAtiva: 0,
     producaoYoY: 0,
@@ -428,9 +434,9 @@ async function fetchDashboardData(
     fetchAllRows<any>(() =>
       supabase
         .from("pedido_itens")
-        .select("pedido_id, produto_nome, quantidade, pedidos!inner(user_id, created_at, status_pagamento, status_pedido)")
+        .select("pedido_id, produto_id, produto_nome, quantidade, pedidos!inner(user_id, created_at, status_pagamento, status_pedido)")
         .eq("pedidos.user_id", userId)
-        .in("pedidos.status_pagamento", ["PAGO", "CONCLUIDO"])
+        .in("pedidos.status_pagamento", ["PAGO", "CONCLUIDO", "PEND. ENTREGA"])
         .gte("pedidos.created_at", startDateTopModelos)
         .lte("pedidos.created_at", now.toISOString())
         .order("pedido_id", { ascending: true })
@@ -519,11 +525,18 @@ async function fetchDashboardData(
   const pecasVendidas = pedidosPagos.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
   const pecasYoY = pedidosYoYPagos.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
 
-  const pedidosPendentes = pedidosSemCancelados.filter(p =>
-    p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO"
+  const pedidosPendentesSimples = pedidosSemCancelados.filter(p =>
+    p.status_pagamento === "PENDENTE"
   ).length;
+  const pedidosIncompletos = pedidosSemCancelados.filter(p =>
+    p.status_pagamento === "INCOMPLETO"
+  ).length;
+  const pedidosPendEntrega = pedidosSemCancelados.filter(p =>
+    p.status_pagamento === "PEND. ENTREGA"
+  ).length;
+  const pedidosPendentes = pedidosPendentesSimples + pedidosIncompletos + pedidosPendEntrega;
   const pedidosYoYPendentes = pedidosYoYSemCancelados.filter(p =>
-    p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO"
+    p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO" || p.status_pagamento === "PEND. ENTREGA"
   ).length;
 
   const producaoData = producao.data || [];
@@ -626,15 +639,22 @@ async function fetchDashboardData(
     })
     : pedidoItensData;
 
-  const modelosMap: Record<string, number> = {};
+  // Agrupa por produto_id quando disponível (nome canônico do estoque),
+  // com fallback para produto_nome para itens sem referência de estoque.
+  // Isso evita duplicatas causadas por nomes levemente diferentes (ex: hífens, espaços).
+  const modelosMap: Record<string, { quantidade: number; nome: string }> = {};
   pedidoItensFiltrados.forEach((item: any) => {
+    const chave = item.produto_id ?? `nome:${(item.produto_nome || "Sem nome").toLowerCase().trim()}`;
     const nome = item.produto_nome || "Sem nome";
-    modelosMap[nome] = (modelosMap[nome] || 0) + (item.quantidade || 0);
+    if (!modelosMap[chave]) {
+      modelosMap[chave] = { quantidade: 0, nome };
+    }
+    modelosMap[chave].quantidade += item.quantidade || 0;
   });
-  const topModelos = Object.entries(modelosMap)
-    .map(([nome, quantidade]) => ({ nome, quantidade }))
+  const topModelos = Object.values(modelosMap)
     .sort((a, b) => b.quantidade - a.quantidade)
-    .slice(0, 5);
+    .slice(0, 5)
+    .map(({ nome, quantidade }) => ({ nome, quantidade }));
 
   const pedidoIdsComItens = new Set(pedidoItensFiltrados.map((item: any) => item.pedido_id));
 
@@ -758,10 +778,35 @@ async function fetchDashboardData(
     : 0;
   const diferencaRitmo = percentualRealizado - percentualEsperadoHoje;
 
-  const mediaDiariaCalc = diasDecorridosCalc > 0
-    ? faturamentoAtualAcumulado / diasDecorridosCalc
-    : 0;
-  const projecaoMensalCalc = mediaDiariaCalc * diasTotaisCalc;
+  // Lógica de projeção baseada em dias úteis de venda (Segunda=1 a Quinta=4)
+  // Evita a distorção causada por sextas e fins de semana sem vendas
+  const DIAS_VENDA = [1, 2, 3, 4]; // getDay(): 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb
+
+  function contarDiasVenda(inicio: Date, fim: Date): number {
+    let count = 0;
+    const cur = new Date(inicio);
+    cur.setHours(0, 0, 0, 0);
+    const end = new Date(fim);
+    end.setHours(23, 59, 59, 999);
+    while (cur <= end) {
+      if (DIAS_VENDA.includes(getDay(cur))) count++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count;
+  }
+
+  const diasVendaDecorridos = contarDiasVenda(inicioMesAtual, now);
+  const diasVendaTotaisNoMes = contarDiasVenda(inicioMesAtual, endOfMonth(now));
+
+  // Se já houve pelo menos 1 dia de venda, projeta com base neles; senão usa média linear como fallback
+  const mediaDiariaCalc = diasVendaDecorridos > 0
+    ? faturamentoAtualAcumulado / diasVendaDecorridos
+    : (diasDecorridosCalc > 0 ? faturamentoAtualAcumulado / diasDecorridosCalc : 0);
+
+  const projecaoMensalCalc = diasVendaDecorridos > 0
+    ? mediaDiariaCalc * diasVendaTotaisNoMes
+    : mediaDiariaCalc * diasTotaisCalc;
+
   const diferencaPrevisao = projecaoMensalCalc - metaCalculada;
 
   const statusMeta: 'acima' | 'abaixo' | 'atingida' | 'noritmo' =
@@ -833,7 +878,12 @@ async function fetchDashboardData(
     6: { valor: 0, pedidos: 0, pecas: 0 },
   };
 
-  pedidosPagos.forEach(p => {
+  // Para "Vendas por Dia": inclui PEND. ENTREGA pois o item já foi fisicamente enviado
+  const pedidosParaDiaSemana = pedidosSemCancelados.filter(p =>
+    ["PAGO", "CONCLUIDO", "PEND. ENTREGA"].includes((p.status_pagamento || "").toUpperCase())
+  );
+
+  pedidosParaDiaSemana.forEach(p => {
     const dataEfetiva = p.paid_at || p.created_at;
     const dia = getDay(parseISO(dataEfetiva));
     diaSemanaMap[dia].valor += p.valor_total || 0;
@@ -861,6 +911,9 @@ async function fetchDashboardData(
       pecasVendidas,
       pecasYoY,
       pedidosPendentes,
+      pedidosPendentesSimples,
+      pedidosIncompletos,
+      pedidosPendEntrega,
       pedidosYoY: pedidosYoYPendentes,
       producaoAtiva,
       producaoYoY: producaoYoYAtiva,

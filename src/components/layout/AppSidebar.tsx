@@ -83,7 +83,7 @@ const bottomNavItems: NavItem[] = [{
 }];
 
 // Pages that should preserve their URL params
-const PAGES_WITH_PARAMS = ['/estoque', '/producao', '/clientes', '/pedidos/criados'];
+const PAGES_WITH_PARAMS = ['/estoque', '/producao', '/clientes'];
 
 export function AppSidebar() {
   const { user, signOut } = useAuth();
@@ -103,8 +103,15 @@ export function AppSidebar() {
   }, [location.pathname, location.search]);
 
   const handleNavigate = useCallback((targetPath: string) => {
-    // If already on the same path, don't navigate (preserves current params)
-    if (location.pathname === targetPath) return;
+    // Se já está no mesmo path E sem params de query relevantes, não faz nada
+    if (location.pathname === targetPath && !location.search) return;
+
+    // Para Pedidos Criados: sempre navega para o path limpo (sem filtros)
+    // Isso garante que clicar no menu sempre desmonta e remonta o compoente com estado vazio
+    if (targetPath === '/pedidos/criados') {
+      navigate(targetPath);
+      return;
+    }
 
     // Check if target page has saved URL params
     const savedUrl = sessionStorage.getItem(`lastUrl_${targetPath}`);
@@ -113,7 +120,7 @@ export function AppSidebar() {
     } else {
       navigate(targetPath);
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname, location.search, navigate]);
 
   if (isMobile) {
     return null;

@@ -109,16 +109,6 @@ export function useSalesTrendChart(excluirCancelados: boolean) {
                 }
             });
 
-            // Zero out 'anterior' for days that haven't happened yet in 2026
-            // so the comparison is always fair (same number of days elapsed)
-            const todayDayNumber = now.getDate();
-            result.forEach((point, idx) => {
-                if (idx + 1 > todayDayNumber) {
-                    point.anterior = 0;
-                    point.pedidosAnterior = 0;
-                    point.pecasAnterior = 0;
-                }
-            });
         } else {
             // granularity === "ano"
             const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];

@@ -61,7 +61,7 @@ const PRIORIDADE_ORDER: Record<InsightItem["prioridade"], number> = {
 };
 
 const ATENCAO_IDS = new Set(["meta-abaixo-leve", "concentracao-dia", "meta-atingida", "meta-acima", "yoy-crescimento"]);
-const CONTEXTO_IDS = new Set(["historico-mes", "feriados-periodo", "sem-anomalias"]);
+const CONTEXTO_IDS = new Set(["historico-mes", "feriados-periodo", "sem-anomalias", "ticket-medio"]);
 
 function getPrioridade(tipo: InsightItem["tipo"], id: string): InsightItem["prioridade"] {
   if (tipo === "alerta") return "critico";
@@ -160,10 +160,13 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       }
     }
 
-    // 2. Estoque crítico impactando vendas
-    const topNomes = new Set(topModelos.map((m) => m.nome.toLowerCase()));
+    // Melhoria #3: normalização robusta de nomes para evitar falha com acentos/espaços
+    function normalizeStr(s: string): string {
+      return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    }
+    const topNomesNorm = new Set(topModelos.map((m) => normalizeStr(m.nome)));
     const modelosZeradosTop = estoqueBaixo
-      .filter((e) => (e.quantidade <= 0) && topNomes.has(e.nome.toLowerCase()))
+      .filter((e) => e.quantidade <= 0 && topNomesNorm.has(normalizeStr(e.nome)))
       .map((e) => e.nome);
 
     if (modelosZeradosTop.length > 0) {
@@ -177,14 +180,17 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
     }
 
     // 3. Concentração de vendas
+    // Melhoria #1: Threshold subiu de 40% para 65%.
+    // Com 4 dias úteis de venda (Seg–Qui), 25% por dia é a base esperada.
+    // Só alertamos se UMA única dia ultrapassar 65% (=2.6x a baseline), indicando risco real.
     const totalFatSemana = faturamentoDiaSemana.reduce((s, d) => s + d.valor, 0);
     if (totalFatSemana > 0) {
-      const diaConcentrado = faturamentoDiaSemana.find((d) => d.percentual > 40);
+      const diaConcentrado = faturamentoDiaSemana.find((d) => d.percentual > 65);
       if (diaConcentrado) {
         raw.push({
           id: "concentracao-dia",
           tipo: "info",
-          mensagem: `${diaConcentrado.percentual.toFixed(0)}% do faturamento está concentrado em ${diaConcentrado.diaSemana}. Considere ações para distribuir vendas.`,
+          mensagem: `${diaConcentrado.percentual.toFixed(0)}% do faturamento está concentrado em ${diaConcentrado.diaSemana}. Concentração atípica — considere ações para distribuir vendas ao longo da semana.`,
           icone: "alert",
         });
       }
@@ -206,12 +212,26 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
     }
 
     // 5. Pedidos pendentes acumulados
-    if (kpis.pedidosPendentes > 10) {
+    // Melhoria #2: Threshold subiu de 10 para 20 pedidos — para um atacado, <20 é operacionalmente normal.
+    if (kpis.pedidosPendentes > 20) {
       raw.push({
         id: "pendentes-alto",
         tipo: "alerta",
         mensagem: `Existem ${kpis.pedidosPendentes} pedidos pendentes de pagamento no período. Considere ação de cobrança.`,
         icone: "alert",
+      });
+    }
+
+    // 5b. Ticket médio por pedido — novo insight de contexto
+    // Melhoria #4: Usa pedidos pagos do faturamentoDiaSemana para calcular ticket médio
+    const totalPedidosPeriodo = faturamentoDiaSemana.reduce((sum, d) => sum + d.pedidos, 0);
+    if (totalPedidosPeriodo > 0 && kpis.faturamento > 0) {
+      const ticketMedio = kpis.faturamento / totalPedidosPeriodo;
+      raw.push({
+        id: "ticket-medio",
+        tipo: "info",
+        mensagem: `Ticket médio de ${formatCurrencyShort(ticketMedio)} por pedido no período (${totalPedidosPeriodo} pedidos pagos).`,
+        icone: "check",
       });
     }
 
