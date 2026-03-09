@@ -26,6 +26,7 @@ import { MobileProductCard } from '@/components/estoque/MobileProductCard';
 import { NovoModeloPadronizadoModal } from '@/components/estoque/NovoModeloPadronizadoModal';
 import { DetalhesModeloPadronizadoModal } from '@/components/estoque/DetalhesModeloPadronizadoModal';
 import { ModeloPadronizadoCard } from '@/components/estoque/ModeloPadronizadoCard';
+import { MobileModeloPadronizadoCard } from '@/components/estoque/MobileModeloPadronizadoCard';
 import { useModelosPadronizados, ModeloPadronizado, CATEGORIA_MODELO_PAD, CATEGORIA_VARIACAO_PAD } from '@/hooks/useModelosPadronizados';
 import { useVendasSemana } from '@/hooks/useVendasSemana';
 import { EstoqueItemSchema, NovoModeloAcabadoSchema } from '@/lib/validations';
@@ -895,6 +896,18 @@ export default function Estoque() {
                 if (item.categoria === CATEGORIA_MODELO_PAD) {
                     const modeloCompleto = modelosPadronizados.find(m => m.id === item.id);
                     if (!modeloCompleto) return null; // Fallback se não bater no hook ainda
+                    if (isMobile) {
+                        return (
+                          <MobileModeloPadronizadoCard
+                            key={item.id}
+                            modelo={modeloCompleto}
+                            onVerDetalhes={m => setModeloDetalhes(m)}
+                            onImageUpdate={handleProductImageUpdate}
+                            vendasSemana={vendasSemanaMap?.get(item.id) || 0}
+                          />
+                        );
+                    }
+
                     return (
                       <ModeloPadronizadoCard
                         key={item.id}
