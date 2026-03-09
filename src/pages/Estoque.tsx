@@ -888,7 +888,7 @@ export default function Estoque() {
 
           <TabsContent value={activeTab} className="mt-0">
             {/* ── Seção Única de Produtos Acabados ────────────────────────── */}
-            <div className={cn("grid gap-3 pt-4", isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6")}>
+            <div className={cn("grid gap-3 pt-4", isMobile ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6")}>
               {itensFiltrados.filter(i =>
                 i.tipo === 'acabado' && i.categoria !== CATEGORIA_VARIACAO_PAD
               ).map(item => {
