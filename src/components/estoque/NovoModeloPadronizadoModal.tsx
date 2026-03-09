@@ -17,6 +17,7 @@ import {
     TIPO_GARMENT_LABELS,
     TAMANHOS_LETRAS,
     TAMANHOS_NUMERICOS,
+    TAMANHOS_ESPECIAIS,
     Tamanho,
     GradeAtacado,
 } from '@/hooks/useModelosPadronizados';
@@ -27,7 +28,7 @@ interface Props {
     onClose: () => void;
 }
 
-const TODOS_TAMANHOS: Tamanho[] = [...TAMANHOS_LETRAS, ...TAMANHOS_NUMERICOS];
+const TODOS_TAMANHOS: Tamanho[] = [...TAMANHOS_LETRAS, ...TAMANHOS_NUMERICOS, ...TAMANHOS_ESPECIAIS];
 
 export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
     const { gerarReferenciaBase, criarModeloPadronizado } = useModelosPadronizados();
@@ -283,13 +284,17 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
                                 <Label htmlFor="pm-comp" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                     Composição / Tecido
                                 </Label>
-                                <Input
-                                    id="pm-comp"
-                                    value={composicao}
-                                    onChange={e => setComposicao(e.target.value)}
-                                    placeholder="Ex: 70% Algodão, 30% Elastano"
-                                    className="h-10 shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
-                                />
+                                <Select value={composicao} onValueChange={setComposicao}>
+                                    <SelectTrigger id="pm-comp" className="h-10 shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0">
+                                        <SelectValue placeholder="Selecione..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Alfaiataria">Alfaiataria</SelectItem>
+                                        <SelectItem value="Jeans 100%">Jeans 100%</SelectItem>
+                                        <SelectItem value="Jeans Lycra">Jeans Lycra</SelectItem>
+                                        <SelectItem value="Alfaiataria Marrante">Alfaiataria Marrante</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="pm-col" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -365,6 +370,31 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
                                             {t}
                                         </button>
                                     ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <p className="text-xs text-muted-foreground font-medium">Especiais</p>
+                                <div className="flex gap-2 flex-wrap">
+                                    {TAMANHOS_ESPECIAIS.map(t => (
+                                        <button
+                                            key={t}
+                                            type="button"
+                                            onClick={() => toggleTamanho(t)}
+                                            className={cn(
+                                                'h-9 px-4 rounded-lg text-sm font-semibold border-2 transition-all',
+                                                tamanhosSelecionados.has(t)
+                                                    ? 'bg-primary text-primary-foreground border-primary shadow-md'
+                                                    : 'bg-background text-muted-foreground border-border hover:border-primary/50'
+                                            )}
+                                            title="Tamanho Único"
+                                        >
+                                            {t}
+                                        </button>
+                                    ))}
+                                    <span className="text-xs text-muted-foreground self-center ml-2">
+                                        Use "ÚNICO" se não quiser separar por um tamanho específico.
+                                    </span>
                                 </div>
                             </div>
 

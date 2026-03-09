@@ -874,10 +874,6 @@ export default function Estoque() {
                   <FileSpreadsheet size={18} />
                   Importar Lista de Modelos
                 </Button>
-                <Button onClick={handleOpenNovoModelo} variant="outline" className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
-                  <Plus size={18} />
-                  Novo Modelo Acabado
-                </Button>
                 <Button onClick={() => setShowNovoModeloPadronizadoModal(true)} className="gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]">
                   <Sparkles size={18} />
                   + Novo Modelo Padronizado
@@ -1032,7 +1028,7 @@ export default function Estoque() {
       </div>
 
       {/* Mobile FAB for adding items */}
-      {isMobile && activeTab === 'produto_acabado' && <Button onClick={handleOpenNovoModelo} className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90">
+      {isMobile && activeTab === 'produto_acabado' && <Button onClick={() => setShowNovoModeloPadronizadoModal(true)} className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90">
         <Plus size={24} />
       </Button>}
       {isMobile && activeTab === 'materia_prima' && <Button onClick={() => handleOpenModal()} className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90">

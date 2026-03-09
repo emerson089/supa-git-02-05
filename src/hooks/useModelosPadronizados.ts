@@ -21,7 +21,8 @@ export const TIPO_GARMENT_LABELS: Record<TipoGarment, string> = {
 
 export const TAMANHOS_LETRAS = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3'] as const;
 export const TAMANHOS_NUMERICOS = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54'] as const;
-export type Tamanho = typeof TAMANHOS_LETRAS[number] | typeof TAMANHOS_NUMERICOS[number];
+export const TAMANHOS_ESPECIAIS = ['ÚNICO'] as const;
+export type Tamanho = typeof TAMANHOS_LETRAS[number] | typeof TAMANHOS_NUMERICOS[number] | typeof TAMANHOS_ESPECIAIS[number];
 
 // Prefixo especial salvo na categoria para identificar modelos padronizados
 export const CATEGORIA_MODELO_PAD = 'Modelo Padronizado';
