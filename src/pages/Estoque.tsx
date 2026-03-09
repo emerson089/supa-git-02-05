@@ -886,114 +886,75 @@ export default function Estoque() {
             </div>)}
 
           <TabsContent value={activeTab} className="mt-0">
-            {/* ── Seção: Modelos Padronizados ───────────────────── */}
-            {activeTab === 'produto_acabado' && modelosPadronizados.length > 0 && (
-              <div className="mb-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="h-px flex-1 bg-gradient-to-r from-purple-200 to-transparent" />
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-full">
-                    <Sparkles className="h-3.5 w-3.5 text-purple-600" />
-                    <span className="text-xs font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider">
-                      Modelos Padronizados ({modelosPadronizados.length})
-                    </span>
-                  </div>
-                  <div className="h-px flex-1 bg-gradient-to-l from-purple-200 to-transparent" />
-                </div>
-                <div className={cn("grid gap-3", isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6")}>
-                  {modelosPadronizados.map(modelo => (
-                    <ModeloPadronizadoCard
-                      key={modelo.id}
-                      modelo={modelo}
-                      onVerDetalhes={m => setModeloDetalhes(m)}
-                      onImageUpdate={handleProductImageUpdate}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Seção: Modelos Manuais ────────────────────────── */}
-            {activeTab === 'produto_acabado' && itensFiltrados.filter(i => i.tipo === 'acabado' && i.categoria !== CATEGORIA_MODELO_PAD && i.categoria !== CATEGORIA_VARIACAO_PAD).length > 0 && (
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-px flex-1 bg-gradient-to-r from-border to-transparent" />
-                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-2">
-                  Modelos Manuais
-                </span>
-                <div className="h-px flex-1 bg-gradient-to-l from-border to-transparent" />
-              </div>
-            )}
-
-            <div className={cn("grid gap-3", isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6")}>
+            {/* ── Seção Única de Produtos Acabados ────────────────────────── */}
+            <div className={cn("grid gap-3 pt-4", isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6")}>
               {itensFiltrados.filter(i =>
-                i.tipo !== 'acabado' ||
-                (i.categoria !== CATEGORIA_MODELO_PAD && i.categoria !== CATEGORIA_VARIACAO_PAD)
-              ).map(item => item.tipo === 'acabado' ? isMobile ? <MobileProductCard key={item.id} item={{
-                id: item.id,
-                nome: item.nome,
-                categoria: item.categoria,
-                quantidade: item.quantidade,
-                precoUnitario: item.precoUnitario,
-                imagemUrl: item.imagemUrl,
-                localizacao: item.localizacao,
-                tipo: item.tipo
-              }} editingPriceId={editingPriceId} editingPrice={editingPriceValue.toString()} onEditPrice={(id, price) => {
-                setEditingPriceId(id);
-                setEditingPriceValue(price);
-              }} onSavePrice={handleSavePrice} onCancelEditPrice={handleCancelEditPrice} onPriceChange={v => setEditingPriceValue(Number(v))} onEdit={handleOpenModal} onDelete={handleDeleteClick} onImageUpdate={handleProductImageUpdate} vendasSemana={vendasSemanaMap?.get(item.id) || 0} /> : <ProductCard key={item.id} item={item} editingPriceId={editingPriceId} editingPriceValue={editingPriceValue} onEditPrice={handleStartEditPrice} onSavePrice={handleSavePrice} onCancelEditPrice={handleCancelEditPrice} onPriceValueChange={setEditingPriceValue} onEdit={handleOpenModal} onDelete={handleDeleteClick} onImageUpdate={handleProductImageUpdate} vendasSemana={vendasSemanaMap?.get(item.id) || 0} /> : <Card key={item.id} className="overflow-hidden shadow-soft border border-border/50 bg-card rounded-2xl">
-                <CardContent className={cn("p-6", isMobile && "p-4")}>
-                  {/* Two column layout */}
-                  <div className="flex gap-4 mb-4 pb-4 border-b border-border/30">
-                    {/* Left: Image */}
-                    <ProductImage imagemUrl={item.imagemUrl} nome={item.nome} />
+                i.tipo === 'acabado' && i.categoria !== CATEGORIA_VARIACAO_PAD
+              ).map(item => {
+                // Se for um Modelo Padronizado (pai)
+                if (item.categoria === CATEGORIA_MODELO_PAD) {
+                    const modeloCompleto = modelosPadronizados.find(m => m.id === item.id);
+                    if (!modeloCompleto) return null; // Fallback se não bater no hook ainda
+                    return (
+                      <ModeloPadronizadoCard
+                        key={item.id}
+                        modelo={modeloCompleto}
+                        onVerDetalhes={m => setModeloDetalhes(m)}
+                        onImageUpdate={handleProductImageUpdate}
+                        vendasSemana={vendasSemanaMap?.get(item.id) || 0}
+                      />
+                    );
+                }
 
-                    {/* Right: Main info */}
-                    <div className="flex-1 min-w-0">
-                      <h3 className={cn("font-bold text-foreground", isMobile ? "text-sm line-clamp-2" : "text-lg truncate")}>{item.nome}</h3>
-                      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider mt-1">{item.categoria}</p>
-                    </div>
+                // Se não for Padronizado, é Manual antigo
+                if (isMobile) {
+                  return (
+                    <MobileProductCard 
+                      key={item.id} 
+                      item={{
+                        id: item.id,
+                        nome: item.nome,
+                        categoria: item.categoria,
+                        quantidade: item.quantidade,
+                        precoUnitario: item.precoUnitario,
+                        imagemUrl: item.imagemUrl,
+                        localizacao: item.localizacao,
+                        tipo: item.tipo
+                      }} 
+                      editingPriceId={editingPriceId} 
+                      editingPrice={editingPriceValue.toString()} 
+                      onEditPrice={(id, price) => {
+                        setEditingPriceId(id);
+                        setEditingPriceValue(price);
+                      }} 
+                      onSavePrice={handleSavePrice} 
+                      onCancelEditPrice={handleCancelEditPrice} 
+                      onPriceChange={v => setEditingPriceValue(Number(v))} 
+                      onEdit={handleOpenModal} 
+                      onDelete={handleDeleteClick} 
+                      onImageUpdate={handleProductImageUpdate} 
+                      vendasSemana={vendasSemanaMap?.get(item.id) || 0} 
+                    />
+                  );
+                }
 
-                    {/* Calculate status based on quantity */}
-                    {(() => {
-                      const status: StatusEstoque = item.quantidade === 0 ? 'baixo_estoque' : item.quantidade <= 20 ? 'baixo_estoque' : 'disponivel';
-                      return <Badge className={statusConfig[status].color + " h-fit shrink-0"}>
-                        {statusConfig[status].label}
-                      </Badge>;
-                    })()}
-                  </div>
-
-                  {/* Technical data - clean aligned layout */}
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Quantidade</span>
-                      <span className="font-bold text-lg text-foreground">
-                        {item.quantidade} <span className="text-xs font-normal text-muted-foreground">{item.unidade}</span>
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Mínimo</span>
-                      <span className="text-sm text-muted-foreground">{item.quantidadeMinima} {item.unidade}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Preço unit.</span>
-                      <span className="font-semibold text-primary">R$ {(item.precoUnitario ?? 0).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground/70 uppercase tracking-wider">Localização</span>
-                      <span className="text-sm text-muted-foreground">{item.localizacao}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 mt-5 pt-4 border-t border-border/30">
-                    <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-10" onClick={() => handleOpenModal(item)}>
-                      <Edit size={14} />
-                      Editar
-                    </Button>
-                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive h-10 px-3" onClick={() => handleDeleteClick(item)}>
-                      <Trash2 size={14} />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>)}
+                return (
+                  <ProductCard 
+                    key={item.id} 
+                    item={item} 
+                    editingPriceId={editingPriceId} 
+                    editingPriceValue={editingPriceValue} 
+                    onEditPrice={handleStartEditPrice} 
+                    onSavePrice={handleSavePrice} 
+                    onCancelEditPrice={handleCancelEditPrice} 
+                    onPriceValueChange={setEditingPriceValue} 
+                    onEdit={handleOpenModal} 
+                    onDelete={handleDeleteClick} 
+                    onImageUpdate={handleProductImageUpdate} 
+                    vendasSemana={vendasSemanaMap?.get(item.id) || 0} 
+                  />
+                );
+              })}
 
               {itensFiltrados.length === 0 && !isPaginatedLoading && <div className="col-span-full text-center py-12 text-muted-foreground">
                 {search ? 'Nenhum item encontrado para a busca.' : activeTab === 'materia_prima' ? 'Nenhuma matéria-prima cadastrada.' : 'Nenhum produto acabado no estoque.'}

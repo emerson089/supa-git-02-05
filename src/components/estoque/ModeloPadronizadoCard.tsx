@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Camera, Package, Layers, Eye, Trash2, AlertTriangle, Pencil } from 'lucide-react';
+import { Camera, Package, Layers, Eye, Trash2, AlertTriangle, Pencil, ShoppingBag } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +21,7 @@ interface ModeloPadronizadoCardProps {
     modelo: ModeloPadronizado;
     onVerDetalhes: (modelo: ModeloPadronizado) => void;
     onImageUpdate?: (productId: string, file: File) => void;
+    vendasSemana?: number;
 }
 
 function ModeloImage({
@@ -70,6 +71,7 @@ export function ModeloPadronizadoCard({
     modelo,
     onVerDetalhes,
     onImageUpdate,
+    vendasSemana = 0,
 }: ModeloPadronizadoCardProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
@@ -192,6 +194,17 @@ export function ModeloPadronizadoCard({
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Preço de Venda</p>
                             <p className="font-bold text-emerald-600">R$ {(precoUnitario ?? 0).toFixed(2)}</p>
                         </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-sm pt-1 pb-1">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Vendidas Semana</span>
+                        <span className={cn(
+                        "text-sm font-semibold flex items-center gap-1.5",
+                        vendasSemana > 0 ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"
+                        )}>
+                            <ShoppingBag size={14} />
+                            {vendasSemana} peças
+                        </span>
                     </div>
 
                     {/* Ações */}
