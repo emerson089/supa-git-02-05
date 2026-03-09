@@ -7,10 +7,11 @@ import { toast } from 'sonner';
 // ─────────────────────────────────────────────────────────
 // Tipos
 // ─────────────────────────────────────────────────────────
-export type TipoGarment = 'SH' | 'CA' | 'SA' | 'VS' | 'CJ' | 'MK' | 'OT';
+export type TipoGarment = 'SH' | 'CA' | 'SA' | 'VS' | 'CJ' | 'MK' | 'OT' | 'SS';
 
 export const TIPO_GARMENT_LABELS: Record<TipoGarment, string> = {
     SH: 'Short (SH)',
+    SS: 'Short Saia (SS)',
     CA: 'Calça (CA)',
     SA: 'Saia (SA)',
     VS: 'Vestido (VS)',
