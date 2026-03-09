@@ -393,7 +393,7 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
                                         </button>
                                     ))}
                                     <span className="text-xs text-muted-foreground self-center ml-2">
-                                        Use "ÚNICO" se não quiser separar por um tamanho específico.
+                                        Use "SORTIDO" para cadastrar o estoque total sem separar por tamanho.
                                     </span>
                                 </div>
                             </div>
