@@ -149,8 +149,9 @@ export function useModelosPadronizados() {
         const mm = String(now.getMonth() + 1).padStart(2, '0');
         const prefix = `${tipo}${yy}${mm}-`;
 
-        // Buscar todos os itens que já usam o prefixo
-        if (!user) return `${prefix}0001`;
+        const gerarAleatorio3 = () => Math.floor(Math.random() * 999) + 1;
+
+        if (!user) return `${prefix}${String(gerarAleatorio3()).padStart(3, '0')}`;
 
         try {
             const { data } = await supabase
@@ -159,21 +160,35 @@ export function useModelosPadronizados() {
                 .eq('user_id', user.id)
                 .eq('categoria', CATEGORIA_MODELO_PAD);
 
-            const nums: number[] = [];
+            const usados = new Set<number>();
             (data || []).forEach(row => {
                 const meta = parseMeta(row.localizacao);
                 if (meta?.referencia?.startsWith(prefix)) {
                     const seqStr = meta.referencia.split('-')[1];
                     const seq = parseInt(seqStr, 10);
-                    if (!isNaN(seq)) nums.push(seq);
+                    if (!isNaN(seq)) usados.add(seq);
                 }
             });
 
-            const maxSeq = nums.length > 0 ? Math.max(...nums) : 0;
-            const nextSeq = String(maxSeq + 1).padStart(4, '0');
-            return `${prefix}${nextSeq}`;
+            // Tentar aleatório até 20x
+            for (let i = 0; i < 20; i++) {
+                const candidato = gerarAleatorio3();
+                if (!usados.has(candidato)) {
+                    return `${prefix}${String(candidato).padStart(3, '0')}`;
+                }
+            }
+
+            // Fallback: buscar primeiro disponível entre 1-999
+            for (let n = 1; n <= 999; n++) {
+                if (!usados.has(n)) {
+                    return `${prefix}${String(n).padStart(3, '0')}`;
+                }
+            }
+
+            // Todos 999 ocupados: usar acima de 999
+            return `${prefix}${usados.size + 1}`;
         } catch {
-            return `${prefix}0001`;
+            return `${prefix}${String(gerarAleatorio3()).padStart(3, '0')}`;
         }
     }, [user]);
 

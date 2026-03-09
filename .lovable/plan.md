@@ -1,22 +1,16 @@
 
 
-## Alterar referência base para 3 dígitos aleatórios únicos
+## Adicionar opção "ENTREGA TORITAMA" ao status de entrega
 
-### Arquivo: `src/hooks/useModelosPadronizados.ts`
+Adicionar a nova opção em todos os locais onde os status de entrega são definidos:
 
-**Função `gerarReferenciaBase`** (linhas 146-178):
+### Arquivos a alterar
 
-1. Manter o prefixo `TIPO+AAMM-` (ex: `CA2603-`)
-2. Buscar todos os números já usados para o prefixo (igual ao atual)
-3. Em vez de pegar `max + 1`, gerar um número aleatório entre 1 e 999
-4. Verificar se já está na lista de usados; se sim, gerar outro
-5. Formatar com 3 dígitos: `padStart(3, '0')`
-6. Fallback: se todos 999 estiverem ocupados, usar o próximo disponível acima de 999
+1. **`src/components/pedidos/StatusSelector.tsx`** — Adicionar `{ value: 'ENTREGA TORITAMA', label: 'ENTREGA TORITAMA', color: 'purple' }` ao array `statusEntregaOptions`.
 
-**Atualização do fallback** (linha 176): mudar de `0001` para um aleatório de 3 dígitos.
+2. **`src/lib/csv-validation-schemas.ts`** — Adicionar `'ENTREGA TORITAMA'` ao array `STATUS_ENTREGA_VALUES`.
 
-### Sem impacto em outros arquivos
-- As variações continuam usando `referencia-TAMANHO`
-- O campo é texto livre, então nenhuma migração de BD é necessária
-- Modelos existentes não são afetados
+3. **`src/components/pedidos/MobileFiltersSheet.tsx`** e **`src/hooks/usePedidosPaginated.ts`** — Verificar se usam os arrays centralizados (provavelmente sim, sem alteração necessária).
+
+A cor `purple` foi escolhida para diferenciar visualmente, similar ao "NO CARRO". Posso ajustar se preferir outra cor.
 
