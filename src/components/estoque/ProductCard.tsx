@@ -45,7 +45,7 @@ function ProductImage({
 
   return (
     <div
-      className="relative aspect-[4/3] w-full overflow-hidden rounded-t-2xl bg-muted/30 group cursor-pointer"
+      className="relative aspect-[3/4] w-full overflow-hidden rounded-t-2xl bg-muted/30 group cursor-pointer"
       onClick={onImageClick}
     >
       {loading ? (
@@ -135,7 +135,7 @@ export function ProductCard({
         onChange={handleFileChange}
       />
 
-      {/* Product Image - 4:3 aspect ratio */}
+      {/* Product Image - 3:4 aspect ratio */}
       <ProductImage
         imagemUrl={item.imagemUrl}
         nome={item.nome}
