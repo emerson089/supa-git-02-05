@@ -772,8 +772,15 @@ export default function PedidosCriados() {
 
         if (refStr && nomeStr.includes(` — ${refStr}`)) {
           const tamanho = refStr.split('-').pop();
-          if (tamanho) nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
+          if (tamanho && tamanho !== 'ÚNICO') {
+            nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
+          } else {
+            nomeStr = nomeStr.replace(` — ${refStr}`, '');
+          }
         }
+
+        // Final sanitization for ÚNICO explicitly
+        nomeStr = nomeStr.replace(' — Tamanho ÚNICO', '');
 
         const modeloStr = refStr ? `${nomeStr}\n(Ref: ${refStr})` : nomeStr;
 
@@ -1639,8 +1646,15 @@ export default function PedidosCriados() {
                         }
                         if (refStr && nomeStr.includes(` — ${refStr}`)) {
                           const tamanho = refStr.split('-').pop();
-                          if (tamanho) nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
+                          if (tamanho && tamanho !== 'ÚNICO') {
+                              nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
+                          } else {
+                              nomeStr = nomeStr.replace(` — ${refStr}`, '');
+                          }
                         }
+                        
+                        // Final sanitization for ÚNICO explicitly
+                        nomeStr = nomeStr.replace(' — Tamanho ÚNICO', '');
                         return (
                           <div key={item.id || index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                             <div>
