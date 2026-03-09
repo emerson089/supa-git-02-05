@@ -896,6 +896,12 @@ export default function Estoque() {
                 if (item.categoria === CATEGORIA_MODELO_PAD) {
                     const modeloCompleto = modelosPadronizados.find(m => m.id === item.id);
                     if (!modeloCompleto) return null; // Fallback se não bater no hook ainda
+                    
+                    // Somar vendas da semana de todas as variações deste modelo
+                    const vendasSemanasAgrupadas = modeloCompleto.variacoes?.reduce((acc, v) => {
+                       return acc + (vendasSemanaMap?.get(v.id) || 0);
+                    }, 0) || 0;
+
                     if (isMobile) {
                         return (
                           <MobileModeloPadronizadoCard
@@ -903,7 +909,7 @@ export default function Estoque() {
                             modelo={modeloCompleto}
                             onVerDetalhes={m => setModeloDetalhes(m)}
                             onImageUpdate={handleProductImageUpdate}
-                            vendasSemana={vendasSemanaMap?.get(item.id) || 0}
+                            vendasSemana={vendasSemanasAgrupadas}
                           />
                         );
                     }
@@ -914,7 +920,7 @@ export default function Estoque() {
                         modelo={modeloCompleto}
                         onVerDetalhes={m => setModeloDetalhes(m)}
                         onImageUpdate={handleProductImageUpdate}
-                        vendasSemana={vendasSemanaMap?.get(item.id) || 0}
+                        vendasSemana={vendasSemanasAgrupadas}
                       />
                     );
                 }
