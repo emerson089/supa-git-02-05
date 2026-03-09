@@ -779,8 +779,9 @@ export default function PedidosCriados() {
           }
         }
 
-        // Final sanitization for SORTIDO explicitly
-        nomeStr = nomeStr.replace(' — Tamanho SORTIDO', '');
+        // Final sanitization for SORTIDO and ÚNICO explicitly
+        nomeStr = nomeStr.replace(' — Tamanho SORTIDO', '').replace(' — Tamanho ÚNICO', '');
+        refStr = refStr.replace('-SORTIDO', '').replace('-ÚNICO', '');
 
         const modeloStr = refStr ? `${nomeStr}\n(Ref: ${refStr})` : nomeStr;
 
@@ -1653,8 +1654,10 @@ export default function PedidosCriados() {
                           }
                         }
                         
-                        // Final sanitization for SORTIDO explicitly
-                        nomeStr = nomeStr.replace(' — Tamanho SORTIDO', '');
+                        // Final sanitization for SORTIDO and ÚNICO explicitly
+                        nomeStr = nomeStr.replace(' — Tamanho SORTIDO', '').replace(' — Tamanho ÚNICO', '');
+                        refStr = refStr.replace('-SORTIDO', '').replace('-ÚNICO', '');
+                        
                         return (
                           <div key={item.id || index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                             <div>
