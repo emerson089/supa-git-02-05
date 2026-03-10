@@ -1,22 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
-// Allowed origins for CORS
-const ALLOWED_ORIGINS = [
-  'https://denim-flow-master.lovable.app',
-  'https://id-preview--daf59025-1007-41d6-9df6-d2c77da6cb3c.lovable.app',
-  'https://daf59025-1007-41d6-9df6-d2c77da6cb3c.lovableproject.com',
-];
-
-function getCorsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('origin') || '';
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Credentials': 'true',
-  };
-}
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
 interface InviteUserRequest {
   email: string;
@@ -25,49 +14,41 @@ interface InviteUserRequest {
 }
 
 serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
-
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Get authorization header
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      console.error('Missing authorization header');
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ error: 'Não autorizado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Create Supabase client with user's auth token
+    const token = authHeader.replace('Bearer ', '');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    // Validate JWT token using getClaims
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
     });
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      console.error('Failed to validate token:', claimsError);
+    // Validate JWT by fetching user with explicit token
+    const { data: { user: caller }, error: userError } = await supabaseAdmin.auth.getUser(token);
+
+    if (userError || !caller) {
+      console.error('Failed to validate token:', userError);
       return new Response(
         JSON.stringify({ error: 'Usuário não autenticado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const callerId = claimsData.claims.sub;
+    const callerId = caller.id;
 
-    // Use service role client to check admin status
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Check if caller is admin using the has_role function
+    // Check if caller is admin
     const { data: isAdmin, error: roleError } = await supabaseAdmin.rpc('has_role', {
       _user_id: callerId,
       _role: 'admin'
@@ -89,10 +70,8 @@ serve(async (req) => {
       );
     }
 
-    // Parse request body
     const { email, nome, role }: InviteUserRequest = await req.json();
 
-    // Validate input
     if (!email || !nome || !role) {
       return new Response(
         JSON.stringify({ error: 'Email, nome e role são obrigatórios' }),
@@ -118,16 +97,13 @@ serve(async (req) => {
       );
     }
 
-    // Generate temporary password
     const tempPassword = generateTempPassword();
-
     console.log(`Creating user ${email} with role ${role}`);
 
-    // Create user with Supabase Admin API
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: tempPassword,
-      email_confirm: true, // Auto-confirm email
+      email_confirm: true,
       user_metadata: { nome }
     });
 
@@ -139,7 +115,6 @@ serve(async (req) => {
       );
     }
 
-    // Update profile (trigger already created it, so we use upsert)
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -153,10 +128,8 @@ serve(async (req) => {
 
     if (profileError) {
       console.error('Failed to update profile:', profileError);
-      // Non-fatal - profile was created by trigger, continue
     }
 
-    // Assign role
     const { error: roleInsertError } = await supabaseAdmin
       .from('user_roles')
       .insert({
@@ -166,7 +139,6 @@ serve(async (req) => {
 
     if (roleInsertError) {
       console.error('Failed to assign role:', roleInsertError);
-      // Rollback: delete user
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
       return new Response(
         JSON.stringify({ error: 'Erro ao atribuir role ao usuário' }),
@@ -195,7 +167,7 @@ serve(async (req) => {
     console.error('Unexpected error:', error);
     return new Response(
       JSON.stringify({ error: 'Erro interno do servidor' }),
-      { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
