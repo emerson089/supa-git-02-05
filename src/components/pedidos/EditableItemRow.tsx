@@ -23,7 +23,7 @@ interface EditableItemRowProps {
 export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemoving }: EditableItemRowProps) {
   const [quantidade, setQuantidade] = useState(item.quantidade);
   const [valorUnitario, setValorUnitario] = useState(item.valor_unitario);
-  const [pendingUpdate, setPendingUpdate] = useState<NodeJS.Timeout | null>(null);
+  const [pendingUpdate, setPendingUpdate] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   const subtotal = quantidade * valorUnitario;
 

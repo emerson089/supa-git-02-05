@@ -28,7 +28,7 @@ export function GradeCompactCardEditable({
     hasRemovingUpdates,
 }: GradeCompactCardEditableProps) {
     const [localQuantities, setLocalQuantities] = useState<Record<string, number>>({});
-    const [pendingUpdate, setPendingUpdate] = useState<NodeJS.Timeout | null>(null);
+    const [pendingUpdate, setPendingUpdate] = useState<ReturnType<typeof setTimeout> | null>(null);
 
     // Sync local quantities on mount or when items change externally
     useEffect(() => {

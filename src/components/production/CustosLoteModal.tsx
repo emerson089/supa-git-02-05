@@ -89,7 +89,7 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
     integradoSemCusto?: boolean;
   } | null>(null);
   
-  const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const quantidade = lot?.quantidade || 0;
 
   useEffect(() => {
