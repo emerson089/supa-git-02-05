@@ -1,80 +1,61 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ALLOWED_ORIGINS = [
-  'http://localhost:8080',
-  'http://localhost:8081',
-  'http://localhost:5173',
-  'https://lovable.dev',
-  'https://denim-flow-master.lovable.app',
-  'https://id-preview--daf59025-1007-41d6-9df6-d2c77da6cb3c.lovable.app',
-  'https://daf59025-1007-41d6-9df6-d2c77da6cb3c.lovableproject.com',
-];
-
-function getCorsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('origin') || '';
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  };
-}
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
 interface DeleteUserRequest {
   userId: string;
 }
 
 serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
-
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Get authorization token
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      console.log('Missing Authorization header');
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Token de autenticação não fornecido' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Create Supabase clients
+    const token = authHeader.replace('Bearer ', '');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
+    // Validate JWT using getClaims
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
+      global: { headers: { Authorization: authHeader } },
     });
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false }
-    });
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
 
-    // Get current user - this properly validates the JWT
-    const { data: { user: caller }, error: userError } = await supabaseAuth.auth.getUser();
-    
-    if (userError || !caller) {
-      console.log('Invalid token:', userError?.message);
+    if (claimsError || !claimsData?.claims) {
+      console.log('Invalid token:', claimsError?.message);
       return new Response(
         JSON.stringify({ success: false, error: 'Token inválido ou expirado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const callerUserId = caller.id;
+    const callerUserId = claimsData.claims.sub as string;
     console.log('Caller user ID:', callerUserId);
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
+    });
 
     // Check if caller is admin
     const { data: isAdmin, error: roleError } = await supabaseAdmin.rpc('has_role', {
       _user_id: callerUserId,
-      _role: 'admin'
+      _role: 'admin',
     });
 
     if (roleError) {
@@ -86,14 +67,12 @@ serve(async (req) => {
     }
 
     if (!isAdmin) {
-      console.log('User is not admin');
       return new Response(
         JSON.stringify({ success: false, error: 'Apenas administradores podem excluir usuários' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Parse request body
     const body: DeleteUserRequest = await req.json();
     const { userId } = body;
 
@@ -104,7 +83,6 @@ serve(async (req) => {
       );
     }
 
-    // Prevent self-deletion
     if (userId === callerUserId) {
       return new Response(
         JSON.stringify({ success: false, error: 'Você não pode excluir sua própria conta' }),
@@ -114,40 +92,11 @@ serve(async (req) => {
 
     console.log('Deleting user:', userId);
 
-    // 1. Delete from user_locations first (to avoid FK constraint)
-    const { error: locationsDeleteError } = await supabaseAdmin
-      .from('user_locations')
-      .delete()
-      .eq('user_id', userId);
+    // Delete related data in order
+    await supabaseAdmin.from('user_locations').delete().eq('user_id', userId);
+    await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
+    await supabaseAdmin.from('profiles').delete().eq('user_id', userId);
 
-    if (locationsDeleteError) {
-      console.log('Error deleting user_locations:', locationsDeleteError.message);
-      // Continue anyway, might not have locations
-    }
-
-    // 2. Delete from user_roles
-    const { error: rolesDeleteError } = await supabaseAdmin
-      .from('user_roles')
-      .delete()
-      .eq('user_id', userId);
-
-    if (rolesDeleteError) {
-      console.log('Error deleting user_roles:', rolesDeleteError.message);
-      // Continue anyway, role might not exist
-    }
-
-    // 3. Delete from profiles
-    const { error: profileDeleteError } = await supabaseAdmin
-      .from('profiles')
-      .delete()
-      .eq('user_id', userId);
-
-    if (profileDeleteError) {
-      console.log('Error deleting profile:', profileDeleteError.message);
-      // Continue anyway, profile might not exist
-    }
-
-    // 4. Delete from auth.users
     const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (authDeleteError) {
@@ -164,7 +113,6 @@ serve(async (req) => {
       JSON.stringify({ success: true, message: 'Usuário excluído com sucesso' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
   } catch (error) {
     console.error('Error in delete-user function:', error);
     return new Response(
