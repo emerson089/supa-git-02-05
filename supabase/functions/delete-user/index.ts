@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,27 +30,24 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // Validate JWT using getClaims
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
+    // Use service role client to validate user from token
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
     });
 
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    // Validate the JWT by fetching the user with the token
+    const { data: { user: caller }, error: userError } = await supabaseAdmin.auth.getUser(token);
 
-    if (claimsError || !claimsData?.claims) {
-      console.log('Invalid token:', claimsError?.message);
+    if (userError || !caller) {
+      console.log('Invalid token:', userError?.message);
       return new Response(
         JSON.stringify({ success: false, error: 'Token inválido ou expirado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const callerUserId = claimsData.claims.sub as string;
+    const callerUserId = caller.id;
     console.log('Caller user ID:', callerUserId);
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-    });
 
     // Check if caller is admin
     const { data: isAdmin, error: roleError } = await supabaseAdmin.rpc('has_role', {
@@ -92,7 +89,6 @@ serve(async (req) => {
 
     console.log('Deleting user:', userId);
 
-    // Delete related data in order
     await supabaseAdmin.from('user_locations').delete().eq('user_id', userId);
     await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
     await supabaseAdmin.from('profiles').delete().eq('user_id', userId);
