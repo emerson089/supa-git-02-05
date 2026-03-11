@@ -387,13 +387,13 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
                                                     ? 'bg-primary text-primary-foreground border-primary shadow-md'
                                                     : 'bg-background text-muted-foreground border-border hover:border-primary/50'
                                             )}
-                                            title="Tamanho Único"
+                                            title="PEÇAS"
                                         >
                                             {t}
                                         </button>
                                     ))}
                                     <span className="text-xs text-muted-foreground self-center ml-2">
-                                        Use "SORTIDO" para cadastrar o estoque total sem separar por tamanho.
+                                        Use "PEÇAS" para cadastrar o estoque total sem separar por tamanho.
                                     </span>
                                 </div>
                             </div>

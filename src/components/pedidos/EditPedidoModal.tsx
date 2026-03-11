@@ -8,7 +8,6 @@ import { AddItemSelector } from './AddItemSelector';
 import { useAddPedidoItem, useUpdatePedidoItem, useRemovePedidoItem } from '@/hooks/usePedidoItensData';
 import { GradeCompactCardEditable } from './GradeCompactCardEditable';
 import { useEstoque } from '@/contexts/EstoqueContext';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface PedidoData {
@@ -35,17 +34,57 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
 
-  // Filter finished products from inventory
+  // Filter and group finished products from inventory
   const produtosAcabados = useMemo(() => {
-    return estoqueItens
-      .filter(item => item.tipo === 'acabado')
-      .map(item => ({
-        id: item.id,
-        nome: item.nome,
-        preco_unitario: item.precoUnitario || 0,
-        quantidade: item.quantidade,
-        referencia: item.localizacao || undefined,
-      }));
+    const grouped = new Map<string, any>();
+
+    estoqueItens
+      .filter(item => 
+        item.tipo === 'acabado' && 
+        item.categoria !== 'Modelo Padronizado'
+      )
+      .forEach(item => {
+        let referencia: string | undefined;
+        let tamanho: string | undefined;
+        if (item.localizacao) {
+          try {
+            const loc = JSON.parse(item.localizacao);
+            referencia = loc.referencia || undefined;
+            const t = loc.tamanho as string | undefined;
+            if (t && !/^(PEÇAS)$/i.test(t)) tamanho = t;
+          } catch { }
+        }
+
+        // Use cleaned name and ref for grouping identity
+        const cleanName = item.nome
+          .replace(/ — Tamanho (PEÇAS)/gi, '')
+          .replace(/-(PEÇAS)/gi, '')
+          .trim();
+        
+        const cleanRef = referencia 
+          ? referencia.replace(/-(PEÇAS)/gi, '').trim()
+          : undefined;
+
+        const preco = item.precoUnitario || 0;
+        // Group by cleaned identity
+        const key = `${cleanName}|${cleanRef || ''}|${preco}`;
+
+        if (grouped.has(key)) {
+          const existing = grouped.get(key);
+          existing.quantidade += item.quantidade;
+        } else {
+          grouped.set(key, {
+            id: item.id,
+            nome: cleanName,
+            preco_unitario: preco,
+            quantidade: item.quantidade,
+            referencia: cleanRef,
+            tamanho,
+          });
+        }
+      });
+
+    return Array.from(grouped.values());
   }, [estoqueItens]);
 
   // Get existing product IDs in the order
@@ -67,61 +106,43 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
     setUpdatingItemId(itemId);
     try {
-      // Buscar o item atual diretamente do banco para garantir dados corretos
-      const { data: itemDB, error: itemError } = await supabase
-        .from('pedido_itens')
-        .select('id, produto_id, produto_nome, quantidade')
-        .eq('id', itemId)
-        .maybeSingle();
-
-      if (itemError || !itemDB) {
-        console.error('Erro ao buscar item do pedido:', itemError);
-        toast.error('Erro ao buscar dados do item');
+      // Usar dados do item já disponíveis nos props (evita fetch ao DB)
+      const itemLocal = pedido.itens.find(i => i.id === itemId);
+      if (!itemLocal) {
+        toast.error('Item não encontrado');
         setUpdatingItemId(null);
         return;
       }
 
+      // Pré-calcular totais localmente (evita SELECT de todos os itens em syncPedidoTotals)
+      const newQtd = data.quantidade ?? itemLocal.quantidade;
+      const newValor = data.valor_unitario ?? itemLocal.valor_unitario;
+      const precomputedTotals = {
+        total_pecas: pedido.total_pecas - itemLocal.quantidade + newQtd,
+        valor_total: pedido.valor_total - (itemLocal.quantidade * itemLocal.valor_unitario) + (newQtd * newValor),
+      };
+
       // Se a quantidade mudou, ajustar estoque
-      if (data.quantidade !== undefined && data.quantidade !== itemDB.quantidade) {
-        const diferenca = itemDB.quantidade - data.quantidade; // positivo = devolve, negativo = subtrai
+      if (data.quantidade !== undefined && data.quantidade !== itemLocal.quantidade) {
+        const diferenca = itemLocal.quantidade - data.quantidade; // positivo = devolve, negativo = subtrai
 
-        let produtoId = itemDB.produto_id;
+        let produtoId = itemLocal.produto_id;
 
-        // Fallback: se não tem produto_id, tentar encontrar pelo nome
+        // Fallback: se não tem produto_id, buscar pelo nome no contexto de estoque
         if (!produtoId) {
-          const { data: estoqueByName } = await supabase
-            .from('estoque_itens')
-            .select('id')
-            .eq('tipo', 'acabado')
-            .ilike('nome', itemDB.produto_nome)
-            .maybeSingle();
-
-          if (estoqueByName) {
-            produtoId = estoqueByName.id;
-          }
+          const estoqueByName = estoqueItens.find(
+            e => e.tipo === 'acabado' && e.nome.toLowerCase() === itemLocal.produto_nome.toLowerCase()
+          );
+          if (estoqueByName) produtoId = estoqueByName.id;
         }
 
         if (produtoId) {
-          // Buscar quantidade atual do estoque diretamente do banco
-          const { data: estoqueAtual, error: estoqueError } = await supabase
-            .from('estoque_itens')
-            .select('id, quantidade')
-            .eq('id', produtoId)
-            .maybeSingle();
-
-          if (estoqueError) {
-            console.error('Erro ao buscar estoque:', estoqueError);
-            toast.error('Erro ao verificar estoque');
-            setUpdatingItemId(null);
-            return;
-          }
-
+          // Usar quantidade do contexto ao invés de buscar do DB
+          const estoqueAtual = estoqueItens.find(e => e.id === produtoId);
           if (estoqueAtual) {
             const novaQuantidadeEstoque = estoqueAtual.quantidade + diferenca;
             if (novaQuantidadeEstoque >= 0) {
-              await updateEstoqueItem(estoqueAtual.id, {
-                quantidade: novaQuantidadeEstoque
-              });
+              await updateEstoqueItem(estoqueAtual.id, { quantidade: novaQuantidadeEstoque });
             } else {
               toast.error(`Estoque insuficiente! Disponível: ${estoqueAtual.quantidade}`);
               setUpdatingItemId(null);
@@ -129,7 +150,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
             }
           }
         } else {
-          console.warn('Produto não encontrado no estoque para ajuste:', itemDB.produto_nome);
+          console.warn('Produto não encontrado no estoque para ajuste:', itemLocal.produto_nome);
         }
       }
 
@@ -137,6 +158,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         id: itemId,
         pedidoId: pedido.id,
         data,
+        precomputedTotals,
       });
       toast.success('Item atualizado!');
     } catch (error) {
@@ -152,47 +174,36 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
     setRemovingItemId(itemId);
     try {
-      // Buscar o item atual diretamente do banco
-      const { data: itemDB, error: itemError } = await supabase
-        .from('pedido_itens')
-        .select('id, produto_id, produto_nome, quantidade')
-        .eq('id', itemId)
-        .maybeSingle();
-
-      if (itemError || !itemDB) {
-        console.error('Erro ao buscar item do pedido:', itemError);
-        toast.error('Erro ao buscar dados do item');
+      // Usar dados do item já disponíveis nos props (evita fetch ao DB)
+      const itemLocal = pedido.itens.find(i => i.id === itemId);
+      if (!itemLocal) {
+        toast.error('Item não encontrado');
         setRemovingItemId(null);
         return;
       }
 
-      let produtoId = itemDB.produto_id;
+      // Pré-calcular totais sem este item
+      const precomputedTotals = {
+        total_pecas: pedido.total_pecas - itemLocal.quantidade,
+        valor_total: pedido.valor_total - (itemLocal.quantidade * itemLocal.valor_unitario),
+      };
 
-      // Fallback: se não tem produto_id, tentar encontrar pelo nome
+      let produtoId = itemLocal.produto_id;
+
+      // Fallback: se não tem produto_id, buscar pelo nome no contexto de estoque
       if (!produtoId) {
-        const { data: estoqueByName } = await supabase
-          .from('estoque_itens')
-          .select('id')
-          .eq('tipo', 'acabado')
-          .ilike('nome', itemDB.produto_nome)
-          .maybeSingle();
-
-        if (estoqueByName) {
-          produtoId = estoqueByName.id;
-        }
+        const estoqueByName = estoqueItens.find(
+          e => e.tipo === 'acabado' && e.nome.toLowerCase() === itemLocal.produto_nome.toLowerCase()
+        );
+        if (estoqueByName) produtoId = estoqueByName.id;
       }
 
-      // Devolver ao estoque antes de remover
+      // Devolver ao estoque
       if (produtoId) {
-        const { data: estoqueAtual, error: estoqueError } = await supabase
-          .from('estoque_itens')
-          .select('id, quantidade')
-          .eq('id', produtoId)
-          .maybeSingle();
-
-        if (!estoqueError && estoqueAtual) {
+        const estoqueAtual = estoqueItens.find(e => e.id === produtoId);
+        if (estoqueAtual) {
           await updateEstoqueItem(estoqueAtual.id, {
-            quantidade: estoqueAtual.quantidade + itemDB.quantidade
+            quantidade: estoqueAtual.quantidade + itemLocal.quantidade
           });
         }
       }
@@ -200,8 +211,9 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
       await removeItemMutation.mutateAsync({
         id: itemId,
         pedidoId: pedido.id,
+        precomputedTotals,
       });
-      toast.success(`Item removido! ${itemDB.quantidade} peças retornaram ao estoque.`);
+      toast.success(`Item removido! ${itemLocal.quantidade} peças retornaram ao estoque.`);
     } catch (error) {
       console.error('Error removing item:', error);
       toast.error('Erro ao remover item');
@@ -214,24 +226,18 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
     if (!pedido) return;
 
     try {
-      // Buscar quantidade atual diretamente do banco
-      const { data: estoqueAtual, error: estoqueError } = await supabase
-        .from('estoque_itens')
-        .select('id, quantidade, tipo')
-        .eq('id', produto.id)
-        .eq('tipo', 'acabado')
-        .maybeSingle();
-
-      if (estoqueError) {
-        console.error('Erro ao buscar estoque:', estoqueError);
-        toast.error('Erro ao verificar estoque');
-        return;
-      }
+      // Usar dados do contexto de estoque ao invés de buscar do DB
+      const estoqueAtual = estoqueItens.find(e => e.id === produto.id && e.tipo === 'acabado');
 
       if (!estoqueAtual || estoqueAtual.quantidade < 1) {
         toast.error('Estoque insuficiente para este produto!');
         return;
       }
+
+      const precomputedTotals = {
+        total_pecas: pedido.total_pecas + 1,
+        valor_total: pedido.valor_total + (produto.preco_unitario || 0),
+      };
 
       // Deduzir 1 unidade do estoque
       await updateEstoqueItem(estoqueAtual.id, {
@@ -245,6 +251,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         produto_nome: produto.nome,
         quantidade: 1,
         valor_unitario: produto.preco_unitario || 0,
+        precomputedTotals,
       });
       toast.success('Item adicionado! 1 peça deduzida do estoque.');
     } catch (error) {
@@ -374,6 +381,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                       if (produto && produto.nome) nomeModelo = produto.nome;
                       if (nomeModelo.includes(' | REF: ')) nomeModelo = nomeModelo.split(' | REF: ')[0];
                       nomeModelo = nomeModelo.replace(` — ${refStr}`, '').trim();
+                      nomeModelo = nomeModelo.replace(/-(PEÇAS)/gi, '').trim();
                       return { refBase, tamanho, nomeModelo, refStr };
                     }
                   }
@@ -458,6 +466,11 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                             const produto = estoqueItens.find(p => p.id === produtoId);
                             if (produto && produto.nome) displayName = produto.nome;
                           }
+
+                          // Remove unwanted suffixes for display
+                          displayName = displayName
+                            .replace(/ — Tamanho (PEÇAS)/gi, '')
+                            .replace(/-(PEÇAS)/gi, '');
 
                           const enhancedItem = { ...item, produto_nome: displayName };
 

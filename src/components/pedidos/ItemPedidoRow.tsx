@@ -229,17 +229,19 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                             if (refStr && nomeStr.includes(` — ${refStr}`)) {
                               const tamanho = refStr.split('-').pop();
                               if (tamanho) {
-                                nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
+                                nomeStr = nomeStr.replace(` — ${refStr}`, ` - ${tamanho}`);
                               }
                             }
                             return nomeStr;
                           })()}
                         </span>
                         <span className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                          {produto.referencia ? `${produto.referencia} · ` : ''}
-                          {produto.quantidadeDisponivel === 0
-                            ? 'Esgotado'
-                            : `${produto.quantidadeDisponivel} em estoque`}
+                          {(() => {
+                            const refParts = produto.referencia ? produto.referencia.split('-') : [];
+                            const refMid = refParts.length >= 3 ? refParts.slice(1, -1).join('-') : '';
+                            const refDisplay = refMid ? `ref ${refMid} · ` : '';
+                            return refDisplay + (produto.quantidadeDisponivel === 0 ? 'Esgotado' : `${produto.quantidadeDisponivel} em estoque`);
+                          })()}
                         </span>
                       </div>
                     </div>

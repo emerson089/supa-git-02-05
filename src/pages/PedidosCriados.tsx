@@ -481,8 +481,16 @@ export default function PedidosCriados() {
   const getModelosResumo = (pedido: PedidoPaginatedDB) => {
     const itens = pedido.pedido_itens || [];
     if (itens.length === 0) return '-';
-    if (itens.length === 1) return itens[0].produto_nome;
-    return `${itens[0].produto_nome} +${itens.length - 1}`;
+
+    const cleanName = (name: string) => name
+      .replace(/ — Tamanho (PEÇAS)/gi, '')
+      .replace(/-(PEÇAS)/gi, '')
+      .trim();
+
+    const primeiroNome = cleanName(itens[0].produto_nome);
+
+    if (itens.length === 1) return primeiroNome;
+    return `${primeiroNome} +${itens.length - 1}`;
   };
   const clearDateFilters = () => {
     setStartDate(undefined);
@@ -680,6 +688,7 @@ export default function PedidosCriados() {
           if (produto && produto.nome) nomeModelo = produto.nome;
           if (nomeModelo.includes(' | REF: ')) nomeModelo = nomeModelo.split(' | REF: ')[0];
           nomeModelo = nomeModelo.replace(` — ${refStr}`, '').trim();
+          nomeModelo = nomeModelo.replace(/-(PEÇAS)/gi, '').trim();
           return { refBase, tamanho, nomeModelo, refStr };
         }
       }
@@ -772,16 +781,16 @@ export default function PedidosCriados() {
 
         if (refStr && nomeStr.includes(` — ${refStr}`)) {
           const tamanho = refStr.split('-').pop();
-          if (tamanho && tamanho !== 'SORTIDO') {
+          if (tamanho && tamanho !== 'PEÇAS') {
             nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
           } else {
             nomeStr = nomeStr.replace(` — ${refStr}`, '');
           }
         }
 
-        // Final sanitization for SORTIDO and ÚNICO explicitly
-        nomeStr = nomeStr.replace(' — Tamanho SORTIDO', '').replace(' — Tamanho ÚNICO', '');
-        refStr = refStr.replace('-SORTIDO', '').replace('-ÚNICO', '');
+        // Final sanitization for PEÇAS explicitly
+        nomeStr = nomeStr.replace(/ — Tamanho (PEÇAS)/gi, '');
+        refStr = refStr.replace(/-(PEÇAS)/gi, '');
 
         const modeloStr = refStr ? `${nomeStr}\n(Ref: ${refStr})` : nomeStr;
 
@@ -1504,6 +1513,7 @@ export default function PedidosCriados() {
                     if (produto && produto.nome) nomeModelo = produto.nome;
                     if (nomeModelo.includes(' | REF: ')) nomeModelo = nomeModelo.split(' | REF: ')[0];
                     nomeModelo = nomeModelo.replace(` — ${refStr}`, '').trim();
+                    nomeModelo = nomeModelo.replace(/-(PEÇAS)/gi, '').trim();
 
                     return { refBase, tamanho, nomeModelo };
                   }
@@ -1647,16 +1657,17 @@ export default function PedidosCriados() {
                         }
                         if (refStr && nomeStr.includes(` — ${refStr}`)) {
                           const tamanho = refStr.split('-').pop();
-                          if (tamanho && tamanho !== 'SORTIDO') {
-                              nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
+                          if (tamanho && !/^(PEÇAS)$/i.test(tamanho)) {
+                              nomeStr = nomeStr.replace(` — ${refStr}`, ` — ${tamanho}`);
                           } else {
                               nomeStr = nomeStr.replace(` — ${refStr}`, '');
                           }
                         }
                         
-                        // Final sanitization for SORTIDO and ÚNICO explicitly
-                        nomeStr = nomeStr.replace(' — Tamanho SORTIDO', '').replace(' — Tamanho ÚNICO', '');
-                        refStr = refStr.replace('-SORTIDO', '').replace('-ÚNICO', '');
+                        // Final sanitization
+                        nomeStr = nomeStr.replace(/ — Tamanho (PEÇAS)/gi, '');
+                        nomeStr = nomeStr.replace(/ — (PEÇAS)/gi, '');                     
+                        refStr = refStr.replace(/-(PEÇAS)/gi, '');
                         
                         return (
                           <div key={item.id || index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">

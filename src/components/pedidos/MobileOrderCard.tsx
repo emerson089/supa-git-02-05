@@ -65,8 +65,16 @@ const formatCurrency = (value: number) => {
 const getModelosResumo = (pedido: PedidoPaginatedDB) => {
   const itens = pedido.pedido_itens || [];
   if (itens.length === 0) return '-';
-  if (itens.length === 1) return itens[0].produto_nome;
-  return `${itens[0].produto_nome} +${itens.length - 1}`;
+
+  const cleanName = (name: string) => name
+    .replace(/ — Tamanho (PEÇAS)/gi, '')
+    .replace(/-(PEÇAS)/gi, '')
+    .trim();
+
+  const primeiroNome = cleanName(itens[0].produto_nome);
+
+  if (itens.length === 1) return primeiroNome;
+  return `${primeiroNome} +${itens.length - 1}`;
 };
 
 export function MobileOrderCard({

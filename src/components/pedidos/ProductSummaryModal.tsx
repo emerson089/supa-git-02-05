@@ -91,7 +91,18 @@ export function ProductSummaryModal({
                 }
 
                 // Aggregate by product model
-                const key = item.produto_nome.trim();
+                let key = item.produto_nome.trim();
+                if (key.includes(' | REF: ')) {
+                    key = key.split(' | REF: ')[0];
+                }
+                
+                // Clear suffixes if they slipped into the raw name saved in DB
+                key = key
+                    .replace(/ — Tamanho (PEÇAS)/gi, '')
+                    .replace(/ — (PEÇAS)/gi, '')
+                    .replace(/-(PEÇAS)/gi, '')
+                    .trim();
+
                 const existing = aggMap.get(key);
                 if (existing) {
                     existing.quantidade += item.quantidade;
