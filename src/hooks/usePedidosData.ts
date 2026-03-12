@@ -196,7 +196,7 @@ export function useAddPedido() {
 
       // Handle missing column error (code 42703 is standard for column not found)
       if (pedidoError && (pedidoError as any).code === '42703') {
-        process.env.NODE_ENV === 'development' && console.warn('Coluna "desconto" não encontrada no Banco de Dados. Criando pedido sem desconto.');
+        import.meta.env.DEV && console.warn('Coluna "desconto" não encontrada no Banco de Dados. Criando pedido sem desconto.');
         
         const { itens: _itens, desconto: _desconto, ...dataWithoutDesconto } = pedido;
         const { data: retryData, error: retryError } = await supabase
