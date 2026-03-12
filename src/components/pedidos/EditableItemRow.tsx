@@ -62,9 +62,7 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
     const value = parseInt(e.target.value) || 0;
     if (value >= 0) {
       setQuantidade(value);
-      if (value > 0) {
-        debouncedUpdate('quantidade', value);
-      }
+      debouncedUpdate('quantidade', value);
     }
   };
 

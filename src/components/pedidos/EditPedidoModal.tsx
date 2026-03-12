@@ -172,11 +172,14 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
           // Usar quantidade do contexto ao invés de buscar do DB
           const estoqueAtual = estoqueItens.find(e => e.id === produtoId);
           if (estoqueAtual) {
-            const novaQuantidadeEstoque = estoqueAtual.quantidade + diferenca;
-            if (novaQuantidadeEstoque >= 0) {
+            // A disponibilidade real é o que tem no estoque MAIS o que já está reservado neste item do pedido
+            const estoqueDisponivelTotal = estoqueAtual.quantidade + itemLocal.quantidade;
+            
+            if (newQtd <= estoqueDisponivelTotal) {
+              const novaQuantidadeEstoque = estoqueDisponivelTotal - newQtd;
               await updateEstoqueItem(estoqueAtual.id, { quantidade: novaQuantidadeEstoque });
             } else {
-              toast.error(`Estoque insuficiente! Disponível: ${estoqueAtual.quantidade}`);
+              toast.error(`Estoque insuficiente! Disponível no Central: ${estoqueAtual.quantidade}. Máximo permitido considerando este pedido: ${estoqueDisponivelTotal}`);
               setUpdatingItemId(null);
               return;
             }

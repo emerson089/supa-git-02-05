@@ -88,7 +88,7 @@ export function GradeCompactCardEditable({
         <div
             className={cn(
                 'rounded-xl border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/30 dark:bg-indigo-950/10 overflow-hidden transition-opacity',
-                isDisabled && 'opacity-60 pointer-events-none'
+                hasRemovingUpdates && 'opacity-60 pointer-events-none'
             )}
         >
             {/* ── Cabeçalho ── */}
@@ -153,10 +153,11 @@ export function GradeCompactCardEditable({
                                             min={0}
                                             value={localQuantities[item.id] ?? item.quantidade}
                                             onChange={e => handleQtdChange(item.id, e)}
-                                            disabled={isDisabled}
+                                            disabled={hasRemovingUpdates}
                                             className={cn(
                                                 'w-12 h-8 mx-auto text-center text-sm font-bold rounded-lg border',
                                                 'bg-white dark:bg-background',
+                                                localQuantities[item.id] !== item.quantidade && 'border-indigo-400 text-indigo-600',
                                                 'focus-visible:ring-indigo-400 focus-visible:ring-offset-0 focus-visible:border-indigo-400'
                                             )}
                                         />
