@@ -1,16 +1,21 @@
 
 
-## Adicionar opção "ENTREGA TORITAMA" ao status de entrega
+## Correção do Erro de Build
 
-Adicionar a nova opção em todos os locais onde os status de entrega são definidos:
+### Problema
+Na linha 199 de `src/hooks/usePedidosData.ts`, há uma referência a `process.env.NODE_ENV` que não é reconhecida no ambiente Vite/browser sem `@types/node`.
 
-### Arquivos a alterar
+### Solução
+Substituir `process.env.NODE_ENV === 'development'` por `import.meta.env.DEV`, que é a forma correta no Vite:
 
-1. **`src/components/pedidos/StatusSelector.tsx`** — Adicionar `{ value: 'ENTREGA TORITAMA', label: 'ENTREGA TORITAMA', color: 'purple' }` ao array `statusEntregaOptions`.
+```typescript
+// Antes
+process.env.NODE_ENV === 'development' && console.warn('...');
 
-2. **`src/lib/csv-validation-schemas.ts`** — Adicionar `'ENTREGA TORITAMA'` ao array `STATUS_ENTREGA_VALUES`.
+// Depois  
+import.meta.env.DEV && console.warn('...');
+```
 
-3. **`src/components/pedidos/MobileFiltersSheet.tsx`** e **`src/hooks/usePedidosPaginated.ts`** — Verificar se usam os arrays centralizados (provavelmente sim, sem alteração necessária).
-
-A cor `purple` foi escolhida para diferenciar visualmente, similar ao "NO CARRO". Posso ajustar se preferir outra cor.
+### Sobre o GitHub
+O projeto está sincronizado automaticamente. Após corrigir esse erro de build, o push será feito automaticamente para o repositório.
 
