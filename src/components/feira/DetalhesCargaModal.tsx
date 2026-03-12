@@ -224,7 +224,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm line-clamp-2">
-                              {group.refBase ? `${group.nomeBase} - ${group.refBase}` : group.nomeBase}
+                              {group.nomeExibicao}
                             </p>
                             {group.tamanhos.length > 0 && (
                               <p className="text-[10px] text-muted-foreground truncate">
@@ -232,7 +232,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
                               </p>
                             )}
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              {formatCurrency(group.precoUnitario)} • Total: <span className="text-emerald-600 font-semibold">{formatCurrency(group.subtotal)}</span>
+                              {formatCurrency(group.valorUnitario)} • Total: <span className="text-emerald-600 font-semibold">{formatCurrency(group.subtotal)}</span>
                             </p>
                           </div>
                           <div className="flex gap-3 text-center text-xs shrink-0">
@@ -295,7 +295,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
                                     )}
                                 </TableCell>
                                 <TableCell className="text-right text-muted-foreground text-sm">
-                                  {formatCurrency(group.precoUnitario)}
+                                  {formatCurrency(group.valorUnitario)}
                                 </TableCell>
                                 <TableCell className="text-center font-medium text-blue-600 dark:text-blue-400">
                                   {group.enviado}
