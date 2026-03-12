@@ -624,6 +624,7 @@ export type Database = {
           cliente_id: string | null
           cliente_nome: string
           created_at: string
+          desconto: number | null
           estado: string | null
           estorno_realizado: boolean | null
           excursao: string | null
@@ -642,13 +643,13 @@ export type Database = {
           updated_at: string
           user_id: string
           valor_total: number | null
-          desconto: number | null
         }
         Insert: {
           cidade?: string | null
           cliente_id?: string | null
           cliente_nome: string
           created_at?: string
+          desconto?: number | null
           estado?: string | null
           estorno_realizado?: boolean | null
           excursao?: string | null
@@ -667,13 +668,13 @@ export type Database = {
           updated_at?: string
           user_id: string
           valor_total?: number | null
-          desconto?: number | null
         }
         Update: {
           cidade?: string | null
           cliente_id?: string | null
           cliente_nome?: string
           created_at?: string
+          desconto?: number | null
           estado?: string | null
           estorno_realizado?: boolean | null
           excursao?: string | null
@@ -692,7 +693,6 @@ export type Database = {
           updated_at?: string
           user_id?: string
           valor_total?: number | null
-          desconto?: number | null
         }
         Relationships: [
           {
