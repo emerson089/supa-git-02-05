@@ -25,6 +25,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hooks/useFeiraHistorico';
 import { LotImage } from '@/components/production/LotImage';
+import { groupItensByModel, parseProductName } from '@/utils/productNameUtils';
 
 interface DetalhesCargaModalProps {
   carga: TransferenciaComItensHistorico | null;
@@ -178,143 +179,148 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
               </Card>
             </div>
 
-            {/* Lista de Itens - Mobile */}
-            <div className="md:hidden space-y-2">
-              {carga.itens.map((item) => {
-                const enviado = Number(item.quantidadeEnviada) || 0;
-                const retornado = Number(item.quantidadeRetornada) || 0;
+            {(() => {
+              const groupedItens = groupItensByModel(carga.itens, {
+                getItemId: (i) => i.itemId || i.id || "",
+                getItemNome: (i) => i.produtoNome || "",
+                getItemPreco: (i) => Number(i.precoUnitario) || Number(i.produtoPreco) || 0,
+                getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
+                getItemImagem: (i) => i.produtoImagem
+              }).map(g => {
+                const retornado = g.itens.reduce((sum: number, item: any) => sum + (Number(item.quantidadeRetornada) || 0), 0);
+                const enviado = g.quantidadeTotal;
                 const vendido = Math.max(0, enviado - retornado);
-                const preco = Number(item.precoUnitario) || Number(item.produtoPreco) || 0;
-                const valorItem = vendido * preco;
-                const temProblema = retornado > enviado;
+                return {
+                  ...g,
+                  enviado,
+                  retornado,
+                  vendido,
+                  subtotal: vendido * g.valorUnitario
+                };
+              });
 
-                return (
-                  <div 
-                    key={item.id} 
-                    className={`flex items-center gap-3 p-3 rounded-lg border ${
-                      temProblema 
-                        ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800' 
-                        : 'bg-muted/30'
-                    }`}
-                  >
-                    {/* Imagem */}
-                    <div className="w-14 h-14 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                      <LotImage 
-                        src={item.produtoImagem} 
-                        alt={item.produtoNome || 'Produto'} 
-                        className="w-full h-full object-cover"
-                        eager={true}
-                      />
-                    </div>
-                    
-                    {/* Info principal */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm line-clamp-2">
-                        {item.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatCurrency(preco)} • Total: <span className="text-emerald-600 font-semibold">{formatCurrency(valorItem)}</span>
-                      </p>
-                    </div>
-                    
-                    {/* Métricas em coluna */}
-                    <div className="flex gap-3 text-center text-xs shrink-0">
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">Env</p>
-                        <p className="font-bold text-blue-600">{enviado}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">Ret</p>
-                        <p className="font-bold text-amber-600">{retornado}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">Vend</p>
-                        <p className="font-bold text-emerald-600">{vendido}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Tabela de Itens - Desktop */}
-            <div className="hidden md:block border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-12"></TableHead>
-                      <TableHead>Produto</TableHead>
-                      <TableHead className="text-right w-20">Preço</TableHead>
-                      <TableHead className="text-center w-16">Env.</TableHead>
-                      <TableHead className="text-center w-16">Ret.</TableHead>
-                      <TableHead className="text-center w-20">Vendido</TableHead>
-                      <TableHead className="text-right w-24">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {carga.itens.map((item) => {
-                      const enviado = Number(item.quantidadeEnviada) || 0;
-                      const retornado = Number(item.quantidadeRetornada) || 0;
-                      const vendido = Math.max(0, enviado - retornado);
-                      const preco = Number(item.precoUnitario) || Number(item.produtoPreco) || 0;
-                      const valorItem = vendido * preco;
-                      const temProblema = retornado > enviado;
-
+              return (
+                <>
+                  {/* Lista de Itens - Mobile */}
+                  <div className="md:hidden space-y-2">
+                    {groupedItens.map((group, idx) => {
+                      const temProblema = group.retornado > group.enviado;
                       return (
-                        <TableRow key={item.id} className={temProblema ? 'bg-red-50 dark:bg-red-950/20' : ''}>
-                          {/* Foto */}
-                          <TableCell className="p-2">
-                            <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                              <LotImage 
-                                src={item.produtoImagem} 
-                                alt={item.produtoNome || 'Produto'} 
-                                className="w-full h-full object-cover"
-                                eager={true}
-                              />
+                        <div 
+                          key={idx} 
+                          className={`flex items-center gap-3 p-3 rounded-lg border ${
+                            temProblema 
+                              ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800' 
+                              : 'bg-muted/30'
+                          }`}
+                        >
+                          <div className="w-14 h-14 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                            <LotImage 
+                              src={group.produtoImagem} 
+                              alt={group.nomeBase} 
+                              className="w-full h-full object-cover"
+                              eager={true}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm line-clamp-2">
+                              {group.refBase ? `${group.nomeBase} - ${group.refBase}` : group.nomeBase}
+                            </p>
+                            {group.tamanhos.length > 0 && (
+                              <p className="text-[10px] text-muted-foreground truncate">
+                                Tam: {group.tamanhos.join(', ')}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {formatCurrency(group.precoUnitario)} • Total: <span className="text-emerald-600 font-semibold">{formatCurrency(group.subtotal)}</span>
+                            </p>
+                          </div>
+                          <div className="flex gap-3 text-center text-xs shrink-0">
+                            <div>
+                              <p className="text-[10px] text-muted-foreground">Env</p>
+                              <p className="font-bold text-blue-600">{group.enviado}</p>
                             </div>
-                          </TableCell>
-                          
-                          {/* Produto */}
-                          <TableCell className="font-medium">
-                            <span className="line-clamp-2">
-                              {item.produtoNome || `Item #${item.itemId.slice(0, 8)}`}
-                            </span>
-                          </TableCell>
-                          
-                          {/* Preço Unitário */}
-                          <TableCell className="text-right text-muted-foreground text-sm">
-                            {formatCurrency(preco)}
-                          </TableCell>
-                          
-                          {/* Enviado */}
-                          <TableCell className="text-center font-medium text-blue-600 dark:text-blue-400">
-                            {enviado}
-                          </TableCell>
-                          
-                          {/* Retornado */}
-                          <TableCell className="text-center font-medium text-amber-600 dark:text-amber-400">
-                            {retornado}
-                          </TableCell>
-                          
-                          {/* Vendido */}
-                          <TableCell className="text-center">
-                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
-                              {vendido}
-                            </Badge>
-                          </TableCell>
-                          
-                          {/* Total Vendido */}
-                          <TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                            {formatCurrency(valorItem)}
-                          </TableCell>
-                        </TableRow>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground">Ret</p>
+                              <p className="font-bold text-amber-600">{group.retornado}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground">Vend</p>
+                              <p className="font-bold text-emerald-600">{group.vendido}</p>
+                            </div>
+                          </div>
+                        </div>
                       );
                     })}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
+                  </div>
+
+                  {/* Tabela de Itens - Desktop */}
+                  <div className="hidden md:block border rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="w-12"></TableHead>
+                            <TableHead>Produto</TableHead>
+                            <TableHead className="text-right w-20">Preço</TableHead>
+                            <TableHead className="text-center w-16">Env.</TableHead>
+                            <TableHead className="text-center w-16">Ret.</TableHead>
+                            <TableHead className="text-center w-20">Vendido</TableHead>
+                            <TableHead className="text-right w-24">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {groupedItens.map((group, idx) => {
+                            const temProblema = group.retornado > group.enviado;
+                            return (
+                              <TableRow key={idx} className={temProblema ? 'bg-red-50 dark:bg-red-950/20' : ''}>
+                                <TableCell className="p-2">
+                                  <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                                    <LotImage 
+                                      src={group.produtoImagem} 
+                                      alt={group.nomeBase} 
+                                      className="w-full h-full object-cover"
+                                      eager={true}
+                                    />
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                    <p className="font-medium text-foreground">
+                                      {group.nomeExibicao}
+                                    </p>
+                                    {group.tamanhos.length > 0 && (
+                                      <p className="text-[10px] text-muted-foreground">
+                                        Tam: {group.tamanhos.join(', ')}
+                                      </p>
+                                    )}
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground text-sm">
+                                  {formatCurrency(group.precoUnitario)}
+                                </TableCell>
+                                <TableCell className="text-center font-medium text-blue-600 dark:text-blue-400">
+                                  {group.enviado}
+                                </TableCell>
+                                <TableCell className="text-center font-medium text-amber-600 dark:text-amber-400">
+                                  {group.retornado}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
+                                    {group.vendido}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                  {formatCurrency(group.subtotal)}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
 
             {/* Alerta de Divergência */}
             {temDivergencia && (

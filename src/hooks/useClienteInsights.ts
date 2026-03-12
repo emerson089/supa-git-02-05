@@ -5,6 +5,7 @@ export interface ClienteInsights {
   totalPedidos: number;
   valorAcumulado: number;
   totalPecas: number;
+  totalDescontos: number;
   pedidosCancelados: number;
 }
 
@@ -14,10 +15,25 @@ export function useClienteInsights(clienteId: string | null) {
     queryFn: async (): Promise<ClienteInsights | null> => {
       if (!clienteId) return null;
 
-      const { data, error } = await supabase
+      // Try query with desconto first
+      let data: any[] | null = null;
+      let { data: initialData, error } = await supabase
         .from('pedidos')
-        .select('valor_total, total_pecas, status_pedido, status_pagamento')
+        .select('valor_total, total_pecas, status_pedido, status_pagamento, desconto')
         .eq('cliente_id', clienteId);
+
+      data = initialData;
+
+      // Handle missing column error (PostgREST code 42703)
+      if (error && (error as any).code === '42703') {
+        const retry = await supabase
+          .from('pedidos')
+          .select('valor_total, total_pecas, status_pedido, status_pagamento')
+          .eq('cliente_id', clienteId);
+        
+        data = retry.data;
+        error = retry.error;
+      }
 
       if (error) throw error;
 
@@ -33,6 +49,7 @@ export function useClienteInsights(clienteId: string | null) {
         totalPedidos: pedidosPagos.length,
         valorAcumulado: pedidosPagos.reduce((sum, p) => sum + (Number(p.valor_total) || 0), 0),
         totalPecas: pedidosPagos.reduce((sum, p) => sum + (Number(p.total_pecas) || 0), 0),
+        totalDescontos: pedidosPagos.reduce((sum, p) => sum + (Number((p as any).desconto) || 0), 0),
         pedidosCancelados: pedidos.filter(p => 
           p.status_pedido && statusCancelados.includes(p.status_pedido.toUpperCase())
         ).length,

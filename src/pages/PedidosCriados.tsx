@@ -7,6 +7,8 @@ import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePedidos, Pedido } from '@/contexts/PedidosContext';
 import { usePedidoById } from '@/hooks/usePedidosData';
+import { generateCargaPDF } from '@/utils/generateCargaPDF';
+import { groupItensByModel, parseProductName } from '@/utils/productNameUtils';
 import { usePedidosPaginated, PedidoPaginatedDB } from '@/hooks/usePedidosPaginated';
 import { usePedidosTotals } from '@/hooks/usePedidosTotals';
 import { EditPedidoModal } from '@/components/pedidos/EditPedidoModal';
@@ -482,15 +484,19 @@ export default function PedidosCriados() {
     const itens = pedido.pedido_itens || [];
     if (itens.length === 0) return '-';
 
-    const cleanName = (name: string) => name
-      .replace(/ — Tamanho (PEÇAS)/gi, '')
-      .replace(/-(PEÇAS)/gi, '')
-      .trim();
+    // Agrupamento inteligente para exibição no modal e totais usando utilitário centralizado
+    const grouped = groupItensByModel(itens, {
+      getItemId: (i) => i.id || "",
+      getItemNome: (i) => i.produto_nome || "",
+      getItemPreco: (i) => i.valor_unitario ?? 0,
+      getItemQtd: (i) => i.quantidade ?? 0,
+    });
 
-    const primeiroNome = cleanName(itens[0].produto_nome);
+    if (grouped.length === 0) return '-';
 
-    if (itens.length === 1) return primeiroNome;
-    return `${primeiroNome} +${itens.length - 1}`;
+    const primeiroNome = grouped[0].nomeExibicao;
+    if (grouped.length === 1) return primeiroNome;
+    return `${primeiroNome} +${grouped.length - 1}`;
   };
   const clearDateFilters = () => {
     setStartDate(undefined);
@@ -663,146 +669,27 @@ export default function PedidosCriados() {
 
     // Items grouping
     const itens = pedido.pedido_itens || [];
+    const allItemsForPDF = itens.map(item => ({
+      itemId: item.id,
+      produtoNome: item.produto_nome,
+      quantidade: item.quantidade,
+      precoUnitario: item.valor_unitario,
+    }));
 
-    const parseItem = (item: typeof itens[number]) => {
-      const produtoId = item.produto_id || '';
-      const produto = estoqueItens.find(p => p.id === produtoId);
-      let refStr = '';
-      if (produto) {
-        try {
-          if (produto.localizacao) {
-            const loc = JSON.parse(produto.localizacao);
-            if (loc.referencia) refStr = loc.referencia;
-          }
-        } catch (e) { }
-      } else if (item.produto_nome?.includes(' | REF: ')) {
-        refStr = item.produto_nome.split(' | REF: ')[1] || '';
-      }
-
-      if (refStr) {
-        const m = refStr.match(/^(.+)-(P|M|G|GG|G1|G2|G3|XGG|\d{2})$/);
-        if (m) {
-          const refBase = m[1];
-          const tamanho = m[2];
-          let nomeModelo = item.produto_nome || 'Produto';
-          if (produto && produto.nome) nomeModelo = produto.nome;
-          if (nomeModelo.includes(' | REF: ')) nomeModelo = nomeModelo.split(' | REF: ')[0];
-          nomeModelo = nomeModelo.replace(` — ${refStr}`, '').trim();
-          nomeModelo = nomeModelo.replace(/-(PEÇAS)/gi, '').trim();
-          return { refBase, tamanho, nomeModelo, refStr };
-        }
-      }
-      return null;
-    };
-
-    const gradeGroups = new Map<string, { refBase: string; nomeModelo: string; itens: Array<{ item: typeof itens[number]; tamanho: string }> }>();
-    const avulsosItems: typeof itens = [];
-
-    itens.forEach(item => {
-      const parsed = parseItem(item);
-      if (parsed) {
-        const key = `${parsed.refBase}|${item.valor_unitario}`;
-        if (!gradeGroups.has(key)) {
-          gradeGroups.set(key, { refBase: parsed.refBase, nomeModelo: parsed.nomeModelo, itens: [] });
-        }
-        gradeGroups.get(key)!.itens.push({ item, tamanho: parsed.tamanho });
-      } else {
-        avulsosItems.push(item);
-      }
+    const groupedItens = groupItensByModel(allItemsForPDF, {
+      getItemId: (i) => i.itemId || "",
+      getItemNome: (i) => i.produtoNome || "",
+      getItemPreco: (i) => i.precoUnitario ?? 0,
+      getItemQtd: (i) => i.quantidade ?? 0,
     });
 
-    const gradeGroupsFinal: typeof gradeGroups = new Map();
-    gradeGroups.forEach((v, k) => {
-      if (v.itens.length >= 2) gradeGroupsFinal.set(k, v);
-      else avulsosItems.push(v.itens[0].item);
-    });
-
-    const hasGrades = gradeGroupsFinal.size > 0;
-    const hasAvulsos = avulsosItems.length > 0;
-
-    const tableData: any[] = [];
-
-    if (hasGrades) {
-      if (hasGrades && hasAvulsos) {
-        tableData.push([{ content: 'GRADES', colSpan: 5, styles: { fillColor: [240, 240, 240], fontStyle: 'bold', textColor: [100, 100, 100], halign: 'left' } }]);
-      }
-
-      const ORDEM = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', '34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54'];
-
-      gradeGroupsFinal.forEach(grupo => {
-        const totalPecas = grupo.itens.reduce((s, { item }) => s + item.quantidade, 0);
-        const valorUnit = grupo.itens[0].item.valor_unitario;
-        const subtotal = totalPecas * valorUnit;
-
-        const itensSorted = [...grupo.itens].sort((a, b) => ORDEM.indexOf(a.tamanho) - ORDEM.indexOf(b.tamanho));
-
-        // chunk the tamanhosStr to wrap every 4 sizes nicely, jspdf-autotable handles newlines
-        let tamanhosStr = '';
-        itensSorted.forEach((it, idx) => {
-          tamanhosStr += `${it.tamanho}(${it.item.quantidade})`;
-          if (idx < itensSorted.length - 1) {
-            tamanhosStr += ((idx + 1) % 4 === 0) ? '\n' : ' ';
-          }
-        });
-
-        tableData.push([
-          `${grupo.nomeModelo}\n(Ref: ${grupo.refBase})`,
-          tamanhosStr,
-          totalPecas.toString(),
-          formatCurrency(valorUnit),
-          formatCurrency(subtotal)
-        ]);
-      });
-    }
-
-    if (hasAvulsos) {
-      if (hasGrades && hasAvulsos) {
-        tableData.push([{ content: 'AVULSOS', colSpan: 5, styles: { fillColor: [240, 240, 240], fontStyle: 'bold', textColor: [100, 100, 100], halign: 'left' } }]);
-      }
-
-      avulsosItems.forEach(item => {
-        const produtoId = item.produto_id || '';
-        const produto = estoqueItens.find(p => p.id === produtoId);
-        let nomeStr = item.produto_nome || 'Produto';
-        let refStr = '';
-
-        if (produto) {
-          if (produto.nome) nomeStr = produto.nome;
-          try {
-            if (produto.localizacao) {
-              const loc = JSON.parse(produto.localizacao);
-              if (loc.referencia) refStr = loc.referencia;
-            }
-          } catch (e) { }
-        } else if (nomeStr.includes(' | REF: ')) {
-          refStr = nomeStr.split(' | REF: ')[1] || '';
-          nomeStr = nomeStr.split(' | REF: ')[0];
-        }
-
-        if (refStr && nomeStr.includes(` — ${refStr}`)) {
-          const tamanho = refStr.split('-').pop();
-          if (tamanho && tamanho !== 'PEÇAS') {
-            nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
-          } else {
-            nomeStr = nomeStr.replace(` — ${refStr}`, '');
-          }
-        }
-
-        // Final sanitization for PEÇAS explicitly
-        nomeStr = nomeStr.replace(/ — Tamanho (PEÇAS)/gi, '');
-        refStr = refStr.replace(/-(PEÇAS)/gi, '');
-
-        const modeloStr = refStr ? `${nomeStr}\n(Ref: ${refStr})` : nomeStr;
-
-        tableData.push([
-          modeloStr,
-          '-',
-          item.quantidade.toString(),
-          formatCurrency(item.valor_unitario),
-          formatCurrency(item.quantidade * item.valor_unitario)
-        ]);
-      });
-    }
+    const tableData = groupedItens.map(item => [
+      item.nomeExibicao,
+      item.tamanhos.join(', ') || '-',
+      item.quantidadeTotal.toString(),
+      formatCurrency(item.valorUnitario),
+      formatCurrency(item.subtotal)
+    ]);
 
     autoTable(doc, {
       startY: 75,
@@ -831,11 +718,7 @@ export default function PedidosCriados() {
     // @ts-ignore - jspdf-autotable adds this property
     const finalY = doc.lastAutoTable.finalY + 10;
 
-    // Calculate quantity of unique models
-    const modelosUnicos = new Set(
-      itens.filter(item => item.produto_id).map(item => item.produto_id)
-    );
-    const quantidadeModelos = modelosUnicos.size;
+    const quantidadeModelos = groupedItens.length;
     const taxaExcursao = pedido.taxa_excursao || 0;
     const subtotalItens = itens.reduce((acc, item) => acc + (item.quantidade * item.valor_unitario), 0);
 
@@ -850,12 +733,10 @@ export default function PedidosCriados() {
     doc.text(`Total de Peças: ${pedido.total_pecas || 0}`, 20, finalY + 10);
     doc.text(`Quantidade de Modelos: ${quantidadeModelos}`, pageWidth / 2, finalY + 10);
 
-    // Linha 2: Subtotal e Taxa (se houver)
+    // Linha 2: Taxa (se houver) e Valor Total
     if (taxaExcursao > 0) {
-      doc.text(`Subtotal dos Itens: ${formatCurrency(subtotalItens)}`, 20, finalY + 18);
-      doc.text(`Taxa Excursão: + ${formatCurrency(taxaExcursao)}`, pageWidth / 2, finalY + 18);
-
-      // Linha 3: Valor Total e Status
+      doc.text(`Taxa Excursão: + ${formatCurrency(taxaExcursao)}`, 20, finalY + 18);
+      
       doc.setFontSize(12);
       doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 28);
       doc.setFont('helvetica', 'normal');
@@ -1420,343 +1301,182 @@ export default function PedidosCriados() {
           </DialogTitle>
         </DialogHeader>
 
-        {selectedPedido && <div className="space-y-6 mt-4">
-          {/* Cliente Info */}
-          <div className="neu-card p-4 rounded-xl">
-            <h3 className="font-semibold text-foreground mb-3">Informações do Cliente</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Nome</p>
-                <p className="font-medium text-foreground">{selectedPedido.cliente_nome}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <p className="font-medium text-foreground">{selectedPedido.telefone || '-'}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                <p className="font-medium text-foreground">{selectedPedido.cidade}, {selectedPedido.estado}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Bus className="h-4 w-4 text-muted-foreground" />
-                <p className="font-medium text-foreground">{selectedPedido.excursao || '-'}</p>
-              </div>
-            </div>
-          </div>
+        {selectedPedido && (() => {
+          const allItems = selectedPedido.pedido_itens || [];
+          
+          // Agrupamento centralizado para uso no Modal usando utilitário centralizado
+          const groupedItens = groupItensByModel(allItems as any[], {
+            getItemId: (item: any) => {
+              const produtoId = item.produto_id || '';
+              const produto = estoqueItens.find(p => p.id === produtoId);
+              if (produto?.localizacao) {
+                try {
+                  const loc = JSON.parse(produto.localizacao);
+                  if (loc.referencia) return loc.referencia;
+                } catch (e) {}
+              }
+              // Fallback se não tiver no estoque ou localizacao
+              if (item.produto_nome?.includes(' | REF: ')) {
+                return item.produto_nome.split(' | REF: ')[1] || "";
+              }
+              return item.produto_nome || "";
+            },
+            getItemNome: (item: any) => item.produto_nome || "",
+            getItemPreco: (item: any) => item.valor_unitario || 0,
+            getItemQtd: (item: any) => item.quantidade || 0,
+            getItemImagem: (item: any) => {
+              const produto = estoqueItens.find(p => p.id === item.produto_id);
+              return produto?.imagemUrl || null;
+            }
+          });
 
-          {/* Order Info */}
-          <div className="neu-card p-4 rounded-xl">
-            <h3 className="font-semibold text-foreground mb-3">Informações do Pedido</h3>
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Data de Criação</p>
-                <p className="font-medium text-foreground">
-                  {format(new Date(selectedPedido.created_at), "dd/MM/yyyy", {
-                    locale: ptBR
-                  })}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Forma de Pagamento</p>
-                <p className="font-medium text-foreground">{selectedPedido.forma_pagamento || '-'}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Status</p>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  <Badge className={`${statusPagamentoColors[selectedPedido.status_pagamento || ''] || 'bg-muted'} border text-[9px]`}>
-                    {selectedPedido.status_pagamento || 'Pendente'}
-                  </Badge>
-                  <Badge className={`${statusPedidoColors[selectedPedido.status_pedido || ''] || 'bg-muted'} border text-[9px]`}>
-                    {selectedPedido.status_pedido || 'Nao separado'}
-                  </Badge>
-                  <Badge className={`${statusEntregaColors[selectedPedido.status_entrega || ''] || 'bg-muted'} border text-[9px]`}>
-                    {selectedPedido.status_entrega || 'Pend. Entrega'}
-                  </Badge>
+          return (
+            <div className="space-y-6 mt-4">
+              {/* Informações do Cliente */}
+              <div className="neu-card p-4 rounded-xl">
+                <h3 className="font-semibold text-foreground mb-3">Informações do Cliente</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Nome</p>
+                    <p className="font-medium text-foreground">{selectedPedido.cliente_nome}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <p className="font-medium text-foreground">{selectedPedido.telefone || '-'}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <p className="font-medium text-foreground">{selectedPedido.cidade}, {selectedPedido.estado}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Bus className="h-4 w-4 text-muted-foreground" />
+                    <p className="font-medium text-foreground">{selectedPedido.excursao || '-'}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Items */}
-          <div className="neu-card p-4 rounded-xl">
-            <h3 className="font-semibold text-foreground mb-3">Itens do Pedido</h3>
-            {(() => {
-              const allItems = selectedPedido.pedido_itens || [];
+              {/* Informações do Pedido */}
+              <div className="neu-card p-4 rounded-xl">
+                <h3 className="font-semibold text-foreground mb-3">Informações do Pedido</h3>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Data de Criação</p>
+                    <p className="font-medium text-foreground">
+                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy", {
+                        locale: ptBR
+                      })}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Forma de Pagamento</p>
+                    <p className="font-medium text-foreground">{selectedPedido.forma_pagamento || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Status</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      <Badge className={`${statusPagamentoColors[selectedPedido.status_pagamento || ''] || 'bg-muted'} border text-[9px]`}>
+                        {selectedPedido.status_pagamento || 'Pendente'}
+                      </Badge>
+                      <Badge className={`${statusPedidoColors[selectedPedido.status_pedido || ''] || 'bg-muted'} border text-[9px]`}>
+                        {selectedPedido.status_pedido || 'Nao separado'}
+                      </Badge>
+                      <Badge className={`${statusEntregaColors[selectedPedido.status_entrega || ''] || 'bg-muted'} border text-[9px]`}>
+                        {selectedPedido.status_entrega || 'Pend. Entrega'}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-              // Helper: extract base ref from produto_nome and estoque information
-              // Returns { refBase: 'SH2603-0004', tamanho: '40', nomeModelo: 'Nome' } or null if avulso
-              const parseItem = (item: typeof allItems[number]) => {
-                const produtoId = item.produto_id || '';
-                const produto = estoqueItens.find(p => p.id === produtoId);
-
-                let refStr = '';
-                if (produto) {
-                  try {
-                    if (produto.localizacao) {
-                      const loc = JSON.parse(produto.localizacao);
-                      if (loc.referencia) refStr = loc.referencia;
-                    }
-                  } catch (e) { }
-                } else if (item.produto_nome?.includes(' | REF: ')) {
-                  refStr = item.produto_nome.split(' | REF: ')[1] || '';
-                }
-
-                if (refStr) {
-                  // Assume pattern BASE-TAMANHO, e.g. SH2603-0004-40
-                  // Matches word characters/hyphens for base, then specific sizes
-                  const m = refStr.match(/^(.+)-(P|M|G|GG|G1|G2|G3|XGG|\d{2})$/);
-                  if (m) {
-                    const refBase = m[1];
-                    const tamanho = m[2];
-
-                    let nomeModelo = item.produto_nome || 'Produto';
-                    if (produto && produto.nome) nomeModelo = produto.nome;
-                    if (nomeModelo.includes(' | REF: ')) nomeModelo = nomeModelo.split(' | REF: ')[0];
-                    nomeModelo = nomeModelo.replace(` — ${refStr}`, '').trim();
-                    nomeModelo = nomeModelo.replace(/-(PEÇAS)/gi, '').trim();
-
-                    return { refBase, tamanho, nomeModelo };
-                  }
-                }
-                return null;
-              };
-
-              // Group items: key = refBase + '|' + valorUnitario
-              const gradeGroups = new Map<string, { refBase: string; nomeModelo: string; itens: Array<{ item: typeof allItems[number]; tamanho: string }> }>();
-              const avulsosItems: typeof allItems = [];
-
-              allItems.forEach(item => {
-                const parsed = parseItem(item);
-                if (parsed) {
-                  const key = `${parsed.refBase}|${item.valor_unitario}`;
-                  if (!gradeGroups.has(key)) {
-                    gradeGroups.set(key, { refBase: parsed.refBase, nomeModelo: parsed.nomeModelo, itens: [] });
-                  }
-                  gradeGroups.get(key)!.itens.push({ item, tamanho: parsed.tamanho });
-                } else {
-                  avulsosItems.push(item);
-                }
-              });
-
-              // Only treat as grade if group has 2+ items (a single item with a size ref could be avulso)
-              const gradeGroupsFinal: typeof gradeGroups = new Map();
-              gradeGroups.forEach((v, k) => {
-                if (v.itens.length >= 2) gradeGroupsFinal.set(k, v);
-                else avulsosItems.push(v.itens[0].item);
-              });
-
-              const hasGrades = gradeGroupsFinal.size > 0;
-              const hasAvulsos = avulsosItems.length > 0;
-
-              return (
-                <div className="space-y-4">
-                  {/* ── Grades ── */}
-                  {hasGrades && (
-                    <div className="space-y-3">
-                      {hasAvulsos && (
-                        <p className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="inline-block w-2 h-2 rounded-full bg-indigo-500" />
-                          Grades
+              {/* Itens do Pedido */}
+              <div className="neu-card p-4 rounded-xl">
+                <h3 className="font-semibold text-foreground mb-3">Itens do Pedido</h3>
+                {groupedItens.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhum item</p>
+                ) : (
+                  <div className="space-y-0">
+                    {groupedItens.map((group, index) => (
+                      <div key={index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {group.nomeExibicao}
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            {group.tamanhos.length > 0 && `Tamanhos: ${group.tamanhos.join(', ')} · `}{group.quantidadeTotal} x {formatCurrency(group.valorUnitario)}
+                          </p>
+                        </div>
+                        <p className="font-bold text-emerald-600">
+                          {formatCurrency(group.subtotal)}
                         </p>
-                      )}
-                      {Array.from(gradeGroupsFinal.entries()).map(([key, grupo]) => {
-                        const totalPecas = grupo.itens.reduce((s, { item }) => s + item.quantidade, 0);
-                        const valorUnit = grupo.itens[0].item.valor_unitario;
-                        const subtotal = totalPecas * valorUnit;
-
-                        // Sort sizes canonically
-                        const ORDEM = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', '34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54'];
-                        const itensSorted = [...grupo.itens].sort(
-                          (a, b) => ORDEM.indexOf(a.tamanho) - ORDEM.indexOf(b.tamanho)
-                        );
-
-                        return (
-                          <div key={key} className="rounded-xl border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/30 dark:bg-indigo-950/10 overflow-hidden">
-                            {/* Header */}
-                            <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-100/60 dark:bg-indigo-950/30 border-b border-indigo-200 dark:border-indigo-900/30">
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300 truncate">
-                                  {grupo.nomeModelo}
-                                </p>
-                                <p className="text-[11px] text-indigo-500/80 font-mono">{grupo.refBase}</p>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-[10px] font-semibold bg-indigo-600 text-white px-1.5 py-0.5 rounded-md">
-                                  GRADE
-                                </span>
-                                <span className="text-[11px] font-bold text-emerald-600">
-                                  R$ {subtotal.toFixed(2)}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Tabela de tamanhos */}
-                            <div className="px-4 py-3">
-                              <div className="overflow-x-auto">
-                                <table className="text-center text-xs">
-                                  <thead>
-                                    <tr>
-                                      {itensSorted.map(({ tamanho }) => (
-                                        <td key={tamanho} className="pb-1 px-2">
-                                          <span className="font-mono font-bold text-muted-foreground text-[11px]">{tamanho}</span>
-                                        </td>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    <tr>
-                                      {itensSorted.map(({ item, tamanho }) => (
-                                        <td key={tamanho} className="px-2">
-                                          <span className="text-sm font-bold text-foreground">{item.quantidade}×</span>
-                                        </td>
-                                      ))}
-                                    </tr>
-                                  </tbody>
-                                </table>
-                              </div>
-                              <p className="text-[11px] text-muted-foreground mt-2">
-                                {totalPecas} peças · R$ {valorUnit.toFixed(2)} un.
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Separador */}
-                  {hasGrades && hasAvulsos && (
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-px bg-border/50" />
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avulso</span>
-                      <div className="flex-1 h-px bg-border/50" />
-                    </div>
-                  )}
-
-                  {/* ── Avulsos ── */}
-                  {hasAvulsos && (
-                    <div className="space-y-0">
-                      {avulsosItems.map((item, index) => {
-                        const produtoId = item.produto_id || '';
-                        const produto = estoqueItens.find(p => p.id === produtoId);
-                        let nomeStr = item.produto_nome || 'Produto';
-                        let refStr = '';
-                        if (produto) {
-                          if (produto.nome) nomeStr = produto.nome;
-                          try {
-                            if (produto.localizacao) {
-                              const loc = JSON.parse(produto.localizacao);
-                              if (loc.referencia) refStr = loc.referencia;
-                            }
-                          } catch (e) { }
-                        }
-                        if (nomeStr.includes(' | REF: ')) {
-                          const parts = nomeStr.split(' | REF: ');
-                          nomeStr = parts[0];
-                          if (!refStr && parts.length > 1) refStr = parts[1];
-                        }
-                        if (refStr && nomeStr.includes(` — ${refStr}`)) {
-                          const tamanho = refStr.split('-').pop();
-                          if (tamanho && !/^(PEÇAS)$/i.test(tamanho)) {
-                              nomeStr = nomeStr.replace(` — ${refStr}`, ` — ${tamanho}`);
-                          } else {
-                              nomeStr = nomeStr.replace(` — ${refStr}`, '');
-                          }
-                        }
-                        
-                        // Final sanitization
-                        nomeStr = nomeStr.replace(/ — Tamanho (PEÇAS)/gi, '');
-                        nomeStr = nomeStr.replace(/ — (PEÇAS)/gi, '');                     
-                        refStr = refStr.replace(/-(PEÇAS)/gi, '');
-                        
-                        return (
-                          <div key={item.id || index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                            <div>
-                              <p className="font-medium text-foreground">{nomeStr}</p>
-                              <p className="text-sm text-muted-foreground mt-0.5">
-                                {refStr && `Ref: ${refStr} · `}{item.quantidade} x {formatCurrency(item.valor_unitario)}
-                              </p>
-                            </div>
-                            <p className="font-bold text-emerald-600">
-                              {formatCurrency(item.quantidade * item.valor_unitario)}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {allItems.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">Nenhum item</p>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* Totals */}
-          <div className="neu-card p-4 rounded-xl">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Total de Peças */}
-              <div className="flex flex-col gap-1">
-                <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-                  Total de Peças
-                </p>
-                <p className="text-2xl font-semibold leading-tight text-primary">
-                  {selectedPedido.total_pecas || 0} <span className="text-sm font-normal text-muted-foreground">peças</span>
-                </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Quantidade de Modelos */}
-              <div className="flex flex-col gap-1">
-                <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-                  Qtd de Modelos
-                </p>
-                <p className="text-2xl font-semibold leading-tight text-violet-600">
-                  {(() => {
-                    const modelosUnicos = new Set(
-                      (selectedPedido.pedido_itens || [])
-                        .filter(item => item.produto_id)
-                        .map(item => item.produto_id)
-                    );
-                    return modelosUnicos.size;
-                  })()} <span className="text-sm font-normal text-muted-foreground">
-                    {(() => {
-                      const modelosUnicos = new Set(
-                        (selectedPedido.pedido_itens || [])
-                          .filter(item => item.produto_id)
-                          .map(item => item.produto_id)
-                      );
-                      return modelosUnicos.size === 1 ? 'modelo' : 'modelos';
-                    })()}
-                  </span>
-                </p>
-              </div>
+              {/* Totais */}
+              <div className="neu-card p-4 rounded-xl">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                  {/* Total de Peças */}
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                      Total de Peças
+                    </p>
+                    <p className="text-2xl font-semibold leading-tight text-primary">
+                      {selectedPedido.total_pecas || 0} <span className="text-sm font-normal text-muted-foreground">peças</span>
+                    </p>
+                  </div>
 
-              {/* Taxa Excursão (condicional) */}
-              {(selectedPedido.taxa_excursao || 0) > 0 && (
-                <div className="flex flex-col gap-1">
-                  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-                    Taxa Excursão
-                  </p>
-                  <p className="text-2xl font-semibold leading-tight text-amber-600">
-                    + {formatCurrency(selectedPedido.taxa_excursao || 0)}
-                  </p>
+                  {/* Quantidade de Modelos - CORRIGIDO USANDO groupedItens */}
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                      Qtd de Modelos
+                    </p>
+                    <p className="text-2xl font-semibold leading-tight text-violet-600">
+                      {groupedItens.length} <span className="text-sm font-normal text-muted-foreground">
+                        {groupedItens.length === 1 ? 'modelo' : 'modelos'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Taxa Excursão (condicional) */}
+                  {(selectedPedido.taxa_excursao || 0) > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                        Taxa Excursão
+                      </p>
+                      <p className="text-2xl font-semibold leading-tight text-amber-600">
+                        + {formatCurrency(selectedPedido.taxa_excursao || 0)}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Desconto (Interno) */}
+                  {(selectedPedido.desconto || 0) > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                        Desconto (Interno)
+                      </p>
+                      <p className="text-2xl font-semibold leading-tight text-rose-600">
+                        - {formatCurrency(selectedPedido.desconto || 0)}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Valor Total */}
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                      Valor Total
+                    </p>
+                    <p className="text-2xl font-semibold leading-tight text-emerald-600">
+                      {formatCurrency(selectedPedido.valor_total || 0)}
+                    </p>
+                  </div>
                 </div>
-              )}
-
-              {/* Valor Total */}
-              <div className="flex flex-col gap-1">
-                <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-                  Valor Total
-                </p>
-                <p className="text-2xl font-semibold leading-tight text-emerald-600">
-                  {formatCurrency(selectedPedido.valor_total || 0)}
-                </p>
               </div>
             </div>
-          </div>
-        </div>}
+          );
+        })()}
       </DialogContent>
     </Dialog>
 

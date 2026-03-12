@@ -90,17 +90,12 @@ export function ProductSummaryModal({
                     alfaiatariaValor += itemValorTotal;
                 }
 
-                // Aggregate by product model
+                // Aggregate by product model (using full name as saved in DB to avoid base-model grouping)
                 let key = item.produto_nome.trim();
-                if (key.includes(' | REF: ')) {
-                    key = key.split(' | REF: ')[0];
-                }
                 
-                // Clear suffixes if they slipped into the raw name saved in DB
+                // Clear "Tamanho" label if it exists in DB
                 key = key
-                    .replace(/ — Tamanho (PEÇAS)/gi, '')
-                    .replace(/ — (PEÇAS)/gi, '')
-                    .replace(/-(PEÇAS)/gi, '')
+                    .replace(/\s*—\s*Tamanho\s+/gi, ' — ')
                     .trim();
 
                 const existing = aggMap.get(key);

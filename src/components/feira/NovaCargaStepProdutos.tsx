@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Truck, X, Search, Package, Loader2, Plus, Check, Minus } from 'lucide-react';
+import { Truck, X, Search, Package, Package2, Loader2, Plus, Check, Minus } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { parseProductName } from '@/utils/productNameUtils';
 
 interface Produto {
   id: string;
@@ -35,6 +36,7 @@ interface NovaCargaStepProdutosProps {
   formatCurrency: (value: number) => string;
   titulo?: string;
   onTituloChange?: (value: string) => void;
+  onOpenGrade?: () => void;
 }
 
 export function NovaCargaStepProdutos({
@@ -49,6 +51,7 @@ export function NovaCargaStepProdutos({
   formatCurrency,
   titulo,
   onTituloChange,
+  onOpenGrade,
 }: NovaCargaStepProdutosProps) {
   const [produtoSelecionado, setProdutoSelecionado] = useState<string | null>(null);
   const [quantidadeSelecionada, setQuantidadeSelecionada] = useState(1);
@@ -105,6 +108,22 @@ export function NovaCargaStepProdutos({
           Fechar
         </Button>
       </div>
+
+      {/* Ação de Grade para Mobile */}
+      {onOpenGrade && (
+        <div className="px-4 py-2 border-b bg-primary/5 flex items-center justify-between">
+          <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Opções rápidas</span>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onOpenGrade}
+            className="h-8 rounded-lg border-primary/20 bg-background text-primary font-bold text-xs"
+          >
+            <Package2 size={14} className="mr-1.5" />
+            Por Grade
+          </Button>
+        </div>
+      )}
 
       {/* Campo de título da carga */}
       {onTituloChange && (
@@ -195,8 +214,8 @@ export function NovaCargaStepProdutos({
                   
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium line-clamp-2 leading-tight">
-                      {produto.nome}
+                    <p className="text-sm font-medium line-clamp-1 leading-tight">
+                      {parseProductName(produto.nome, produto.id).nomeExibicao}
                     </p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <span className={cn(

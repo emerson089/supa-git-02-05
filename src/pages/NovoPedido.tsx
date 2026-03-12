@@ -25,6 +25,7 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@
 import { ClienteSchema, PedidoItemSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { ChevronsUpDown, Check } from 'lucide-react';
+import { parseProductName } from '@/utils/productNameUtils';
 
 function formatPhone(phone: string): string {
   if (!phone) return '';
@@ -64,6 +65,7 @@ const NovoPedido = () => {
   const [excursao, setExcursao] = useState('');
   const [excursaoId, setExcursaoId] = useState<string | null>(null);
   const [taxaExcursao, setTaxaExcursao] = useState(0);
+  const [desconto, setDesconto] = useState(0);
 
   // Status - valores fixos, não editáveis na UI
   const statusPagamento = 'PENDENTE';
@@ -90,6 +92,7 @@ const NovoPedido = () => {
         if (data.excursao) setExcursao(data.excursao);
         if (data.excursaoId) setExcursaoId(data.excursaoId);
         if (data.taxaExcursao) setTaxaExcursao(data.taxaExcursao);
+        if (data.desconto) setDesconto(data.desconto);
         if (data.items && Array.isArray(data.items)) setItems(data.items);
       } catch (e) {
         // Ignorar erro de parse
@@ -109,6 +112,7 @@ const NovoPedido = () => {
       excursao,
       excursaoId,
       taxaExcursao,
+      desconto,
       items
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -134,28 +138,46 @@ const NovoPedido = () => {
   // Calculate totals
   const valorItens = items.reduce((sum, item) => sum + item.quantidade * item.valorUnitario, 0);
   const totalPecas = items.reduce((sum, item) => sum + item.quantidade, 0);
-  const valorTotal = valorItens + taxaExcursao;
+  const valorTotal = valorItens + taxaExcursao - desconto;
 
   // Verificar se há estoque insuficiente em algum item
   const hasEstoqueInsuficiente = useMemo(() => {
-    const produtosAcabados = getProdutosAcabados();
     return items.some(item => {
       if (!item.produtoId) return false;
-      const produto = produtosAcabados.find(p => p.id === item.produtoId);
+      // Usar getItemById diretamente para garantir que verificamos o item correto
+      // independentemente da categoria (acabado ou variação)
+      const produto = getItemById(item.produtoId);
       if (!produto) return false;
       return item.quantidade > produto.quantidade;
     });
-  }, [items, getProdutosAcabados]);
+  }, [items, getItemById]);
 
   // Calcular quantidade de modelos únicos
+  // Calcular quantidade de modelos únicos baseada no agrupamento inteligente
   const quantidadeModelos = useMemo(() => {
-    const modelosUnicos = new Set(
-      items
-        .filter(item => item.produtoId)
-        .map(item => item.produtoId)
-    );
-    return modelosUnicos.size;
-  }, [items]);
+    const groups = new Set();
+    
+    items.forEach(item => {
+      if (!item.produtoId) return;
+      
+      const produto = getItemById(item.produtoId);
+      let refTecnica = '';
+      if (produto?.localizacao) {
+        try {
+          const loc = JSON.parse(produto.localizacao);
+          refTecnica = loc.referencia || '';
+        } catch (e) {}
+      }
+
+      const info = parseProductName(item.produtoNome || "", refTecnica);
+      
+      // Chave de agrupamento: RefBase + Valor + NomeBase (vinda do parseProductName)
+      const key = `${info.refBase}|${item.valorUnitario}|${info.nomeBase}`;
+      groups.add(key);
+    });
+    
+    return groups.size;
+  }, [items, getItemById]);
 
   // Item handlers
   const handleAddItem = useCallback(() => {
@@ -188,6 +210,7 @@ const NovoPedido = () => {
     setExcursao('');
     setExcursaoId(null);
     setTaxaExcursao(0);
+    setDesconto(0);
     setItems([]);
     clearDraft();
     toast.success('Formulário limpo');
@@ -239,7 +262,8 @@ const NovoPedido = () => {
         const produto = getItemById(item.produtoId);
         if (produto) {
           const novaQuantidade = produto.quantidade - item.quantidade;
-          updateItem(item.produtoId, {
+          // IMPORTANTE: Await garantir que o estoque seja atualizado antes de criar o pedido
+          await updateItem(item.produtoId, {
             quantidade: novaQuantidade
           });
         }
@@ -267,7 +291,8 @@ const NovoPedido = () => {
         observacoes: '',
         itens: itensFormatados,
         totalPecas,
-        valorTotal
+        valorTotal,
+        desconto
       });
       toast.success('Pedido cadastrado com sucesso! Estoque atualizado.');
       clearDraft();
@@ -275,9 +300,10 @@ const NovoPedido = () => {
 
       // Redirecionar para página de pedidos criados
       navigate('/pedidos/criados');
-    } catch (error) {
-      console.error('Erro ao criar pedido:', error);
-      toast.error('Erro ao criar pedido');
+    } catch (error: any) {
+      console.error('Erro detalhado ao criar pedido:', error);
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Erro desconhecido');
+      toast.error(`Erro ao criar pedido: ${errorMsg}`);
     } finally {
       setIsLoading(false);
     }
@@ -379,7 +405,20 @@ const NovoPedido = () => {
           {/* Status padrão: PENDENTE, NÃO SEPARADO, NÃO ENTREGUE - configurável apenas ao editar pedido */}
 
           {/* Resumo Card - agora acima dos itens */}
-          <ResumoCard totalPecas={totalPecas} valorItens={valorItens} taxaExcursao={taxaExcursao} nomeExcursao={excursao} valorTotal={valorTotal} quantidadeModelos={quantidadeModelos} onLimpar={handleLimpar} onCriarPedido={handleCriarPedido} isLoading={isLoading} disabled={hasEstoqueInsuficiente} />
+          <ResumoCard 
+            totalPecas={totalPecas} 
+            valorItens={valorItens} 
+            taxaExcursao={taxaExcursao} 
+            nomeExcursao={excursao} 
+            valorTotal={valorTotal} 
+            desconto={desconto}
+            onDescontoChange={setDesconto}
+            quantidadeModelos={quantidadeModelos} 
+            onLimpar={handleLimpar} 
+            onCriarPedido={handleCriarPedido} 
+            isLoading={isLoading} 
+            disabled={hasEstoqueInsuficiente} 
+          />
 
           {/* Items Card - agora abaixo do resumo */}
           <ItensPedidoCard items={items} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} onAddGradeItems={handleAddGradeItems} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />

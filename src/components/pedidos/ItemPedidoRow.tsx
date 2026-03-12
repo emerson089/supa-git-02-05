@@ -26,7 +26,16 @@ export interface ItemPedido {
 
 interface ItemPedidoRowProps {
   item: ItemPedido;
-  produtos: { id: string; nome: string; preco: number; quantidadeDisponivel: number; referencia?: string }[];
+  produtos: { 
+    id: string; 
+    nome: string; 
+    preco: number; 
+    quantidadeDisponivel: number; 
+    referencia?: string;
+    totalModelEstoque?: number;
+    refBase?: string;
+    tamanho?: string;
+  }[];
   onUpdate: (item: ItemPedido) => void;
   onRemove: (id: string) => void;
   autoFocus?: boolean;
@@ -178,15 +187,12 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                         <span className="text-sm font-medium text-foreground truncate w-full text-left">
                           {(() => {
                             let nomeStr = produtoSelecionado?.nome || item.produtoNome || 'Produto';
-                            const refStr = produtoSelecionado?.referencia;
-                            if (refStr && nomeStr.includes(` — ${refStr}`)) {
-                              const tamanho = refStr.split('-').pop();
-                              if (tamanho) {
-                                nomeStr = nomeStr.replace(` — ${refStr}`, ` — Tamanho ${tamanho}`);
-                              }
+                            const t = produtoSelecionado?.tamanho || '';
+                            if (t && !/^(PEÇAS)$/i.test(t) && !nomeStr.includes(t)) {
+                              nomeStr = `${nomeStr} — ${t}`;
                             }
                             return nomeStr;
-                          })()}
+                          })() /* Standardized Display */}
                         </span>
                         {produtoSelecionado?.referencia && (
                           <span className="text-[10px] text-muted-foreground mt-0.5 truncate w-full text-left">
@@ -223,24 +229,17 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                     >
                       <div className="flex-1 flex flex-col min-w-0">
                         <span className="text-sm font-medium text-foreground truncate">
-                          {(() => {
-                            let nomeStr = produto.nome;
-                            const refStr = produto.referencia;
-                            if (refStr && nomeStr.includes(` — ${refStr}`)) {
-                              const tamanho = refStr.split('-').pop();
-                              if (tamanho) {
-                                nomeStr = nomeStr.replace(` — ${refStr}`, ` - ${tamanho}`);
-                              }
-                            }
-                            return nomeStr;
-                          })()}
+                          {produto.nome}
+                          {produto.tamanho && !/^(PEÇAS)$/i.test(produto.tamanho) && (
+                            <span className="text-muted-foreground font-normal"> — {produto.tamanho}</span>
+                          )}
                         </span>
-                        <span className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                        <span className="text-[10px] text-muted-foreground mt-0.5 truncate uppercase tracking-tight">
                           {(() => {
-                            const refParts = produto.referencia ? produto.referencia.split('-') : [];
-                            const refMid = refParts.length >= 3 ? refParts.slice(1, -1).join('-') : '';
-                            const refDisplay = refMid ? `ref ${refMid} · ` : '';
-                            return refDisplay + (produto.quantidadeDisponivel === 0 ? 'Esgotado' : `${produto.quantidadeDisponivel} em estoque`);
+                            const refToDisplay = produto.refBase || produto.referencia;
+                            const totalModelEstoque = produto.totalModelEstoque ?? produto.quantidadeDisponivel;
+                            const refDisplay = refToDisplay ? `ref ${refToDisplay} · ` : '';
+                            return refDisplay + (produto.quantidadeDisponivel === 0 ? 'Esgotado' : `${totalModelEstoque} em estoque`);
                           })()}
                         </span>
                       </div>

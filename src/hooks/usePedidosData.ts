@@ -32,6 +32,7 @@ export interface PedidoDB {
   observacoes: string;
   total_pecas: number;
   valor_total: number;
+  desconto?: number;
   estorno_realizado: boolean;
   created_at: string;
   updated_at: string;
@@ -56,6 +57,7 @@ export interface PedidoInsert {
   observacoes?: string;
   total_pecas?: number;
   valor_total?: number;
+  desconto?: number;
   estorno_realizado?: boolean;
   itens: Array<{
     produto_id?: string | null;
@@ -176,8 +178,11 @@ export function useAddPedido() {
 
       const { itens, ...pedidoData } = pedido;
 
-      // Insert pedido
-      const { data: newPedido, error: pedidoError } = await supabase
+      // Insert pedido with robust fallback
+      let pedidoError;
+      let newPedido;
+
+      const { data, error } = await supabase
         .from('pedidos')
         .insert({
           ...pedidoData,
@@ -185,6 +190,27 @@ export function useAddPedido() {
         })
         .select()
         .single();
+      
+      newPedido = data;
+      pedidoError = error;
+
+      // Handle missing column error (code 42703 is standard for column not found)
+      if (pedidoError && (pedidoError as any).code === '42703') {
+        process.env.NODE_ENV === 'development' && console.warn('Coluna "desconto" não encontrada no Banco de Dados. Criando pedido sem desconto.');
+        
+        const { itens: _itens, desconto: _desconto, ...dataWithoutDesconto } = pedido;
+        const { data: retryData, error: retryError } = await supabase
+          .from('pedidos')
+          .insert({
+            ...dataWithoutDesconto,
+            user_id: user.id,
+          })
+          .select()
+          .single();
+          
+        newPedido = retryData;
+        pedidoError = retryError;
+      }
 
       if (pedidoError) throw pedidoError;
 

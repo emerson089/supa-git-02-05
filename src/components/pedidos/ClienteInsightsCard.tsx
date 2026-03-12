@@ -86,6 +86,13 @@ export function ClienteInsightsCard({ clienteId }: ClienteInsightsCardProps) {
       bgColor: 'bg-emerald-500/10',
     },
     {
+      icon: Star,
+      value: formatCurrency(insights.totalDescontos),
+      label: 'Total Descontos',
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-500/10',
+    },
+    {
       icon: ShoppingBag,
       value: insights.totalPecas,
       label: 'Peças Compradas',

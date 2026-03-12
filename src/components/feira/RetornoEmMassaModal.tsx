@@ -8,6 +8,7 @@ import { LotImage } from '@/components/production/LotImage';
 import { TransferenciaComItens } from '@/hooks/useTransferencias';
 import { Loader2, Check, X, Search, Package, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { parseProductName } from '@/utils/productNameUtils';
 
 interface RetornoEmMassaItem {
     transferenciaId: string;
@@ -168,7 +169,11 @@ export function RetornoEmMassaModal({ open, cargas, onClose, onConfirmar, isLoad
                                             <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                                                 <LotImage src={item.produtoImagem} alt={item.produtoNome} className="w-full h-full object-cover" />
                                             </div>
-                                            <p className="flex-1 text-sm font-medium truncate min-w-0">{item.produtoNome}</p>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium truncate">
+                                                    {parseProductName(item.produtoNome, item.itemId).nomeExibicao}
+                                                </p>
+                                            </div>
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <span className="text-xs text-blue-600 font-semibold w-8 text-right">{item.quantidadeEnviada}</span>
                                                 <span className="text-xs text-muted-foreground">→</span>

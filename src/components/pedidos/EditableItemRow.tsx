@@ -95,8 +95,8 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
       {/* Compact Layout - Mobile/Tablet (< lg) - 3 linhas para garantir que cabe */}
       <div className="lg:hidden space-y-2 w-full overflow-hidden">
         {/* Linha 1: Nome + Lixeira */}
-        <div className="flex items-center gap-2 w-full">
-          <p className="font-medium text-foreground text-sm truncate flex-1 min-w-0">
+        <div className="flex items-start gap-2 w-full justify-between">
+          <p className="font-medium text-foreground text-sm break-words mt-1">
             {item.produto_nome}
           </p>
           <Button
@@ -147,10 +147,10 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
       </div>
 
       {/* Desktop Layout (>= lg) */}
-      <div className="hidden lg:flex items-center gap-2">
-        {/* Product Name - Limited width to ensure other columns fit */}
-        <div className="flex-1 min-w-0 max-w-[350px]">
-          <p className="font-medium text-foreground truncate">{item.produto_nome}</p>
+      <div className="hidden lg:flex items-start gap-2">
+        {/* Product Name - Allowed to wrap and show full text */}
+        <div className="flex-1 min-w-0 pr-4 mt-1.5">
+          <p className="font-medium text-foreground text-sm leading-tight break-words">{item.produto_nome}</p>
         </div>
 
         {/* Quantity Input */}

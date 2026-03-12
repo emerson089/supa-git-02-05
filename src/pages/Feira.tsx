@@ -24,6 +24,7 @@ import { NovaCargaStepProdutos } from '@/components/feira/NovaCargaStepProdutos'
 import { NovaCargaBottomSheet } from '@/components/feira/NovaCargaBottomSheet';
 import { NovaCargaBottomBar } from '@/components/feira/NovaCargaBottomBar';
 import { EditarCargaModal } from '@/components/feira/EditarCargaModal';
+import { AddGradeCargaModal } from '@/components/feira/AddGradeCargaModal';
 import { RetornoEmMassaModal } from '@/components/feira/RetornoEmMassaModal';
 import { OfflineBanner } from '@/components/feira/OfflineBanner';
 import { useFeiraOffline } from '@/hooks/useFeiraOffline';
@@ -39,13 +40,14 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Package, Plus, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle, FileText, TrendingUp } from 'lucide-react';
+import { Package, Plus, Package2, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle, FileText, TrendingUp } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { generateCargaPDF } from '@/utils/generateCargaPDF';
+import { parseProductName } from '@/utils/productNameUtils';
 interface ItemCarga {
   itemId: string;
   nome: string;
@@ -126,6 +128,7 @@ export default function Feira() {
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
   const [tituloCarga, setTituloCarga] = useState('');
   const [buscaProduto, setBuscaProduto] = useState('');
+  const [showAddGrade, setShowAddGrade] = useState(false);
   const [showRetornoEmMassa, setShowRetornoEmMassa] = useState(false);
   const [retornoEmMassaLoading, setRetornoEmMassaLoading] = useState(false);
   const [itensRetorno, setItensRetorno] = useState<{
@@ -247,6 +250,28 @@ export default function Feira() {
       imagemUrl: produto.imagemUrl ?? null
     }]);
     return true;
+  };
+  const handleAddGradeItems = (novosItens: ItemCarga[]) => {
+    setItensCarga(prev => {
+      const atualizados = [...prev];
+      novosItens.forEach(novo => {
+        const index = atualizados.findIndex(i => i.itemId === novo.itemId);
+        if (index >= 0) {
+          // Se já existe, soma as quantidades, respeitando o limite do central
+          const itemExistente = atualizados[index];
+          const novaQtd = Math.min(itemExistente.quantidade + novo.quantidade, itemExistente.disponivelCentral);
+          atualizados[index] = {
+            ...itemExistente,
+            quantidade: novaQtd
+          };
+        } else {
+          // Se não existe, adiciona novo
+          atualizados.push(novo);
+        }
+      });
+      return atualizados;
+    });
+    toast.success(`${novosItens.length} modelos de grade adicionados`);
   };
   const handleUpdateQuantidadeCarga = (itemId: string, delta: number) => {
     setItensCarga(prev => prev.map(item => {
@@ -910,7 +935,20 @@ export default function Feira() {
     {/* Modal Nova Carga - Mobile uses new components, Desktop uses Dialog */}
     {isMobile ? <Sheet open={showNovaCarga} onOpenChange={open => !open && handleCloseNovaCarga()}>
       <SheetContent side="bottom" className="h-[95vh] flex flex-col p-0 rounded-t-2xl [&>button]:hidden relative">
-        <NovaCargaStepProdutos produtos={produtosFiltrados} itensCarga={itensCarga} isLoading={isRefetchingEstoque} buscaProduto={buscaProduto} onBuscaChange={setBuscaProduto} onAddItem={handleAddItemCarga} onClose={handleCloseNovaCarga} getDisponivelCentral={getDisponivelCentral} formatCurrency={formatCurrency} titulo={tituloCarga} onTituloChange={setTituloCarga} />
+        <NovaCargaStepProdutos 
+          produtos={produtosFiltrados} 
+          itensCarga={itensCarga} 
+          isLoading={isRefetchingEstoque} 
+          buscaProduto={buscaProduto} 
+          onBuscaChange={setBuscaProduto} 
+          onAddItem={handleAddItemCarga} 
+          onClose={handleCloseNovaCarga} 
+          getDisponivelCentral={getDisponivelCentral} 
+          formatCurrency={formatCurrency} 
+          titulo={tituloCarga} 
+          onTituloChange={setTituloCarga}
+          onOpenGrade={() => setShowAddGrade(true)}
+        />
 
         {/* FAB do carrinho - agora dentro do Sheet */}
         <NovaCargaBottomSheet itensCarga={itensCarga} onUpdateQtd={handleSetQuantidadeCarga} onRemoveItem={handleRemoveItemCarga} onCriarCarga={handleCriarCarga} isPending={criarCarga.isPending} formatCurrency={formatCurrency} titulo={tituloCarga} />
@@ -925,6 +963,17 @@ export default function Feira() {
             <Truck className="h-5 w-5 text-primary" />
             Nova Carga para Feira
           </DialogTitle>
+          <div className="flex gap-2 mr-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddGrade(true)}
+              className="h-8 rounded-lg border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-medium"
+            >
+              <Package2 size={14} className="mr-1.5" />
+              Por Grade
+            </Button>
+          </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
@@ -1108,13 +1157,10 @@ export default function Feira() {
                 const inputValue = inputRetornoValues[item.itemId];
                 const campoVazio = inputValue === '' || inputValue === undefined;
 
-                // Extrair referência do nome (padrão "Nome - 123")
-                const nomeCompleto = itemWithExtras.produtoNome || `Item #${item.itemId.slice(0, 8)}`;
-                const referenciaMatch = nomeCompleto.match(/\s*-\s*(\d+)$/);
-                const referencia = referenciaMatch ? referenciaMatch[1] : null;
-                const nomeSemReferencia = referencia
-                  ? nomeCompleto.replace(/\s*-\s*\d+$/, '').trim()
-                  : nomeCompleto;
+                const info = parseProductName(
+                  itemWithExtras.produtoNome || "",
+                  item.itemId || ""
+                );
 
                 return (
                   <div key={item.id} className="px-4 py-3 hover:bg-muted/20 transition-colors">
@@ -1123,20 +1169,15 @@ export default function Feira() {
                       <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted flex-shrink-0">
                         <LotImage
                           src={itemWithExtras.produtoImagem}
-                          alt={nomeCompleto}
+                          alt={info.nomeExibicao}
                           className="w-full h-full object-cover"
                           eager={true}
                         />
                       </div>
                       <div className="flex-1 min-w-0 pt-0.5">
                         <p className="text-sm font-medium leading-tight line-clamp-2">
-                          {nomeSemReferencia}
+                          {info.nomeExibicao}
                         </p>
-                        {referencia && (
-                          <Badge variant="outline" className="mt-1.5 text-xs px-2 py-0.5">
-                            Ref: {referencia}
-                          </Badge>
-                        )}
                       </div>
                     </div>
 
@@ -1355,5 +1396,12 @@ export default function Feira() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {/* Modal Grade para Carga */}
+    <AddGradeCargaModal
+      open={showAddGrade}
+      onClose={() => setShowAddGrade(false)}
+      onAdd={handleAddGradeItems}
+      getDisponivelCentral={getDisponivelCentral}
+    />
   </div>;
 }

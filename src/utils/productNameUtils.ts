@@ -1,0 +1,110 @@
+/**
+ * Utilitários para padronização de nomes e referências de produtos
+ */
+
+export interface ProductInfo {
+  nomeBase: string;
+  refBase: string;
+  tamanho: string | null;
+  refCurta: string;
+  nomeExibicao: string;
+}
+
+/**
+ * Analisa o nome e a referência de um produto para extrair informações padronizadas
+ */
+export const parseProductName = (nome: string, referencia: string): ProductInfo => {
+  const currentRef = (referencia || "").toUpperCase();
+  const currentName = nome || "";
+
+  // 1. Extrair a referência base e o tamanho (ex: SH2603-0042-M -> SH2603-0042 e M)
+  const sizeMatch = currentRef.match(/^(.+)-(P|M|G|GG|G1|G2|G3|XGG|PEÇAS|\d{2})$/i);
+  const refBase = sizeMatch ? sizeMatch[1] : currentRef;
+  const tamanho = sizeMatch ? sizeMatch[2].toUpperCase() : null;
+
+  // 2. Tentar extrair os últimos 3 números da referência oficial
+  const numerosMatch = refBase.match(/(\d+)$/);
+  let numeros = numerosMatch ? numerosMatch[1] : "";
+  
+  // 3. Se não achou na referência, tenta achar no nome (ex: "Produto - 123" ou "Produto 123")
+  if (!numeros) {
+    const nomeReferenciaMatch = currentName.match(/\s*[—|-]\s*(\d+)$/);
+    if (nomeReferenciaMatch) {
+      numeros = nomeReferenciaMatch[1];
+    } else {
+      // Tenta pegar números no final do nome se houver espaço (ex: "Produto 123")
+      const finalNumericoMatch = currentName.match(/\s+(\d+)$/);
+      if (finalNumericoMatch) {
+        numeros = finalNumericoMatch[1];
+      }
+    }
+  }
+
+  const refCurta = numeros ? `REF ${numeros.slice(-3).padStart(3, '0')}` : "";
+
+  // 4. Limpar o nome (remover referências que estejam no campo nome)
+  // Divide por " — " ou " - " e pega a primeira parte
+  const nomeBase = currentName.split(/\s*[—|-]\s*/)[0].trim();
+
+  // 5. Gerar nome de exibição padronizado: "Nome - REF XXX"
+  const nomeExibicao = refCurta ? `${nomeBase} - ${refCurta}` : nomeBase;
+
+  return {
+    nomeBase,
+    refBase: refBase || numeros, // Usar numeros se refBase for vazio para agrupamento
+    tamanho,
+    refCurta,
+    nomeExibicao,
+  };
+};
+
+/**
+ * Agrupa itens por modelo (refBase) e preço
+ */
+export const groupItensByModel = <T extends any>(
+  items: T[],
+  config: {
+    getItemId: (item: T) => string;
+    getItemNome: (item: T) => string;
+    getItemPreco: (item: T) => number;
+    getItemQtd: (item: T) => number;
+    getItemImagem?: (item: T) => string | null;
+  }
+) => {
+  const groups: Record<string, any> = {};
+
+  items.forEach(item => {
+    const info = parseProductName(config.getItemNome(item), config.getItemId(item));
+    const preco = config.getItemPreco(item);
+    const qtd = config.getItemQtd(item);
+    
+    // Chave de agrupamento: RefBase + Preço
+    const groupKey = `${info.refBase}-${preco}`;
+
+    if (!groups[groupKey]) {
+      groups[groupKey] = {
+        refBase: info.refBase,
+        nomeBase: info.nomeBase,
+        nomeExibicao: info.nomeExibicao,
+        tamanhos: [],
+        quantidadeTotal: 0,
+        valorUnitario: preco,
+        subtotal: 0,
+        imagemUrl: config.getItemImagem ? config.getItemImagem(item) : null,
+        ids: [],
+        itens: [] // Itens originais no grupo
+      };
+    }
+
+    if (info.tamanho && !groups[groupKey].tamanhos.includes(info.tamanho)) {
+      groups[groupKey].tamanhos.push(info.tamanho);
+    }
+
+    groups[groupKey].quantidadeTotal += qtd;
+    groups[groupKey].subtotal += qtd * preco;
+    groups[groupKey].ids.push(config.getItemId(item));
+    groups[groupKey].itens.push(item);
+  });
+
+  return Object.values(groups);
+};

@@ -36,55 +36,87 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
   // Filter and group finished products from inventory
   const produtosAcabados = useMemo(() => {
-    const grouped = new Map<string, any>();
+    const acabadosOnly = estoqueItens.filter(item => item.tipo === 'acabado');
+    
+    // 1. Dicionário de quantidades por modelo pai (Padronizado)
+    const estoquePorModeloId = new Map<string, number>();
+    acabadosOnly
+      .filter(i => i.categoria === 'Modelo Padronizado')
+      .forEach(m => estoquePorModeloId.set(m.id, m.quantidade));
 
-    estoqueItens
-      .filter(item => 
-        item.tipo === 'acabado' && 
-        item.categoria !== 'Modelo Padronizado'
-      )
+    // 2. Dicionário de quantidades por ref base (Legado)
+    const estoquePorRefBase = new Map<string, number>();
+    const getRefBaseLegacy = (ref: string) => {
+      const parts = ref.split('-');
+      if (parts.length > 1) return parts.slice(0, -1).join('-');
+      return ref;
+    };
+
+    // Pré-calcular estoque total para itens legados
+    acabadosOnly
+      .filter(i => i.categoria !== 'Modelo Padronizado' && i.categoria !== 'Variação Padronizada')
       .forEach(item => {
+        let ref = '';
+        try {
+          if (item.localizacao) {
+            const loc = JSON.parse(item.localizacao);
+            ref = loc.referencia || '';
+          }
+        } catch(e) {}
+        
+        if (ref) {
+          const base = getRefBaseLegacy(ref);
+          estoquePorRefBase.set(base, (estoquePorRefBase.get(base) || 0) + item.quantidade);
+        }
+      });
+
+    return acabadosOnly
+      .filter(item => item.categoria !== 'Modelo Padronizado')
+      .map(item => {
         let referencia: string | undefined;
         let tamanho: string | undefined;
+        let modeloId: string | undefined;
+        let totalModelEstoque = item.quantidade;
+        let refBase = '';
+
         if (item.localizacao) {
           try {
             const loc = JSON.parse(item.localizacao);
             referencia = loc.referencia || undefined;
             const t = loc.tamanho as string | undefined;
             if (t && !/^(PEÇAS)$/i.test(t)) tamanho = t;
+            modeloId = loc.modeloId;
           } catch { }
         }
 
-        // Use cleaned name and ref for grouping identity
-        const cleanName = item.nome
-          .replace(/ — Tamanho (PEÇAS)/gi, '')
-          .replace(/-(PEÇAS)/gi, '')
-          .trim();
-        
-        const cleanRef = referencia 
-          ? referencia.replace(/-(PEÇAS)/gi, '').trim()
-          : undefined;
-
-        const preco = item.precoUnitario || 0;
-        // Group by cleaned identity
-        const key = `${cleanName}|${cleanRef || ''}|${preco}`;
-
-        if (grouped.has(key)) {
-          const existing = grouped.get(key);
-          existing.quantidade += item.quantidade;
-        } else {
-          grouped.set(key, {
-            id: item.id,
-            nome: cleanName,
-            preco_unitario: preco,
-            quantidade: item.quantidade,
-            referencia: cleanRef,
-            tamanho,
-          });
+        // Se for variação padronizada
+        if (item.categoria === 'Variação Padronizada' && modeloId) {
+          totalModelEstoque = estoquePorModeloId.get(modeloId) || item.quantidade;
+          if (referencia) refBase = getRefBaseLegacy(referencia);
+        } else if (referencia) {
+          refBase = getRefBaseLegacy(referencia);
+          totalModelEstoque = estoquePorRefBase.get(refBase) || item.quantidade;
         }
-      });
 
-    return Array.from(grouped.values());
+        // Use cleaned name for display
+        let cleanName = item.nome
+          .replace(/\s*—\s*Tamanho\s+/gi, ' — ');
+          
+        if (referencia) {
+           cleanName = cleanName.replace(new RegExp(`\\s*—\\s*${referencia.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'), '');
+        }
+        
+        return {
+          id: item.id,
+          nome: cleanName.trim(),
+          preco_unitario: item.precoUnitario || 0,
+          quantidade: item.quantidade,
+          referencia: referencia,
+          tamanho,
+          totalModelEstoque,
+          refBase: refBase || referencia
+        };
+      });
   }, [estoqueItens]);
 
   // Get existing product IDs in the order
@@ -380,8 +412,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                       let nomeModelo = item.produto_nome;
                       if (produto && produto.nome) nomeModelo = produto.nome;
                       if (nomeModelo.includes(' | REF: ')) nomeModelo = nomeModelo.split(' | REF: ')[0];
-                      nomeModelo = nomeModelo.replace(` — ${refStr}`, '').trim();
-                      nomeModelo = nomeModelo.replace(/-(PEÇAS)/gi, '').trim();
+                      nomeModelo = nomeModelo.replace(/\s*—\s*Tamanho\s+/gi, ' — ').trim();
                       return { refBase, tamanho, nomeModelo, refStr };
                     }
                   }
@@ -459,18 +490,17 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                           const parsed = parseItem(item);
                           let displayName = item.produto_nome;
 
-                          if (parsed) {
-                            displayName = `${parsed.nomeModelo} — Tamanho ${parsed.tamanho} | REF: ${parsed.refStr}`;
+                           if (parsed) {
+                            displayName = `${parsed.nomeModelo} — ${parsed.tamanho} | REF: ${parsed.refStr}`;
                           } else {
                             const produtoId = item.produto_id || '';
                             const produto = estoqueItens.find(p => p.id === produtoId);
                             if (produto && produto.nome) displayName = produto.nome;
                           }
 
-                          // Remove unwanted suffixes for display
+                          // Remove unwanted labels for display
                           displayName = displayName
-                            .replace(/ — Tamanho (PEÇAS)/gi, '')
-                            .replace(/-(PEÇAS)/gi, '');
+                            .replace(/\s*—\s*Tamanho\s+/gi, ' — ');
 
                           const enhancedItem = { ...item, produto_nome: displayName };
 

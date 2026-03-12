@@ -26,29 +26,43 @@ export interface PedidoItemUpdate {
   valor_unitario?: number;
 }
 
-// Helper function to recalculate and update pedido totals
-async function syncPedidoTotals(pedidoId: string): Promise<{ total_pecas: number; valor_total: number }> {
-  // Fetch all items for this pedido
-  const { data: itens, error: itensError } = await supabase
-    .from('pedido_itens')
-    .select('quantidade, valor_unitario')
-    .eq('pedido_id', pedidoId);
+interface PrecomputedTotals {
+  total_pecas: number;
+  valor_total: number;
+}
 
-  if (itensError) throw itensError;
+// Helper function to recalculate and update pedido totals.
+// If precomputed totals are passed, skips the SELECT query entirely.
+async function syncPedidoTotals(
+  pedidoId: string,
+  precomputed?: PrecomputedTotals
+): Promise<PrecomputedTotals> {
+  let totals: PrecomputedTotals;
 
-  // Calculate new totals
-  const total_pecas = (itens || []).reduce((sum, item) => sum + item.quantidade, 0);
-  const valor_total = (itens || []).reduce((sum, item) => sum + (item.quantidade * item.valor_unitario), 0);
+  if (precomputed) {
+    totals = precomputed;
+  } else {
+    const { data: itens, error: itensError } = await supabase
+      .from('pedido_itens')
+      .select('quantidade, valor_unitario')
+      .eq('pedido_id', pedidoId);
 
-  // Update the pedido with new totals
+    if (itensError) throw itensError;
+
+    totals = {
+      total_pecas: (itens || []).reduce((sum, item) => sum + item.quantidade, 0),
+      valor_total: (itens || []).reduce((sum, item) => sum + (item.quantidade * item.valor_unitario), 0),
+    };
+  }
+
   const { error: updateError } = await supabase
     .from('pedidos')
-    .update({ total_pecas, valor_total })
+    .update(totals)
     .eq('id', pedidoId);
 
   if (updateError) throw updateError;
 
-  return { total_pecas, valor_total };
+  return totals;
 }
 
 export function useAddPedidoItem() {
@@ -56,10 +70,12 @@ export function useAddPedidoItem() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (item: PedidoItemInsert) => {
+    mutationFn: async ({
+      precomputedTotals,
+      ...item
+    }: PedidoItemInsert & { precomputedTotals?: PrecomputedTotals }) => {
       if (!user) throw new Error('User not authenticated');
 
-      // Insert the new item
       const { data: newItem, error: insertError } = await supabase
         .from('pedido_itens')
         .insert({
@@ -71,13 +87,11 @@ export function useAddPedidoItem() {
 
       if (insertError) throw insertError;
 
-      // Sync totals
-      const totals = await syncPedidoTotals(item.pedido_id);
+      const totals = await syncPedidoTotals(item.pedido_id, precomputedTotals);
 
       return { item: newItem as PedidoItemDB, totals };
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['pedidos'] });
       queryClient.invalidateQueries({ queryKey: ['pedido', variables.pedido_id] });
       queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
       queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
@@ -89,8 +103,17 @@ export function useUpdatePedidoItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, pedidoId, data }: { id: string; pedidoId: string; data: PedidoItemUpdate }) => {
-      // Update the item
+    mutationFn: async ({
+      id,
+      pedidoId,
+      data,
+      precomputedTotals,
+    }: {
+      id: string;
+      pedidoId: string;
+      data: PedidoItemUpdate;
+      precomputedTotals?: PrecomputedTotals;
+    }) => {
       const { data: updatedItem, error: updateError } = await supabase
         .from('pedido_itens')
         .update(data)
@@ -100,13 +123,11 @@ export function useUpdatePedidoItem() {
 
       if (updateError) throw updateError;
 
-      // Sync totals
-      const totals = await syncPedidoTotals(pedidoId);
+      const totals = await syncPedidoTotals(pedidoId, precomputedTotals);
 
       return { item: updatedItem as PedidoItemDB, totals };
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['pedidos'] });
       queryClient.invalidateQueries({ queryKey: ['pedido', variables.pedidoId] });
       queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
       queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
@@ -118,8 +139,15 @@ export function useRemovePedidoItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, pedidoId }: { id: string; pedidoId: string }) => {
-      // Delete the item
+    mutationFn: async ({
+      id,
+      pedidoId,
+      precomputedTotals,
+    }: {
+      id: string;
+      pedidoId: string;
+      precomputedTotals?: PrecomputedTotals;
+    }) => {
       const { error: deleteError } = await supabase
         .from('pedido_itens')
         .delete()
@@ -127,13 +155,11 @@ export function useRemovePedidoItem() {
 
       if (deleteError) throw deleteError;
 
-      // Sync totals
-      const totals = await syncPedidoTotals(pedidoId);
+      const totals = await syncPedidoTotals(pedidoId, precomputedTotals);
 
       return { totals };
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['pedidos'] });
       queryClient.invalidateQueries({ queryKey: ['pedido', variables.pedidoId] });
       queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
       queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });

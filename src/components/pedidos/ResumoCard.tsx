@@ -6,6 +6,8 @@ interface ResumoCardProps {
   taxaExcursao: number;
   nomeExcursao?: string;
   valorTotal: number;
+  desconto: number;
+  onDescontoChange: (value: number) => void;
   quantidadeModelos: number;
   onLimpar: () => void;
   onCriarPedido: () => void;
@@ -19,6 +21,8 @@ export function ResumoCard({
   taxaExcursao,
   nomeExcursao,
   valorTotal,
+  desconto,
+  onDescontoChange,
   quantidadeModelos,
   onLimpar,
   onCriarPedido,
@@ -76,6 +80,23 @@ export function ResumoCard({
             </p>
           </div>
         )}
+
+        {/* Campo de Desconto (Interno) */}
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+            Desconto (Interno)
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-semibold text-rose-600">-</span>
+            <input
+              type="number"
+              value={desconto || ''}
+              onChange={(e) => onDescontoChange(Number(e.target.value) || 0)}
+              placeholder="R$ 0,00"
+              className="w-24 bg-transparent border-b border-border focus:border-rose-500 outline-none text-xl font-semibold text-rose-600 placeholder:text-rose-300"
+            />
+          </div>
+        </div>
 
         {/* Valor total do pedido */}
         <div className="flex flex-col gap-1">

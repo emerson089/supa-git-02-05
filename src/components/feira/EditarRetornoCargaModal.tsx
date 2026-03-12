@@ -18,6 +18,7 @@ import { Loader2, AlertTriangle, ArrowRight, Package, Search, X } from 'lucide-r
 import { cn } from '@/lib/utils';
 import { TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hooks/useFeiraHistorico';
 import { format } from 'date-fns';
+import { parseProductName } from '@/utils/productNameUtils';
 
 interface EditarRetornoCargaModalProps {
   carga: TransferenciaComItensHistorico | null;
@@ -285,9 +286,10 @@ export function EditarRetornoCargaModal({
 
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">
-                      {item.produtoNome || 'Produto'}
+                      {parseProductName(item.produtoNome || "", item.itemId).nomeExibicao}
                     </p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>•</span>
                       <span>Env: {item.quantidadeEnviada}</span>
                       <span>•</span>
                       <span>{formatCurrency(preco)}/un</span>

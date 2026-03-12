@@ -10,6 +10,8 @@ interface Produto {
   quantidade: number;
   referencia?: string;
   tamanho?: string;
+  totalModelEstoque?: number;
+  refBase?: string;
 }
 
 interface AddItemSelectorProps {
@@ -125,18 +127,12 @@ export function AddItemSelector({ produtos, onAdd, isAdding, existingProductIds 
               </div>
             ) : (
               filteredProdutos.map((produto) => {
-                const cleanName = produto.nome
-                  .replace(/ — Tamanho (PEÇAS)/gi, '')
-                  .replace(/-(PEÇAS)/gi, '')
-                  .trim();
-                  
-                const cleanRef = produto.referencia
-                  ? produto.referencia.replace(/-(PEÇAS)/gi, '').trim()
-                  : undefined;
-                  
                 const cleanTamanho = produto.tamanho && !/^(PEÇAS)$/i.test(produto.tamanho)
                   ? produto.tamanho
                   : undefined;
+                  
+                const refToDisplay = produto.refBase || produto.referencia;
+                const totalModelEstoque = produto.totalModelEstoque ?? produto.quantidade;
 
                 return (
                 <button
@@ -147,23 +143,21 @@ export function AddItemSelector({ produtos, onAdd, isAdding, existingProductIds 
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-foreground truncate">
-                      {cleanName}
+                      {produto.nome}
                       {cleanTamanho && (
                         <span className="text-muted-foreground font-normal"> — {cleanTamanho}</span>
                       )}
                     </p>
-                    {cleanRef && (
-                      <p className="text-xs text-muted-foreground/70 mt-0.5 truncate font-mono">
-                        {cleanRef}
-                      </p>
-                    )}
+                    <p className="text-xs text-muted-foreground/70 mt-0.5 truncate">
+                      {refToDisplay && `ref ${refToDisplay} · `}{totalModelEstoque} em estoque
+                    </p>
                   </div>
                   <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                     <p className="text-sm font-bold text-primary">
                       {produto.preco_unitario ? formatCurrency(produto.preco_unitario) : '—'}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {produto.quantidade} un.
+                    <p className="text-[10px] text-muted-foreground/50">
+                      {produto.quantidade} disponível
                     </p>
                   </div>
                 </button>

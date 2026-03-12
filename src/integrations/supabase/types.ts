@@ -642,6 +642,7 @@ export type Database = {
           updated_at: string
           user_id: string
           valor_total: number | null
+          desconto: number | null
         }
         Insert: {
           cidade?: string | null
@@ -666,6 +667,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           valor_total?: number | null
+          desconto?: number | null
         }
         Update: {
           cidade?: string | null
@@ -690,6 +692,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           valor_total?: number | null
+          desconto?: number | null
         }
         Relationships: [
           {

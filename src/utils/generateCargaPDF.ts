@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getSignedUrl, compressImageForPDF } from './imageUtils';
+import { groupItensByModel, parseProductName } from './productNameUtils';
 import type { TransferenciaComItensHistorico, TransferenciaItemComProduto } from '@/hooks/useFeiraHistorico';
 
 // Formatar valor em reais
@@ -28,28 +29,6 @@ function calcularTotais(itens: TransferenciaItemComProduto[]) {
   return { totalPecas, valorTotal, totalItens: itens.length };
 }
 
-// Extrair código do nome do produto
-function extrairCodigo(nome: string): { nome: string; codigo: string } {
-  // Padrão 1: "Nome - 123" (com traço)
-  const matchTraco = nome.match(/\s*-\s*(\d+)$/);
-  if (matchTraco) {
-    return {
-      nome: nome.replace(/\s*-\s*\d+$/, '').trim(),
-      codigo: matchTraco[1],
-    };
-  }
-  
-  // Padrão 2: "Nome 123" (número no final sem traço, mínimo 3 dígitos)
-  const matchFinal = nome.match(/\s+(\d{3,})$/);
-  if (matchFinal) {
-    return {
-      nome: nome.replace(/\s+\d{3,}$/, '').trim(),
-      codigo: matchFinal[1],
-    };
-  }
-  
-  return { nome, codigo: '-' };
-}
 
 // Gerar PDF da carga
 export async function generateCargaPDF(
@@ -240,23 +219,28 @@ export async function generateCargaPDF(
   yPos += 4;
 
   // Preparar dados da tabela - sempre 5 colunas fixas
+  const groupedItens = groupItensByModel(carga.itens, {
+    getItemId: (i) => i.itemId || (i as any).id || "",
+    getItemNome: (i) => i.produtoNome || "",
+    getItemPreco: (i) => Number(i.precoUnitario) || Number(i.produtoPreco) || 0,
+    getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
+    getItemImagem: (i) => i.produtoImagem
+  });
   const tableData: { content: string; styles?: object }[][] = [];
   const imagePositions: { rowIndex: number; itemId: string }[] = [];
 
-  carga.itens.forEach((item, index) => {
-    const qtd = Number(item.quantidadeEnviada) || 0;
-    const preco = Number(item.precoUnitario) || Number(item.produtoPreco) || 0;
-    const { nome, codigo } = extrairCodigo(item.produtoNome || 'Produto');
+  groupedItens.forEach((item, index) => {
+    const nomePrincipal = item.nomeExibicao;
+    const tamanhosExibicao = item.tamanhos.join(', ') || '-';
 
-    imagePositions.push({ rowIndex: index, itemId: item.itemId });
+    imagePositions.push({ rowIndex: index, itemId: item.ids[0] });
 
-    // Tabela sempre com 5 colunas: Foto, Produto, Cód, Qtd, Preço
     tableData.push([
-      { content: '', styles: { cellWidth: 14 } }, // Coluna para foto
-      { content: nome.length > 45 ? nome.substring(0, 42) + '...' : nome },
-      { content: codigo, styles: { halign: 'center' } },
-      { content: String(qtd), styles: { halign: 'center', fontStyle: 'bold' } },
-      { content: formatCurrency(preco), styles: { halign: 'right' } },
+      { content: '', styles: { cellWidth: 14 } }, // Foto
+      { content: nomePrincipal.length > 50 ? nomePrincipal.substring(0, 47) + '...' : nomePrincipal },
+      { content: tamanhosExibicao, styles: { halign: 'center' } },
+      { content: String(item.quantidadeTotal), styles: { halign: 'center', fontStyle: 'bold' } },
+      { content: formatCurrency(item.valorUnitario), styles: { halign: 'right' } },
     ]);
   });
 
@@ -264,13 +248,13 @@ export async function generateCargaPDF(
   const columnStyles = {
     0: { cellWidth: 14, halign: 'center' as const },  // Foto
     1: { cellWidth: 'auto' as const },                 // Produto
-    2: { cellWidth: 14, halign: 'center' as const },  // Código
+    2: { cellWidth: 35, halign: 'center' as const },  // Tamanhos
     3: { cellWidth: 12, halign: 'center' as const },  // Qtd
     4: { cellWidth: 20, halign: 'right' as const },   // Preço
   };
 
   // Cabeçalho fixo (sem condicional)
-  const tableHeaders = [['', 'Produto', 'Cód', 'Qtd', 'Preço']];
+  const tableHeaders = [['', 'Produto', 'Tamanhos', 'Qtd', 'Preço']];
 
   autoTable(doc, {
     startY: yPos,

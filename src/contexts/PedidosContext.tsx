@@ -28,6 +28,7 @@ export interface Pedido {
   itens: ItemPedido[];
   totalPecas: number;
   valorTotal: number;
+  desconto?: number;
   dataCriacao: string;
   dataPagamento: string | null;
   estornoRealizado?: boolean;
@@ -71,6 +72,7 @@ function transformDBToContext(pedidoDB: PedidoDB): Pedido {
     })),
     totalPecas: pedidoDB.total_pecas || 0,
     valorTotal: Number(pedidoDB.valor_total) || 0,
+    desconto: Number(pedidoDB.desconto) || 0,
     dataCriacao: pedidoDB.created_at,
     dataPagamento: pedidoDB.paid_at,
     estornoRealizado: pedidoDB.estorno_realizado || false,
@@ -103,6 +105,7 @@ export function PedidosProvider({ children }: { children: ReactNode }) {
       observacoes: pedidoData.observacoes,
       total_pecas: pedidoData.totalPecas,
       valor_total: pedidoData.valorTotal,
+      desconto: pedidoData.desconto || 0,
       estorno_realizado: pedidoData.estornoRealizado,
       itens: pedidoData.itens.map(item => ({
         produto_id: item.produtoId || null,
@@ -139,6 +142,7 @@ export function PedidosProvider({ children }: { children: ReactNode }) {
     if (data.observacoes !== undefined) updateData.observacoes = data.observacoes;
     if (data.totalPecas !== undefined) updateData.total_pecas = data.totalPecas;
     if (data.valorTotal !== undefined) updateData.valor_total = data.valorTotal;
+    if (data.desconto !== undefined) updateData.desconto = data.desconto;
     if (data.estornoRealizado !== undefined) updateData.estorno_realizado = data.estornoRealizado;
 
     updatePedidoMutation.mutate({ id, data: updateData });
