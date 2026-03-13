@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
-import { Loader2, Package, DollarSign, X } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Loader2, Package, DollarSign, X, Percent, Check } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -15,6 +16,7 @@ interface PedidoData {
   cliente_nome: string;
   total_pecas: number;
   valor_total: number;
+  desconto: number;
   itens: EditableItem[];
 }
 
@@ -33,6 +35,12 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
+  const [localDesconto, setLocalDesconto] = useState(pedido?.desconto ?? 0);
+  const [isSavingDesconto, setIsSavingDesconto] = useState(false);
+
+  useEffect(() => {
+    setLocalDesconto(pedido?.desconto ?? 0);
+  }, [pedido?.id]);
 
   // Filter and group finished products from inventory
   const produtosAcabados = useMemo(() => {
@@ -132,6 +140,25 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
   }, [pedido, produtosAcabados]);
 
   const isSyncing = addItemMutation.isPending || updateItemMutation.isPending || removeItemMutation.isPending;
+
+  const handleSaveDesconto = async () => {
+    if (!pedido) return;
+    const descontoDelta = (pedido.desconto ?? 0) - localDesconto;
+    const newValorTotal = pedido.valor_total + descontoDelta;
+    setIsSavingDesconto(true);
+    try {
+      const { error } = await supabase
+        .from('pedidos')
+        .update({ desconto: localDesconto, valor_total: newValorTotal })
+        .eq('id', pedido.id);
+      if (error) throw error;
+      toast.success('Desconto atualizado!');
+    } catch {
+      toast.error('Erro ao salvar desconto');
+    } finally {
+      setIsSavingDesconto(false);
+    }
+  };
 
   const handleUpdateItem = async (itemId: string, data: { quantidade?: number; valor_unitario?: number }) => {
     if (!pedido) return;
@@ -331,7 +358,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
         {/* Totals Banner */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 bg-muted/30 border-b border-border/50 flex-shrink-0">
-          <div className="grid grid-cols-2 gap-2 sm:gap-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
             {/* Total Peças */}
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-4 bg-background rounded-lg sm:rounded-xl shadow-sm">
               <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-primary/10">
@@ -349,9 +376,43 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
               </div>
             </div>
 
+            {/* Desconto (Interno) */}
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-4 bg-background rounded-lg sm:rounded-xl shadow-sm">
+              <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-rose-500/10 flex-shrink-0">
+                <Percent className="h-4 w-4 sm:h-5 sm:w-5 text-rose-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider">Desconto</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-semibold text-rose-600">-</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={localDesconto || ''}
+                    onChange={(e) => setLocalDesconto(Number(e.target.value) || 0)}
+                    placeholder="0"
+                    className="w-16 sm:w-20 bg-transparent border-b border-border focus:border-rose-500 outline-none text-base sm:text-lg font-bold text-rose-600 placeholder:text-rose-300"
+                  />
+                  {localDesconto !== (pedido.desconto ?? 0) && (
+                    <button
+                      onClick={handleSaveDesconto}
+                      disabled={isSavingDesconto}
+                      className="flex-shrink-0 p-1 rounded-md bg-rose-100 hover:bg-rose-200 text-rose-700 disabled:opacity-50 transition-colors"
+                      title="Salvar desconto"
+                    >
+                      {isSavingDesconto
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Check className="h-3 w-3" />
+                      }
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Valor Total */}
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-4 bg-background rounded-lg sm:rounded-xl shadow-sm">
-              <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-emerald-500/10">
+              <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-emerald-500/10 flex-shrink-0">
                 <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
               </div>
               <div>
@@ -360,7 +421,9 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                   {isSyncing ? (
                     <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin text-emerald-600" />
                   ) : (
-                    <p className="text-lg sm:text-2xl font-bold text-emerald-600">{formatCurrency(pedido.valor_total)}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-emerald-600">
+                      {formatCurrency(pedido.valor_total + (pedido.desconto ?? 0) - localDesconto)}
+                    </p>
                   )}
                 </div>
               </div>

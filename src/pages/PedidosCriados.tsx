@@ -1518,6 +1518,7 @@ function EditPedidoModalWrapper({
     cliente_nome: pedidoDB.cliente_nome,
     total_pecas: pedidoDB.total_pecas || 0,
     valor_total: pedidoDB.valor_total || 0,
+    desconto: pedidoDB.desconto ?? 0,
     itens: (pedidoDB.itens || []).map(item => ({
       id: item.id,
       produto_id: item.produto_id,

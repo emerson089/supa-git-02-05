@@ -25,7 +25,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hooks/useFeiraHistorico';
 import { LotImage } from '@/components/production/LotImage';
-import { groupItensByModel, parseProductName } from '@/utils/productNameUtils';
+import { groupItensByModel } from '@/utils/productNameUtils';
 
 interface DetalhesCargaModalProps {
   carga: TransferenciaComItensHistorico | null;
@@ -185,7 +185,8 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
                 getItemNome: (i) => i.produtoNome || "",
                 getItemPreco: (i) => Number(i.precoUnitario) || Number(i.produtoPreco) || 0,
                 getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
-                getItemImagem: (i) => i.produtoImagem
+                getItemImagem: (i) => i.produtoImagem,
+                getItemReferencia: (i) => i.produtoNome || "",
               }).map(g => {
                 const retornado = g.itens.reduce((sum: number, item: any) => sum + (Number(item.quantidadeRetornada) || 0), 0);
                 const enviado = g.quantidadeTotal;
@@ -216,7 +217,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
                         >
                           <div className="w-14 h-14 rounded-md overflow-hidden bg-muted flex-shrink-0">
                             <LotImage 
-                              src={group.produtoImagem} 
+                              src={group.imagemUrl} 
                               alt={group.nomeBase} 
                               className="w-full h-full object-cover"
                               eager={true}
@@ -277,7 +278,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
                                 <TableCell className="p-2">
                                   <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
                                     <LotImage 
-                                      src={group.produtoImagem} 
+                                      src={group.imagemUrl} 
                                       alt={group.nomeBase} 
                                       className="w-full h-full object-cover"
                                       eager={true}

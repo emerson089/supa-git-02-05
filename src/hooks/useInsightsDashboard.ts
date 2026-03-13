@@ -258,10 +258,12 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
     // 7. Contexto sazonal: histórico do mês
     if (metaAutomatica.temHistoricoSazonal && metaAutomatica.anosUsados.length > 0) {
       const mesNome = MESES_PT[new Date().getMonth()] || "";
+      const nAnos = metaAutomatica.anosUsados.length;
+      const periodoStr = nAnos === 1 ? "no último ano" : `nos últimos ${nAnos} anos`;
       raw.push({
         id: "historico-mes",
         tipo: "info",
-        mensagem: `Historicamente, ${mesNome} teve faturamento médio de ${formatCurrencyShort(metaAutomatica.mediaBase)} nos últimos ${metaAutomatica.anosUsados.length} anos.`,
+        mensagem: `Historicamente, ${mesNome} teve faturamento médio de ${formatCurrencyShort(metaAutomatica.mediaBase)} ${periodoStr}.`,
         icone: "check",
       });
     }
@@ -314,7 +316,11 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
     }
 
     // Resumo executivo
-    const resumoExecutivo = gerarResumoExecutivo(metaAutomatica, kpis);
+    const resumoBase = gerarResumoExecutivo(metaAutomatica, kpis);
+    const hasYoyQueda = insights.some(i => i.id === "yoy-queda");
+    const resumoExecutivo = (hasYoyQueda && resumoBase.includes("positivo"))
+      ? "Faturamento acima do ritmo esperado, mas abaixo do mesmo período do ano anterior."
+      : resumoBase;
 
     // Sugestão de foco: first critical insight
     const firstCritico = insights.find((i) => i.prioridade === "critico");

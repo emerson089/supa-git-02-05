@@ -69,12 +69,16 @@ export const groupItensByModel = <T extends any>(
     getItemPreco: (item: T) => number;
     getItemQtd: (item: T) => number;
     getItemImagem?: (item: T) => string | null;
+    getItemReferencia?: (item: T) => string;
   }
 ) => {
   const groups: Record<string, any> = {};
 
   items.forEach(item => {
-    const info = parseProductName(config.getItemNome(item), config.getItemId(item));
+    const referencia = config.getItemReferencia
+      ? config.getItemReferencia(item)
+      : config.getItemId(item);
+    const info = parseProductName(config.getItemNome(item), referencia);
     const preco = config.getItemPreco(item);
     const qtd = config.getItemQtd(item);
     

@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip as TooltipUI, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { KpiCardSkeleton, ChartSkeleton, DonutChartSkeleton, ListItemSkeleton, TopModelosSkeleton, ProducaoKanbanSkeleton } from "@/components/ui/dashboard-skeleton";
-import { Banknote, Package, AlertCircle, Factory, TrendingUp, TrendingDown, Calendar as CalendarIcon, AlertTriangle, ChevronRight, Wrench, Wand2, Target, Pencil, X, Filter, Settings } from "lucide-react";
+import { Banknote, Package, AlertCircle, Factory, TrendingUp, TrendingDown, Calendar as CalendarIcon, AlertTriangle, ChevronRight, Wrench, Wand2, Target, Pencil, X, Filter, Settings, Bus } from "lucide-react";
 import { useInsightsDashboard } from "@/hooks/useInsightsDashboard";
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
 import { useDashboardData, Periodo, DateRange, STATUS_COLORS, MetaYoY, TopModelo, StatusPedido, TopModelosCoverage, PrevisaoMensal, MetaAutomatica, FaturamentoDiaSemana } from "@/hooks/useDashboardData";
@@ -30,6 +30,7 @@ import { format, startOfMonth, getYear, subDays, subMonths, startOfYear } from "
 import { ptBR } from "date-fns/locale";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Line, ComposedChart } from "recharts";
 import { useSalesTrendChart, TrendDataPoint } from "@/hooks/useSalesTrendChart";
+import { useTaxasExcursao } from "@/hooks/useTaxasExcursao";
 
 
 function formatCurrency(value: number) {
@@ -242,6 +243,8 @@ export default function Dashboard() {
     currentYear: trendCurrentYear,
     previousYear: trendPreviousYear
   } = useSalesTrendChart(excluirCancelados);
+
+  const { data: taxasExcursao, loading: taxasLoading } = useTaxasExcursao();
 
   // Calcular dateRange efetivo para insights
   const insightsDateRange = (() => {
@@ -1163,6 +1166,57 @@ export default function Dashboard() {
                 </TooltipProvider>
               </div>;
             })()}
+          </CardContent>
+        </Card>
+
+        {/* Card de Taxas de Excursão */}
+        <Card className="neu-card border-orange-200/60 bg-gradient-to-br from-card to-orange-50/30">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <Bus size={18} className="text-orange-600" />
+              <CardTitle className="text-base font-semibold">Taxas de Excursão</CardTitle>
+            </div>
+            <p className="text-sm text-muted-foreground">A repassar — NO CARRO</p>
+          </CardHeader>
+          <CardContent>
+            {taxasLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+              </div>
+            ) : taxasExcursao.totalGeral === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Nenhum pedido NO CARRO com taxa
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-2xl font-bold text-foreground">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(taxasExcursao.totalGeral)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {taxasExcursao.porExcursao.reduce((s, e) => s + e.numPedidos, 0)} pedido{taxasExcursao.porExcursao.reduce((s, e) => s + e.numPedidos, 0) !== 1 ? "s" : ""} com excursão
+                  </p>
+                </div>
+                {taxasExcursao.porExcursao.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    {taxasExcursao.porExcursao.map(exc => (
+                      <div key={exc.excursaoId ?? exc.nome} className="flex items-center justify-between gap-2 bg-orange-50/60 rounded-lg px-3 py-1.5">
+                        <span className="text-xs font-medium text-foreground truncate">{exc.nome}</span>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-[10px] text-muted-foreground">{exc.numPedidos} ped.</span>
+                          <span className="text-xs font-bold text-orange-700">
+                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(exc.totalTaxa)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
