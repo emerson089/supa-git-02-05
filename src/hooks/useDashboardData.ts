@@ -153,7 +153,7 @@ const ETAPA_ORDER: string[] = [
   "Travete",
   "Destroyed",
   "Lavanderia",
-  "Limpado",
+  "Acabamento",
   "Aprontamento",
   "Vendas",
 ];
@@ -164,7 +164,7 @@ const ETAPA_COLORS: Record<string, string> = {
   "Travete": "hsl(239 84% 67%)",        // Indigo
   "Destroyed": "hsl(25 95% 53%)",       // Orange
   "Lavanderia": "hsl(187 85% 53%)",     // Cyan
-  "Limpado": "hsl(168 76% 42%)",        // Teal
+  "Acabamento": "hsl(168 76% 42%)",        // Teal
   "Aprontamento": "hsl(271 81% 56%)",   // Purple
   "Vendas": "hsl(152 76% 43%)",         // Emerald
 };

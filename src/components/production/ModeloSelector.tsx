@@ -11,6 +11,7 @@ interface ModeloSelectorProps {
   onSelect: (modelo: {
     nome: string;
     imagemUrl: string;
+    id: string;
   }) => void;
 }
 
@@ -54,6 +55,7 @@ export function ModeloSelector({ onSelect }: ModeloSelectorProps) {
     onSelect({
       nome: modelo.nome,
       imagemUrl: modelo.imagem_url || '',
+      id: modelo.id,
     });
     setIsExpanded(false);
     setSearch('');

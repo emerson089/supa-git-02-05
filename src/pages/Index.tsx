@@ -249,10 +249,36 @@ const Index = () => {
 
       // Build observacao with extras
       const obsParts: string[] = [];
+
+      // When leaving Corte, preserve the cortador's name before lot.responsavel is overwritten
+      if (currentStage === 'Corte' && lot.responsavel && lot.responsavel !== data.responsavel) {
+        obsParts.push(`Cortador: ${lot.responsavel}`);
+      }
+
       if (data.extras) {
+        const labelMap: Record<string, string> = {
+          rolos:      'Rolos',
+          pecas:      'Peças cortadas',
+          numeracao:  'Numeração',
+          cor_linha:  'Cor da linha',
+          qtd_ziper:  'Zíper (qtd)',
+          tipo_ziper: 'Zíper (tipo/cor)',
+          abanhado:   'Abanhado',
+          etiquetas:  'Etiquetas',
+          forro:      'Forro',
+          tipo_lavado:       'Tipo de lavado',
+          cor_resultado:     'Cor do resultado',
+          qtd_pecas:         'Peças',
+          processo_especial: 'Processo especial',
+          botao:              'Botão',
+          bolsa_transparente: 'Bolsa transparente',
+          cordao:             'Cordão',
+          placa_marca:        'Placa da marca',
+          tag:                'Tag',
+        };
         Object.entries(data.extras).forEach(([key, value]) => {
-          if (value) {
-            const labelMap: Record<string, string> = { rolos: 'Rolos', pecas: 'Peças cortadas', numeracao: 'Numeração' };
+          // Skip boolean fields when "Não" — no need to record the negative default
+          if (value && value !== 'Não') {
             obsParts.push(`${labelMap[key] || key}: ${value}`);
           }
         });

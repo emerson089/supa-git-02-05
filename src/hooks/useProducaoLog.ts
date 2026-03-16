@@ -81,11 +81,6 @@ export function useProducaoLogsComTempo(producaoId: string | null, dataCriacao?:
         return { ...log, tempoNaEtapa };
       });
 
-      // Calcular estatísticas
-      const tempoTotalDias = dataCriacao 
-        ? differenceInDays(new Date(), new Date(dataCriacao))
-        : 0;
-
       // Agrupar tempo por etapa
       const tempoPorEtapaMap = new Map<string, { dias: number; horas: number }>();
       logsComTempo.forEach(log => {
@@ -110,13 +105,36 @@ export function useProducaoLogsComTempo(producaoId: string | null, dataCriacao?:
         }
       });
 
-      // Sem fallback para lot.responsavel pois esse campo é sobrescrito a cada etapa
+      // Fallback: extract Corte responsavel from outgoing transition observacoes
+      // (saved as "Cortador: [nome]" when the lot leaves Corte)
+      if (!responsaveisPorEtapa['Corte']) {
+        const outgoingCorte = rawLogs.find(l => l.processo_anterior === 'Corte' && l.observacao);
+        if (outgoingCorte?.observacao) {
+          const m = outgoingCorte.observacao.match(/Cortador:\s*([^|]+)/i);
+          if (m) responsaveisPorEtapa['Corte'] = m[1].trim();
+        }
+      }
+
+      // Contar apenas movimentações reais (exclui o log de criação)
+      const totalMovimentacoes = rawLogs.filter(
+        l => !(l.processo_anterior === null && l.processo_novo === 'Corte')
+      ).length;
+
+      // Tempo total: usar formatTempo para mostrar horas/minutos em lotes recentes
+      const agora = new Date();
+      const dataCriacaoDate = dataCriacao ? new Date(dataCriacao) : agora;
+      const totalHorasGeral = differenceInHours(agora, dataCriacaoDate);
+      const totalMinutosGeral = differenceInMinutes(agora, dataCriacaoDate);
+      const totalDiasGeral = Math.floor(totalHorasGeral / 24);
+      const horasRestantes = totalHorasGeral % 24;
+      const minutosRestantes = totalMinutosGeral % 60;
+      const tempoTotalLabel = formatTempo(totalDiasGeral, horasRestantes, minutosRestantes);
 
       const estatisticas: EstatisticasProducao = {
-        totalMovimentacoes: rawLogs.length,
+        totalMovimentacoes,
         tempoTotalProducao: {
-          dias: tempoTotalDias,
-          label: tempoTotalDias === 1 ? '1 dia' : `${tempoTotalDias} dias`,
+          dias: totalDiasGeral,
+          label: tempoTotalLabel,
         },
         tempoPorEtapa,
         responsaveisPorEtapa,

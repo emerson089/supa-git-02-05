@@ -6,7 +6,7 @@ export type StageId =
   | 'Travete' 
   | 'Destroyed' 
   | 'Lavanderia' 
-  | 'Limpado' 
+  | 'Acabamento'
   | 'Aprontamento'
   | 'Vendas';
 

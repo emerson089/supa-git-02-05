@@ -7,12 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { STAGES } from '@/data/production-data';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Copy } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface StageFieldConfig {
   showResponsavel: boolean;
   responsavelLabel?: string;
-  extraFields: Array<{ key: string; label: string; type: 'number' | 'text' }>;
+  extraFields: Array<{ key: string; label: string; type: 'number' | 'text' | 'boolean' }>;
 }
 
 const STAGE_FIELDS: Record<string, StageFieldConfig> = {
@@ -27,8 +29,14 @@ const STAGE_FIELDS: Record<string, StageFieldConfig> = {
     showResponsavel: true,
     responsavelLabel: 'Facção / Costureira',
     extraFields: [
-      { key: 'pecas', label: 'Qtd de peças cortadas', type: 'number' },
-      { key: 'numeracao', label: 'Numeração das peças (Ex: 34 ao 44)', type: 'text' }
+      { key: 'pecas',      label: 'Qtd de peças cortadas',        type: 'number'  },
+      { key: 'numeracao',  label: 'Numeração das peças (Ex: 34 ao 44)', type: 'text' },
+      { key: 'cor_linha',  label: 'Cor da linha',                  type: 'text'    },
+      { key: 'qtd_ziper',  label: 'Quantidade de zíper',           type: 'number'  },
+      { key: 'tipo_ziper', label: 'Tipo / cor do zíper',           type: 'text'    },
+      { key: 'abanhado',   label: 'Abanhado',                      type: 'boolean' },
+      { key: 'etiquetas',  label: 'Etiquetas por tamanho',         type: 'boolean' },
+      { key: 'forro',      label: 'Forro',                         type: 'boolean' },
     ]
   },
   'Travete': {
@@ -42,11 +50,22 @@ const STAGE_FIELDS: Record<string, StageFieldConfig> = {
   'Lavanderia': {
     showResponsavel: true,
     responsavelLabel: 'Lavanderia',
-    extraFields: []
+    extraFields: [
+      { key: 'tipo_lavado',       label: 'Tipo de lavado',    type: 'text'    },
+      { key: 'cor_resultado',     label: 'Cor do resultado',  type: 'text'    },
+      { key: 'qtd_pecas',         label: 'Qtd de peças',      type: 'number'  },
+      { key: 'processo_especial', label: 'Processo especial', type: 'boolean' },
+    ]
   },
-  'Limpado': {
+  'Acabamento': {
     showResponsavel: true,
-    extraFields: []
+    extraFields: [
+      { key: 'botao',              label: 'Quantidade de botões',            type: 'number'  },
+      { key: 'bolsa_transparente', label: 'Bolsa transparente',              type: 'boolean' },
+      { key: 'cordao',             label: 'Cordão',                          type: 'boolean' },
+      { key: 'placa_marca',        label: 'Placa de identificação da marca', type: 'boolean' },
+      { key: 'tag',                label: 'Tag da peça',                     type: 'boolean' },
+    ]
   },
   'Aprontamento': {
     showResponsavel: true,
@@ -112,9 +131,72 @@ export function StageTransitionModal({
 
   if (!lot) return null;
 
+  const buildResumoWhatsApp = () => {
+    const lines: string[] = [];
+    const emoji = toStage === 'Lavanderia' ? '🫧' : toStage === 'Acabamento' ? '✨' : '🧵';
+
+    lines.push(`${emoji} *${toStageLabel} - Lote #${lot.id_producao}*`);
+    if (lot.modelo_nome_cache) lines.push(`📌 Modelo: ${lot.modelo_nome_cache}`);
+    if (responsavel) lines.push(`👤 ${config.responsavelLabel || 'Responsável'}: ${responsavel}`);
+    lines.push('');
+
+    if (toStage === 'Costura/Facção') {
+      if (extras.pecas)     lines.push(`📦 Peças: ${extras.pecas}`);
+      if (extras.numeracao) lines.push(`📏 Numeração: ${extras.numeracao}`);
+      if (extras.cor_linha) lines.push(`🎨 Cor da linha: ${extras.cor_linha}`);
+      if (extras.qtd_ziper || extras.tipo_ziper) {
+        const zipParts = [extras.qtd_ziper, extras.tipo_ziper].filter(Boolean).join('x ');
+        lines.push(`🤐 Zíper: ${zipParts}`);
+      }
+      if (extras.abanhado  === 'Sim') lines.push('✅ Abanhado');
+      if (extras.etiquetas === 'Sim') lines.push('✅ Etiquetas por tamanho');
+      if (extras.forro     === 'Sim') lines.push('✅ Forro');
+    } else if (toStage === 'Lavanderia') {
+      if (extras.tipo_lavado)   lines.push(`🫧 Tipo de lavado: ${extras.tipo_lavado}`);
+      if (extras.cor_resultado) lines.push(`🎨 Cor do resultado: ${extras.cor_resultado}`);
+      if (extras.qtd_pecas)     lines.push(`📦 Peças: ${extras.qtd_pecas}`);
+      if (extras.processo_especial === 'Sim') lines.push('✅ Processo especial');
+    } else if (toStage === 'Acabamento') {
+      if (extras.botao)                          lines.push(`🔢 Botão: ${extras.botao}x`);
+      if (extras.bolsa_transparente  === 'Sim')  lines.push('✅ Bolsa transparente');
+      if (extras.cordao              === 'Sim')  lines.push('✅ Cordão');
+      if (extras.placa_marca         === 'Sim')  lines.push('✅ Placa de identificação da marca');
+      if (extras.tag                 === 'Sim')  lines.push('✅ Tag da peça');
+    }
+
+    if (lot.observacoes) {
+      const gradeMatch = lot.observacoes.match(/Grade:\s*([^|]+)/i);
+      if (gradeMatch) {
+        lines.push('');
+        lines.push(`📊 Grade: ${gradeMatch[1].trim()}`);
+      }
+    }
+
+    if (observacao.trim()) {
+      lines.push('');
+      lines.push(`💬 Obs: ${observacao.trim()}`);
+    }
+
+    return lines.join('\n');
+  };
+
+  const handleCopiarResumo = async () => {
+    const msg = buildResumoWhatsApp();
+    try {
+      await navigator.clipboard.writeText(msg);
+      toast.success('Resumo copiado! Cole no WhatsApp da costureira.');
+    } catch {
+      toast.error('Não foi possível copiar. Verifique as permissões do navegador.');
+    }
+  };
+
+  // Split fields into sections for Costura/Facção: numeric/text first, then booleans
+  const numericTextFields = config.extraFields.filter(f => f.type !== 'boolean');
+  const booleanFields = config.extraFields.filter(f => f.type === 'boolean');
+
   return (
     <Dialog open={open} onOpenChange={handleCancel}>
-      <DialogContent className="sm:max-w-[450px]">
+      <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             Mover lote {lot.id_producao} para {toStageLabel}
@@ -125,8 +207,8 @@ export function StageTransitionModal({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Extra fields (e.g., rolos for Corte) */}
-          {config.extraFields.map(field => (
+          {/* Numeric / text extra fields */}
+          {numericTextFields.map(field => (
             <div key={field.key} className="space-y-2">
               <Label>{field.label}</Label>
               <Input
@@ -138,6 +220,39 @@ export function StageTransitionModal({
               />
             </div>
           ))}
+
+          {/* Boolean (Sim/Não) fields */}
+          {booleanFields.length > 0 && (
+            <div className="space-y-3">
+              {booleanFields.map(field => {
+                const current = extras[field.key] || 'Não';
+                return (
+                  <div key={field.key} className="flex items-center justify-between gap-4">
+                    <Label className="text-sm">{field.label}</Label>
+                    <div className="flex gap-1.5 shrink-0">
+                      {['Não', 'Sim'].map(opt => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setExtras(prev => ({ ...prev, [field.key]: opt }))}
+                          className={cn(
+                            "w-14 py-1 text-sm rounded-md border transition-colors",
+                            current === opt
+                              ? opt === 'Sim'
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-muted text-foreground border-border font-medium"
+                              : "border-border text-muted-foreground hover:bg-accent"
+                          )}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Responsável selector */}
           {config.showResponsavel && (
@@ -161,6 +276,20 @@ export function StageTransitionModal({
               rows={3}
             />
           </div>
+
+          {/* Copiar resumo — for Costura/Facção and Lavanderia */}
+          {(toStage === 'Costura/Facção' || toStage === 'Lavanderia' || toStage === 'Acabamento') && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCopiarResumo}
+              className="w-full gap-2"
+            >
+              <Copy className="h-4 w-4" />
+              Copiar resumo para WhatsApp
+            </Button>
+          )}
         </div>
 
         <DialogFooter>
