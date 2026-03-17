@@ -120,7 +120,7 @@ export function ModeloPadronizadoCard({
 
     return (
         <>
-            <div className="overflow-hidden rounded-2xl bg-white dark:bg-gray-800 border border-purple-100 dark:border-purple-900/30 shadow-soft transition-all duration-300 hover:shadow-lg relative">
+            <div className="overflow-hidden rounded-2xl bg-white dark:bg-gray-800 border border-purple-100 dark:border-purple-900/30 shadow-soft transition-all duration-300 hover:shadow-lg relative flex flex-col h-full">
                 {/* Indicador de status */}
                 <div
                     className={cn('absolute top-3 right-3 w-3 h-3 rounded-full z-10 shadow-sm', statusColor)}
@@ -140,7 +140,7 @@ export function ModeloPadronizadoCard({
                 <ModeloImage imagemUrl={modelo.imagemUrl} nome={nome} onImageClick={handleImageClick} />
 
                 {/* Conteúdo */}
-                <div className="p-4 space-y-3">
+                <div className="p-4 flex flex-col flex-1 gap-3">
                     {/* Head */}
                     <div className="space-y-1">
                         <div className="flex items-start justify-between gap-2">
@@ -208,7 +208,7 @@ export function ModeloPadronizadoCard({
                     </div>
 
                     {/* Ações */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mt-auto">
                         <Button
                             variant="outline"
                             size="sm"

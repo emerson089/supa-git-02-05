@@ -117,7 +117,7 @@ export function ProductCard({
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-soft transition-all duration-300 hover:shadow-lg relative">
+    <div className="overflow-hidden rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-soft transition-all duration-300 hover:shadow-lg relative flex flex-col h-full">
       {/* Stock status indicator */}
       <div
         className={cn(
@@ -143,7 +143,7 @@ export function ProductCard({
       />
 
       {/* Content */}
-      <div className="p-4">
+      <div className="p-4 flex flex-col flex-1">
         {/* Header: Name and Category */}
         <div className="mb-3 pb-3 border-b border-gray-100 dark:border-gray-700">
           <h3 className="font-bold text-lg text-foreground line-clamp-2">{item.nome}</h3>
@@ -228,7 +228,7 @@ export function ProductCard({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-3 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+        <div className="flex gap-3 mt-auto pt-4 border-t border-gray-100 dark:border-gray-700">
           <Button
             variant="outline"
             size="sm"

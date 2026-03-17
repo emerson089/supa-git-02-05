@@ -97,8 +97,9 @@ export function useEstoqueItensPaginated(params: EstoquePaginatedParams) {
       let countQuery = supabase
         .from('estoque_itens')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-      
+        .eq('user_id', user.id)
+        .neq('categoria', 'Variação Padronizada');
+
       // Apply tipo filter
       if (params.tipo) {
         countQuery = countQuery.eq('tipo', params.tipo);
@@ -119,6 +120,7 @@ export function useEstoqueItensPaginated(params: EstoquePaginatedParams) {
         .from('estoque_itens')
         .select('*')
         .eq('user_id', user.id)
+        .neq('categoria', 'Variação Padronizada')
         .order('created_at', { ascending: false });
       
       // Apply tipo filter
