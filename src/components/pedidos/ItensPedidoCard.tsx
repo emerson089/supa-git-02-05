@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 import { AddGradeModal } from './AddGradeModal';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { useModelosPadronizados } from '@/hooks/useModelosPadronizados';
 
 interface ItensPedidoCardProps {
   items: ItemPedido[];
@@ -21,12 +22,41 @@ interface ItensPedidoCardProps {
 
 export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, onAddGradeItems, newItemId, onNewItemFocused }: ItensPedidoCardProps) {
   const { getProdutosAcabados } = useEstoque();
+  const { modelosPadronizados } = useModelosPadronizados();
   const [showAddGrade, setShowAddGrade] = useState(false);
 
   // Remove todos os itens de um grupo de grade de uma vez
   const handleRemoveGrupo = useCallback((ids: string[]) => {
     ids.forEach(id => onRemoveItem(id));
   }, [onRemoveItem]);
+
+  // Para cada variação que pertence a uma grade, calcula quantas peças estão reservadas
+  // para grades completas e quantas estão livres para venda avulsa.
+  const gradeInfoMap = useMemo(() => {
+    const map: Record<string, { gradeReservado: number; livreParaAvulso: number }> = {};
+    for (const modelo of modelosPadronizados) {
+      if (!modelo.meta.grades?.length) continue;
+      const grade = modelo.meta.grades[0]; // usa a primeira grade como referência
+      let maxGrades = Infinity;
+      for (const gradeItem of grade.itens) {
+        if (gradeItem.quantidade <= 0) continue;
+        const variacao = modelo.variacoes.find(v => v.tamanho === gradeItem.tamanho);
+        const stock = variacao?.quantidade ?? 0;
+        maxGrades = Math.min(maxGrades, Math.floor(stock / gradeItem.quantidade));
+      }
+      if (!isFinite(maxGrades)) maxGrades = 0;
+      for (const gradeItem of grade.itens) {
+        const variacao = modelo.variacoes.find(v => v.tamanho === gradeItem.tamanho);
+        if (!variacao) continue;
+        const gradeReservado = maxGrades * gradeItem.quantidade;
+        map[variacao.id] = {
+          gradeReservado,
+          livreParaAvulso: Math.max(0, variacao.quantidade - gradeReservado),
+        };
+      }
+    }
+    return map;
+  }, [modelosPadronizados]);
 
   // Obter produtos acabados do estoque e transformar para o formato esperado
   const produtos = useMemo(() => {
@@ -97,18 +127,21 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
           cleanName = cleanName.replace(new RegExp(`\\s*—\\s*${ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'), '');
         }
 
+        const gradeInfo = gradeInfoMap[item.id];
         return {
           id: item.id,
           nome: cleanName.trim(),
           preco: item.precoUnitario,
-          quantidadeDisponivel: item.quantidade,
+          // Para variações em grade: mostra apenas o sobrante (fora da grade)
+          quantidadeDisponivel: gradeInfo?.livreParaAvulso ?? item.quantidade,
           referencia: ref,
           totalModelEstoque,
           refBase: refBase || ref,
-          tamanho
+          tamanho,
+          gradeReserved: gradeInfo?.gradeReservado,
         };
       });
-  }, [getProdutosAcabados]);
+  }, [getProdutosAcabados, gradeInfoMap]);
 
   // Separar itens por grade e avulsos para exibição
   const itensGrade = items.filter(i => i.tipo === 'grade');
@@ -208,17 +241,28 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
             )}
 
             {/* ── Seção: Itens Avulsos ── */}
-            {itensAvulsos.map(item => (
-              <ItemPedidoRow
-                key={item.id}
-                item={item}
-                produtos={produtos}
-                onUpdate={onUpdateItem}
-                onRemove={onRemoveItem}
-                autoFocus={item.id === newItemId}
-                onAutoFocusComplete={onNewItemFocused}
-              />
-            ))}
+            {itensAvulsos.map(item => {
+              // Soma apenas os avulsos do mesmo produto (grade já está em gradeReservado)
+              const avulsoCommitted = itensAvulsos
+                .filter(ci => ci.produtoId === item.produtoId)
+                .reduce((s, ci) => s + ci.quantidade, 0);
+              const produto = item.produtoId ? produtos.find(p => p.id === item.produtoId) : null;
+              const availableOverride = produto
+                ? Math.max(0, produto.quantidadeDisponivel - (avulsoCommitted - item.quantidade))
+                : undefined;
+              return (
+                <ItemPedidoRow
+                  key={item.id}
+                  item={item}
+                  produtos={produtos}
+                  onUpdate={onUpdateItem}
+                  onRemove={onRemoveItem}
+                  autoFocus={item.id === newItemId}
+                  onAutoFocusComplete={onNewItemFocused}
+                  availableOverride={availableOverride}
+                />
+              );
+            })}
           </div>
         )}
       </div>
@@ -227,6 +271,7 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
         open={showAddGrade}
         onClose={() => setShowAddGrade(false)}
         onAdd={onAddGradeItems}
+        existingItems={items}
       />
     </>
   );

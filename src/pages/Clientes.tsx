@@ -48,7 +48,7 @@ const emptyCliente = {
   excursao: ''
 };
 type Ordenacao = 'nome' | 'recente' | 'maior_historico';
-type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'inativo' | 'risco' | 'pendente';
+type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'risco' | 'pendente';
 const PAGE_SIZE = 24;
 function formatCurrency(value: number): string {
   return value.toLocaleString('pt-BR', {
@@ -139,9 +139,9 @@ const ClienteCard = memo(function ClienteCard({
 
   let inativoColorClass = status?.color;
   if (isInativo) {
-    if (diasSemComprar > 40 && diasSemComprar !== Infinity) {
+    if (diasSemComprar >= 40 && diasSemComprar !== Infinity) {
       inativoColorClass = 'bg-red-800 text-white border-red-800'; // Vermelho Escuro
-    } else if (diasSemComprar >= 25 && diasSemComprar <= 40) {
+    } else if (diasSemComprar >= 25 && diasSemComprar < 40) {
       inativoColorClass = 'bg-orange-500 text-white border-orange-500'; // Laranja
     }
   }
@@ -366,10 +366,8 @@ export default function Clientes() {
   const savedState = useMemo(() => loadClientesState(), []);
   const [currentPage, setCurrentPage] = useState(savedState?.currentPage || 0);
   const [busca, setBusca] = useState(savedState?.busca || '');
-  type SubFiltroInativo = 'critico' | 'alerta' | null;
   const [ordenacao, setOrdenacao] = useState<Ordenacao>(savedState?.ordenacao || 'nome');
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>(savedState?.filtroStatus || 'todos');
-  const [subFiltroInativo, setSubFiltroInativo] = useState<SubFiltroInativo>(savedState?.subFiltroInativo || null);
 
   // Contact markers
   const { contatosMap, marcarContato, getContato } = useClienteContatos();
@@ -381,9 +379,8 @@ export default function Clientes() {
       ordenacao,
       currentPage,
       busca,
-      subFiltroInativo,
     }));
-  }, [filtroStatus, ordenacao, currentPage, busca, subFiltroInativo]);
+  }, [filtroStatus, ordenacao, currentPage, busca]);
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -400,7 +397,7 @@ export default function Clientes() {
   const {
     data: crmFilterIds,
     isLoading: crmFilterLoading
-  } = useClientesCRMFilter(crmFilterStatus, ordenacao === 'maior_historico' ? 'maior_historico' : undefined, subFiltroInativo);
+  } = useClientesCRMFilter(crmFilterStatus, ordenacao === 'maior_historico' ? 'maior_historico' : undefined);
 
   // Paginated query - now with filterByIds for CRM filters (filter BEFORE pagination)
   const {
@@ -450,7 +447,6 @@ export default function Clientes() {
   }, []);
   const handleFiltroChange = useCallback((filtro: FiltroStatus) => {
     setFiltroStatus(filtro);
-    setSubFiltroInativo(null); // Reset sub-filters on main filter change
     setCurrentPage(0);
   }, []);
   const handleOrdenacaoChange = useCallback((ord: Ordenacao) => {
@@ -688,48 +684,17 @@ export default function Clientes() {
           <SelectContent>
             <SelectItem value="nome">Nome (A-Z)</SelectItem>
             <SelectItem value="recente">Cadastro (Mais Recente)</SelectItem>
-            {filtroStatus === 'inativo' && (
-              <SelectItem value="maior_historico">Priorizar por Maior Histórico (VIPs Inativos)</SelectItem>
-            )}
           </SelectContent>
         </Select>
 
         <div className="flex gap-2 flex-wrap">
-          {(['todos', 'vip', 'frequente', 'inativo', 'risco', 'pendente'] as FiltroStatus[]).map(filtro => <Button key={filtro} size="sm" variant={filtroStatus === filtro ? 'default' : 'outline'} onClick={() => handleFiltroChange(filtro)} className={cn("rounded-xl h-10 px-4", filtroStatus === filtro && "bg-primary text-primary-foreground", filtro === 'pendente' && filtroStatus !== filtro && "border-yellow-400 text-yellow-700")}>
+          {(['todos', 'vip', 'frequente', 'risco', 'pendente'] as FiltroStatus[]).map(filtro => <Button key={filtro} size="sm" variant={filtroStatus === filtro ? 'default' : 'outline'} onClick={() => handleFiltroChange(filtro)} className={cn("rounded-xl h-10 px-4", filtroStatus === filtro && "bg-primary text-primary-foreground", filtro === 'pendente' && filtroStatus !== filtro && "border-yellow-400 text-yellow-700")}>
             {filtro === 'todos' && 'Todos'}
             {filtro === 'vip' && '⭐ VIP'}
             {filtro === 'frequente' && '🔵 Frequentes'}
-            {filtro === 'inativo' && '⚪ Inativos'}
             {filtro === 'risco' && '⚠️ Risco'}
             {filtro === 'pendente' && '🟡 Pendentes'}
           </Button>)}
-
-          {filtroStatus === 'inativo' && (
-            <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0 sm:ml-2">
-              <Button
-                size="sm"
-                variant={subFiltroInativo === 'critico' ? 'default' : 'outline'}
-                onClick={() => {
-                  setSubFiltroInativo(subFiltroInativo === 'critico' ? null : 'critico');
-                  setCurrentPage(0);
-                }}
-                className={cn("rounded-xl h-10 px-4", subFiltroInativo === 'critico' && "bg-red-800 text-white hover:bg-red-900 border-0")}
-              >
-                Críticos (40+ dias)
-              </Button>
-              <Button
-                size="sm"
-                variant={subFiltroInativo === 'alerta' ? 'default' : 'outline'}
-                onClick={() => {
-                  setSubFiltroInativo(subFiltroInativo === 'alerta' ? null : 'alerta');
-                  setCurrentPage(0);
-                }}
-                className={cn("rounded-xl h-10 px-4", subFiltroInativo === 'alerta' && "bg-orange-500 text-white hover:bg-orange-600 border-0")}
-              >
-                Alerta (25-39 dias)
-              </Button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -769,7 +734,7 @@ export default function Clientes() {
               onEdit={handleOpenEdit}
               onDelete={handleDeleteClick}
               prioridadeNivel={prio.nivel}
-              showPrioridade={filtroStatus === 'inativo'}
+              showPrioridade={false}
               contatoInfo={contato}
               onMarcarContato={marcarContato}
               onWhatsAppEnviado={() => marcarContato(cliente.id, 'whatsapp')}

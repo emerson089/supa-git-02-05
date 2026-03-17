@@ -822,13 +822,6 @@ export default function Estoque() {
           {/* Mobile: Scrollable tabs */}
           {isMobile ? <ScrollArea className="w-full mb-4">
             <div className="flex gap-2 pb-2">
-              <button onClick={() => handleTabChange('materia_prima')} className={cn("flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap", "border text-sm font-medium", activeTab === 'materia_prima' ? "bg-primary/10 text-primary border-primary/30 shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted")}>
-                <Layers className="h-4 w-4 shrink-0" />
-                <span>Matéria-Prima</span>
-                <span className={cn("inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold", activeTab === 'materia_prima' ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
-                  {materiasPrimas.length}
-                </span>
-              </button>
               <button onClick={() => handleTabChange('produto_acabado')} className={cn("flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap", "border text-sm font-medium", activeTab === 'produto_acabado' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted")}>
                 <PackageCheck className="h-4 w-4 shrink-0" />
                 <span>Produtos</span>
@@ -841,10 +834,6 @@ export default function Estoque() {
           </ScrollArea> : (/* Desktop: Original tabs */
             <div className="flex items-center justify-between mb-6">
               <TabsList className="shadow-[3px_3px_6px_hsl(var(--muted)/0.3),-3px_-3px_6px_hsl(var(--background))] bg-muted/30">
-                <TabsTrigger value="materia_prima" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
-                  <Layers size={16} />
-                  Matéria-Prima ({materiasPrimas.length})
-                </TabsTrigger>
                 <TabsTrigger value="produto_acabado" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
                   <PackageCheck size={16} />
                   Produtos Acabados ({produtosAcabados.length})

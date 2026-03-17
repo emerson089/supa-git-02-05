@@ -141,14 +141,16 @@ const NovoPedido = () => {
   const valorTotal = valorItens + taxaExcursao - desconto;
 
   // Verificar se há estoque insuficiente em algum item
+  // Agrega por produtoId para detectar quando múltiplas linhas do mesmo produto somam mais do que o disponível
   const hasEstoqueInsuficiente = useMemo(() => {
-    return items.some(item => {
-      if (!item.produtoId) return false;
-      // Usar getItemById diretamente para garantir que verificamos o item correto
-      // independentemente da categoria (acabado ou variação)
-      const produto = getItemById(item.produtoId);
-      if (!produto) return false;
-      return item.quantidade > produto.quantidade;
+    const qtdPorProduto: Record<string, number> = {};
+    for (const item of items) {
+      if (!item.produtoId) continue;
+      qtdPorProduto[item.produtoId] = (qtdPorProduto[item.produtoId] || 0) + item.quantidade;
+    }
+    return Object.entries(qtdPorProduto).some(([produtoId, total]) => {
+      const produto = getItemById(produtoId);
+      return !!produto && total > produto.quantidade;
     });
   }, [items, getItemById]);
 
@@ -257,15 +259,17 @@ const NovoPedido = () => {
         valorUnitario: item.valorUnitario
       }));
 
-      // Subtrair do estoque
+      // Subtrair do estoque — agrega por produtoId para evitar deduzir parcialmente quando
+      // o mesmo produto aparece em múltiplas linhas (ex.: grades adicionadas em momentos distintos)
+      const qtdPorProduto: Record<string, number> = {};
       for (const item of items) {
-        const produto = getItemById(item.produtoId);
+        if (!item.produtoId) continue;
+        qtdPorProduto[item.produtoId] = (qtdPorProduto[item.produtoId] || 0) + item.quantidade;
+      }
+      for (const [produtoId, qtdTotal] of Object.entries(qtdPorProduto)) {
+        const produto = getItemById(produtoId);
         if (produto) {
-          const novaQuantidade = produto.quantidade - item.quantidade;
-          // IMPORTANTE: Await garantir que o estoque seja atualizado antes de criar o pedido
-          await updateItem(item.produtoId, {
-            quantidade: novaQuantidade
-          });
+          await updateItem(produtoId, { quantidade: produto.quantidade - qtdTotal });
         }
       }
 

@@ -671,6 +671,7 @@ export default function PedidosCriados() {
     const itens = pedido.pedido_itens || [];
     const allItemsForPDF = itens.map(item => ({
       itemId: item.id,
+      produtoId: item.produto_id,
       produtoNome: item.produto_nome,
       quantidade: item.quantidade,
       precoUnitario: item.valor_unitario,
@@ -681,11 +682,31 @@ export default function PedidosCriados() {
       getItemNome: (i) => i.produtoNome || "",
       getItemPreco: (i) => i.precoUnitario ?? 0,
       getItemQtd: (i) => i.quantidade ?? 0,
+      getItemReferencia: (i) => {
+        const produto = estoqueItens.find(p => p.id === i.produtoId);
+        if (produto?.localizacao) {
+          try {
+            const loc = JSON.parse(produto.localizacao);
+            if (loc.referencia) {
+              if (loc.tamanho && !loc.referencia.toUpperCase().endsWith(`-${String(loc.tamanho).toUpperCase()}`)) {
+                return `${loc.referencia}-${loc.tamanho}`;
+              }
+              return loc.referencia;
+            }
+          } catch (e) {}
+        }
+        if (i.produtoNome?.includes(' | REF: ')) {
+          return i.produtoNome.split(' | REF: ')[1] || "";
+        }
+        return i.produtoNome || "";
+      },
     });
 
     const tableData = groupedItens.map(item => [
       item.nomeExibicao,
-      item.tamanhos.join(', ') || '-',
+      Object.keys(item.tamanhosComQtd ?? {}).length > 0
+        ? Object.entries(item.tamanhosComQtd).map(([t, q]) => `${q}× ${t}`).join(', ')
+        : item.tamanhos.join(', ') || '-',
       item.quantidadeTotal.toString(),
       formatCurrency(item.valorUnitario),
       formatCurrency(item.subtotal)
@@ -1402,7 +1423,10 @@ export default function PedidosCriados() {
                             {group.nomeExibicao}
                           </p>
                           <p className="text-sm text-muted-foreground mt-0.5">
-                            {group.tamanhos.length > 0 && `Tamanhos: ${group.tamanhos.join(', ')} · `}{group.quantidadeTotal} x {formatCurrency(group.valorUnitario)}
+                            {Object.keys(group.tamanhosComQtd ?? {}).length > 0
+                              ? `${Object.entries(group.tamanhosComQtd).map(([t, q]) => `${q}× ${t}`).join(', ')} · `
+                              : ''}
+                            {group.quantidadeTotal} peça{group.quantidadeTotal !== 1 ? 's' : ''} · {formatCurrency(group.valorUnitario)}
                           </p>
                         </div>
                         <p className="font-bold text-emerald-600">

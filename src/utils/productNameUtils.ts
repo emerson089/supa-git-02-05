@@ -46,8 +46,9 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
   // Divide por " — " ou " - " e pega a primeira parte
   const nomeBase = currentName.split(/\s*[—|-]\s*/)[0].trim();
 
-  // 5. Gerar nome de exibição padronizado: "Nome - REF XXX"
-  const nomeExibicao = refCurta ? `${nomeBase} - ${refCurta}` : nomeBase;
+  // 5. Gerar nome de exibição padronizado: "Nome XXX"
+  const numDisplay = numeros ? numeros.slice(-3).padStart(3, '0') : '';
+  const nomeExibicao = numDisplay ? `${nomeBase} ${numDisplay}` : nomeBase;
 
   return {
     nomeBase,
@@ -91,6 +92,7 @@ export const groupItensByModel = <T extends any>(
         nomeBase: info.nomeBase,
         nomeExibicao: info.nomeExibicao,
         tamanhos: [],
+        tamanhosComQtd: {} as Record<string, number>,
         quantidadeTotal: 0,
         valorUnitario: preco,
         subtotal: 0,
@@ -102,6 +104,9 @@ export const groupItensByModel = <T extends any>(
 
     if (info.tamanho && !groups[groupKey].tamanhos.includes(info.tamanho)) {
       groups[groupKey].tamanhos.push(info.tamanho);
+    }
+    if (info.tamanho) {
+      groups[groupKey].tamanhosComQtd[info.tamanho] = (groups[groupKey].tamanhosComQtd[info.tamanho] || 0) + qtd;
     }
 
     groups[groupKey].quantidadeTotal += qtd;

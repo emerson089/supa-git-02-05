@@ -35,8 +35,16 @@ export function useClientesPaginated(params: ClientesPaginatedParams) {
   // Debounce search by 400ms
   const debouncedSearch = useDebouncedValue(search, 400);
 
+  // Use a fingerprint of the actual IDs (not just the length) to avoid cache collisions
+  // when two different CRM filters happen to return the same number of clients.
+  const filterKey = filterByIds == null
+    ? filterByIds
+    : filterByIds.length === 0
+      ? '[]'
+      : [...filterByIds].sort().join(',');
+
   return useQuery<ClientesPaginatedResult>({
-    queryKey: ['clientes-paginated', user?.id, page, pageSize, debouncedSearch, ordenacao, filterByIds?.length ?? null],
+    queryKey: ['clientes-paginated', user?.id, page, pageSize, debouncedSearch, ordenacao, filterKey],
     queryFn: async () => {
       if (!user?.id) {
         return { data: [], count: 0, totalPages: 0 };
@@ -91,14 +99,20 @@ export function useClientesPaginated(params: ClientesPaginatedParams) {
         let allData = dataResult.data || [];
 
         // Sort locally respecting the exact order of filterByIds
+        // Optimization: Use a Map for O(1) lookup during sort
+        const idToIndexMap = new Map();
+        filterByIds.forEach((id, index) => idToIndexMap.set(id, index));
+
         allData.sort((a, b) => {
-          return filterByIds.indexOf(a.id) - filterByIds.indexOf(b.id);
+          const indexA = idToIndexMap.has(a.id) ? idToIndexMap.get(a.id) : 999999;
+          const indexB = idToIndexMap.has(b.id) ? idToIndexMap.get(b.id) : 999999;
+          return indexA - indexB;
         });
 
         // Apply pagination locally
         const totalCount = allData.length;
         const totalPages = Math.ceil(totalCount / pageSize);
-        const paginatedData = allData.slice(from, to);
+        const paginatedData = allData.slice(from, from + pageSize);
 
         return {
           data: paginatedData,
@@ -133,7 +147,8 @@ export function useClientesPaginated(params: ClientesPaginatedParams) {
         totalPages,
       };
     },
-    enabled: !!user?.id,
+    // Don't run while a CRM filter is still loading (filterByIds = undefined means loading)
+    enabled: !!user?.id && params.filterByIds !== undefined,
     staleTime: 30000, // Cache for 30 seconds
   });
 }

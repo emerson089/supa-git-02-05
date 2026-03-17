@@ -101,6 +101,9 @@ export function useAddCliente() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes-crm'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes-crm-filter'] });
     },
   });
 }
@@ -122,6 +125,9 @@ export function useUpdateCliente() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes-crm'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes-crm-filter'] });
     },
   });
 }
@@ -140,6 +146,9 @@ export function useRemoveCliente() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes-crm'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes-crm-filter'] });
     },
   });
 }

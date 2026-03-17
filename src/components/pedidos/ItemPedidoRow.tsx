@@ -26,23 +26,25 @@ export interface ItemPedido {
 
 interface ItemPedidoRowProps {
   item: ItemPedido;
-  produtos: { 
-    id: string; 
-    nome: string; 
-    preco: number; 
-    quantidadeDisponivel: number; 
+  produtos: {
+    id: string;
+    nome: string;
+    preco: number;
+    quantidadeDisponivel: number;
     referencia?: string;
     totalModelEstoque?: number;
     refBase?: string;
     tamanho?: string;
+    gradeReserved?: number;
   }[];
   onUpdate: (item: ItemPedido) => void;
   onRemove: (id: string) => void;
   autoFocus?: boolean;
   onAutoFocusComplete?: () => void;
+  availableOverride?: number;
 }
 
-export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, onAutoFocusComplete }: ItemPedidoRowProps) {
+export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, onAutoFocusComplete, availableOverride }: ItemPedidoRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -51,9 +53,9 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
 
   const total = item.quantidade * item.valorUnitario;
 
-  // Verificar disponibilidade
+  // Verificar disponibilidade — usa availableOverride quando fornecido (desconta carrinho)
   const produtoSelecionado = produtos.find(p => p.id === item.produtoId);
-  const quantidadeDisponivel = produtoSelecionado?.quantidadeDisponivel || 0;
+  const quantidadeDisponivel = availableOverride ?? (produtoSelecionado?.quantidadeDisponivel || 0);
   const estoqueInsuficiente = item.produtoId && item.quantidade > quantidadeDisponivel;
   const esgotado = produtoSelecionado && quantidadeDisponivel === 0;
 
@@ -239,7 +241,12 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                             const refToDisplay = produto.refBase || produto.referencia;
                             const totalModelEstoque = produto.totalModelEstoque ?? produto.quantidadeDisponivel;
                             const refDisplay = refToDisplay ? `ref ${refToDisplay} · ` : '';
-                            return refDisplay + (produto.quantidadeDisponivel === 0 ? 'Esgotado' : `${totalModelEstoque} em estoque`);
+                            const qtdDisplay = produto.quantidadeDisponivel === 0
+                              ? (produto.gradeReserved ? 'Todos em grade' : 'Esgotado')
+                              : produto.gradeReserved
+                                ? `${produto.quantidadeDisponivel} fora da grade`
+                                : `${totalModelEstoque} em estoque`;
+                            return refDisplay + qtdDisplay;
                           })()}
                         </span>
                       </div>
@@ -256,7 +263,7 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
               {esgotado ? (
                 <p className="text-[10px] uppercase tracking-wider text-destructive flex items-center gap-1">
                   <AlertCircle size={10} />
-                  Esgotado
+                  {produtoSelecionado?.gradeReserved ? 'Todos em grade' : 'Esgotado'}
                 </p>
               ) : estoqueInsuficiente ? (
                 <p className="text-[10px] uppercase tracking-wider text-destructive flex items-center gap-1">
@@ -265,7 +272,9 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                 </p>
               ) : (
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                  {quantidadeDisponivel} disponíveis
+                  {produtoSelecionado?.gradeReserved
+                    ? `${quantidadeDisponivel} fora da grade`
+                    : `${quantidadeDisponivel} disponíveis`}
                 </p>
               )}
             </div>

@@ -31,11 +31,12 @@ interface AddGradeModalProps {
     open: boolean;
     onClose: () => void;
     onAdd: (items: ItemPedido[]) => void;
+    existingItems?: ItemPedido[];
 }
 
 type Step = 'select-model' | 'select-grade';
 
-export function AddGradeModal({ open, onClose, onAdd }: AddGradeModalProps) {
+export function AddGradeModal({ open, onClose, onAdd, existingItems = [] }: AddGradeModalProps) {
     const { modelosPadronizados } = useModelosPadronizados();
     const { itens } = useEstoque();
 
@@ -77,12 +78,21 @@ export function AddGradeModal({ open, onClose, onAdd }: AddGradeModalProps) {
     };
 
     // Calcular disponibilidade por variação para a grade selecionada
+    // Desconta o que já está no carrinho (existingItems) para mostrar disponível real
     const analiseEstoque = useMemo(() => {
         if (!gradeSelecionada || !modeloSelecionado) return null;
 
+        const qtdNoCarrinho: Record<string, number> = {};
+        for (const ci of existingItems) {
+            if (!ci.produtoId) continue;
+            qtdNoCarrinho[ci.produtoId] = (qtdNoCarrinho[ci.produtoId] || 0) + ci.quantidade;
+        }
+
         return gradeSelecionada.itens.map(item => {
             const variacao = modeloSelecionado.variacoes.find(v => v.tamanho === item.tamanho);
-            const disponivel = variacao?.quantidade ?? 0;
+            const estoqueReal = variacao?.quantidade ?? 0;
+            const jaNoCarrinho = qtdNoCarrinho[variacao?.id ?? ''] ?? 0;
+            const disponivel = Math.max(0, estoqueReal - jaNoCarrinho);
             const necessario = item.quantidade * quantidadeGrades;
             return {
                 tamanho: item.tamanho,
@@ -93,9 +103,18 @@ export function AddGradeModal({ open, onClose, onAdd }: AddGradeModalProps) {
                 variacaoId: variacao?.id ?? '',
             };
         });
-    }, [gradeSelecionada, modeloSelecionado, quantidadeGrades]);
+    }, [gradeSelecionada, modeloSelecionado, quantidadeGrades, existingItems]);
 
     const estoqueInsuficiente = analiseEstoque?.some(a => !a.ok) ?? false;
+
+    // Máximo de grades completas possíveis com o estoque disponível (já descontando carrinho)
+    const maxGradesDisponiveis = useMemo(() => {
+        if (!gradeSelecionada || !analiseEstoque) return 0;
+        const mins = analiseEstoque
+            .filter(a => a.qtdPorGrade > 0)
+            .map(a => Math.floor(a.disponivel / a.qtdPorGrade));
+        return mins.length > 0 ? Math.min(...mins) : 0;
+    }, [gradeSelecionada, analiseEstoque]);
     const totalPecas = gradeSelecionada
         ? gradeSelecionada.totalPecas * quantidadeGrades
         : 0;
@@ -255,7 +274,14 @@ export function AddGradeModal({ open, onClose, onAdd }: AddGradeModalProps) {
                                     <Separator />
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between gap-4">
-                                            <Label className="text-sm font-semibold">Quantas grades?</Label>
+                                            <div>
+                                                <Label className="text-sm font-semibold">Quantas grades?</Label>
+                                                {maxGradesDisponiveis > 0 && (
+                                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                                        máx. {maxGradesDisponiveis} grade(s) disponível(is)
+                                                    </p>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-2">
                                                 <Button
                                                     type="button"
@@ -268,8 +294,12 @@ export function AddGradeModal({ open, onClose, onAdd }: AddGradeModalProps) {
                                                 <Input
                                                     type="number"
                                                     min={1}
+                                                    max={maxGradesDisponiveis || undefined}
                                                     value={quantidadeGrades}
-                                                    onChange={e => setQuantidadeGrades(Math.max(1, parseInt(e.target.value) || 1))}
+                                                    onChange={e => {
+                                                        const parsed = Math.max(1, parseInt(e.target.value) || 1);
+                                                        setQuantidadeGrades(maxGradesDisponiveis > 0 ? Math.min(parsed, maxGradesDisponiveis) : parsed);
+                                                    }}
                                                     className="h-8 w-16 text-center font-bold shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
                                                 />
                                                 <Button
@@ -278,6 +308,7 @@ export function AddGradeModal({ open, onClose, onAdd }: AddGradeModalProps) {
                                                     size="icon"
                                                     className="h-8 w-8"
                                                     onClick={() => setQuantidadeGrades(q => q + 1)}
+                                                    disabled={maxGradesDisponiveis > 0 && quantidadeGrades >= maxGradesDisponiveis}
                                                 >+</Button>
                                             </div>
                                         </div>
@@ -311,15 +342,22 @@ export function AddGradeModal({ open, onClose, onAdd }: AddGradeModalProps) {
                                             </div>
                                         </div>
 
-                                        {/* Alerta de estoque insuficiente (não bloqueia) */}
-                                        {estoqueInsuficiente && (
+                                        {/* Alerta de estoque */}
+                                        {maxGradesDisponiveis === 0 ? (
+                                            <div className="flex gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+                                                <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                                                <p className="text-xs text-destructive font-medium">
+                                                    Estoque insuficiente para adicionar esta grade.
+                                                </p>
+                                            </div>
+                                        ) : estoqueInsuficiente ? (
                                             <div className="flex gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
                                                 <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                                                 <p className="text-xs text-amber-700 dark:text-amber-400">
-                                                    Estoque insuficiente para alguns tamanhos. O pedido pode ser criado, mas verifique com o operador.
+                                                    Quantidade solicitada ultrapassa o estoque disponível para alguns tamanhos.
                                                 </p>
                                             </div>
-                                        )}
+                                        ) : null}
                                     </div>
                                 </>
                             )}
@@ -332,6 +370,7 @@ export function AddGradeModal({ open, onClose, onAdd }: AddGradeModalProps) {
                         <Button variant="outline" onClick={handleBack}>Voltar</Button>
                         <Button
                             onClick={handleConfirmar}
+                            disabled={maxGradesDisponiveis === 0 || quantidadeGrades > maxGradesDisponiveis}
                             className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white gap-2"
                         >
                             <Package2 className="h-4 w-4" />

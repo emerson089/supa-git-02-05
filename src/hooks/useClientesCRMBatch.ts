@@ -35,8 +35,8 @@ export function getClienteStatusFromStats(stats: ClienteCRMBatchStats | undefine
     return { label: 'VIP', color: 'bg-amber-500 text-white' };
   }
 
-  // Inativo: Última compra há 25 dias ou mais
-  if (diasDesdeUltimaCompra >= 25) {
+  // Inativo: Última compra há 25 dias ou mais (excluir quem nunca comprou)
+  if (diasDesdeUltimaCompra >= 25 && diasDesdeUltimaCompra !== Infinity) {
     return { label: 'Inativo', color: 'bg-gray-400 text-white' };
   }
 
@@ -146,6 +146,32 @@ interface ClienteWithPendingDate {
   diasDesdeUltimaCompra?: number;
 }
 
+const PAGE_SIZE_CRM = 1000;
+
+async function fetchAllPedidosMinimal(userId: string) {
+  let allPedidos: any[] = [];
+  let from = 0;
+  let hasMore = true;
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select('cliente_id, valor_total, status_pagamento, status_pedido, created_at')
+      .eq('user_id', userId)
+      .not('cliente_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE_CRM - 1);
+    if (error) throw error;
+    if (data && data.length > 0) {
+      allPedidos = [...allPedidos, ...data];
+      from += PAGE_SIZE_CRM;
+      hasMore = data.length === PAGE_SIZE_CRM;
+    } else {
+      hasMore = false;
+    }
+  }
+  return allPedidos;
+}
+
 /**
  * Hook to get IDs of clients that match a CRM status filter.
  * Used for hybrid filtering (server-side base + CRM filter).
@@ -153,51 +179,57 @@ interface ClienteWithPendingDate {
  * or highest total purchased for 'maior_historico' sorting).
  */
 export function useClientesCRMFilter(
-  filtroStatus: 'vip' | 'frequente' | 'inativo' | 'risco' | 'pendente' | null,
-  ordenacao?: 'nome' | 'recente' | 'maior_historico',
-  subFiltroInativo?: 'critico' | 'alerta' | null
+  filtroStatus: 'vip' | 'frequente' | 'risco' | 'pendente' | null,
+  ordenacao?: 'nome' | 'recente' | 'maior_historico'
 ) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['clientes-crm-filter', user?.id, filtroStatus, ordenacao, subFiltroInativo],
+    queryKey: ['clientes-crm-filter', user?.id, filtroStatus, ordenacao],
     queryFn: async () => {
       if (!user?.id || !filtroStatus) {
         return null; // No filter applied
       }
 
-      // Fetch all orders with minimal fields for filtering
-      const { data: pedidos, error } = await supabase
-        .from('pedidos')
-        .select('cliente_id, valor_total, status_pagamento, status_pedido, created_at')
-        .not('cliente_id', 'is', null);
+      // STEP 1: Fetch all client IDs for this user first
+      // This ensures clients with no orders are also evaluated
+      const { data: allClientes, error: clientesError } = await supabase
+        .from('clientes')
+        .select('id')
+        .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (clientesError) throw clientesError;
+      if (!allClientes || allClientes.length === 0) return [];
+
+      // STEP 2: Fetch all orders with minimal fields for filtering
+      const pedidos = await fetchAllPedidosMinimal(user.id);
 
       const statusCancelados = ['CANCELADO', 'GOLPE', 'GOLPE CANCELADO'];
       const statsMap = new Map<string, ClienteCRMBatchStats>();
 
-      // Aggregate by cliente_id
-      for (const pedido of pedidos || []) {
+      // STEP 3: Initialize statsMap with ALL clients (including those with no orders)
+      // Clients with no orders will have ultimaCompra = null → infinite days inactive
+      for (const cliente of allClientes) {
+        statsMap.set(cliente.id, {
+          clienteId: cliente.id,
+          totalComprado: 0,
+          pedidosPagos: 0,
+          cancelamentos: 0,
+          ultimaCompra: null,
+          ultimoPedidoValor: null,
+          ultimoPedidoStatus: null,
+          ultimoPedidoPendenteValor: null,
+          ultimoPedidoPendenteData: null,
+        });
+      }
+
+      // STEP 4: Update stats for clients that have orders
+      for (const pedido of pedidos) {
         if (!pedido.cliente_id) continue;
 
-        const clienteId = pedido.cliente_id;
+        const stats = statsMap.get(pedido.cliente_id);
+        if (!stats) continue; // Order belongs to a client not in our list
 
-        if (!statsMap.has(clienteId)) {
-          statsMap.set(clienteId, {
-            clienteId,
-            totalComprado: 0,
-            pedidosPagos: 0,
-            cancelamentos: 0,
-            ultimaCompra: null,
-            ultimoPedidoValor: null,
-            ultimoPedidoStatus: null,
-            ultimoPedidoPendenteValor: null,
-            ultimoPedidoPendenteData: null,
-          });
-        }
-
-        const stats = statsMap.get(clienteId)!;
         const isPago = pedido.status_pagamento?.toUpperCase() === 'PAGO';
         const isCancelado = pedido.status_pedido && statusCancelados.includes(pedido.status_pedido.toUpperCase());
         const isPendente = pedido.status_pagamento?.toUpperCase() === 'PENDENTE';
@@ -246,20 +278,10 @@ export function useClientesCRMFilter(
           case 'frequente':
             matches = stats.pedidosPagos >= 5 && stats.totalComprado < 10000 && diasDesdeUltimaCompra < 25;
             break;
-          case 'inativo':
-            if (subFiltroInativo === 'critico') {
-              matches = diasDesdeUltimaCompra > 40 && diasDesdeUltimaCompra !== Infinity;
-            } else if (subFiltroInativo === 'alerta') {
-              matches = diasDesdeUltimaCompra >= 25 && diasDesdeUltimaCompra <= 40;
-            } else {
-              matches = diasDesdeUltimaCompra >= 25;
-            }
-            break;
           case 'risco':
             matches = stats.cancelamentos >= 2;
             break;
           case 'pendente':
-            // Check if client has ANY pending order (not just the most recent one)
             matches = stats.ultimoPedidoPendenteData !== null;
             break;
         }
@@ -284,9 +306,10 @@ export function useClientesCRMFilter(
       } else if (ordenacao === 'maior_historico') {
         // Sort by highest total purchased globally
         matchingClients.sort((a, b) => b.totalComprado - a.totalComprado);
-      } else if (filtroStatus === 'inativo') {
-        // Default sorting for Inativos: Highest days without purchase first
-        matchingClients.sort((a, b) => (b.diasDesdeUltimaCompra || 0) - (a.diasDesdeUltimaCompra || 0));
+      }
+
+      if (matchingClients.length === 0 && filtroStatus) {
+        console.log(`[CRM Filter] Nenhum cliente encontrado para o filtro: ${filtroStatus}`);
       }
 
       return matchingClients.map(c => c.id);
