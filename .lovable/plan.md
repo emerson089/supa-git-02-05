@@ -1,16 +1,32 @@
 
 
-## Adicionar opção "ENTREGA TORITAMA" ao status de entrega
+## Diagnóstico
 
-Adicionar a nova opção em todos os locais onde os status de entrega são definidos:
+O erro ocorre ao excluir um modelo padronizado porque a tabela `transferencia_itens` possui uma **foreign key sem CASCADE** referenciando `estoque_itens`. A lógica atual tenta limpar esses registros manualmente, mas usa um JOIN complexo com a tabela `transferencias` que pode falhar por causa de RLS (políticas de segurança) ou filtros que não capturam todos os registros.
 
-### Arquivos a alterar
+**Foreign keys atuais em `estoque_itens`:**
+- `estoque_movimentacoes` → CASCADE (OK)
+- `estoque_por_local` → CASCADE (OK)
+- `pedido_itens` → SET NULL (OK)
+- `transferencia_itens` → **NO ACTION** (PROBLEMA)
 
-1. **`src/components/pedidos/StatusSelector.tsx`** — Adicionar `{ value: 'ENTREGA TORITAMA', label: 'ENTREGA TORITAMA', color: 'purple' }` ao array `statusEntregaOptions`.
+## Plano
 
-2. **`src/lib/csv-validation-schemas.ts`** — Adicionar `'ENTREGA TORITAMA'` ao array `STATUS_ENTREGA_VALUES`.
+### 1. Migração: Alterar FK para CASCADE
+Alterar a foreign key `transferencia_itens_item_id_fkey` de NO ACTION para CASCADE, assim quando um `estoque_itens` for deletado, os `transferencia_itens` associados são removidos automaticamente.
 
-3. **`src/components/pedidos/MobileFiltersSheet.tsx`** e **`src/hooks/usePedidosPaginated.ts`** — Verificar se usam os arrays centralizados (provavelmente sim, sem alteração necessária).
+```sql
+ALTER TABLE transferencia_itens
+  DROP CONSTRAINT transferencia_itens_item_id_fkey;
 
-A cor `purple` foi escolhida para diferenciar visualmente, similar ao "NO CARRO". Posso ajustar se preferir outra cor.
+ALTER TABLE transferencia_itens
+  ADD CONSTRAINT transferencia_itens_item_id_fkey
+  FOREIGN KEY (item_id) REFERENCES estoque_itens(id) ON DELETE CASCADE;
+```
+
+### 2. Simplificar lógica de exclusão no código
+No `useEstoqueData.ts`, simplificar o step 2 da função `removeItem`: após verificar que não há transferências em andamento, deletar **todos** os `transferencia_itens` do item diretamente com um DELETE simples (sem inner join), como fallback de segurança antes do CASCADE agir.
+
+### Resultado esperado
+A exclusão de modelos padronizados funcionará mesmo quando houver histórico de transferências concluídas/canceladas vinculadas ao item.
 
