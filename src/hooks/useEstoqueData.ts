@@ -385,45 +385,15 @@ export function useRemoveItem() {
         throw new Error(mensagem);
       }
 
-      // 2. Limpar transferencia_itens de transferências CONCLUÍDAS ou SOFT-DELETED
-      const { data: itensParaLimpar, error: itensLimparError } = await supabase
+      // 2. Limpar TODOS os transferencia_itens restantes (fallback antes do CASCADE)
+      const { error: deleteTransItensError } = await supabase
         .from('transferencia_itens')
-        .select(`
-          id,
-          transferencia_id,
-          transferencias!inner(
-            id,
-            status,
-            deleted_at
-          )
-        `)
+        .delete()
         .eq('item_id', id);
 
-      if (itensLimparError) {
-        console.error('[useRemoveItem] Erro ao buscar itens para limpeza:', itensLimparError);
-      }
-
-      // Filtrar itens que podem ser deletados (concluídas, estornadas, canceladas ou soft-deleted)
-      const itensParaDeletar = itensParaLimpar?.filter((i: any) => 
-        i.transferencias?.deleted_at !== null || 
-        i.transferencias?.status === 'concluida' ||
-        i.transferencias?.status === 'estornada' ||
-        i.transferencias?.status === 'cancelada'
-      ) || [];
-
-      if (itensParaDeletar.length > 0) {
-        const idsParaDeletar = itensParaDeletar.map((i: any) => i.id);
-        console.log(`[useRemoveItem] Limpando ${idsParaDeletar.length} transferencia_itens de transferências concluídas/excluídas`);
-        
-        const { error: deleteTransItensError } = await supabase
-          .from('transferencia_itens')
-          .delete()
-          .in('id', idsParaDeletar);
-        
-        if (deleteTransItensError) {
-          console.error('[useRemoveItem] Erro ao deletar transferencia_itens:', deleteTransItensError);
-          throw new Error('Erro ao limpar histórico de transferências');
-        }
+      if (deleteTransItensError) {
+        console.error('[useRemoveItem] Erro ao deletar transferencia_itens:', deleteTransItensError);
+        // Não bloquear — CASCADE vai cuidar na deleção do item
       }
 
       // 3. Deletar registros dependentes
