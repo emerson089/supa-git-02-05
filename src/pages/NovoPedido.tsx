@@ -266,12 +266,13 @@ const NovoPedido = () => {
         if (!item.produtoId) continue;
         qtdPorProduto[item.produtoId] = (qtdPorProduto[item.produtoId] || 0) + item.quantidade;
       }
-      for (const [produtoId, qtdTotal] of Object.entries(qtdPorProduto)) {
-        const produto = getItemById(produtoId);
-        if (produto) {
-          await updateItem(produtoId, { quantidade: produto.quantidade - qtdTotal });
-        }
-      }
+      await Promise.all(
+        Object.entries(qtdPorProduto).map(([produtoId, qtdTotal]) => {
+          const produto = getItemById(produtoId);
+          if (!produto) return Promise.resolve();
+          return updateItem(produtoId, { quantidade: produto.quantidade - qtdTotal });
+        })
+      );
 
       // Criar pedido no contexto - usando labels em maiúsculo para matching de cores
       const getLabel = (value: string, options: {

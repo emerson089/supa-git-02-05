@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -9,8 +10,13 @@ import {
     ModeloPadronizado,
     VariacaoModelo,
     TIPO_GARMENT_LABELS,
+    TAMANHOS_LETRAS,
+    TAMANHOS_NUMERICOS,
 } from '@/hooks/useModelosPadronizados';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
+import { useUpdateItem } from '@/hooks/useEstoqueData';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 import {
     Package,
     Tag,
@@ -21,6 +27,9 @@ import {
     Palette,
     Hash,
     Layers,
+    Pencil,
+    Check,
+    X,
 } from 'lucide-react';
 import { EtiquetasModal } from './EtiquetasModal';
 
@@ -59,11 +68,56 @@ function getStockColor(qtd: number) {
 
 export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props) {
     const [showEtiquetas, setShowEtiquetas] = useState(false);
+    const [localVariacoes, setLocalVariacoes] = useState<VariacaoModelo[]>([]);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingQtd, setEditingQtd] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
+    const { mutateAsync: updateItem } = useUpdateItem();
+
+    useEffect(() => {
+        if (modelo) {
+            const ORDEM = [...TAMANHOS_LETRAS, ...TAMANHOS_NUMERICOS] as string[];
+            const sorted = [...modelo.variacoes].sort(
+                (a, b) => ORDEM.indexOf(a.tamanho) - ORDEM.indexOf(b.tamanho)
+            );
+            setLocalVariacoes(sorted);
+            setEditingId(null);
+        }
+    }, [modelo?.id]);
 
     if (!modelo) return null;
-    const { meta, variacoes, nome, precoUnitario } = modelo;
+    const { meta, nome, precoUnitario } = modelo;
 
-    const totalPecas = variacoes.reduce((s, v) => s + v.quantidade, 0);
+    const totalPecas = localVariacoes.reduce((s, v) => s + v.quantidade, 0);
+
+    const startEdit = (v: VariacaoModelo) => {
+        setEditingId(v.id);
+        setEditingQtd(String(v.quantidade));
+    };
+
+    const cancelEdit = () => {
+        setEditingId(null);
+        setEditingQtd('');
+    };
+
+    const saveEdit = async (v: VariacaoModelo) => {
+        const novaQtd = parseInt(editingQtd, 10);
+        if (isNaN(novaQtd) || novaQtd < 0) return;
+        setSaving(true);
+        try {
+            await updateItem({ id: v.id, quantidade: novaQtd });
+            setLocalVariacoes(prev =>
+                prev.map(lv => lv.id === v.id ? { ...lv, quantidade: novaQtd } : lv)
+            );
+            setEditingId(null);
+            queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
         <>
@@ -149,7 +203,7 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                     <div className="mt-4 p-3 rounded-xl bg-primary/5 border border-primary/10">
                                         <p className="text-xs text-muted-foreground uppercase tracking-wider">Total em Estoque</p>
                                         <p className="text-2xl font-bold text-primary">{totalPecas}</p>
-                                        <p className="text-xs text-muted-foreground">peças em {variacoes.length} variação(ões)</p>
+                                        <p className="text-xs text-muted-foreground">peças em {localVariacoes.length} variação(ões)</p>
                                     </div>
                                 </div>
                             </div>
@@ -175,14 +229,14 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {variacoes.length === 0 ? (
+                                            {localVariacoes.length === 0 ? (
                                                 <tr>
                                                     <td colSpan={5} className="text-center py-8 text-muted-foreground">
                                                         Nenhuma variação cadastrada
                                                     </td>
                                                 </tr>
                                             ) : (
-                                                variacoes.map((v, idx) => (
+                                                localVariacoes.map((v, idx) => (
                                                     <tr
                                                         key={v.id}
                                                         className={cn(
@@ -199,7 +253,43 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                                         <td className="px-4 py-3 text-center">
                                                             <BarcodeInline value={v.referencia} />
                                                         </td>
-                                                        <td className="px-4 py-3 text-right font-bold">{v.quantidade}</td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            {editingId === v.id ? (
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={0}
+                                                                        className="w-20 h-7 text-right text-sm px-2"
+                                                                        value={editingQtd}
+                                                                        onChange={e => setEditingQtd(e.target.value)}
+                                                                        onKeyDown={e => {
+                                                                            if (e.key === 'Enter') saveEdit(v);
+                                                                            if (e.key === 'Escape') cancelEdit();
+                                                                        }}
+                                                                        autoFocus
+                                                                        disabled={saving}
+                                                                    />
+                                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" onClick={() => saveEdit(v)} disabled={saving}>
+                                                                        {saving ? <span className="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin inline-block" /> : <Check className="h-3.5 w-3.5" />}
+                                                                    </Button>
+                                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={cancelEdit} disabled={saving}>
+                                                                        <X className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center justify-end gap-1 group/cell">
+                                                                    <span className="font-bold">{v.quantidade}</span>
+                                                                    <Button
+                                                                        size="icon"
+                                                                        variant="ghost"
+                                                                        className="h-6 w-6 opacity-0 group-hover/cell:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
+                                                                        onClick={() => startEdit(v)}
+                                                                    >
+                                                                        <Pencil className="h-3 w-3" />
+                                                                    </Button>
+                                                                </div>
+                                                            )}
+                                                        </td>
                                                         <td className="px-4 py-3 text-right">
                                                             <Badge className={cn('text-[10px] border', getStockColor(v.quantidade))}>
                                                                 {v.quantidade === 0 ? 'Esgotado' : v.quantidade <= 3 ? 'Baixo' : 'OK'}
@@ -220,7 +310,7 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
             <EtiquetasModal
                 open={showEtiquetas}
                 onClose={() => setShowEtiquetas(false)}
-                variacoes={variacoes}
+                variacoes={localVariacoes}
                 nomeModelo={nome}
                 precoVenda={precoUnitario ?? 0}
             />

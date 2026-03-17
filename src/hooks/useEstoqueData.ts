@@ -250,16 +250,20 @@ export function useUpdateItem() {
       
       // Sync quantity with estoque_por_local for Central location
       if (updates.quantidade !== undefined && user) {
-        const { data: localCentral, error: localError } = await supabase
-          .from('estoque_locais')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('tipo', 'central')
-          .maybeSingle();
-        
-        if (localError) {
-          console.error('[useUpdateItem] Erro ao buscar local central:', localError);
-        }
+        const localCentral = await queryClient.fetchQuery({
+          queryKey: ['estoque-local-central', user.id],
+          queryFn: async () => {
+            const { data, error } = await supabase
+              .from('estoque_locais')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('tipo', 'central')
+              .maybeSingle();
+            if (error) console.error('[useUpdateItem] Erro ao buscar local central:', error);
+            return data ?? null;
+          },
+          staleTime: 5 * 60 * 1000,
+        });
         
         if (localCentral) {
           const { data: estoqueLocal, error: estoqueLocalError } = await supabase

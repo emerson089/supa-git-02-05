@@ -679,7 +679,10 @@ export default function PedidosCriados() {
 
     const groupedItens = groupItensByModel(allItemsForPDF, {
       getItemId: (i) => i.itemId || "",
-      getItemNome: (i) => i.produtoNome || "",
+      getItemNome: (i) => {
+        const produto = estoqueItens.find(p => p.id === i.produtoId);
+        return produto?.nome || i.produtoNome || "";
+      },
       getItemPreco: (i) => i.precoUnitario ?? 0,
       getItemQtd: (i) => i.quantidade ?? 0,
       getItemReferencia: (i) => {
@@ -1342,7 +1345,10 @@ export default function PedidosCriados() {
               }
               return item.produto_nome || "";
             },
-            getItemNome: (item: any) => item.produto_nome || "",
+            getItemNome: (item: any) => {
+              const produto = estoqueItens.find(p => p.id === item.produto_id);
+              return produto?.nome || item.produto_nome || "";
+            },
             getItemPreco: (item: any) => item.valor_unitario || 0,
             getItemQtd: (item: any) => item.quantidade || 0,
             getItemImagem: (item: any) => {
