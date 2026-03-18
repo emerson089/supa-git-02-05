@@ -1010,7 +1010,9 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          item_id: string
+          imagem_url_produto: string | null
+          item_id: string | null
+          nome_produto: string | null
           preco_unitario: number | null
           quantidade_enviada: number
           quantidade_retornada: number | null
@@ -1020,7 +1022,9 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
-          item_id: string
+          imagem_url_produto?: string | null
+          item_id?: string | null
+          nome_produto?: string | null
           preco_unitario?: number | null
           quantidade_enviada?: number
           quantidade_retornada?: number | null
@@ -1030,7 +1034,9 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
-          item_id?: string
+          imagem_url_produto?: string | null
+          item_id?: string | null
+          nome_produto?: string | null
           preco_unitario?: number | null
           quantidade_enviada?: number
           quantidade_retornada?: number | null
