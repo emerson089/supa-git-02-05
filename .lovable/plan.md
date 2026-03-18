@@ -1,33 +1,16 @@
 
 
-## Plano: Melhorar layout do resumo e exibição do desconto
+## Adicionar opção "ENTREGA TORITAMA" ao status de entrega
 
-### O que muda
+Adicionar a nova opção em todos os locais onde os status de entrega são definidos:
 
-**1. ResumoCard (tela Novo Pedido)**
-- Reorganizar o grid de métricas em layout horizontal com 4 colunas fixas: Total de Peças | Qtd de Modelos | Desconto (Interno) | Valor Total
-- Quando houver desconto > 0, o Valor Total exibirá:
-  - O valor original riscado (line-through, cinza)
-  - O valor com desconto em destaque (verde, grande)
-  - A economia exibida como badge: "- R$ 32,00 de desconto"
-- Taxa Excursão e Subtotal ficam como linha auxiliar acima do grid principal (texto menor)
+### Arquivos a alterar
 
-**2. Modal de detalhes (PedidosCriados)**
-- Mesmo tratamento visual: quando desconto > 0, mostrar valor original riscado + valor final com desconto
-- Layout em grid horizontal de 4 colunas (Total Peças, Qtd Modelos, Desconto, Valor Total)
+1. **`src/components/pedidos/StatusSelector.tsx`** — Adicionar `{ value: 'ENTREGA TORITAMA', label: 'ENTREGA TORITAMA', color: 'purple' }` ao array `statusEntregaOptions`.
 
-### Arquivos alterados
-- `src/components/pedidos/ResumoCard.tsx` - Refatorar grid e lógica de exibição do desconto/valor total
-- `src/pages/PedidosCriados.tsx` (linhas ~1447-1506) - Atualizar seção de totais do modal de detalhes
+2. **`src/lib/csv-validation-schemas.ts`** — Adicionar `'ENTREGA TORITAMA'` ao array `STATUS_ENTREGA_VALUES`.
 
-### Comportamento do Valor Total com desconto
-```text
-Sem desconto:          Com desconto:
-┌──────────────┐       ┌──────────────────────┐
-│ VALOR TOTAL  │       │ VALOR TOTAL          │
-│ R$ 1.200,00  │       │ R$ 1.200,00  (riscado)│
-│              │       │ R$ 1.168,00  (verde)  │
-│              │       │ -R$ 32,00 desconto    │
-└──────────────┘       └──────────────────────┘
-```
+3. **`src/components/pedidos/MobileFiltersSheet.tsx`** e **`src/hooks/usePedidosPaginated.ts`** — Verificar se usam os arrays centralizados (provavelmente sim, sem alteração necessária).
+
+A cor `purple` foi escolhida para diferenciar visualmente, similar ao "NO CARRO". Posso ajustar se preferir outra cor.
 

@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface ResumoCardProps {
   totalPecas: number;
@@ -33,24 +34,37 @@ export function ResumoCard({
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
+  const valorSemDesconto = valorItens + taxaExcursao;
+  const temDesconto = desconto > 0;
+
   return (
     <div className="neu-card p-7">
-      {/* Métricas em grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 lg:gap-8 mb-6">
-        {/* Quantidade total de peças */}
+      {/* Linha auxiliar: Subtotal e Taxa Excursão */}
+      {(taxaExcursao > 0 || valorItens > 0) && (
+        <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-muted-foreground">
+          <span>Subtotal: <strong className="text-foreground">{formatCurrency(valorItens)}</strong></span>
+          {taxaExcursao > 0 && (
+            <span>Taxa Excursão{nomeExcursao ? ` (${nomeExcursao})` : ''}: <strong className="text-amber-600">+ {formatCurrency(taxaExcursao)}</strong></span>
+          )}
+        </div>
+      )}
+
+      {/* Grid principal: 4 colunas */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 lg:gap-8 mb-6">
+        {/* Total de Peças */}
         <div className="flex flex-col gap-1">
           <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-            Quantidade total de peças
+            Total de Peças
           </p>
           <p className="text-2xl font-semibold leading-tight text-primary">
             {totalPecas} <span className="text-sm font-normal text-muted-foreground">peças</span>
           </p>
         </div>
 
-        {/* Quantidade de modelos */}
+        {/* Quantidade de Modelos */}
         <div className="flex flex-col gap-1">
           <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-            Quantidade de modelos
+            Qtd de Modelos
           </p>
           <p className="text-2xl font-semibold leading-tight text-violet-600">
             {quantidadeModelos} <span className="text-sm font-normal text-muted-foreground">
@@ -59,29 +73,7 @@ export function ResumoCard({
           </p>
         </div>
 
-        {/* Subtotal dos itens */}
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-            Subtotal dos itens
-          </p>
-          <p className="text-2xl font-semibold leading-tight text-foreground">
-            {formatCurrency(valorItens)}
-          </p>
-        </div>
-
-        {/* Taxa Excursão - condicional */}
-        {taxaExcursao > 0 && (
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-              Taxa Excursão {nomeExcursao && <span className="normal-case">({nomeExcursao})</span>}
-            </p>
-            <p className="text-2xl font-semibold leading-tight text-amber-600">
-              + {formatCurrency(taxaExcursao)}
-            </p>
-          </div>
-        )}
-
-        {/* Campo de Desconto (Interno) */}
+        {/* Desconto (Interno) */}
         <div className="flex flex-col gap-1">
           <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
             Desconto (Interno)
@@ -98,14 +90,28 @@ export function ResumoCard({
           </div>
         </div>
 
-        {/* Valor total do pedido */}
+        {/* Valor Total */}
         <div className="flex flex-col gap-1">
           <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-            Valor total do pedido
+            Valor Total
           </p>
-          <p className="text-2xl font-semibold leading-tight text-emerald-600">
-            {formatCurrency(valorTotal)}
-          </p>
+          {temDesconto ? (
+            <div className="flex flex-col gap-0.5">
+              <p className="text-sm text-muted-foreground line-through">
+                {formatCurrency(valorSemDesconto)}
+              </p>
+              <p className="text-2xl font-semibold leading-tight text-emerald-600">
+                {formatCurrency(valorTotal)}
+              </p>
+              <Badge className="w-fit bg-rose-100 text-rose-700 border-rose-200 text-xs font-medium">
+                - {formatCurrency(desconto)} de desconto
+              </Badge>
+            </div>
+          ) : (
+            <p className="text-2xl font-semibold leading-tight text-emerald-600">
+              {formatCurrency(valorTotal)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -131,3 +137,4 @@ export function ResumoCard({
     </div>
   );
 }
+

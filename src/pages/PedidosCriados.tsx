@@ -1446,7 +1446,14 @@ export default function PedidosCriados() {
 
               {/* Totais */}
               <div className="neu-card p-4 rounded-xl">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {/* Linha auxiliar: Subtotal e Taxa */}
+                {((selectedPedido.taxa_excursao || 0) > 0) && (
+                  <div className="flex flex-wrap items-center gap-4 mb-3 text-sm text-muted-foreground">
+                    <span>Subtotal: <strong className="text-foreground">{formatCurrency((selectedPedido.valor_total || 0) + (selectedPedido.desconto || 0) - (selectedPedido.taxa_excursao || 0))}</strong></span>
+                    <span>Taxa Excursão: <strong className="text-amber-600">+ {formatCurrency(selectedPedido.taxa_excursao || 0)}</strong></span>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {/* Total de Peças */}
                   <div className="flex flex-col gap-1">
                     <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
@@ -1457,7 +1464,7 @@ export default function PedidosCriados() {
                     </p>
                   </div>
 
-                  {/* Quantidade de Modelos - CORRIGIDO USANDO groupedItens */}
+                  {/* Quantidade de Modelos */}
                   <div className="flex flex-col gap-1">
                     <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
                       Qtd de Modelos
@@ -1469,38 +1476,44 @@ export default function PedidosCriados() {
                     </p>
                   </div>
 
-                  {/* Taxa Excursão (condicional) */}
-                  {(selectedPedido.taxa_excursao || 0) > 0 && (
-                    <div className="flex flex-col gap-1">
-                      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-                        Taxa Excursão
-                      </p>
-                      <p className="text-2xl font-semibold leading-tight text-amber-600">
-                        + {formatCurrency(selectedPedido.taxa_excursao || 0)}
-                      </p>
-                    </div>
-                  )}
-
                   {/* Desconto (Interno) */}
-                  {(selectedPedido.desconto || 0) > 0 && (
-                    <div className="flex flex-col gap-1">
-                      <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-                        Desconto (Interno)
-                      </p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                      Desconto (Interno)
+                    </p>
+                    {(selectedPedido.desconto || 0) > 0 ? (
                       <p className="text-2xl font-semibold leading-tight text-rose-600">
                         - {formatCurrency(selectedPedido.desconto || 0)}
                       </p>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="text-2xl font-semibold leading-tight text-muted-foreground/50">
+                        —
+                      </p>
+                    )}
+                  </div>
 
                   {/* Valor Total */}
                   <div className="flex flex-col gap-1">
                     <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
                       Valor Total
                     </p>
-                    <p className="text-2xl font-semibold leading-tight text-emerald-600">
-                      {formatCurrency(selectedPedido.valor_total || 0)}
-                    </p>
+                    {(selectedPedido.desconto || 0) > 0 ? (
+                      <div className="flex flex-col gap-0.5">
+                        <p className="text-sm text-muted-foreground line-through">
+                          {formatCurrency((selectedPedido.valor_total || 0) + (selectedPedido.desconto || 0))}
+                        </p>
+                        <p className="text-2xl font-semibold leading-tight text-emerald-600">
+                          {formatCurrency(selectedPedido.valor_total || 0)}
+                        </p>
+                        <span className="inline-flex items-center w-fit rounded-full bg-rose-100 text-rose-700 border border-rose-200 text-xs font-medium px-2 py-0.5">
+                          - {formatCurrency(selectedPedido.desconto || 0)} de desconto
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-2xl font-semibold leading-tight text-emerald-600">
+                        {formatCurrency(selectedPedido.valor_total || 0)}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
