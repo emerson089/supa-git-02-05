@@ -8,7 +8,7 @@ import { LotImage } from '@/components/production/LotImage';
 import { TransferenciaComItens } from '@/hooks/useTransferencias';
 import { Loader2, Check, X, Search, Package, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { parseProductName } from '@/utils/productNameUtils';
+import { groupItensByModel } from '@/utils/productNameUtils';
 
 interface RetornoEmMassaItem {
     transferenciaId: string;
@@ -30,64 +30,104 @@ interface RetornoEmMassaModalProps {
     isLoading: boolean;
 }
 
-type RetornosState = Record<string, Record<string, string>>; // transferenciaId -> itemId -> qty string
+type RetornosState = Record<string, Record<string, string>>; // transferenciaId -> groupKey -> qty string
+
+/** Distribui o retorno total proporcionalmente entre os tamanhos enviados */
+function distribuirRetornoProporcional(
+    itens: { itemId: string; enviado: number }[],
+    totalRetornado: number
+): { itemId: string; quantidadeRetornada: number }[] {
+    const totalEnviado = itens.reduce((s, i) => s + i.enviado, 0);
+    const limitado = Math.min(totalRetornado, totalEnviado);
+    if (totalEnviado === 0) return itens.map(i => ({ itemId: i.itemId, quantidadeRetornada: 0 }));
+    let restante = limitado;
+    return itens.map((item, idx) => {
+        if (idx === itens.length - 1) {
+            return { itemId: item.itemId, quantidadeRetornada: Math.min(restante, item.enviado) };
+        }
+        const prop = Math.min(Math.round(item.enviado / totalEnviado * limitado), item.enviado, restante);
+        restante -= prop;
+        return { itemId: item.itemId, quantidadeRetornada: prop };
+    });
+}
 
 export function RetornoEmMassaModal({ open, cargas, onClose, onConfirmar, isLoading }: RetornoEmMassaModalProps) {
     const [retornos, setRetornos] = useState<RetornosState>({});
     const [busca, setBusca] = useState('');
 
-    // Initialize state when cargas change
+    // Agrupar itens de cada carga por modelo
+    const gruposParaRetorno = useMemo(() =>
+        cargas.map(carga => ({
+            transferenciaId: carga.transferenciaId,
+            titulo: carga.titulo,
+            horario: carga.horario,
+            grupos: groupItensByModel(carga.itens, {
+                getItemId: (i) => i.itemId,
+                getItemNome: (i) => i.produtoNome || '',
+                getItemPreco: () => 0,
+                getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
+                getItemImagem: (i) => i.produtoImagem,
+                getItemReferencia: (i) => i.produtoNome || '',
+            }),
+        })),
+        [cargas]
+    );
+
+    // Initialize state: transferenciaId -> refBase -> ''
     const retornosInit: RetornosState = useMemo(() => {
         const init: RetornosState = {};
-        cargas.forEach(c => {
+        gruposParaRetorno.forEach(c => {
             if (!init[c.transferenciaId]) init[c.transferenciaId] = {};
-            c.itens.forEach(i => {
-                init[c.transferenciaId][i.itemId] = '';
+            c.grupos.forEach(g => {
+                init[c.transferenciaId][g.refBase] = '';
             });
         });
         return init;
-    }, [cargas]);
+    }, [gruposParaRetorno]);
 
-    const getValue = (transferenciaId: string, itemId: string) =>
-        (retornos[transferenciaId]?.[itemId] ?? retornosInit[transferenciaId]?.[itemId] ?? '');
+    const getValue = (transferenciaId: string, groupKey: string) =>
+        (retornos[transferenciaId]?.[groupKey] ?? retornosInit[transferenciaId]?.[groupKey] ?? '');
 
-    const setValue = (transferenciaId: string, itemId: string, val: string) => {
+    const setValue = (transferenciaId: string, groupKey: string, val: string) => {
         setRetornos(prev => ({
             ...prev,
-            [transferenciaId]: { ...prev[transferenciaId], [itemId]: val },
+            [transferenciaId]: { ...prev[transferenciaId], [groupKey]: val },
         }));
     };
 
-    // Count total unfilled fields
-    const totalCampos = cargas.reduce((sum, c) => sum + c.itens.length, 0);
-    const camposPreenchidos = cargas.reduce((sum, c) =>
-        sum + c.itens.filter(i => {
-            const v = getValue(c.transferenciaId, i.itemId);
+    // Count total unfilled groups
+    const totalCampos = gruposParaRetorno.reduce((sum, c) => sum + c.grupos.length, 0);
+    const camposPreenchidos = gruposParaRetorno.reduce((sum, c) =>
+        sum + c.grupos.filter(g => {
+            const v = getValue(c.transferenciaId, g.refBase);
             return v !== '' && /^\d+$/.test(v);
         }).length, 0);
     const todoPreenchido = camposPreenchidos === totalCampos && totalCampos > 0;
     const pendentes = totalCampos - camposPreenchidos;
 
     const handleConfirmar = async () => {
-        const result = cargas.map(c => ({
-            transferenciaId: c.transferenciaId,
-            itens: c.itens.map(i => ({
-                itemId: i.itemId,
-                quantidadeRetornada: Math.max(0, Math.min(i.quantidadeEnviada, parseInt(getValue(c.transferenciaId, i.itemId) || '0', 10) || 0)),
-            })),
-        }));
+        const result = gruposParaRetorno.map(carga => {
+            const itensRetornados = carga.grupos.flatMap(g => {
+                const totalRet = parseInt(getValue(carga.transferenciaId, g.refBase) || '0', 10) || 0;
+                return distribuirRetornoProporcional(
+                    g.itens.map((i: any) => ({ itemId: i.itemId, enviado: Number(i.quantidadeEnviada) || 0 })),
+                    totalRet
+                );
+            });
+            return { transferenciaId: carga.transferenciaId, itens: itensRetornados };
+        });
         await onConfirmar(result);
         setRetornos({});
     };
 
     const cargasFiltradas = useMemo(() => {
-        if (!busca.trim()) return cargas;
+        if (!busca.trim()) return gruposParaRetorno;
         const t = busca.toLowerCase();
-        return cargas.map(c => ({
+        return gruposParaRetorno.map(c => ({
             ...c,
-            itens: c.itens.filter(i => i.produtoNome.toLowerCase().includes(t)),
-        })).filter(c => c.itens.length > 0 || c.titulo.toLowerCase().includes(t));
-    }, [cargas, busca]);
+            grupos: c.grupos.filter(g => g.nomeBase.toLowerCase().includes(t)),
+        })).filter(c => c.grupos.length > 0 || c.titulo.toLowerCase().includes(t));
+    }, [gruposParaRetorno, busca]);
 
     return (
         <Dialog open={open} onOpenChange={open => !open && onClose()}>
@@ -99,14 +139,14 @@ export function RetornoEmMassaModal({ open, cargas, onClose, onConfirmar, isLoad
                         <Badge variant="secondary" className="ml-1">{cargas.length} cargas</Badge>
                     </DialogTitle>
                     <DialogDescription className="text-xs text-muted-foreground">
-                        Preencha o retorno de todas as cargas ativas de uma vez. Deixe 0 para itens 100% vendidos.
+                        Informe quantas peças retornaram por modelo. Deixe 0 para modelos 100% vendidos.
                     </DialogDescription>
                 </DialogHeader>
 
                 {/* Progress bar */}
                 <div className="px-4 py-2 border-b bg-muted/30 shrink-0">
                     <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-muted-foreground">{camposPreenchidos}/{totalCampos} campos preenchidos</span>
+                        <span className="text-xs text-muted-foreground">{camposPreenchidos}/{totalCampos} modelos preenchidos</span>
                         {pendentes > 0 && (
                             <span className="text-xs text-amber-600 font-medium">{pendentes} pendente(s)</span>
                         )}
@@ -129,7 +169,7 @@ export function RetornoEmMassaModal({ open, cargas, onClose, onConfirmar, isLoad
                     <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
-                            placeholder="Filtrar por produto..."
+                            placeholder="Filtrar por modelo..."
                             value={busca}
                             onChange={e => setBusca(e.target.value)}
                             className="pl-8 h-8 text-sm"
@@ -153,29 +193,34 @@ export function RetornoEmMassaModal({ open, cargas, onClose, onConfirmar, isLoad
                                     </span>
                                     <span className="text-xs text-muted-foreground">{carga.horario}</span>
                                     <Badge variant="outline" className="ml-auto text-[10px] shrink-0">
-                                        {carga.itens.length} itens
+                                        {carga.grupos.length} modelo(s)
                                     </Badge>
                                 </div>
 
-                                {/* Items */}
-                                {carga.itens.map(item => {
-                                    const val = getValue(carga.transferenciaId, item.itemId);
+                                {/* Groups — one per model */}
+                                {carga.grupos.map(grupo => {
+                                    const gKey = grupo.refBase;
+                                    const val = getValue(carga.transferenciaId, gKey);
                                     const campoVazio = val === '' || val === undefined;
                                     const retornado = parseInt(val || '0', 10) || 0;
-                                    const vendido = item.quantidadeEnviada - retornado;
+                                    const vendido = grupo.quantidadeTotal - retornado;
+                                    const tamanhos: string[] = grupo.tamanhos ?? [];
 
                                     return (
-                                        <div key={item.itemId} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20">
+                                        <div key={gKey} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20">
                                             <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                                                <LotImage src={item.produtoImagem} alt={item.produtoNome} className="w-full h-full object-cover" />
+                                                <LotImage src={grupo.imagemUrl} alt={grupo.nomeBase} className="w-full h-full object-cover" />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate">
-                                                    {parseProductName(item.produtoNome, item.itemId).nomeExibicao}
-                                                </p>
+                                                <p className="text-sm font-medium truncate">{grupo.nomeBase}</p>
+                                                {tamanhos.length > 0 && (
+                                                    <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                                                        {tamanhos.join(' · ')}
+                                                    </p>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
-                                                <span className="text-xs text-blue-600 font-semibold w-8 text-right">{item.quantidadeEnviada}</span>
+                                                <span className="text-xs text-blue-600 font-semibold w-8 text-right">{grupo.quantidadeTotal}</span>
                                                 <span className="text-xs text-muted-foreground">→</span>
                                                 {/* Return input */}
                                                 <Input
@@ -186,12 +231,12 @@ export function RetornoEmMassaModal({ open, cargas, onClose, onConfirmar, isLoad
                                                     value={val}
                                                     onChange={e => {
                                                         const v = e.target.value;
-                                                        if (v === '' || /^\d+$/.test(v)) setValue(carga.transferenciaId, item.itemId, v);
+                                                        if (v === '' || /^\d+$/.test(v)) setValue(carga.transferenciaId, gKey, v);
                                                     }}
                                                     onBlur={() => {
                                                         if (val !== '') {
-                                                            const n = Math.max(0, Math.min(item.quantidadeEnviada, parseInt(val, 10) || 0));
-                                                            setValue(carga.transferenciaId, item.itemId, String(n));
+                                                            const n = Math.max(0, Math.min(grupo.quantidadeTotal, parseInt(val, 10) || 0));
+                                                            setValue(carga.transferenciaId, gKey, String(n));
                                                         }
                                                     }}
                                                     className={cn(

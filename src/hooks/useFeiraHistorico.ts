@@ -140,9 +140,9 @@ function mapDbToTransferenciaHistorico(db: any): TransferenciaComItensHistorico 
       quantidadeEnviada: Number(item.quantidade_enviada) || 0,
       quantidadeRetornada: item.quantidade_retornada !== null ? Number(item.quantidade_retornada) : null,
       precoUnitario: item.preco_unitario !== null ? Number(item.preco_unitario) : null,
-      produtoNome: item.estoque_itens?.nome || null,
-      produtoPreco: item.estoque_itens?.preco_unitario !== null ? Number(item.estoque_itens?.preco_unitario) : null,
-      produtoImagem: item.estoque_itens?.imagem_url || null,
+      produtoNome: item.estoque_itens?.nome || item.nome_produto || null,
+      produtoPreco: item.estoque_itens?.preco_unitario != null ? Number(item.estoque_itens?.preco_unitario) : null,
+      produtoImagem: item.estoque_itens?.imagem_url || item.imagem_url_produto || null,
     })),
   };
 }

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { GradeAtacado } from '@/hooks/useModelosPadronizados';
 import { cn } from '@/lib/utils';
-import { Plus, Trash2, Package2, Wand2, ChevronDown, ChevronUp, Pencil, Check } from 'lucide-react';
+import { Plus, X, Trash2, Package2, Wand2, ChevronDown, ChevronUp, Pencil, Check } from 'lucide-react';
 
 interface GradesEditorProps {
     tamanhosSelecionados: string[];
@@ -29,8 +29,8 @@ function gerarSugestoes(tamanhos: string[], precoUnitario: number): GradeAtacado
 
     const numericos = tamanhos.filter(t => !isNaN(Number(t)));
     const letras = tamanhos.filter(t => isNaN(Number(t)));
-    const numericos_plus = numericos.filter(t => Number(t) >= 46);
-    const numericos_padrao = numericos.filter(t => Number(t) <= 44);
+    const numericos_plus = numericos.filter(t => Number(t) >= 48);
+    const numericos_padrao = numericos.filter(t => Number(t) <= 46);
 
     const sugestoes: GradeAtacado[] = [];
 
@@ -85,11 +85,13 @@ function gerarSugestoes(tamanhos: string[], precoUnitario: number): GradeAtacado
 function GradeItemEditor({
     grade,
     precoUnitario,
+    tamanhosSelecionados,
     onUpdate,
     onDelete,
 }: {
     grade: GradeAtacado;
     precoUnitario: number;
+    tamanhosSelecionados: string[];
     onUpdate: (g: GradeAtacado) => void;
     onDelete: () => void;
 }) {
@@ -106,6 +108,16 @@ function GradeItemEditor({
         onUpdate({ ...grade, itens: newItens, totalPecas, precoSugerido });
     };
 
+    const removeItem = (tamanho: string) => {
+        const newItens = grade.itens.filter(i => i.tamanho !== tamanho);
+        onUpdate({ ...grade, itens: newItens, totalPecas: calcularTotal(newItens), precoSugerido: calcularPreco(newItens, precoUnitario) });
+    };
+
+    const addItem = (tamanho: string) => {
+        const newItens = [...grade.itens, { tamanho, quantidade: 1 }];
+        onUpdate({ ...grade, itens: newItens, totalPecas: calcularTotal(newItens), precoSugerido: calcularPreco(newItens, precoUnitario) });
+    };
+
     const saveNome = () => {
         onUpdate({ ...grade, nome: nomeTemp.trim() || grade.nome });
         setEditingNome(false);
@@ -113,6 +125,9 @@ function GradeItemEditor({
 
     const totalPecas = calcularTotal(grade.itens);
     const precoTotal = grade.precoSugerido;
+    const tamanhosDisponiveis = tamanhosSelecionados.filter(
+        t => !grade.itens.some(i => i.tamanho === t)
+    );
 
     return (
         <div className="rounded-xl border border-border overflow-hidden">
@@ -166,9 +181,19 @@ function GradeItemEditor({
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                         {grade.itens.map(item => (
                             <div key={item.tamanho} className="space-y-1">
-                                <Label className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
-                                    {item.tamanho}
-                                </Label>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                                        {item.tamanho}
+                                    </Label>
+                                    <button
+                                        type="button"
+                                        onClick={() => removeItem(item.tamanho)}
+                                        className="text-muted-foreground/50 hover:text-destructive"
+                                        title={`Remover ${item.tamanho}`}
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </div>
                                 <Input
                                     type="number"
                                     min={0}
@@ -179,6 +204,23 @@ function GradeItemEditor({
                             </div>
                         ))}
                     </div>
+
+                    {/* Adicionar tamanho disponível */}
+                    {tamanhosDisponiveis.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-border/30">
+                            <span className="text-[10px] text-muted-foreground shrink-0">+ Adicionar:</span>
+                            {tamanhosDisponiveis.map(t => (
+                                <button
+                                    key={t}
+                                    type="button"
+                                    onClick={() => addItem(t)}
+                                    className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-dashed border-primary/40 text-primary hover:bg-primary/10 transition-colors"
+                                >
+                                    {t}
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Preço editável */}
                     <div className="flex items-center gap-3 pt-1 border-t border-border/30">
@@ -296,6 +338,7 @@ export function GradesEditor({
                         key={grade.id}
                         grade={grade}
                         precoUnitario={precoUnitario}
+                        tamanhosSelecionados={tamanhosSelecionados}
                         onUpdate={updated => handleUpdateGrade(grade.id, updated)}
                         onDelete={() => handleDeleteGrade(grade.id)}
                     />

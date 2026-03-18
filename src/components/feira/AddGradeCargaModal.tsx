@@ -54,14 +54,29 @@ export function AddGradeCargaModal({ open, onClose, onAdd, getDisponivelCentral 
     const [gradeSelecionada, setGradeSelecionada] = useState<GradeAtacado | null>(null);
     const [quantidadeGrades, setQuantidadeGrades] = useState(1);
 
-    // Filtra modelos com pelo menos uma grade definida
+    // Filtra modelos com pelo menos uma variação (com ou sem grades pré-definidas)
     const modelos = useMemo(() => {
         const s = search.toLowerCase();
         return modelosPadronizados.filter(m =>
-            (m.meta.grades?.length ?? 0) > 0 &&
+            m.variacoes.length > 0 &&
             (m.nome.toLowerCase().includes(s) || m.meta.referencia.toLowerCase().includes(s))
         );
     }, [modelosPadronizados, search]);
+
+    // Grades disponíveis: usa pré-definidas se existirem, senão gera Grade Completa automaticamente
+    const gradesDisponiveis = useMemo((): GradeAtacado[] => {
+        if (!modeloSelecionado) return [];
+        const grades = modeloSelecionado.meta.grades ?? [];
+        if (grades.length > 0) return grades;
+        const itens = modeloSelecionado.variacoes.map(v => ({ tamanho: v.tamanho, quantidade: 1 }));
+        return [{
+            id: 'auto',
+            nome: 'Grade Completa',
+            itens,
+            totalPecas: itens.length,
+            precoSugerido: itens.length * (modeloSelecionado.precoUnitario ?? 0),
+        }];
+    }, [modeloSelecionado]);
 
     const handleSelectModelo = (m: ModeloPadronizado) => {
         setModeloSelecionado(m);
@@ -192,9 +207,15 @@ export function AddGradeCargaModal({ open, onClose, onAdd, getDisponivelCentral 
                                                     <p className="text-sm font-semibold truncate">{m.nome.split('—')[0].trim()}</p>
                                                     <div className="flex items-center gap-2 mt-0.5">
                                                         <span className="text-[11px] font-mono text-muted-foreground uppercase">{m.meta.referencia}</span>
-                                                        <Badge variant="secondary" className="text-[9px] h-4 px-1">
-                                                            {m.meta.grades!.length} grade(s)
-                                                        </Badge>
+                                                        {(m.meta.grades?.length ?? 0) > 0 ? (
+                                                            <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                                                                {m.meta.grades!.length} grade(s)
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-[9px] h-4 px-1 text-muted-foreground">
+                                                                Grade auto
+                                                            </Badge>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
@@ -214,7 +235,7 @@ export function AddGradeCargaModal({ open, onClose, onAdd, getDisponivelCentral 
                                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                     Grades Disponíveis
                                 </Label>
-                                {modeloSelecionado.meta.grades!.map(g => (
+                                {gradesDisponiveis.map(g => (
                                     <button
                                         key={g.id}
                                         onClick={() => setGradeSelecionada(g)}

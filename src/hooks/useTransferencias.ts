@@ -233,7 +233,7 @@ export function useCriarCargaFeira() {
       itens,
       observacoes,
     }: {
-      itens: { itemId: string; quantidade: number; precoUnitario?: number }[];
+      itens: { itemId: string; nome: string; quantidade: number; precoUnitario?: number; imagemUrl?: string | null }[];
       observacoes?: string;
     }) => {
       if (!user) throw new Error('Usuário não autenticado');
@@ -346,6 +346,8 @@ export function useCriarCargaFeira() {
         item_id: item.itemId,
         quantidade_enviada: item.quantidade,
         preco_unitario: item.precoUnitario || null,
+        nome_produto: item.nome,
+        imagem_url_produto: item.imagemUrl || null,
       }));
 
       const { error: itensError } = await supabase
@@ -772,6 +774,8 @@ export function useEditarCargaFeira() {
             item_id: item.itemId,
             quantidade_enviada: item.quantidade,
             preco_unitario: item.precoUnitario,
+            nome_produto: item.nome,
+            imagem_url_produto: item.imagemUrl || null,
           });
 
           // Registrar movimentação ENVIO_FEIRA
