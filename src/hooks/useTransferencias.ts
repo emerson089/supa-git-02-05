@@ -652,8 +652,8 @@ export function useRegistrarRetornoFeira() {
             .eq('id', estoqueCentral.id);
         }
 
-        // Sincronizar estoque_itens.quantidade
-        await sincronizarEstoqueTotal(item.itemId, user.id);
+        // Sincronizar estoque_itens.quantidade (passando central.id para evitar re-consulta)
+        await sincronizarEstoqueTotal(item.itemId, user.id, central.id);
       }
 
       // Marcar transferência como concluída
