@@ -256,12 +256,13 @@ export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado', search?: s
         .eq('tipo', 'central')
         .maybeSingle();
       
-      // Buscar campos necessários para métricas
+      // Buscar campos necessários para métricas (excluir variações padronizadas para não duplicar)
       let query = supabase
         .from('estoque_itens')
         .select('id, nome, categoria, quantidade, preco_unitario')
-        .eq('user_id', user.id);
-      
+        .eq('user_id', user.id)
+        .neq('categoria', 'Variação Padronizada');
+
       if (tipo) {
         query = query.eq('tipo', tipo);
       }

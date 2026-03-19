@@ -116,6 +116,42 @@ export function usePedidosPaginated(params: PaginatedParams) {
         query = query.lte('created_at', endOfDay.toISOString());
       }
 
+      // Apply modelo filter server-side
+      // Search both stored produto_nome AND current estoque_itens.nome (item may have been renamed after pedido was created)
+      if (debouncedModelo) {
+        // Step 1: find estoque_itens whose current name matches
+        const { data: estoqueData } = await supabase
+          .from('estoque_itens')
+          .select('id')
+          .ilike('nome', `%${debouncedModelo}%`)
+          .limit(5000);
+
+        const estoqueIds = (estoqueData || []).map((i: any) => i.id as string);
+
+        // Step 2: find pedido_itens matching by stored name OR by current inventory name
+        let itemsQuery = supabase
+          .from('pedido_itens')
+          .select('pedido_id')
+          .limit(5000);
+
+        if (estoqueIds.length > 0) {
+          itemsQuery = itemsQuery.or(`produto_nome.ilike.%${debouncedModelo}%,produto_id.in.(${estoqueIds.join(',')})`);
+        } else {
+          itemsQuery = itemsQuery.ilike('produto_nome', `%${debouncedModelo}%`);
+        }
+
+        const { data: matchingItems, error: modeloError } = await itemsQuery;
+
+        if (!modeloError) {
+          const matchingIds = [...new Set((matchingItems || []).map((i: any) => i.pedido_id as string))];
+          if (matchingIds.length === 0) {
+            return { data: [], count: 0, totalPages: 0 };
+          }
+          query = query.in('id', matchingIds);
+        }
+        // If lookup fails, proceed without modelo filter (graceful degradation)
+      }
+
       // Apply sorting
       const sortField = params.sortField || 'created_at';
       const ascending = params.sortDirection === 'asc';
@@ -130,20 +166,8 @@ export function usePedidosPaginated(params: PaginatedParams) {
 
       if (error) throw error;
 
-      let filteredData = data || [];
-
-      // Apply modelo filter client-side (needs to check items)
-      if (debouncedModelo) {
-        const modeloLower = debouncedModelo.toLowerCase();
-        filteredData = filteredData.filter(pedido =>
-          pedido.pedido_itens?.some((item: any) =>
-            item.produto_nome.toLowerCase().includes(modeloLower)
-          )
-        );
-      }
-
       return {
-        data: filteredData as PedidoPaginatedDB[],
+        data: (data || []) as PedidoPaginatedDB[],
         count: count || 0,
         totalPages: Math.ceil((count || 0) / params.pageSize)
       };

@@ -29,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { statusPagamentoOptions, statusPedidoOptions, statusEntregaOptions } from '@/components/pedidos/StatusSelector';
 import { StatusMultiSelect } from '@/components/pedidos/StatusMultiSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Search, Plus, Eye, EyeOff, Trash2, ShoppingBag, DollarSign, Package, MapPin, Phone, Bus, MoreHorizontal, ArrowUpDown, FileText, Pencil, Calendar as CalendarIcon, X, Download, Upload, Loader2, RefreshCw } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay, parse, subDays, startOfWeek, addDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -480,17 +480,34 @@ export default function PedidosCriados() {
       setDeleteId(null);
     }
   };
+  const buildModeloGroupConfig = (itens: PedidoPaginatedDB['pedido_itens']) => ({
+    getItemId: (i: typeof itens[0]) => i.id || "",
+    getItemNome: (i: typeof itens[0]) => {
+      const produto = estoqueItens.find(p => p.id === i.produto_id);
+      return produto?.nome || i.produto_nome || "";
+    },
+    getItemReferencia: (i: typeof itens[0]) => {
+      const produto = estoqueItens.find(p => p.id === i.produto_id);
+      if (produto?.localizacao) {
+        try {
+          const loc = JSON.parse(produto.localizacao);
+          if (loc.referencia) return loc.referencia as string;
+        } catch { /* ignore */ }
+      }
+      if (i.produto_nome?.includes(' | REF: ')) {
+        return i.produto_nome.split(' | REF: ')[1] || "";
+      }
+      return i.produto_nome || "";
+    },
+    getItemPreco: (i: typeof itens[0]) => i.valor_unitario ?? 0,
+    getItemQtd: (i: typeof itens[0]) => i.quantidade ?? 0,
+  });
+
   const getModelosResumo = (pedido: PedidoPaginatedDB) => {
     const itens = pedido.pedido_itens || [];
     if (itens.length === 0) return '-';
 
-    // Agrupamento inteligente para exibição no modal e totais usando utilitário centralizado
-    const grouped = groupItensByModel(itens, {
-      getItemId: (i) => i.id || "",
-      getItemNome: (i) => i.produto_nome || "",
-      getItemPreco: (i) => i.valor_unitario ?? 0,
-      getItemQtd: (i) => i.quantidade ?? 0,
-    });
+    const grouped = groupItensByModel(itens, buildModeloGroupConfig(itens));
 
     if (grouped.length === 0) return '-';
 
@@ -810,6 +827,7 @@ export default function PedidosCriados() {
             *,
             pedido_itens (
               id,
+              produto_id,
               produto_nome,
               quantidade,
               valor_unitario
@@ -865,7 +883,12 @@ export default function PedidosCriados() {
       const rows = allPedidos.map(pedido => [
         format(new Date(pedido.created_at), "dd/MM/yyyy"),
         pedido.cliente_nome || '',
-        (pedido.pedido_itens || []).map(i => `${i.produto_nome}(${i.quantidade})`).join('; '),
+        (() => {
+          const itens = pedido.pedido_itens || [];
+          if (itens.length === 0) return '-';
+          const grouped = groupItensByModel(itens, buildModeloGroupConfig(itens));
+          return grouped.map(g => `${g.nomeExibicao}(${g.quantidadeTotal})`).join('; ');
+        })(),
         pedido.total_pecas?.toString() || '',
         pedido.valor_total?.toFixed(2) || '',
         pedido.status_pagamento || '',
@@ -1258,26 +1281,64 @@ export default function PedidosCriados() {
                       <PaginationPrevious onClick={() => setCurrentPage(p => Math.max(0, p - 1))} className={currentPage === 0 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} />
                     </PaginationItem>
 
-                    {/* Page numbers */}
-                    {Array.from({
-                      length: Math.min(5, totalPages)
-                    }, (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = i;
-                      } else if (currentPage < 3) {
-                        pageNum = i;
-                      } else if (currentPage > totalPages - 4) {
-                        pageNum = totalPages - 5 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
+                    {/* Page numbers with first/last anchors */}
+                    {(() => {
+                      if (totalPages <= 7) {
+                        return Array.from({ length: totalPages }, (_, i) => (
+                          <PaginationItem key={i}>
+                            <PaginationLink onClick={() => setCurrentPage(i)} isActive={currentPage === i} className="cursor-pointer">
+                              {i + 1}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ));
                       }
-                      return <PaginationItem key={pageNum}>
-                        <PaginationLink onClick={() => setCurrentPage(pageNum)} isActive={currentPage === pageNum} className="cursor-pointer">
-                          {pageNum + 1}
-                        </PaginationLink>
-                      </PaginationItem>;
-                    })}
+
+                      // Calculate window of 5 pages around current
+                      let windowStart: number;
+                      if (currentPage < 3) {
+                        windowStart = 0;
+                      } else if (currentPage >= totalPages - 3) {
+                        windowStart = totalPages - 5;
+                      } else {
+                        windowStart = currentPage - 2;
+                      }
+                      const window5 = Array.from({ length: 5 }, (_, i) => windowStart + i);
+
+                      const showLeftEllipsis = windowStart > 1;
+                      const showRightEllipsis = windowStart + 5 < totalPages - 1;
+
+                      return (
+                        <>
+                          {/* First page */}
+                          {windowStart > 0 && (
+                            <PaginationItem key="first">
+                              <PaginationLink onClick={() => setCurrentPage(0)} isActive={currentPage === 0} className="cursor-pointer">1</PaginationLink>
+                            </PaginationItem>
+                          )}
+                          {showLeftEllipsis && (
+                            <PaginationItem key="ellipsis-left"><PaginationEllipsis /></PaginationItem>
+                          )}
+
+                          {window5.map(p => (
+                            <PaginationItem key={p}>
+                              <PaginationLink onClick={() => setCurrentPage(p)} isActive={currentPage === p} className="cursor-pointer">
+                                {p + 1}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+
+                          {showRightEllipsis && (
+                            <PaginationItem key="ellipsis-right"><PaginationEllipsis /></PaginationItem>
+                          )}
+                          {/* Last page */}
+                          {windowStart + 5 < totalPages && (
+                            <PaginationItem key="last">
+                              <PaginationLink onClick={() => setCurrentPage(totalPages - 1)} isActive={currentPage === totalPages - 1} className="cursor-pointer">{totalPages}</PaginationLink>
+                            </PaginationItem>
+                          )}
+                        </>
+                      );
+                    })()}
 
                     <PaginationItem>
                       <PaginationNext onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} className={currentPage >= totalPages - 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} />

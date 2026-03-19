@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getSignedUrl, compressImageForPDF } from './imageUtils';
-import { groupItensByModel, parseProductName } from './productNameUtils';
+import { groupItensByModel } from './productNameUtils';
 import type { TransferenciaComItensHistorico, TransferenciaItemComProduto } from '@/hooks/useFeiraHistorico';
 
 // Formatar valor em reais
@@ -160,6 +160,16 @@ export async function generateCargaPDF(
   // ===== RESUMO PRIMEIRO (COMPACTO - HORIZONTAL) =====
   const totais = calcularTotais(carga.itens);
 
+  // Agrupar itens por modelo (usado no resumo e na tabela)
+  const groupedItens = groupItensByModel(carga.itens, {
+    getItemId: (i) => i.itemId || (i as any).id || "",
+    getItemNome: (i) => i.produtoNome || "",
+    getItemReferencia: (i) => i.produtoNome || "",
+    getItemPreco: (i) => Number(i.precoUnitario) || Number(i.produtoPreco) || 0,
+    getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
+    getItemImagem: (i) => i.produtoImagem
+  });
+
   doc.setDrawColor(...primaryColor);
   doc.setFillColor(238, 242, 255);
   doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 16, 2, 2, 'FD');
@@ -175,10 +185,10 @@ export async function generateCargaPDF(
   
   // Layout horizontal compacto - condicional para hideFinancials
   if (hideFinancials) {
-    const resumoText = `${totais.totalItens} modelos  |  ${totais.totalPecas} peças`;
+    const resumoText = `${groupedItens.length} modelos  |  ${totais.totalPecas} peças`;
     doc.text(resumoText, margin + 25, yPos + 10);
   } else {
-    const resumoText = `${totais.totalItens} modelos  |  ${totais.totalPecas} peças  |  `;
+    const resumoText = `${groupedItens.length} modelos  |  ${totais.totalPecas} peças  |  `;
     doc.text(resumoText, margin + 25, yPos + 10);
     
     doc.setFont('helvetica', 'bold');
@@ -219,13 +229,6 @@ export async function generateCargaPDF(
   yPos += 4;
 
   // Preparar dados da tabela - sempre 5 colunas fixas
-  const groupedItens = groupItensByModel(carga.itens, {
-    getItemId: (i) => i.itemId || (i as any).id || "",
-    getItemNome: (i) => i.produtoNome || "",
-    getItemPreco: (i) => Number(i.precoUnitario) || Number(i.produtoPreco) || 0,
-    getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
-    getItemImagem: (i) => i.produtoImagem
-  });
   const tableData: { content: string; styles?: object }[][] = [];
   const imagePositions: { rowIndex: number; itemId: string }[] = [];
 

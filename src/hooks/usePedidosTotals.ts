@@ -76,9 +76,19 @@ export function usePedidosTotals(params: TotalsParams) {
       };
 
       // If modelo filter is active, we need to fetch pedido_itens
+      // Also search by current estoque_itens.nome (item may have been renamed after pedido was created)
       if (debouncedModelo) {
+        // Find estoque_itens whose current name matches
+        const { data: estoqueData } = await supabase
+          .from('estoque_itens')
+          .select('id')
+          .ilike('nome', `%${debouncedModelo}%`)
+          .limit(5000);
+
+        const estoqueIds = new Set((estoqueData || []).map((i: any) => i.id as string));
+
         const buildModeloQuery = () => {
-          let q = supabase.from('pedidos').select('id, valor_total, total_pecas, pedido_itens(produto_nome, quantidade, valor_unitario)');
+          let q = supabase.from('pedidos').select('id, valor_total, total_pecas, pedido_itens(produto_nome, produto_id, quantidade, valor_unitario)');
           return applyFilters(q);
         };
 
@@ -106,7 +116,9 @@ export function usePedidosTotals(params: TotalsParams) {
 
         allData.forEach(pedido => {
           (pedido.pedido_itens || []).forEach((item: any) => {
-            if (item.produto_nome.toLowerCase().includes(modeloLower)) {
+            const nomeMatch = item.produto_nome?.toLowerCase().includes(modeloLower);
+            const estoqueMatch = item.produto_id && estoqueIds.has(item.produto_id);
+            if (nomeMatch || estoqueMatch) {
               pecasModelo += item.quantidade;
               valorModelo += item.quantidade * item.valor_unitario;
               pedidosComModelo.add(pedido.id);
