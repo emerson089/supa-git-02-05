@@ -674,6 +674,9 @@ export function useRegistrarRetornoFeira() {
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
     },
+    onError: (error) => {
+      console.error('[useRegistrarRetornoFeira] Erro na mutation:', error);
+    },
   });
 }
 
