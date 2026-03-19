@@ -881,7 +881,7 @@ export default function PedidosCriados() {
       }
       const headers = ['Data', 'Cliente', 'Modelos', 'Qtd', 'Valor', 'Pagamento', 'Pedido', 'Entrega'];
       const rows = allPedidos.map(pedido => [
-        format(new Date(pedido.created_at), "dd/MM/yyyy"),
+        format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm"),
         pedido.cliente_nome || '',
         (() => {
           const itens = pedido.pedido_itens || [];
