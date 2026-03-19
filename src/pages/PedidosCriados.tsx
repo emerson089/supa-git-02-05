@@ -1450,7 +1450,7 @@ export default function PedidosCriados() {
                   <div>
                     <p className="text-muted-foreground">Data de Criação</p>
                     <p className="font-medium text-foreground">
-                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy", {
+                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy HH:mm", {
                         locale: ptBR
                       })}
                     </p>
