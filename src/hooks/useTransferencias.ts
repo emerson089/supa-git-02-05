@@ -187,18 +187,24 @@ export function useCargasHoje() {
 
 // Função auxiliar para sincronizar estoque_itens.quantidade com o estoque do Central
 // REGRA UNIFICADA: estoque_itens.quantidade = SOMENTE quantidade do Central
-export async function sincronizarEstoqueTotal(itemId: string, userId: string) {
-  // Buscar o local Central do usuário
-  const { data: central, error: centralError } = await supabase
-    .from('estoque_locais')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('tipo', 'central')
-    .single();
+// centralId opcional: se fornecido, pula a query de busca do local central
+export async function sincronizarEstoqueTotal(itemId: string, userId: string, centralId?: string) {
+  let centralLocalId = centralId;
 
-  if (centralError || !central) {
-    console.error('[sincronizarEstoqueTotal] Local Central não encontrado:', centralError);
-    throw new Error('Local Central não encontrado para sincronização de estoque');
+  if (!centralLocalId) {
+    // Buscar o local Central SEM filtro de user_id (locais são compartilhados entre roles)
+    const { data: central, error: centralError } = await supabase
+      .from('estoque_locais')
+      .select('id')
+      .eq('tipo', 'central')
+      .limit(1)
+      .single();
+
+    if (centralError || !central) {
+      console.error('[sincronizarEstoqueTotal] Local Central não encontrado:', centralError);
+      throw new Error('Local Central não encontrado para sincronização de estoque');
+    }
+    centralLocalId = central.id;
   }
 
   // Buscar quantidade apenas do Central (estoque disponível para venda)
@@ -206,7 +212,7 @@ export async function sincronizarEstoqueTotal(itemId: string, userId: string) {
     .from('estoque_por_local')
     .select('quantidade')
     .eq('item_id', itemId)
-    .eq('local_id', central.id)
+    .eq('local_id', centralLocalId)
     .single();
 
   const quantidadeCentral = estoqueCentral ? Number(estoqueCentral.quantidade) : 0;
@@ -646,8 +652,8 @@ export function useRegistrarRetornoFeira() {
             .eq('id', estoqueCentral.id);
         }
 
-        // Sincronizar estoque_itens.quantidade
-        await sincronizarEstoqueTotal(item.itemId, user.id);
+        // Sincronizar estoque_itens.quantidade (passando central.id para evitar re-consulta)
+        await sincronizarEstoqueTotal(item.itemId, user.id, central.id);
       }
 
       // Marcar transferência como concluída
@@ -667,6 +673,9 @@ export function useRegistrarRetornoFeira() {
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
+    },
+    onError: (error) => {
+      console.error('[useRegistrarRetornoFeira] Erro na mutation:', error);
     },
   });
 }
