@@ -680,7 +680,7 @@ export default function PedidosCriados() {
       locale: ptBR
     }), pageWidth - 70, 48);
     doc.text('Data do Pedido:', pageWidth - 70, 56);
-    doc.text(format(new Date(pedido.created_at), "dd/MM/yyyy", {
+    doc.text(format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm", {
       locale: ptBR
     }), pageWidth - 70, 62);
 
