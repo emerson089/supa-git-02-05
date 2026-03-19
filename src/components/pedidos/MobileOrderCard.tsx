@@ -92,7 +92,7 @@ export function MobileOrderCard({
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-foreground truncate">{pedido.cliente_nome}</p>
           <p className="text-xs text-muted-foreground">
-            {format(new Date(pedido.created_at), "dd/MM/yyyy", { locale: ptBR })} • {pedido.total_pecas || 0} pçs
+            {format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })} • {pedido.total_pecas || 0} pçs
           </p>
           <p className="text-xs text-muted-foreground truncate mt-0.5">
             {getModelosResumo(pedido)}

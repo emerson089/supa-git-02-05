@@ -680,7 +680,7 @@ export default function PedidosCriados() {
       locale: ptBR
     }), pageWidth - 70, 48);
     doc.text('Data do Pedido:', pageWidth - 70, 56);
-    doc.text(format(new Date(pedido.created_at), "dd/MM/yyyy", {
+    doc.text(format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm", {
       locale: ptBR
     }), pageWidth - 70, 62);
 
@@ -881,7 +881,7 @@ export default function PedidosCriados() {
       }
       const headers = ['Data', 'Cliente', 'Modelos', 'Qtd', 'Valor', 'Pagamento', 'Pedido', 'Entrega'];
       const rows = allPedidos.map(pedido => [
-        format(new Date(pedido.created_at), "dd/MM/yyyy"),
+        format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm"),
         pedido.cliente_nome || '',
         (() => {
           const itens = pedido.pedido_itens || [];
@@ -1213,7 +1213,7 @@ export default function PedidosCriados() {
                   <TableBody>
                     {pedidosList.map(pedido => <TableRow key={pedido.id} className="group border-0 transition-all duration-200 hover:shadow-[inset_0_2px_8px_rgba(0,0,0,0.06)] rounded-xl">
                       <TableCell className="py-2.5 text-sm text-muted-foreground font-medium">
-                        {format(new Date(pedido.created_at), "dd/MM/yyyy", {
+                        {format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm", {
                           locale: ptBR
                         })}
                       </TableCell>
@@ -1450,7 +1450,7 @@ export default function PedidosCriados() {
                   <div>
                     <p className="text-muted-foreground">Data de Criação</p>
                     <p className="font-medium text-foreground">
-                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy", {
+                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy HH:mm", {
                         locale: ptBR
                       })}
                     </p>
