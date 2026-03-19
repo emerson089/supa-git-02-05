@@ -1,16 +1,19 @@
 
 
-## Adicionar opção "ENTREGA TORITAMA" ao status de entrega
+## Plano: Adicionar hora de criação nos pedidos
 
-Adicionar a nova opção em todos os locais onde os status de entrega são definidos:
+Adicionar o horário (`HH:mm`) junto à data em todos os locais onde a data de criação do pedido é exibida.
 
-### Arquivos a alterar
+### Alterações
 
-1. **`src/components/pedidos/StatusSelector.tsx`** — Adicionar `{ value: 'ENTREGA TORITAMA', label: 'ENTREGA TORITAMA', color: 'purple' }` ao array `statusEntregaOptions`.
+**1. `src/pages/PedidosCriados.tsx`**
+- **Tabela desktop (linha ~1216)**: Mudar formato de `dd/MM/yyyy` para `dd/MM/yyyy HH:mm`
+- **Modal de detalhes (linha ~1453)**: Mesmo ajuste no formato
+- **PDF (linha ~683)**: Incluir horário no PDF gerado
+- **CSV export (linha ~884)**: Incluir horário na exportação
 
-2. **`src/lib/csv-validation-schemas.ts`** — Adicionar `'ENTREGA TORITAMA'` ao array `STATUS_ENTREGA_VALUES`.
+**2. `src/components/pedidos/MobileOrderCard.tsx`**
+- **Card mobile (linha ~95)**: Mudar formato para `dd/MM/yyyy HH:mm`
 
-3. **`src/components/pedidos/MobileFiltersSheet.tsx`** e **`src/hooks/usePedidosPaginated.ts`** — Verificar se usam os arrays centralizados (provavelmente sim, sem alteração necessária).
-
-A cor `purple` foi escolhida para diferenciar visualmente, similar ao "NO CARRO". Posso ajustar se preferir outra cor.
+Todas as alterações usam a mesma lib `date-fns` já importada, apenas mudando a string de formato.
 
