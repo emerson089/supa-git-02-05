@@ -29,6 +29,7 @@ interface EditPedidoModalProps {
 
 export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps) {
   const { itens: estoqueItens, updateItem: updateEstoqueItem } = useEstoque();
+  const queryClient = useQueryClient();
 
   const addItemMutation = useAddPedidoItem();
   const updateItemMutation = useUpdatePedidoItem();
