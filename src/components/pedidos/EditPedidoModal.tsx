@@ -146,6 +146,14 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
       .filter(Boolean) as string[];
   }, [pedido, produtosAcabados]);
 
+  // Helper to refetch pedido data after mutations
+  const refetchPedido = async () => {
+    if (!pedido) return;
+    await queryClient.refetchQueries({ queryKey: ['pedido', pedido.id] });
+    queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
+    queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
+  };
+
   const isSyncing = addItemMutation.isPending || updateItemMutation.isPending || removeItemMutation.isPending;
 
   const handleSaveDesconto = async () => {
