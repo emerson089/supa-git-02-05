@@ -335,10 +335,58 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         valor_unitario: produto.preco_unitario || 0,
         precomputedTotals,
       });
+      await refetchPedido();
       toast.success('Item adicionado! 1 peça deduzida do estoque.');
     } catch (error) {
       console.error('Error adding item:', error);
       toast.error('Erro ao adicionar item');
+    }
+  };
+
+  // Handle adding a full grade from AddGradeModal
+  const handleAddGrade = async (gradeItems: ItemPedido[]) => {
+    if (!pedido) return;
+
+    try {
+      let addedPecas = 0;
+      let addedValor = 0;
+
+      for (const item of gradeItems) {
+        // Deduct from stock
+        const estoqueAtual = estoqueItens.find(e => e.id === item.produtoId && e.tipo === 'acabado');
+        if (estoqueAtual) {
+          if (estoqueAtual.quantidade < item.quantidade) {
+            toast.error(`Estoque insuficiente para ${item.produtoNome}!`);
+            continue;
+          }
+          await updateEstoqueItem(estoqueAtual.id, {
+            quantidade: estoqueAtual.quantidade - item.quantidade,
+          });
+        }
+
+        addedPecas += item.quantidade;
+        addedValor += item.quantidade * item.valorUnitario;
+
+        const precomputedTotals = {
+          total_pecas: pedido.total_pecas + addedPecas,
+          valor_total: pedido.valor_total + addedValor,
+        };
+
+        await addItemMutation.mutateAsync({
+          pedido_id: pedido.id,
+          produto_id: item.produtoId,
+          produto_nome: item.produtoNome || '',
+          quantidade: item.quantidade,
+          valor_unitario: item.valorUnitario,
+          precomputedTotals,
+        });
+      }
+
+      await refetchPedido();
+      toast.success(`Grade adicionada! ${addedPecas} peças no total.`);
+    } catch (error) {
+      console.error('Error adding grade:', error);
+      toast.error('Erro ao adicionar grade');
     }
   };
 
