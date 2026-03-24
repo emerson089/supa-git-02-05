@@ -32,6 +32,7 @@ interface EditPedidoModalProps {
 
 export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps) {
   const { itens: estoqueItens, updateItem: updateEstoqueItem } = useEstoque();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const addItemMutation = useAddPedidoItem();
@@ -42,10 +43,11 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [localDesconto, setLocalDesconto] = useState(pedido?.desconto ?? 0);
   const [isSavingDesconto, setIsSavingDesconto] = useState(false);
+  const [gradeModalOpen, setGradeModalOpen] = useState(false);
 
   useEffect(() => {
     setLocalDesconto(pedido?.desconto ?? 0);
-  }, [pedido?.id]);
+  }, [pedido?.id, pedido?.desconto]);
 
   // Filter and group finished products from inventory
   const produtosAcabados = useMemo(() => {
