@@ -1,15 +1,18 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Package, DollarSign, X, Percent, Check } from 'lucide-react';
+import { Loader2, Package, DollarSign, X, Percent, Check, Layers } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { EditableItemRow, EditableItem } from './EditableItemRow';
 import { AddItemSelector } from './AddItemSelector';
+import { AddGradeModal } from './AddGradeModal';
 import { useAddPedidoItem, useUpdatePedidoItem, useRemovePedidoItem } from '@/hooks/usePedidoItensData';
 import { GradeCompactCardEditable } from './GradeCompactCardEditable';
 import { useEstoque } from '@/contexts/EstoqueContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { ItemPedido } from './ItemPedidoRow';
 import { toast } from 'sonner';
 
 interface PedidoData {
