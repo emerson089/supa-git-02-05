@@ -168,9 +168,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         .eq('id', pedido.id);
       if (error) throw error;
       toast.success('Desconto atualizado!');
-      queryClient.invalidateQueries({ queryKey: ['pedido', pedido.id] });
-      queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
+      await refetchPedido();
     } catch {
       toast.error('Erro ao salvar desconto');
     } finally {
