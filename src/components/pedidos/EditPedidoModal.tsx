@@ -294,6 +294,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         pedidoId: pedido.id,
         precomputedTotals,
       });
+      await refetchPedido();
       toast.success(`Item removido! ${itemLocal.quantidade} peças retornaram ao estoque.`);
     } catch (error) {
       console.error('Error removing item:', error);
