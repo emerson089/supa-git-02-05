@@ -659,7 +659,19 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         </div>
 
         {/* Add Item Section */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border/50 flex-shrink-0">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border/50 flex-shrink-0 space-y-2">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setGradeModalOpen(true)}
+              disabled={addItemMutation.isPending}
+              className="h-11 flex-1 rounded-xl border-dashed border-2 border-indigo-400/30 hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all"
+            >
+              <Layers className="h-4 w-4 mr-2 text-indigo-600" />
+              <span className="text-indigo-600 font-medium">Adicionar Grade</span>
+            </Button>
+          </div>
           <AddItemSelector
             produtos={produtosAcabados}
             onAdd={handleAddItem}
@@ -669,5 +681,20 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Add Grade Modal */}
+    <AddGradeModal
+      open={gradeModalOpen}
+      onClose={() => setGradeModalOpen(false)}
+      onAdd={handleAddGrade}
+      existingItems={pedido.itens.map(i => ({
+        id: i.id,
+        produtoId: i.produto_id || '',
+        produtoNome: i.produto_nome,
+        quantidade: i.quantidade,
+        valorUnitario: i.valor_unitario,
+      }))}
+    />
+    </>
   );
 }
