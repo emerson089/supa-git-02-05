@@ -1,15 +1,18 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Package, DollarSign, X, Percent, Check } from 'lucide-react';
+import { Loader2, Package, DollarSign, X, Percent, Check, Layers } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { EditableItemRow, EditableItem } from './EditableItemRow';
 import { AddItemSelector } from './AddItemSelector';
+import { AddGradeModal } from './AddGradeModal';
 import { useAddPedidoItem, useUpdatePedidoItem, useRemovePedidoItem } from '@/hooks/usePedidoItensData';
 import { GradeCompactCardEditable } from './GradeCompactCardEditable';
 import { useEstoque } from '@/contexts/EstoqueContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { ItemPedido } from './ItemPedidoRow';
 import { toast } from 'sonner';
 
 interface PedidoData {
@@ -29,6 +32,7 @@ interface EditPedidoModalProps {
 
 export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps) {
   const { itens: estoqueItens, updateItem: updateEstoqueItem } = useEstoque();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const addItemMutation = useAddPedidoItem();
@@ -39,10 +43,11 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [localDesconto, setLocalDesconto] = useState(pedido?.desconto ?? 0);
   const [isSavingDesconto, setIsSavingDesconto] = useState(false);
+  const [gradeModalOpen, setGradeModalOpen] = useState(false);
 
   useEffect(() => {
     setLocalDesconto(pedido?.desconto ?? 0);
-  }, [pedido?.id]);
+  }, [pedido?.id, pedido?.desconto]);
 
   // Filter and group finished products from inventory
   const produtosAcabados = useMemo(() => {
@@ -141,6 +146,14 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
       .filter(Boolean) as string[];
   }, [pedido, produtosAcabados]);
 
+  // Helper to refetch pedido data after mutations
+  const refetchPedido = async () => {
+    if (!pedido) return;
+    await queryClient.refetchQueries({ queryKey: ['pedido', pedido.id] });
+    queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
+    queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
+  };
+
   const isSyncing = addItemMutation.isPending || updateItemMutation.isPending || removeItemMutation.isPending;
 
   const handleSaveDesconto = async () => {
@@ -155,9 +168,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         .eq('id', pedido.id);
       if (error) throw error;
       toast.success('Desconto atualizado!');
-      queryClient.invalidateQueries({ queryKey: ['pedido', pedido.id] });
-      queryClient.invalidateQueries({ queryKey: ['pedidos-paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['pedidos-totals'] });
+      await refetchPedido();
     } catch {
       toast.error('Erro ao salvar desconto');
     } finally {
@@ -227,6 +238,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         data,
         precomputedTotals,
       });
+      await refetchPedido();
       toast.success('Item atualizado!');
     } catch (error) {
       console.error('Error updating item:', error);
@@ -280,6 +292,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         pedidoId: pedido.id,
         precomputedTotals,
       });
+      await refetchPedido();
       toast.success(`Item removido! ${itemLocal.quantidade} peças retornaram ao estoque.`);
     } catch (error) {
       console.error('Error removing item:', error);
@@ -320,10 +333,58 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         valor_unitario: produto.preco_unitario || 0,
         precomputedTotals,
       });
+      await refetchPedido();
       toast.success('Item adicionado! 1 peça deduzida do estoque.');
     } catch (error) {
       console.error('Error adding item:', error);
       toast.error('Erro ao adicionar item');
+    }
+  };
+
+  // Handle adding a full grade from AddGradeModal
+  const handleAddGrade = async (gradeItems: ItemPedido[]) => {
+    if (!pedido) return;
+
+    try {
+      let addedPecas = 0;
+      let addedValor = 0;
+
+      for (const item of gradeItems) {
+        // Deduct from stock
+        const estoqueAtual = estoqueItens.find(e => e.id === item.produtoId && e.tipo === 'acabado');
+        if (estoqueAtual) {
+          if (estoqueAtual.quantidade < item.quantidade) {
+            toast.error(`Estoque insuficiente para ${item.produtoNome}!`);
+            continue;
+          }
+          await updateEstoqueItem(estoqueAtual.id, {
+            quantidade: estoqueAtual.quantidade - item.quantidade,
+          });
+        }
+
+        addedPecas += item.quantidade;
+        addedValor += item.quantidade * item.valorUnitario;
+
+        const precomputedTotals = {
+          total_pecas: pedido.total_pecas + addedPecas,
+          valor_total: pedido.valor_total + addedValor,
+        };
+
+        await addItemMutation.mutateAsync({
+          pedido_id: pedido.id,
+          produto_id: item.produtoId,
+          produto_nome: item.produtoNome || '',
+          quantidade: item.quantidade,
+          valor_unitario: item.valorUnitario,
+          precomputedTotals,
+        });
+      }
+
+      await refetchPedido();
+      toast.success(`Grade adicionada! ${addedPecas} peças no total.`);
+    } catch (error) {
+      console.error('Error adding grade:', error);
+      toast.error('Erro ao adicionar grade');
     }
   };
 
@@ -337,6 +398,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
   if (!pedido) return null;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="w-full max-w-[100vw] sm:w-[95vw] sm:max-w-3xl h-[100dvh] sm:h-[85vh] min-h-0 flex flex-col p-0 gap-0 rounded-none sm:rounded-xl overflow-hidden [&>button]:hidden">
         {/* Header */}
@@ -596,7 +658,19 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         </div>
 
         {/* Add Item Section */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border/50 flex-shrink-0">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border/50 flex-shrink-0 space-y-2">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setGradeModalOpen(true)}
+              disabled={addItemMutation.isPending}
+              className="h-11 flex-1 rounded-xl border-dashed border-2 border-indigo-400/30 hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all"
+            >
+              <Layers className="h-4 w-4 mr-2 text-indigo-600" />
+              <span className="text-indigo-600 font-medium">Adicionar Grade</span>
+            </Button>
+          </div>
           <AddItemSelector
             produtos={produtosAcabados}
             onAdd={handleAddItem}
@@ -606,5 +680,20 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Add Grade Modal */}
+    <AddGradeModal
+      open={gradeModalOpen}
+      onClose={() => setGradeModalOpen(false)}
+      onAdd={handleAddGrade}
+      existingItems={pedido.itens.map(i => ({
+        id: i.id,
+        produtoId: i.produto_id || '',
+        produtoNome: i.produto_nome,
+        quantidade: i.quantidade,
+        valorUnitario: i.valor_unitario,
+      }))}
+    />
+    </>
   );
 }
