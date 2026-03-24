@@ -240,6 +240,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         data,
         precomputedTotals,
       });
+      await refetchPedido();
       toast.success('Item atualizado!');
     } catch (error) {
       console.error('Error updating item:', error);
