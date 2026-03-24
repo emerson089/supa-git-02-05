@@ -400,6 +400,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
   if (!pedido) return null;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="w-full max-w-[100vw] sm:w-[95vw] sm:max-w-3xl h-[100dvh] sm:h-[85vh] min-h-0 flex flex-col p-0 gap-0 rounded-none sm:rounded-xl overflow-hidden [&>button]:hidden">
         {/* Header */}
