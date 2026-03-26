@@ -1,26 +1,43 @@
 
 
-## Plano: Remover setas (spinners) dos inputs numéricos
+## Plano: Correções no Modal de Detalhes e Referência nos Itens de Grade
 
-As setas circuladas são os **spinners nativos** do `<input type="number">` do navegador. A solução é adicionar CSS global para ocultá-los em todos os inputs numéricos do projeto.
+### Problema 1 — Valores desatualizados no modal "Detalhes do Pedido"
 
-### Alteração
+**Causa raiz**: Quando o usuário clica em "Ver Detalhes", o pedido é copiado para o state `selectedPedido` como snapshot. Após editar o pedido (via EditPedidoModal), a lista atualiza via React Query, mas o `selectedPedido` continua com os valores antigos. Os campos Total de Peças, Qtd de Modelos, Desconto e Valor Total ficam defasados.
 
-**Arquivo: `src/index.css`** — Adicionar regras CSS para esconder os spinners:
+**Correção em `src/pages/PedidosCriados.tsx`**:
+- Quando o modal de detalhes está aberto (`selectedPedido` != null), sincronizar automaticamente o `selectedPedido` com os dados mais recentes da lista paginada (`pedidosList`)
+- Adicionar um `useEffect` que, sempre que `pedidosList` mudar, atualiza o `selectedPedido` com o pedido correspondente da lista atualizada (pelo `id`)
 
-```css
-/* Chrome, Safari, Edge, Opera */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-/* Firefox */
-input[type="number"] {
-  -moz-appearance: textfield;
-}
+```typescript
+// Novo useEffect para manter selectedPedido sincronizado
+useEffect(() => {
+  if (selectedPedido && pedidosList.length > 0) {
+    const updated = pedidosList.find(p => p.id === selectedPedido.id);
+    if (updated && updated !== selectedPedido) {
+      setSelectedPedido(updated);
+    }
+  }
+}, [pedidosList]);
 ```
 
-Alteração mínima — 1 arquivo, ~10 linhas. Remove os spinners de **todos** os inputs numéricos do sistema de uma vez.
+### Problema 2 — Referência não aparece nos cards de grade (NovoPedido)
+
+**Causa raiz**: No `AddGradeModal`, o campo `modeloNome` é preenchido com `modeloSelecionado.nome.split('—')[0].trim()`, que retorna apenas o nome sem a referência. O `GradeCompactCard` exibe esse `modeloNome` sem referência.
+
+**Correção em `src/components/pedidos/AddGradeModal.tsx`** (linha 144):
+- Incluir a referência no `modeloNome`: concatenar o nome do modelo com a referência
+
+```typescript
+// De:
+modeloNome: modeloSelecionado.nome.split('—')[0].trim(),
+// Para:
+modeloNome: `${modeloSelecionado.nome.split('—')[0].trim()} ${modeloSelecionado.meta.referencia}`,
+```
+
+### Resumo
+- 2 arquivos alterados, ~10 linhas no total
+- Problema 1: sincronização do state local com dados atualizados do React Query
+- Problema 2: adicionar referência ao nome exibido nos cards de grade
 
