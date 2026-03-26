@@ -236,7 +236,6 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         id: itemId,
         pedidoId: pedido.id,
         data,
-        precomputedTotals,
       });
       await refetchPedido();
       toast.success('Item atualizado!');
