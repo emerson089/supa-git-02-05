@@ -307,11 +307,6 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         return;
       }
 
-      const precomputedTotals = {
-        total_pecas: pedido.total_pecas + 1,
-        valor_total: pedido.valor_total + (produto.preco_unitario || 0),
-      };
-
       // Deduzir 1 unidade do estoque
       await updateEstoqueItem(estoqueAtual.id, {
         quantidade: estoqueAtual.quantidade - 1
@@ -324,7 +319,6 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         produto_nome: produto.nome,
         quantidade: 1,
         valor_unitario: produto.preco_unitario || 0,
-        precomputedTotals,
       });
       await refetchPedido();
       toast.success('Item adicionado! 1 peça deduzida do estoque.');
