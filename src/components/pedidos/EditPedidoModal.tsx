@@ -194,7 +194,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
       // Se a quantidade mudou, ajustar estoque
       if (data.quantidade !== undefined && data.quantidade !== itemLocal.quantidade) {
-        const diferenca = itemLocal.quantidade - data.quantidade; // positivo = devolve, negativo = subtrai
+        const newQtd = data.quantidade;
 
         let produtoId = itemLocal.produto_id;
 
