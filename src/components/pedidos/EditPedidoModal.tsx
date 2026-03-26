@@ -284,7 +284,6 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
       await removeItemMutation.mutateAsync({
         id: itemId,
         pedidoId: pedido.id,
-        precomputedTotals,
       });
       await refetchPedido();
       toast.success(`Item removido! ${itemLocal.quantidade} peças retornaram ao estoque.`);
