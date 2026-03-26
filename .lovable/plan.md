@@ -1,43 +1,42 @@
 
 
-## Plano: Correções no Modal de Detalhes e Referência nos Itens de Grade
+## Plano: Corrigir cálculo de totais no EditPedidoModal
 
-### Problema 1 — Valores desatualizados no modal "Detalhes do Pedido"
+### Causa raiz
 
-**Causa raiz**: Quando o usuário clica em "Ver Detalhes", o pedido é copiado para o state `selectedPedido` como snapshot. Após editar o pedido (via EditPedidoModal), a lista atualiza via React Query, mas o `selectedPedido` continua com os valores antigos. Os campos Total de Peças, Qtd de Modelos, Desconto e Valor Total ficam defasados.
+Os `precomputedTotals` fazem cálculos incrementais baseados em `pedido.total_pecas` e `pedido.valor_total` (valores da prop/banco). Se esses valores já estiverem incorretos por edições anteriores ou por timing de cache, o erro se propaga em cada operação subsequente.
 
-**Correção em `src/pages/PedidosCriados.tsx`**:
-- Quando o modal de detalhes está aberto (`selectedPedido` != null), sincronizar automaticamente o `selectedPedido` com os dados mais recentes da lista paginada (`pedidosList`)
-- Adicionar um `useEffect` que, sempre que `pedidosList` mudar, atualiza o `selectedPedido` com o pedido correspondente da lista atualizada (pelo `id`)
+### Correção
 
-```typescript
-// Novo useEffect para manter selectedPedido sincronizado
-useEffect(() => {
-  if (selectedPedido && pedidosList.length > 0) {
-    const updated = pedidosList.find(p => p.id === selectedPedido.id);
-    if (updated && updated !== selectedPedido) {
-      setSelectedPedido(updated);
-    }
-  }
-}, [pedidosList]);
-```
+**Arquivo: `src/components/pedidos/EditPedidoModal.tsx`**
 
-### Problema 2 — Referência não aparece nos cards de grade (NovoPedido)
+Em vez de usar cálculos incrementais (`pedido.total_pecas + X`), recalcular os totais **a partir dos itens reais** do pedido após cada mutação:
 
-**Causa raiz**: No `AddGradeModal`, o campo `modeloNome` é preenchido com `modeloSelecionado.nome.split('—')[0].trim()`, que retorna apenas o nome sem a referência. O `GradeCompactCard` exibe esse `modeloNome` sem referência.
+1. **Remover todos os `precomputedTotals`** das mutações (add, update, remove, addGrade)
+2. Deixar a função `syncPedidoTotals` em `usePedidoItensData.ts` fazer o cálculo correto — ela já tem um fallback que busca todos os itens do pedido e soma `quantidade` e `quantidade * valor_unitario` quando `precomputed` não é passado
+3. O `refetchPedido` já existente garante que o modal atualiza após cada mutação
 
-**Correção em `src/components/pedidos/AddGradeModal.tsx`** (linha 144):
-- Incluir a referência no `modeloNome`: concatenar o nome do modelo com a referência
+Isso é mais seguro porque a fonte de verdade passa a ser sempre os itens reais no banco, não um cálculo incremental baseado em valores possivelmente stale.
+
+### Detalhes técnicos
+
+Nas 4 chamadas de mutação no EditPedidoModal, remover o parâmetro `precomputedTotals`:
 
 ```typescript
-// De:
-modeloNome: modeloSelecionado.nome.split('—')[0].trim(),
-// Para:
-modeloNome: `${modeloSelecionado.nome.split('—')[0].trim()} ${modeloSelecionado.meta.referencia}`,
+// ANTES (em handleUpdateItem, handleRemoveItem, handleAddAvulso, handleAddGrade):
+const precomputedTotals = {
+  total_pecas: pedido.total_pecas + X,
+  valor_total: pedido.valor_total + Y,
+};
+addItemMutation.mutateAsync({ ...item, precomputedTotals });
+
+// DEPOIS:
+addItemMutation.mutateAsync({ ...item });
+// syncPedidoTotals recalcula automaticamente somando todos os pedido_itens
 ```
 
 ### Resumo
-- 2 arquivos alterados, ~10 linhas no total
-- Problema 1: sincronização do state local com dados atualizados do React Query
-- Problema 2: adicionar referência ao nome exibido nos cards de grade
+- 1 arquivo alterado (`EditPedidoModal.tsx`)
+- ~20 linhas removidas (blocos de `precomputedTotals`)
+- Totais passam a ser recalculados a partir dos itens reais no banco, eliminando divergências
 
