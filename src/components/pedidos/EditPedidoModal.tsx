@@ -260,11 +260,6 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         return;
       }
 
-      // Pré-calcular totais sem este item
-      const precomputedTotals = {
-        total_pecas: pedido.total_pecas - itemLocal.quantidade,
-        valor_total: pedido.valor_total - (itemLocal.quantidade * itemLocal.valor_unitario),
-      };
 
       let produtoId = itemLocal.produto_id;
 
