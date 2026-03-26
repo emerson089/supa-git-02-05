@@ -264,6 +264,16 @@ export default function PedidosCriados() {
   const totalPages = paginatedResult?.totalPages || 0;
   const totalCount = paginatedResult?.count || 0;
 
+  // Sincronizar selectedPedido com dados atualizados do React Query
+  useEffect(() => {
+    if (selectedPedido && pedidosList.length > 0) {
+      const updated = pedidosList.find(p => p.id === selectedPedido.id);
+      if (updated && updated !== selectedPedido) {
+        setSelectedPedido(updated);
+      }
+    }
+  }, [pedidosList]);
+
   // Reset to first page when any filter changes
   useEffect(() => {
     setCurrentPage(0);
