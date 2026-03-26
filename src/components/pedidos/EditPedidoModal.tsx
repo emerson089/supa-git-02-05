@@ -189,13 +189,8 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         return;
       }
 
-      // Pré-calcular totais localmente (evita SELECT de todos os itens em syncPedidoTotals)
-      const newQtd = data.quantidade ?? itemLocal.quantidade;
-      const newValor = data.valor_unitario ?? itemLocal.valor_unitario;
-      const precomputedTotals = {
-        total_pecas: pedido.total_pecas - itemLocal.quantidade + newQtd,
-        valor_total: pedido.valor_total - (itemLocal.quantidade * itemLocal.valor_unitario) + (newQtd * newValor),
-      };
+
+
 
       // Se a quantidade mudou, ajustar estoque
       if (data.quantidade !== undefined && data.quantidade !== itemLocal.quantidade) {
