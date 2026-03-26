@@ -141,7 +141,7 @@ export function AddGradeModal({ open, onClose, onAdd, existingItems = [] }: AddG
                 quantidadeGrades,
                 gradeTotalPecas: gradeSelecionada.totalPecas,
                 modeloId: modeloSelecionado.id,
-                modeloNome: modeloSelecionado.nome.split('—')[0].trim(),
+                modeloNome: `${modeloSelecionado.nome.split('—')[0].trim()} ${modeloSelecionado.meta.referencia}`,
             }));
 
         onAdd(novosItens);
