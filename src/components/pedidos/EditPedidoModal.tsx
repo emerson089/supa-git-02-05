@@ -189,17 +189,12 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         return;
       }
 
-      // Pré-calcular totais localmente (evita SELECT de todos os itens em syncPedidoTotals)
-      const newQtd = data.quantidade ?? itemLocal.quantidade;
-      const newValor = data.valor_unitario ?? itemLocal.valor_unitario;
-      const precomputedTotals = {
-        total_pecas: pedido.total_pecas - itemLocal.quantidade + newQtd,
-        valor_total: pedido.valor_total - (itemLocal.quantidade * itemLocal.valor_unitario) + (newQtd * newValor),
-      };
+
+
 
       // Se a quantidade mudou, ajustar estoque
       if (data.quantidade !== undefined && data.quantidade !== itemLocal.quantidade) {
-        const diferenca = itemLocal.quantidade - data.quantidade; // positivo = devolve, negativo = subtrai
+        const newQtd = data.quantidade;
 
         let produtoId = itemLocal.produto_id;
 
@@ -236,7 +231,6 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         id: itemId,
         pedidoId: pedido.id,
         data,
-        precomputedTotals,
       });
       await refetchPedido();
       toast.success('Item atualizado!');
@@ -261,11 +255,6 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         return;
       }
 
-      // Pré-calcular totais sem este item
-      const precomputedTotals = {
-        total_pecas: pedido.total_pecas - itemLocal.quantidade,
-        valor_total: pedido.valor_total - (itemLocal.quantidade * itemLocal.valor_unitario),
-      };
 
       let produtoId = itemLocal.produto_id;
 
@@ -290,7 +279,6 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
       await removeItemMutation.mutateAsync({
         id: itemId,
         pedidoId: pedido.id,
-        precomputedTotals,
       });
       await refetchPedido();
       toast.success(`Item removido! ${itemLocal.quantidade} peças retornaram ao estoque.`);
@@ -314,11 +302,6 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         return;
       }
 
-      const precomputedTotals = {
-        total_pecas: pedido.total_pecas + 1,
-        valor_total: pedido.valor_total + (produto.preco_unitario || 0),
-      };
-
       // Deduzir 1 unidade do estoque
       await updateEstoqueItem(estoqueAtual.id, {
         quantidade: estoqueAtual.quantidade - 1
@@ -331,7 +314,6 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         produto_nome: produto.nome,
         quantidade: 1,
         valor_unitario: produto.preco_unitario || 0,
-        precomputedTotals,
       });
       await refetchPedido();
       toast.success('Item adicionado! 1 peça deduzida do estoque.');
@@ -365,18 +347,12 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         addedPecas += item.quantidade;
         addedValor += item.quantidade * item.valorUnitario;
 
-        const precomputedTotals = {
-          total_pecas: pedido.total_pecas + addedPecas,
-          valor_total: pedido.valor_total + addedValor,
-        };
-
         await addItemMutation.mutateAsync({
           pedido_id: pedido.id,
           produto_id: item.produtoId,
           produto_nome: item.produtoNome || '',
           quantidade: item.quantidade,
           valor_unitario: item.valorUnitario,
-          precomputedTotals,
         });
       }
 
