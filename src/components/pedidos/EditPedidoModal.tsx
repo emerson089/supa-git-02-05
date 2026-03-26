@@ -352,18 +352,12 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         addedPecas += item.quantidade;
         addedValor += item.quantidade * item.valorUnitario;
 
-        const precomputedTotals = {
-          total_pecas: pedido.total_pecas + addedPecas,
-          valor_total: pedido.valor_total + addedValor,
-        };
-
         await addItemMutation.mutateAsync({
           pedido_id: pedido.id,
           produto_id: item.produtoId,
           produto_nome: item.produtoNome || '',
           quantidade: item.quantidade,
           valor_unitario: item.valorUnitario,
-          precomputedTotals,
         });
       }
 
