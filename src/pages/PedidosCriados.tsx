@@ -370,9 +370,10 @@ export default function PedidosCriados() {
   };
 
   // Handle inline status update with cancellation automation and stock reversal
-  const handleStatusUpdate = async (pedidoId: string, field: 'statusPagamento' | 'statusPedido' | 'statusEntrega', value: string) => {
+  const handleStatusUpdate = async (pedidoItem: PedidoPaginatedDB, field: 'statusPagamento' | 'statusPedido' | 'statusEntrega', value: string) => {
+    const pedidoId = pedidoItem.id;
+    // Also pull from context to get itens (for stock reversal). Fall back to pedidoItem fields.
     const pedido = getPedidoById(pedidoId);
-    if (!pedido) return;
     const updates: Partial<Pedido> = {
       [field]: value
     };
@@ -382,14 +383,17 @@ export default function PedidosCriados() {
       updates.statusPagamento = 'GOLPE CANCELADO';
       updates.statusEntrega = 'CANCELADO'; // Entrega não tem GOLPE CANCELADO, usa CANCELADO
 
-      // Verificar se precisa estornar estoque
-      const estavaCancelado = pedido.statusPagamento === 'CANCELADO' || pedido.statusPedido === 'CANCELADO' || pedido.statusPagamento === 'GOLPE CANCELADO' || pedido.statusPedido === 'GOLPE CANCELADO';
-      const jaEstornou = pedido.estornoRealizado === true;
-      if (!estavaCancelado && !jaEstornou) {
-        const pecasEstornadas = estornarEstoque(pedido);
-        updates.estornoRealizado = true;
-        if (pecasEstornadas > 0) {
-          toast.success(`GOLPE CANCELADO aplicado! ${pecasEstornadas} peças retornaram ao estoque.`);
+      if (pedido) {
+        const estavaCancelado = pedido.statusPagamento === 'CANCELADO' || pedido.statusPedido === 'CANCELADO' || pedido.statusPagamento === 'GOLPE CANCELADO' || pedido.statusPedido === 'GOLPE CANCELADO';
+        const jaEstornou = pedido.estornoRealizado === true;
+        if (!estavaCancelado && !jaEstornou) {
+          const pecasEstornadas = estornarEstoque(pedido);
+          updates.estornoRealizado = true;
+          if (pecasEstornadas > 0) {
+            toast.success(`GOLPE CANCELADO aplicado! ${pecasEstornadas} peças retornaram ao estoque.`);
+          } else {
+            toast.success('Status GOLPE CANCELADO aplicado a todos os campos!');
+          }
         } else {
           toast.success('Status GOLPE CANCELADO aplicado a todos os campos!');
         }
@@ -400,13 +404,17 @@ export default function PedidosCriados() {
       return;
     }
 
-    // Verificar estados
-    const estavaCancelado = pedido.statusPagamento === 'CANCELADO' || pedido.statusPedido === 'CANCELADO' || pedido.statusPagamento === 'GOLPE CANCELADO' || pedido.statusPedido === 'GOLPE CANCELADO';
+    // Verificar estados — usando pedidoItem (paginated) para dados confiáveis e atuais
+    const estavaCancelado = (pedidoItem.status_pagamento === 'CANCELADO' || pedidoItem.status_pedido === 'CANCELADO' || pedidoItem.status_pagamento === 'GOLPE CANCELADO' || pedidoItem.status_pedido === 'GOLPE CANCELADO');
     const estaCancelando = value === 'CANCELADO' || value === 'GOLPE CANCELADO';
-    const jaEstornou = pedido.estornoRealizado === true;
+    const jaEstornou = (pedidoItem.estorno_realizado === true) || (pedido?.estornoRealizado === true);
 
     // CASO 1: Descancelando (saindo de cancelado para outro status)
     if (estavaCancelado && !estaCancelando && jaEstornou) {
+      if (!pedido) {
+        toast.error('Não foi possível encontrar os dados completos do pedido.');
+        return;
+      }
       const resultado = await subtrairEstoque(pedido);
       if (!resultado.sucesso) {
         toast.error(resultado.mensagem, {
@@ -416,10 +424,14 @@ export default function PedidosCriados() {
         return; // Impede a mudança de status
       }
       updates.estornoRealizado = false;
-      toast.success(`Pedido reativado! ${pedido.totalPecas} peças subtraídas do estoque.`);
+      toast.success(`Pedido reativado! ${pedidoItem.total_pecas} peças subtraídas do estoque.`);
     }
     // CASO 2: Cancelando (indo para cancelado)
     else if (estaCancelando && !estavaCancelado && !jaEstornou) {
+      if (!pedido) {
+        toast.error('Não foi possível encontrar os dados completos do pedido.');
+        return;
+      }
       const pecasEstornadas = estornarEstoque(pedido);
       updates.estornoRealizado = true;
 
@@ -435,21 +447,87 @@ export default function PedidosCriados() {
       }
     } else {
       if (field === 'statusPedido' && value === 'SEPARADO') {
-        const telefoneApenasNumeros = pedido.telefone?.replace(/\\D/g, '') || '';
-        const mensagem = `Olá ${pedido.clienteNome}, seu pedido já foi separado e está pronto!`;
-        toast.success('Pedido marcado como SEPARADO!', {
-          action: telefoneApenasNumeros ? {
-            label: 'Avisar no WhatsApp',
-            onClick: () => window.open(`https://wa.me/55${telefoneApenasNumeros}?text=${encodeURIComponent(mensagem)}`, '_blank')
-          } : undefined,
-          duration: 8000,
-        });
+        // Usa pedidoItem (paginated) para ter o flag mais atualizado
+        const jaNotificado = pedidoItem.notificado_separado === true;
+        const telefone = pedidoItem.telefone;
+        if (!jaNotificado && telefone) {
+          const clienteNome = pedidoItem.cliente_nome?.split(' ')[0] || 'Cliente';
+          const mensagem = `Olá, ${clienteNome}! 👋
+
+✅ Seu pedido já foi *separado* aqui na *Delookii Jeans*!
+
+Qualquer dúvida é só chamar! 😊`;
+
+          // Normalizar telefone
+          let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
+          if (digits && !digits.startsWith('55')) digits = '55' + digits;
+
+          if (digits.length >= 12 && digits.length <= 13) {
+            try {
+              const { error: sendError } = await supabase.functions.invoke('send-whatsapp', {
+                body: { phone: digits, message: mensagem },
+              });
+              
+              if (!sendError) {
+                updates.notificadoSeparado = true;
+                toast.success('Pedido separado e cliente avisado!');
+              } else {
+                throw sendError;
+              }
+            } catch (err) {
+              console.error('Erro ao enviar WhatsApp:', err);
+              toast.error('Pedido separado, mas erro ao enviar WhatsApp.');
+            }
+          } else {
+            toast.success('Pedido marcado como SEPARADO!');
+          }
+        } else {
+          toast.success('Pedido marcado como SEPARADO!');
+        }
+      } else if (field === 'statusEntrega' && value === 'NO CARRO') {
+        const jaNotificadoCarro = pedidoItem.notificado_no_carro === true;
+        const telefone = pedidoItem.telefone;
+        if (!jaNotificadoCarro && telefone) {
+          const clienteNome = pedidoItem.cliente_nome?.split(' ')[0] || 'Cliente';
+          const mensagem = `Olá, ${clienteNome}! 👋
+
+📦 Seu pedido já está *no carro*!
+
+🚗 O envio será realizado *amanhã* — assim que deixarmos na excursão, enviamos o comprovante para você. ✅
+
+Qualquer dúvida é só chamar! 😊`;
+
+          let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
+          if (digits && !digits.startsWith('55')) digits = '55' + digits;
+
+          if (digits.length >= 12 && digits.length <= 13) {
+            try {
+              const { error: sendError } = await supabase.functions.invoke('send-whatsapp', {
+                body: { phone: digits, message: mensagem },
+              });
+              if (!sendError) {
+                updates.notificadoNoCarro = true;
+                toast.success('Pedido NO CARRO e cliente avisado!');
+              } else {
+                throw sendError;
+              }
+            } catch (err) {
+              console.error('Erro ao enviar WhatsApp (NO CARRO):', err);
+              toast.error('Pedido NO CARRO, mas erro ao enviar WhatsApp.');
+            }
+          } else {
+            toast.success('Entrega atualizada para NO CARRO!');
+          }
+        } else {
+          toast.success('Entrega atualizada para NO CARRO!');
+        }
       } else {
         toast.success('Status atualizado com sucesso!');
       }
     }
     updatePedido(pedidoId, updates);
   };
+
   // Removed client-side filtering - now handled by server-side pagination
 
   const formatCurrency = (value: number) => {
@@ -873,7 +951,8 @@ export default function PedidosCriados() {
         if (error) throw error;
         if (data && data.length > 0) {
           // Filter by model if needed (client-side)
-          let filteredData = data as PedidoPaginatedDB[];
+          let filteredData = (data as unknown) as PedidoPaginatedDB[];
+
           if (filterModelo) {
             const modeloLower = filterModelo.toLowerCase();
             filteredData = filteredData.filter(p => p.pedido_itens?.some(i => i.produto_nome.toLowerCase().includes(modeloLower)));
@@ -1178,7 +1257,7 @@ export default function PedidosCriados() {
             </p>
           </div> : isMobile ? (/* Mobile: Card List */
             <div className="space-y-3">
-              {pedidosList.map(pedido => <MobileOrderCard key={pedido.id} pedido={pedido} onView={() => setSelectedPedido(pedido)} onEdit={() => setEditingPedidoId(pedido.id)} onDelete={() => setDeleteId(pedido.id)} onGeneratePDF={() => generatePDF(pedido)} onStatusUpdate={(field, value) => handleStatusUpdate(pedido.id, field, value)} />)}
+              {pedidosList.map(pedido => <MobileOrderCard key={pedido.id} pedido={pedido} onView={() => setSelectedPedido(pedido)} onEdit={() => setEditingPedidoId(pedido.id)} onDelete={() => setDeleteId(pedido.id)} onGeneratePDF={() => generatePDF(pedido)} onStatusUpdate={(field, value) => handleStatusUpdate(pedido, field, value)} />)}
             </div>) : (/* Desktop: Table */
             <div className="neu-card p-4 overflow-hidden">
               <div className="overflow-x-auto">
@@ -1240,13 +1319,13 @@ export default function PedidosCriados() {
                         <span className="font-bold text-emerald-600 text-sm">{formatCurrency(pedido.valor_total || 0)}</span>
                       </TableCell>
                       <TableCell className="py-2.5">
-                        <InlineStatusSelect options={statusPagamentoOptions} value={pedido.status_pagamento || 'PENDENTE'} onChange={value => handleStatusUpdate(pedido.id, 'statusPagamento', value)} />
+                        <InlineStatusSelect options={statusPagamentoOptions} value={pedido.status_pagamento || 'PENDENTE'} onChange={value => handleStatusUpdate(pedido, 'statusPagamento', value)} />
                       </TableCell>
                       <TableCell className="py-2.5">
-                        <InlineStatusSelect options={statusPedidoOptions} value={pedido.status_pedido || 'NÃO SEPARADO'} onChange={value => handleStatusUpdate(pedido.id, 'statusPedido', value)} />
+                        <InlineStatusSelect options={statusPedidoOptions} value={pedido.status_pedido || 'NÃO SEPARADO'} onChange={value => handleStatusUpdate(pedido, 'statusPedido', value)} />
                       </TableCell>
                       <TableCell className="py-2.5">
-                        <InlineStatusSelect options={statusEntregaOptions} value={pedido.status_entrega || 'PEND. ENTREGA'} onChange={value => handleStatusUpdate(pedido.id, 'statusEntrega', value)} />
+                        <InlineStatusSelect options={statusEntregaOptions} value={pedido.status_entrega || 'PEND. ENTREGA'} onChange={value => handleStatusUpdate(pedido, 'statusEntrega', value)} />
                       </TableCell>
                       <TableCell className="py-2.5 text-right">
                         <DropdownMenu>

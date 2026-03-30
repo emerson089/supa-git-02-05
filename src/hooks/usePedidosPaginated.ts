@@ -23,6 +23,8 @@ export interface PedidoPaginatedDB {
   total_pecas: number | null;
   valor_total: number | null;
   estorno_realizado: boolean | null;
+  notificado_separado: boolean | null;
+  notificado_no_carro: boolean | null;
   created_at: string;
   updated_at: string;
   paid_at: string | null;
@@ -167,7 +169,7 @@ export function usePedidosPaginated(params: PaginatedParams) {
       if (error) throw error;
 
       return {
-        data: (data || []) as PedidoPaginatedDB[],
+        data: ((data || []) as unknown) as PedidoPaginatedDB[],
         count: count || 0,
         totalPages: Math.ceil((count || 0) / params.pageSize)
       };

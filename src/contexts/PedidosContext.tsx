@@ -32,6 +32,8 @@ export interface Pedido {
   dataCriacao: string;
   dataPagamento: string | null;
   estornoRealizado?: boolean;
+  notificadoSeparado?: boolean;
+  notificadoNoCarro?: boolean;
 }
 
 interface PedidosContextType {
@@ -76,6 +78,8 @@ function transformDBToContext(pedidoDB: PedidoDB): Pedido {
     dataCriacao: pedidoDB.created_at,
     dataPagamento: pedidoDB.paid_at,
     estornoRealizado: pedidoDB.estorno_realizado || false,
+    notificadoSeparado: pedidoDB.notificado_separado || false,
+    notificadoNoCarro: pedidoDB.notificado_no_carro || false,
   };
 }
 
@@ -144,6 +148,8 @@ export function PedidosProvider({ children }: { children: ReactNode }) {
     if (data.valorTotal !== undefined) updateData.valor_total = data.valorTotal;
     if (data.desconto !== undefined) updateData.desconto = data.desconto;
     if (data.estornoRealizado !== undefined) updateData.estorno_realizado = data.estornoRealizado;
+    if (data.notificadoSeparado !== undefined) updateData.notificado_separado = data.notificadoSeparado;
+    if (data.notificadoNoCarro !== undefined) updateData.notificado_no_carro = data.notificadoNoCarro;
 
     updatePedidoMutation.mutate({ id, data: updateData });
   };

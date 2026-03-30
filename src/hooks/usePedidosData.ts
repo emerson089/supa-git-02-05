@@ -34,6 +34,8 @@ export interface PedidoDB {
   valor_total: number;
   desconto?: number;
   estorno_realizado: boolean;
+  notificado_separado: boolean;
+  notificado_no_carro: boolean;
   created_at: string;
   updated_at: string;
   paid_at: string | null;
@@ -59,6 +61,8 @@ export interface PedidoInsert {
   valor_total?: number;
   desconto?: number;
   estorno_realizado?: boolean;
+  notificado_separado?: boolean;
+  notificado_no_carro?: boolean;
   itens: Array<{
     produto_id?: string | null;
     produto_nome: string;
