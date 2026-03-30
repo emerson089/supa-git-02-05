@@ -1,38 +1,17 @@
 
 
-## Plan: Update WhatsApp Message Template
+## Correção: Status "NO CARRO" não atualiza
 
-The current message template (lines 312-320 of `NovoPedido.tsx`) still uses the old format. It needs to be updated to match the user's requested template.
+### Problema
+A coluna `notificado_no_carro` **não existe** na tabela `pedidos` do banco de dados. Quando o status de entrega é alterado para "NO CARRO", o código envia o WhatsApp com sucesso e depois tenta salvar `notificado_no_carro = true` junto com `status_entrega = 'NO CARRO'`. Como a coluna não existe, **toda a atualização falha** — o status não muda.
 
-### Change
+### Solução
 
-**File:** `src/pages/NovoPedido.tsx` (lines 312-320)
-
-Replace the current message with:
-
-```
-Olá, ${clienteNome}! 👋
-
-Seu pedido foi confirmado aqui na *Delookii Jeans*! 🎉
-
-💰 *Total: ${valorFormatado}*
-
-Para dar andamento, realize o pagamento via PIX:
-
-🔑 *Chave PIX:*
-
-\`40548049000106\`
-
-*CNPJ:* 40.548.049/0001-06
-
-*Favorecido:* Delookii Confecções Ltda
-
-Após o pagamento, envie o comprovante aqui e já priorizamos o seu pedido. ✅
-
-Qualquer dúvida é só chamar. Estamos sempre por aqui! 😊
-
-*Delookii Jeans — Toritama/PE*
+**1. Migração SQL** — Adicionar a coluna faltante:
+```sql
+ALTER TABLE public.pedidos 
+ADD COLUMN IF NOT EXISTS notificado_no_carro boolean DEFAULT false;
 ```
 
-This is a single-line change in one file.
+**2. Nenhuma mudança de código necessária** — o código já está correto, só faltava a coluna no banco.
 
