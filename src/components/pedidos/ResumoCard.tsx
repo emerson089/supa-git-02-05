@@ -1,5 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { MessageCircle } from 'lucide-react';
 
 interface ResumoCardProps {
   totalPecas: number;
@@ -14,6 +17,8 @@ interface ResumoCardProps {
   onCriarPedido: () => void;
   isLoading?: boolean;
   disabled?: boolean;
+  enviarWhatsApp?: boolean;
+  onEnviarWhatsAppChange?: (value: boolean) => void;
 }
 
 export function ResumoCard({
@@ -29,6 +34,8 @@ export function ResumoCard({
   onCriarPedido,
   isLoading = false,
   disabled = false,
+  enviarWhatsApp = false,
+  onEnviarWhatsAppChange,
 }: ResumoCardProps) {
   const formatCurrency = (value: number) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -115,24 +122,41 @@ export function ResumoCard({
         </div>
       </div>
 
-      {/* Botões alinhados à direita */}
-      <div className="flex items-center justify-end gap-4 pt-4 border-t border-border/30">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onLimpar}
-          className="h-12 px-8 rounded-xl border-border bg-background hover:bg-muted/50 text-foreground font-medium"
-        >
-          Limpar Formulário
-        </Button>
-        <Button
-          type="button"
-          onClick={onCriarPedido}
-          disabled={isLoading || disabled}
-          className="h-12 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? 'Criando...' : disabled ? 'Estoque Insuficiente' : 'Criar Pedido'}
-        </Button>
+      {/* WhatsApp toggle + Botões */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/30">
+        {/* WhatsApp toggle */}
+        {onEnviarWhatsAppChange && (
+          <div className="flex items-center gap-3">
+            <Switch
+              id="enviar-whatsapp"
+              checked={enviarWhatsApp}
+              onCheckedChange={onEnviarWhatsAppChange}
+            />
+            <Label htmlFor="enviar-whatsapp" className="flex items-center gap-2 text-sm cursor-pointer">
+              <MessageCircle className="h-4 w-4 text-[#25D366]" />
+              Enviar resumo via WhatsApp
+            </Label>
+          </div>
+        )}
+
+        <div className="flex items-center gap-4 ml-auto">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onLimpar}
+            className="h-12 px-8 rounded-xl border-border bg-background hover:bg-muted/50 text-foreground font-medium"
+          >
+            Limpar Formulário
+          </Button>
+          <Button
+            type="button"
+            onClick={onCriarPedido}
+            disabled={isLoading || disabled}
+            className="h-12 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Criando...' : disabled ? 'Estoque Insuficiente' : 'Criar Pedido'}
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -26,6 +26,7 @@ import { ClienteSchema, PedidoItemSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { ChevronsUpDown, Check } from 'lucide-react';
 import { parseProductName } from '@/utils/productNameUtils';
+import { supabase } from '@/integrations/supabase/client';
 
 function formatPhone(phone: string): string {
   if (!phone) return '';
@@ -66,6 +67,7 @@ const NovoPedido = () => {
   const [excursaoId, setExcursaoId] = useState<string | null>(null);
   const [taxaExcursao, setTaxaExcursao] = useState(0);
   const [desconto, setDesconto] = useState(0);
+  const [enviarWhatsApp, setEnviarWhatsApp] = useState(true);
 
   // Status - valores fixos, não editáveis na UI
   const statusPagamento = 'PENDENTE';
@@ -300,6 +302,56 @@ const NovoPedido = () => {
         desconto
       });
       toast.success('Pedido cadastrado com sucesso! Estoque atualizado.');
+
+      // Enviar WhatsApp automaticamente se ativado
+      if (enviarWhatsApp && telefone) {
+        try {
+          const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
+          const itensResumo = items.map(item => {
+            const nome = item.produtoNome || 'Produto';
+            return `• ${nome} — ${item.quantidade}x`;
+          }).join('\n');
+          const valorFormatado = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+          const mensagem = `Olá, *${clienteNome}*! 👋
+
+Seu pedido foi confirmado na *Delookii Jeans*. 🎉
+
+━━━━━━━━━━━━━━━━━━━
+📋 *Itens:*
+${itensResumo}
+
+👖 *Total de Peças:* ${totalPecas}
+💰 *Total:* ${valorFormatado}
+━━━━━━━━━━━━━━━━━━━
+
+Para confirmar, realize o pagamento via *PIX*:
+
+🔑 *Chave PIX CNPJ:*
+\`40548049000106\`
+Nome: Delookii Confeccoes Ltda
+
+Após o pagamento, envie o comprovante para agilizarmos sua produção. ✅
+
+Qualquer dúvida, estamos à disposição! 😊
+_Delookii Jeans — Toritama/PE_`;
+
+          // Normalizar telefone
+          let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
+          if (!digits.startsWith('55')) digits = '55' + digits;
+
+          if (digits.length >= 12 && digits.length <= 13) {
+            await supabase.functions.invoke('send-whatsapp', {
+              body: { phone: digits, message: mensagem },
+            });
+            toast.success('Resumo enviado via WhatsApp!');
+          }
+        } catch (whatsErr) {
+          console.error('Erro ao enviar WhatsApp:', whatsErr);
+          toast.error('Pedido criado, mas não foi possível enviar o WhatsApp.');
+        }
+      }
+
       clearDraft();
       handleLimpar();
 
@@ -422,7 +474,9 @@ const NovoPedido = () => {
             onLimpar={handleLimpar} 
             onCriarPedido={handleCriarPedido} 
             isLoading={isLoading} 
-            disabled={hasEstoqueInsuficiente} 
+            disabled={hasEstoqueInsuficiente}
+            enviarWhatsApp={enviarWhatsApp}
+            onEnviarWhatsAppChange={setEnviarWhatsApp}
           />
 
           {/* Items Card - agora abaixo do resumo */}
