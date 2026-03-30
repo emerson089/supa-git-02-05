@@ -240,10 +240,11 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
               <DrawerFooter className="px-4 pt-4 gap-2">
                 <Button
                   onClick={enviarWhatsApp}
+                  disabled={enviando}
                   className="w-full h-12 bg-[#25D366] hover:bg-[#20BD5A] text-white text-base font-semibold rounded-xl"
                 >
-                  <MessageCircle className="mr-2 h-5 w-5" />
-                  Enviar para o WhatsApp
+                  {enviando ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <MessageCircle className="mr-2 h-5 w-5" />}
+                  {enviando ? 'Enviando...' : 'Enviar para o WhatsApp'}
                 </Button>
                 <Button
                   variant="outline"
