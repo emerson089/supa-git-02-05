@@ -474,7 +474,9 @@ _Delookii Jeans — Toritama/PE_`;
             onLimpar={handleLimpar} 
             onCriarPedido={handleCriarPedido} 
             isLoading={isLoading} 
-            disabled={hasEstoqueInsuficiente} 
+            disabled={hasEstoqueInsuficiente}
+            enviarWhatsApp={enviarWhatsApp}
+            onEnviarWhatsAppChange={setEnviarWhatsApp}
           />
 
           {/* Items Card - agora abaixo do resumo */}
