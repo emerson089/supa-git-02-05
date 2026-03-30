@@ -113,6 +113,7 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
     const [menuOpen, setMenuOpen] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const [mensagem, setMensagem] = useState('');
+    const [enviando, setEnviando] = useState(false);
 
     const processarMensagem = (texto: string, templateId: string) => {
       const nome = cliente.nome.split(' ')[0];
