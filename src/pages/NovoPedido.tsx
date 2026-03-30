@@ -307,34 +307,29 @@ const NovoPedido = () => {
       if (enviarWhatsApp && telefone) {
         try {
           const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
-          const itensResumo = items.map(item => {
-            const nome = item.produtoNome || 'Produto';
-            return `• ${nome} — ${item.quantidade}x`;
-          }).join('\n');
           const valorFormatado = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-          const mensagem = `Olá, *${clienteNome}*! 👋
+          const mensagem = `Olá, ${clienteNome}! 👋
 
-Seu pedido foi confirmado na *Delookii Jeans*. 🎉
+Seu pedido foi confirmado aqui na *Delookii Jeans*! 🎉
 
-━━━━━━━━━━━━━━━━━━━
-📋 *Itens:*
-${itensResumo}
+💰 *Total: ${valorFormatado}*
 
-👖 *Total de Peças:* ${totalPecas}
-💰 *Total:* ${valorFormatado}
-━━━━━━━━━━━━━━━━━━━
+Para dar andamento, realize o pagamento via PIX:
 
-Para confirmar, realize o pagamento via *PIX*:
+🔑 *Chave PIX:*
 
-🔑 *Chave PIX CNPJ:*
 \`40548049000106\`
-Nome: Delookii Confeccoes Ltda
 
-Após o pagamento, envie o comprovante para agilizarmos sua produção. ✅
+*CNPJ:* 40.548.049/0001-06
 
-Qualquer dúvida, estamos à disposição! 😊
-_Delookii Jeans — Toritama/PE_`;
+*Favorecido:* Delookii Confecções Ltda
+
+Após o pagamento, envie o comprovante aqui e já priorizamos o seu pedido. ✅
+
+Qualquer dúvida é só chamar. Estamos sempre por aqui! 😊
+
+*Delookii Jeans — Toritama/PE*`;
 
           // Normalizar telefone
           let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
