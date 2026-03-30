@@ -68,7 +68,9 @@ const statusEntregaColors: Record<string, string> = {
   'PEND. ENTREGA': 'bg-blue-100 text-blue-700 border-blue-300',
   'NÃO ENTREGOU': 'bg-red-100 text-red-700 border-red-300',
   'ENTREGOU ERRADO': 'bg-red-100 text-red-700 border-red-300',
-  'CANCELADO': 'bg-red-100 text-red-700 border-red-300'
+  'CANCELADO': 'bg-red-100 text-red-700 border-red-300',
+  'NO CARRO': 'bg-purple-100 text-purple-700 border-purple-300',
+  'ENTREGA TORITAMA': 'bg-purple-100 text-purple-700 border-purple-300'
 };
 type SortField = 'created_at' | 'valor_total';
 type SortDirection = 'asc' | 'desc';
@@ -446,8 +448,11 @@ export default function PedidosCriados() {
         toast.success('Status atualizado com sucesso!');
       }
     } else {
+      // Para outros status (incluindo SEPARADO e NO CARRO), atualiza o banco IMEDIATAMENTE
+      // Isso evita que a interface fique travada esperando o WhatsApp
+      updatePedido(pedidoId, updates);
+
       if (field === 'statusPedido' && value === 'SEPARADO') {
-        // Usa pedidoItem (paginated) para ter o flag mais atualizado
         const jaNotificado = pedidoItem.notificado_separado === true;
         const telefone = pedidoItem.telefone;
         if (!jaNotificado && telefone) {
@@ -458,7 +463,6 @@ export default function PedidosCriados() {
 
 Qualquer dúvida é só chamar! 😊`;
 
-          // Normalizar telefone
           let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
           if (digits && !digits.startsWith('55')) digits = '55' + digits;
 
@@ -467,9 +471,8 @@ Qualquer dúvida é só chamar! 😊`;
               const { error: sendError } = await supabase.functions.invoke('send-whatsapp', {
                 body: { phone: digits, message: mensagem },
               });
-              
               if (!sendError) {
-                updates.notificadoSeparado = true;
+                updatePedido(pedidoId, { notificadoSeparado: true });
                 toast.success('Pedido separado e cliente avisado!');
               } else {
                 throw sendError;
@@ -484,7 +487,8 @@ Qualquer dúvida é só chamar! 😊`;
         } else {
           toast.success('Pedido marcado como SEPARADO!');
         }
-      } else if (field === 'statusEntrega' && value === 'NO CARRO') {
+      } else if (field === 'statusEntrega' && (value === 'NO CARRO' || value === 'ENTREGA TORITAMA')) {
+        // Gatilho: NO CARRO ou ENTREGA TORITAMA - envia apenas uma vez
         const jaNotificadoCarro = pedidoItem.notificado_no_carro === true;
         const telefone = pedidoItem.telefone;
         if (!jaNotificadoCarro && telefone) {
@@ -506,27 +510,27 @@ Qualquer dúvida é só chamar! 😊`;
                 body: { phone: digits, message: mensagem },
               });
               if (!sendError) {
-                updates.notificadoNoCarro = true;
-                toast.success('Pedido NO CARRO e cliente avisado!');
+                updatePedido(pedidoId, { notificadoNoCarro: true });
+                toast.success(`Pedido em ${value} e cliente avisado!`);
               } else {
                 throw sendError;
               }
             } catch (err) {
-              console.error('Erro ao enviar WhatsApp (NO CARRO):', err);
-              toast.error('Pedido NO CARRO, mas erro ao enviar WhatsApp.');
+              console.error('Erro ao enviar WhatsApp:', err);
+              toast.error(`Pedido em ${value}, mas erro ao enviar WhatsApp.`);
             }
           } else {
-            toast.success('Entrega atualizada para NO CARRO!');
+            toast.success(`Entrega atualizada para ${value}!`);
           }
         } else {
-          toast.success('Entrega atualizada para NO CARRO!');
+          toast.success(`Entrega atualizada para ${value}!`);
         }
       } else {
         toast.success('Status atualizado com sucesso!');
       }
     }
-    updatePedido(pedidoId, updates);
   };
+
 
   // Removed client-side filtering - now handled by server-side pagination
 

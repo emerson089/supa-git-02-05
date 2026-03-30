@@ -58,7 +58,7 @@ export function InlineStatusSelect({ options, value, onChange, className }: Inli
         {options.map((option) => (
           <SelectItem 
             key={option.value} 
-            value={option.label}
+            value={option.value}
             className={cn(
               "font-semibold rounded-lg my-0.5 text-[11px] cursor-pointer",
               colorClasses[option.color]
