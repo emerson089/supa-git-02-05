@@ -1,5 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { MessageCircle } from 'lucide-react';
 
 interface ResumoCardProps {
   totalPecas: number;
@@ -14,6 +17,8 @@ interface ResumoCardProps {
   onCriarPedido: () => void;
   isLoading?: boolean;
   disabled?: boolean;
+  enviarWhatsApp?: boolean;
+  onEnviarWhatsAppChange?: (value: boolean) => void;
 }
 
 export function ResumoCard({
