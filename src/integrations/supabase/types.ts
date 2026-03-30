@@ -698,6 +698,7 @@ export type Database = {
           excursao_id: string | null
           forma_pagamento: string | null
           id: string
+          notificado_no_carro: boolean | null
           notificado_separado: boolean | null
           observacoes: string | null
           paid_at: string | null
@@ -724,6 +725,7 @@ export type Database = {
           excursao_id?: string | null
           forma_pagamento?: string | null
           id?: string
+          notificado_no_carro?: boolean | null
           notificado_separado?: boolean | null
           observacoes?: string | null
           paid_at?: string | null
@@ -750,6 +752,7 @@ export type Database = {
           excursao_id?: string | null
           forma_pagamento?: string | null
           id?: string
+          notificado_no_carro?: boolean | null
           notificado_separado?: boolean | null
           observacoes?: string | null
           paid_at?: string | null
