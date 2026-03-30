@@ -26,6 +26,7 @@ import { ClienteSchema, PedidoItemSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { ChevronsUpDown, Check } from 'lucide-react';
 import { parseProductName } from '@/utils/productNameUtils';
+import { supabase } from '@/integrations/supabase/client';
 
 function formatPhone(phone: string): string {
   if (!phone) return '';
