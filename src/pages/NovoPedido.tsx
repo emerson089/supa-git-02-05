@@ -67,6 +67,7 @@ const NovoPedido = () => {
   const [excursaoId, setExcursaoId] = useState<string | null>(null);
   const [taxaExcursao, setTaxaExcursao] = useState(0);
   const [desconto, setDesconto] = useState(0);
+  const [enviarWhatsApp, setEnviarWhatsApp] = useState(true);
 
   // Status - valores fixos, não editáveis na UI
   const statusPagamento = 'PENDENTE';
