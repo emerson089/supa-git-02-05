@@ -57,8 +57,10 @@ Deno.serve(async (req) => {
     // Call Z-API
     const instanceId = Deno.env.get("ZAPI_INSTANCE_ID");
     const zapiToken = Deno.env.get("ZAPI_TOKEN");
+    const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN");
 
-    if (!instanceId || !zapiToken) {
+    if (!instanceId || !zapiToken || !clientToken) {
+      console.error("Missing Z-API env vars:", { hasInstanceId: !!instanceId, hasToken: !!zapiToken, hasClientToken: !!clientToken });
       return new Response(JSON.stringify({ error: "Credenciais Z-API não configuradas" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -69,7 +71,10 @@ Deno.serve(async (req) => {
 
     const zapiResponse = await fetch(zapiUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Client-Token": clientToken,
+      },
       body: JSON.stringify({ phone, message }),
     });
 
