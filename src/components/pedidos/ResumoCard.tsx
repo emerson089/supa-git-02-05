@@ -34,6 +34,8 @@ export function ResumoCard({
   onCriarPedido,
   isLoading = false,
   disabled = false,
+  enviarWhatsApp = false,
+  onEnviarWhatsAppChange,
 }: ResumoCardProps) {
   const formatCurrency = (value: number) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
