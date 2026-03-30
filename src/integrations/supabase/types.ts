@@ -14,6 +14,73 @@ export type Database = {
   }
   public: {
     Tables: {
+      cliente_contatos: {
+        Row: {
+          canal: string
+          cliente_id: string
+          contatado_em: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          canal: string
+          cliente_id: string
+          contatado_em?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          canal?: string
+          cliente_id?: string
+          contatado_em?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_contatos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cliente_feedbacks: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          id: string
+          motivo: string
+          observacao: string | null
+          user_id: string
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          id?: string
+          motivo: string
+          observacao?: string | null
+          user_id: string
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          motivo?: string
+          observacao?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_feedbacks_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes: {
         Row: {
           cidade: string
@@ -631,6 +698,7 @@ export type Database = {
           excursao_id: string | null
           forma_pagamento: string | null
           id: string
+          notificado_separado: boolean | null
           observacoes: string | null
           paid_at: string | null
           status: string | null
@@ -656,6 +724,7 @@ export type Database = {
           excursao_id?: string | null
           forma_pagamento?: string | null
           id?: string
+          notificado_separado?: boolean | null
           observacoes?: string | null
           paid_at?: string | null
           status?: string | null
@@ -681,6 +750,7 @@ export type Database = {
           excursao_id?: string | null
           forma_pagamento?: string | null
           id?: string
+          notificado_separado?: boolean | null
           observacoes?: string | null
           paid_at?: string | null
           status?: string | null
