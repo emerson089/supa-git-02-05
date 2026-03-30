@@ -1,11 +1,12 @@
 import { useState, forwardRef } from 'react';
-import { MessageCircle, ShoppingBag, RefreshCw, Clock, Copy } from 'lucide-react';
+import { MessageCircle, ShoppingBag, RefreshCw, Clock, Copy, Loader2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Cliente } from '@/contexts/ClientesContext';
 import { ClienteCRMStats } from '@/hooks/useClientesCRM';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -112,6 +113,7 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
     const [menuOpen, setMenuOpen] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const [mensagem, setMensagem] = useState('');
+    const [enviando, setEnviando] = useState(false);
 
     const processarMensagem = (texto: string, templateId: string) => {
       const nome = cliente.nome.split(' ')[0];
@@ -150,7 +152,7 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
       }
     };
 
-    const enviarWhatsApp = () => {
+    const enviarWhatsApp = async () => {
       // Validar telefone
       const phoneResult = normalizePhoneE164(cliente.telefone);
       if (!phoneResult.valid) {
@@ -162,39 +164,34 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
         return;
       }
 
-      const phone = phoneResult.phone;
-      const encodedMsg = encodeURIComponent(mensagem);
-      const { isMobileDevice, isIOS } = getDeviceInfo();
+      setEnviando(true);
 
-      // URLs disponíveis
-      const deepLink = `whatsapp://send?phone=${phone}&text=${encodedMsg}`;
-      const webWhatsApp = `https://web.whatsapp.com/send?phone=${phone}&text=${encodedMsg}`;
-      const waMe = `https://wa.me/${phone}?text=${encodedMsg}`;
+      try {
+        const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+          body: { phone: phoneResult.phone, message: mensagem },
+        });
 
-      if (isMobileDevice) {
-        // Mobile: tentar deep link primeiro, fallback para wa.me
-        window.location.href = deepLink;
+        if (error) {
+          throw error;
+        }
 
-        // Fallback após 1s se ainda estiver na página
-        setTimeout(() => {
-          if (document.visibilityState !== 'hidden') {
-            window.location.href = waMe;
-          }
-        }, 1000);
-      } else {
-        // Desktop: usar web.whatsapp.com (evita api.whatsapp.com)
-        // Abrir em nova aba com link nativo
-        const link = document.createElement('a');
-        link.href = webWhatsApp;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        toast({
+          title: "✅ Mensagem enviada!",
+          description: `Mensagem enviada para ${cliente.nome.split(' ')[0]} via WhatsApp.`,
+        });
+
+        setModalOpen(false);
+        onContatoRegistrado?.();
+      } catch (err: any) {
+        console.error('Erro ao enviar WhatsApp:', err);
+        toast({
+          title: "Erro ao enviar",
+          description: err?.message || "Não foi possível enviar a mensagem. Tente copiar e enviar manualmente.",
+          variant: "destructive",
+        });
+      } finally {
+        setEnviando(false);
       }
-
-      setModalOpen(false);
-      onContatoRegistrado?.();
     };
 
     const renderTemplateMenu = () => (
@@ -243,10 +240,11 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
               <DrawerFooter className="px-4 pt-4 gap-2">
                 <Button
                   onClick={enviarWhatsApp}
+                  disabled={enviando}
                   className="w-full h-12 bg-[#25D366] hover:bg-[#20BD5A] text-white text-base font-semibold rounded-xl"
                 >
-                  <MessageCircle className="mr-2 h-5 w-5" />
-                  Enviar para o WhatsApp
+                  {enviando ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <MessageCircle className="mr-2 h-5 w-5" />}
+                  {enviando ? 'Enviando...' : 'Enviar para o WhatsApp'}
                 </Button>
                 <Button
                   variant="outline"
@@ -305,10 +303,11 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
               </Button>
               <Button
                 onClick={enviarWhatsApp}
+                disabled={enviando}
                 className="h-11 bg-[#25D366] hover:bg-[#20BD5A] text-white font-semibold rounded-xl"
               >
-                <MessageCircle className="mr-2 h-5 w-5" />
-                Enviar
+                {enviando ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <MessageCircle className="mr-2 h-5 w-5" />}
+                {enviando ? 'Enviando...' : 'Enviar'}
               </Button>
             </DialogFooter>
           </DialogContent>

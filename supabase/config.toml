@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.brazilian-holidays]
 verify_jwt = false
+
+[functions.send-whatsapp]
+verify_jwt = false
