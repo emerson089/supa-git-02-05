@@ -1,11 +1,12 @@
 import { useState, forwardRef } from 'react';
-import { MessageCircle, ShoppingBag, RefreshCw, Clock, Copy } from 'lucide-react';
+import { MessageCircle, ShoppingBag, RefreshCw, Clock, Copy, Loader2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Cliente } from '@/contexts/ClientesContext';
 import { ClienteCRMStats } from '@/hooks/useClientesCRM';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import {
   DropdownMenu,
   DropdownMenuContent,
