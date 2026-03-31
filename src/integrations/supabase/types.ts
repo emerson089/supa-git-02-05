@@ -698,6 +698,8 @@ export type Database = {
           excursao_id: string | null
           forma_pagamento: string | null
           id: string
+          infinitepay_link: string | null
+          infinitepay_nsu: string | null
           notificado_no_carro: boolean | null
           notificado_separado: boolean | null
           observacoes: string | null
@@ -725,6 +727,8 @@ export type Database = {
           excursao_id?: string | null
           forma_pagamento?: string | null
           id?: string
+          infinitepay_link?: string | null
+          infinitepay_nsu?: string | null
           notificado_no_carro?: boolean | null
           notificado_separado?: boolean | null
           observacoes?: string | null
@@ -752,6 +756,8 @@ export type Database = {
           excursao_id?: string | null
           forma_pagamento?: string | null
           id?: string
+          infinitepay_link?: string | null
+          infinitepay_nsu?: string | null
           notificado_no_carro?: boolean | null
           notificado_separado?: boolean | null
           observacoes?: string | null
