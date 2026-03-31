@@ -281,7 +281,7 @@ const NovoPedido = () => {
         value: string;
         label: string;
       }[]) => options.find(opt => opt.value === value)?.label || value;
-      await addPedido({
+      const pedidoCriado = await addPedido({
         clienteId,
         clienteNome: cliente?.nome || 'Cliente',
         cidade: cidade || cliente?.cidade || '',
@@ -319,9 +319,9 @@ const NovoPedido = () => {
           phoneFormatted = `+${digits}`;
         }
 
-        const { data: infiniteData, error: infiniteError } = await supabase.functions.invoke('create-infinitepay-link', {
+        const { data: linkData } = await supabase.functions.invoke('create-infinitepay-link', {
           body: {
-            pedido_id: undefined, // será preenchido abaixo
+            pedido_id: pedidoCriado.id,
             items: infinitePayItems,
             customer: {
               name: cliente?.nome || 'Cliente',
@@ -329,32 +329,9 @@ const NovoPedido = () => {
             },
           },
         });
-
-        // Precisamos do pedido_id real — vamos buscar o último pedido criado
-        // Na verdade, addPedido já retornou. Vamos pegar via query
-        const { data: ultimoPedido } = await supabase
-          .from('pedidos')
-          .select('id')
-          .eq('cliente_nome', cliente?.nome || 'Cliente')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (ultimoPedido?.id) {
-          const { data: linkData } = await supabase.functions.invoke('create-infinitepay-link', {
-            body: {
-              pedido_id: ultimoPedido.id,
-              items: infinitePayItems,
-              customer: {
-                name: cliente?.nome || 'Cliente',
-                phone_number: phoneFormatted || undefined,
-              },
-            },
-          });
-          linkInfinitePay = linkData?.link || '';
-          if (linkInfinitePay) {
-            toast.success('Link de pagamento InfinitePay gerado!');
-          }
+        linkInfinitePay = linkData?.link || '';
+        if (linkInfinitePay) {
+          toast.success('Link de pagamento InfinitePay gerado!');
         }
       } catch (infiniteErr) {
         console.error('Erro ao gerar link InfinitePay:', infiniteErr);
