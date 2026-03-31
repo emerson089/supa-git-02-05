@@ -303,19 +303,77 @@ const NovoPedido = () => {
       });
       toast.success('Pedido cadastrado com sucesso! Estoque atualizado.');
 
+      // Gerar link de pagamento InfinitePay
+      let linkInfinitePay = '';
+      try {
+        const infinitePayItems = items.map(item => ({
+          description: item.produtoNome || 'Produto',
+          quantity: item.quantidade,
+          price: Math.round(item.valorUnitario * 100), // centavos
+        }));
+
+        let phoneFormatted = '';
+        if (telefone) {
+          let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
+          if (!digits.startsWith('55')) digits = '55' + digits;
+          phoneFormatted = `+${digits}`;
+        }
+
+        const { data: infiniteData, error: infiniteError } = await supabase.functions.invoke('create-infinitepay-link', {
+          body: {
+            pedido_id: undefined, // será preenchido abaixo
+            items: infinitePayItems,
+            customer: {
+              name: cliente?.nome || 'Cliente',
+              phone_number: phoneFormatted || undefined,
+            },
+          },
+        });
+
+        // Precisamos do pedido_id real — vamos buscar o último pedido criado
+        // Na verdade, addPedido já retornou. Vamos pegar via query
+        const { data: ultimoPedido } = await supabase
+          .from('pedidos')
+          .select('id')
+          .eq('cliente_nome', cliente?.nome || 'Cliente')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (ultimoPedido?.id) {
+          const { data: linkData } = await supabase.functions.invoke('create-infinitepay-link', {
+            body: {
+              pedido_id: ultimoPedido.id,
+              items: infinitePayItems,
+              customer: {
+                name: cliente?.nome || 'Cliente',
+                phone_number: phoneFormatted || undefined,
+              },
+            },
+          });
+          linkInfinitePay = linkData?.link || '';
+          if (linkInfinitePay) {
+            toast.success('Link de pagamento InfinitePay gerado!');
+          }
+        }
+      } catch (infiniteErr) {
+        console.error('Erro ao gerar link InfinitePay:', infiniteErr);
+        toast.error('Pedido criado, mas não foi possível gerar o link de pagamento.');
+      }
+
       // Enviar WhatsApp automaticamente se ativado
       if (enviarWhatsApp && telefone) {
         try {
           const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
           const valorFormatado = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-          const mensagem = `Olá, ${clienteNome}! 👋
+          let mensagemPagamento = '';
+          if (linkInfinitePay) {
+            mensagemPagamento = `Para dar andamento, realize o pagamento pelo link:
 
-Seu pedido foi confirmado aqui na *Delookii Jeans*! 🎉
+🔗 *Link de Pagamento:* ${linkInfinitePay}
 
-💰 *Total: ${valorFormatado}*
-
-Para dar andamento, realize o pagamento via PIX:
+Ou via PIX manual:
 
 🔑 *Chave PIX:*
 
@@ -323,7 +381,26 @@ Para dar andamento, realize o pagamento via PIX:
 
 *CNPJ:* 40.548.049/0001-06
 
-*Favorecido:* Delookii Confecções Ltda
+*Favorecido:* Delookii Confecções Ltda`;
+          } else {
+            mensagemPagamento = `Para dar andamento, realize o pagamento via PIX:
+
+🔑 *Chave PIX:*
+
+\`40548049000106\`
+
+*CNPJ:* 40.548.049/0001-06
+
+*Favorecido:* Delookii Confecções Ltda`;
+          }
+
+          const mensagem = `Olá, ${clienteNome}! 👋
+
+Seu pedido foi confirmado aqui na *Delookii Jeans*! 🎉
+
+💰 *Total: ${valorFormatado}*
+
+${mensagemPagamento}
 
 Após o pagamento, envie o comprovante aqui e já priorizamos o seu pedido. ✅
 
