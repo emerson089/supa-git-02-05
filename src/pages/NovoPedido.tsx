@@ -303,73 +303,11 @@ const NovoPedido = () => {
       });
       toast.success('Pedido cadastrado com sucesso! Estoque atualizado.');
 
-      // Gerar link de pagamento InfinitePay
-      let linkInfinitePay = '';
-      try {
-        const infinitePayItems = items.map(item => ({
-          description: item.produtoNome || 'Produto',
-          quantity: item.quantidade,
-          price: Math.round(item.valorUnitario * 100), // centavos
-        }));
-
-        let phoneFormatted = '';
-        if (telefone) {
-          let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
-          if (!digits.startsWith('55')) digits = '55' + digits;
-          phoneFormatted = `+${digits}`;
-        }
-
-        const { data: linkData } = await supabase.functions.invoke('create-infinitepay-link', {
-          body: {
-            pedido_id: pedidoCriado.id,
-            items: infinitePayItems,
-            customer: {
-              name: cliente?.nome || 'Cliente',
-              phone_number: phoneFormatted || undefined,
-            },
-          },
-        });
-        linkInfinitePay = linkData?.link || '';
-        if (linkInfinitePay) {
-          toast.success('Link de pagamento InfinitePay gerado!');
-        }
-      } catch (infiniteErr) {
-        console.error('Erro ao gerar link InfinitePay:', infiniteErr);
-        toast.error('Pedido criado, mas não foi possível gerar o link de pagamento.');
-      }
-
       // Enviar WhatsApp automaticamente se ativado
       if (enviarWhatsApp && telefone) {
         try {
           const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
           const valorFormatado = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-          let mensagemPagamento = '';
-          if (linkInfinitePay) {
-            mensagemPagamento = `Para dar andamento, realize o pagamento pelo link:
-
-🔗 *Link de Pagamento:* ${linkInfinitePay}
-
-Ou via PIX manual:
-
-🔑 *Chave PIX:*
-
-\`40548049000106\`
-
-*CNPJ:* 40.548.049/0001-06
-
-*Favorecido:* Delookii Confecções Ltda`;
-          } else {
-            mensagemPagamento = `Para dar andamento, realize o pagamento via PIX:
-
-🔑 *Chave PIX:*
-
-\`40548049000106\`
-
-*CNPJ:* 40.548.049/0001-06
-
-*Favorecido:* Delookii Confecções Ltda`;
-          }
 
           const mensagem = `Olá, ${clienteNome}! 👋
 
@@ -377,7 +315,15 @@ Seu pedido foi confirmado aqui na *Delookii Jeans*! 🎉
 
 💰 *Total: ${valorFormatado}*
 
-${mensagemPagamento}
+Para dar andamento, realize o pagamento via PIX:
+
+🔑 *Chave PIX:*
+
+\`40548049000106\`
+
+*CNPJ:* 40.548.049/0001-06
+
+*Favorecido:* Delookii Confecções Ltda
 
 Após o pagamento, envie o comprovante aqui e já priorizamos o seu pedido. ✅
 
