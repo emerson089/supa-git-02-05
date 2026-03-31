@@ -314,7 +314,7 @@ const NovoPedido = () => {
           try {
             const { data: linkData } = await supabase.functions.invoke('create-infinitepay-link', {
               body: {
-                pedido_id: novoPedido.id,
+                pedido_id: pedidoCriado.id,
                 items: itensFormatados.map(item => ({
                   description: item.produtoNome,
                   quantity: item.quantidade,
