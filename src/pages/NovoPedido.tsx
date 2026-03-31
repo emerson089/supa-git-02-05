@@ -315,7 +315,15 @@ Seu pedido foi confirmado aqui na *Delookii Jeans*! 🎉
 
 💰 *Total: ${valorFormatado}*
 
-${mensagemPagamento}
+Para dar andamento, realize o pagamento via PIX:
+
+🔑 *Chave PIX:*
+
+\`40548049000106\`
+
+*CNPJ:* 40.548.049/0001-06
+
+*Favorecido:* Delookii Confecções Ltda
 
 Após o pagamento, envie o comprovante aqui e já priorizamos o seu pedido. ✅
 
