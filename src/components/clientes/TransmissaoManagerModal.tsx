@@ -48,7 +48,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const [countdown, setCountdown] = useState(0);
   
   // Ref para controlar timeout no React StrictMode / rerenders
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getFiltroLabel = () => {
     const map: Record<string, string> = {
