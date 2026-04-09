@@ -857,13 +857,17 @@ export type Database = {
           integrado_estoque: boolean
           modelo_nome_cache: string | null
           observacoes: string | null
+          pecas_com_defeito: number | null
           pecas_concluidas: number | null
           posted_to_stock_at: string | null
           prioridade: string | null
           processo_atual: string
           produto_id: string | null
           quantidade: number
+          quantidade_aprovada: number | null
+          quantidade_final: number | null
           responsavel: string | null
+          status_defeitos: string | null
           total_cost: number | null
           unit_cost: number | null
           updated_at: string
@@ -878,13 +882,17 @@ export type Database = {
           integrado_estoque?: boolean
           modelo_nome_cache?: string | null
           observacoes?: string | null
+          pecas_com_defeito?: number | null
           pecas_concluidas?: number | null
           posted_to_stock_at?: string | null
           prioridade?: string | null
           processo_atual?: string
           produto_id?: string | null
           quantidade?: number
+          quantidade_aprovada?: number | null
+          quantidade_final?: number | null
           responsavel?: string | null
+          status_defeitos?: string | null
           total_cost?: number | null
           unit_cost?: number | null
           updated_at?: string
@@ -899,13 +907,17 @@ export type Database = {
           integrado_estoque?: boolean
           modelo_nome_cache?: string | null
           observacoes?: string | null
+          pecas_com_defeito?: number | null
           pecas_concluidas?: number | null
           posted_to_stock_at?: string | null
           prioridade?: string | null
           processo_atual?: string
           produto_id?: string | null
           quantidade?: number
+          quantidade_aprovada?: number | null
+          quantidade_final?: number | null
           responsavel?: string | null
+          status_defeitos?: string | null
           total_cost?: number | null
           unit_cost?: number | null
           updated_at?: string
