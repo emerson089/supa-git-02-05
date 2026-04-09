@@ -1,54 +1,19 @@
 
 
-## Reativar Link InfinitePay na Mensagem WhatsApp
+## Corrigir erros de build nas Edge Functions
 
-### O que será feito
+Há 3 erros idênticos de TypeScript: `'error' is of type 'unknown'` nos blocos `catch` de 3 Edge Functions. O fix é simples — usar `(error as Error).message` ou `error instanceof Error ? error.message : 'Unknown error'`.
 
-Após criar o pedido, chamar a Edge Function `create-infinitepay-link` para gerar o link de checkout e incluí-lo na mensagem WhatsApp enviada ao cliente, junto com o PIX manual como alternativa.
+### Arquivos a corrigir
 
-### Alteração
+| Arquivo | Linha | Correção |
+|---------|-------|----------|
+| `supabase/functions/brazilian-holidays/index.ts` | 133 | `error.message` → `(error instanceof Error ? error.message : 'Unknown error')` |
+| `supabase/functions/create-infinitepay-link/index.ts` | 109 | idem |
+| `supabase/functions/infinitepay-webhook/index.ts` | 71 | idem |
 
-**Arquivo:** `src/pages/NovoPedido.tsx` (linhas ~304-348)
-
-Após o `toast.success('Pedido cadastrado...')` e antes de montar a mensagem WhatsApp:
-
-1. Chamar `supabase.functions.invoke('create-infinitepay-link')` passando:
-   - `pedido_id`: ID do pedido criado
-   - `items`: itens do pedido com `description`, `quantity`, `price` (em centavos)
-   - `customer`: `{ name: clienteNome, phone_number: telefone }`
-
-2. Capturar o `link` retornado (pode falhar silenciosamente)
-
-3. Atualizar o template da mensagem WhatsApp para incluir o link antes do PIX manual:
-
-```
-Olá, {nome}! 👋
-
-Seu pedido foi confirmado aqui na *Delookii Jeans*! 🎉
-
-💰 *Total: R$ X,XX*
-
-Para pagar, acesse o link abaixo:
-
-🔗 *Link de Pagamento:* {linkInfinitePay}
-
-Ou via PIX manual:
-
-🔑 *Chave PIX:*
-`40548049000106`
-*CNPJ:* 40.548.049/0001-06
-*Favorecido:* Delookii Confecções Ltda
-
-Após o pagamento, envie o comprovante aqui e já priorizamos o seu pedido. ✅
-
-*Delookii Jeans — Toritama/PE*
-```
-
-Se a chamada do InfinitePay falhar, a mensagem será enviada apenas com o PIX manual (sem o bloco do link).
-
-### Resumo
-
-| Ação | Arquivo |
-|------|---------|
-| Editar | `src/pages/NovoPedido.tsx` — adicionar chamada `create-infinitepay-link` + incluir link na mensagem |
+### Impacto
+- Apenas tipagem TypeScript nos catch blocks
+- Sem alteração de lógica ou comportamento
+- Resolve todos os 3 erros de build reportados
 
