@@ -1,52 +1,35 @@
 
 
-## Simplificar mensagem WhatsApp do pedido
+## Corrigir autenticação da Edge Function `send-whatsapp`
 
-### O que será feito
+### Problema
+A função usa `supabase.auth.getClaims(token)` que não é suportado no ambiente Edge Functions.
 
-Remover o bloco do link InfinitePay e simplificar a mensagem WhatsApp para o formato exato solicitado, sem formatação bold do WhatsApp (asteriscos) nos campos de PIX.
+### Correção
+Substituir `getClaims` por `auth.getUser()` via service role client, seguindo o padrão já usado nas outras Edge Functions administrativas do projeto.
 
-### Alteração
+### Alteração em `supabase/functions/send-whatsapp/index.ts`
 
-**Arquivo:** `src/pages/NovoPedido.tsx` (linhas 312-352)
-
-Remover toda a lógica de geração do link InfinitePay (linhas 312-340) e substituir o template da mensagem pelo texto exato:
-
-```
-Olá, {nome}! Pedido confirmado! 🎉
-
-💰 Total: R$ {valor}
-
-PIX (CNPJ): 40.548.049/0001-06
-Favorecido: Delookii Confecções Ltda
-
-Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido.
-
-Qualquer dúvida é só chamar! 😊
-```
-
-O trecho de código ficará:
+Trocar o bloco de validação de auth (linhas 28-38) por:
 
 ```typescript
-const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
-const valorFormatado = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const adminClient = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+);
 
-const mensagem = `Olá, ${clienteNome}! Pedido confirmado! 🎉
-
-💰 Total: ${valorFormatado}
-
-PIX (CNPJ): 40.548.049/0001-06
-Favorecido: Delookii Confecções Ltda
-
-Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido.
-
-Qualquer dúvida é só chamar! 😊`;
+const token = authHeader.replace("Bearer ", "");
+const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
+if (userError || !user) {
+  return new Response(JSON.stringify({ error: "Token inválido" }), {
+    status: 401,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 ```
 
-### Resumo
-
-| Ação | Detalhe |
-|------|---------|
-| Remover | Chamada `create-infinitepay-link` e lógica do `blocoLink` |
-| Substituir | Template da mensagem pelo texto simplificado |
+- Remove o `supabase` client com anon key (não é mais necessário para auth)
+- Usa `adminClient` com service role para validar o JWT via `getUser(token)`
+- Resto da função (validação de body, chamada Z-API) permanece inalterado
+- Deploy automático após alteração
 
