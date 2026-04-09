@@ -1,19 +1,52 @@
 
 
-## Corrigir erros de build nas Edge Functions
+## Simplificar mensagem WhatsApp do pedido
 
-Há 3 erros idênticos de TypeScript: `'error' is of type 'unknown'` nos blocos `catch` de 3 Edge Functions. O fix é simples — usar `(error as Error).message` ou `error instanceof Error ? error.message : 'Unknown error'`.
+### O que será feito
 
-### Arquivos a corrigir
+Remover o bloco do link InfinitePay e simplificar a mensagem WhatsApp para o formato exato solicitado, sem formatação bold do WhatsApp (asteriscos) nos campos de PIX.
 
-| Arquivo | Linha | Correção |
-|---------|-------|----------|
-| `supabase/functions/brazilian-holidays/index.ts` | 133 | `error.message` → `(error instanceof Error ? error.message : 'Unknown error')` |
-| `supabase/functions/create-infinitepay-link/index.ts` | 109 | idem |
-| `supabase/functions/infinitepay-webhook/index.ts` | 71 | idem |
+### Alteração
 
-### Impacto
-- Apenas tipagem TypeScript nos catch blocks
-- Sem alteração de lógica ou comportamento
-- Resolve todos os 3 erros de build reportados
+**Arquivo:** `src/pages/NovoPedido.tsx` (linhas 312-352)
+
+Remover toda a lógica de geração do link InfinitePay (linhas 312-340) e substituir o template da mensagem pelo texto exato:
+
+```
+Olá, {nome}! Pedido confirmado! 🎉
+
+💰 Total: R$ {valor}
+
+PIX (CNPJ): 40.548.049/0001-06
+Favorecido: Delookii Confecções Ltda
+
+Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido.
+
+Qualquer dúvida é só chamar! 😊
+```
+
+O trecho de código ficará:
+
+```typescript
+const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
+const valorFormatado = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const mensagem = `Olá, ${clienteNome}! Pedido confirmado! 🎉
+
+💰 Total: ${valorFormatado}
+
+PIX (CNPJ): 40.548.049/0001-06
+Favorecido: Delookii Confecções Ltda
+
+Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido.
+
+Qualquer dúvida é só chamar! 😊`;
+```
+
+### Resumo
+
+| Ação | Detalhe |
+|------|---------|
+| Remover | Chamada `create-infinitepay-link` e lógica do `blocoLink` |
+| Substituir | Template da mensagem pelo texto simplificado |
 
