@@ -153,6 +153,16 @@ export const WhatsAppButton = forwardRef<HTMLButtonElement, WhatsAppButtonProps>
     };
 
     const enviarWhatsApp = async () => {
+      // Validar mensagem
+      if (!mensagem || mensagem.trim().length === 0) {
+        toast({
+          title: "Mensagem vazia",
+          description: "Digite uma mensagem antes de enviar.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Validar telefone
       const phoneResult = normalizePhoneE164(cliente.telefone);
       if (!phoneResult.valid) {
