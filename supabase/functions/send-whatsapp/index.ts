@@ -38,9 +38,16 @@ Deno.serve(async (req) => {
 
     // Parse and validate body
     const body = await req.json();
-    const { phone, message, type = 'text', documentUrl, fileName, caption } = body;
+    const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
+    const message = typeof body?.message === "string" ? body.message.trim() : "";
+    const documentUrl = typeof body?.documentUrl === "string" ? body.documentUrl.trim() : "";
+    const fileName = typeof body?.fileName === "string" && body.fileName.trim().length > 0
+      ? body.fileName.trim()
+      : "catalogo.pdf";
+    const caption = typeof body?.caption === "string" ? body.caption.trim() : "";
+    const type = body?.type === "document" || documentUrl.length > 0 ? "document" : "text";
 
-    if (!phone || typeof phone !== "string" || phone.length < 12 || phone.length > 13) {
+    if (!phone || phone.length < 12 || phone.length > 13) {
       return new Response(JSON.stringify({ error: "Telefone inválido" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -48,21 +55,14 @@ Deno.serve(async (req) => {
     }
 
     if (type === 'text') {
-      if (!message || typeof message !== "string" || message.trim().length === 0) {
+      if (!message) {
         return new Response(JSON.stringify({ error: "Mensagem não pode estar vazia" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-    } else if (type === 'document') {
-      if (!documentUrl || typeof documentUrl !== "string" || documentUrl.trim().length === 0) {
-        return new Response(JSON.stringify({ error: "URL do documento não informada" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    } else {
-      return new Response(JSON.stringify({ error: "Tipo de mensagem inválido" }), {
+    } else if (!documentUrl) {
+      return new Response(JSON.stringify({ error: "URL do documento não informada" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
