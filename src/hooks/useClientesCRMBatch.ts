@@ -123,7 +123,7 @@ export function useClientesCRMBatch(clienteIds: string[]) {
         }
 
         // Track the most recent PENDING order
-        const isPendente = pedido.status_pagamento?.toUpperCase() === 'PENDENTE';
+        const isPendente = pedido.status_pagamento?.toUpperCase() === 'PENDENTE' && !isCancelado;
         if (isPendente && createdAt) {
           if (!stats.ultimoPedidoPendenteData || createdAt > stats.ultimoPedidoPendenteData) {
             stats.ultimoPedidoPendenteData = createdAt;
@@ -179,7 +179,7 @@ async function fetchAllPedidosMinimal(userId: string) {
  * or highest total purchased for 'maior_historico' sorting).
  */
 export function useClientesCRMFilter(
-  filtroStatus: 'vip' | 'frequente' | 'risco' | 'pendente' | null,
+  filtroStatus: 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | null,
   ordenacao?: 'nome' | 'recente' | 'maior_historico'
 ) {
   const { user } = useAuth();
@@ -232,7 +232,7 @@ export function useClientesCRMFilter(
 
         const isPago = pedido.status_pagamento?.toUpperCase() === 'PAGO';
         const isCancelado = pedido.status_pedido && statusCancelados.includes(pedido.status_pedido.toUpperCase());
-        const isPendente = pedido.status_pagamento?.toUpperCase() === 'PENDENTE';
+        const isPendente = pedido.status_pagamento?.toUpperCase() === 'PENDENTE' && !isCancelado;
         const valorTotal = Number(pedido.valor_total) || 0;
         const createdAt = pedido.created_at ? new Date(pedido.created_at) : null;
 
@@ -283,6 +283,9 @@ export function useClientesCRMFilter(
             break;
           case 'pendente':
             matches = stats.ultimoPedidoPendenteData !== null;
+            break;
+          case 'sem_compras':
+            matches = stats.totalComprado === 0 && stats.ultimaCompra === null;
             break;
         }
 

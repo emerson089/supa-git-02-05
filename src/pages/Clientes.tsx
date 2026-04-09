@@ -48,7 +48,7 @@ const emptyCliente = {
   excursao: ''
 };
 type Ordenacao = 'nome' | 'recente' | 'maior_historico';
-type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'risco' | 'pendente';
+type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras';
 const PAGE_SIZE = 24;
 function formatCurrency(value: number): string {
   return value.toLocaleString('pt-BR', {
@@ -99,6 +99,7 @@ const ClienteCard = memo(function ClienteCard({
   contatoInfo,
   onMarcarContato,
   onWhatsAppEnviado,
+  isPendenteFilter,
 }: {
   cliente: ClientePaginatedDB;
   stats: ClienteCRMBatchStats | undefined;
@@ -110,6 +111,7 @@ const ClienteCard = memo(function ClienteCard({
   contatoInfo?: { data: string; canal: string } | null;
   onMarcarContato?: (clienteId: string, canal: CanalContato) => void;
   onWhatsAppEnviado?: () => void;
+  isPendenteFilter?: boolean;
 }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -308,35 +310,55 @@ const ClienteCard = memo(function ClienteCard({
           </span>
         </div>
 
-        {/* Bloco 2: Última Compra */}
-        <div className="bg-blue-50/60 dark:bg-blue-950/20 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 flex flex-col justify-center min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <Calendar size={11} className="text-blue-800/70 dark:text-blue-300/70" />
-            <span className="text-[11px] font-medium text-blue-800/70 dark:text-blue-300/70 uppercase tracking-wider truncate">Última Compra</span>
-          </div>
-          {stats?.ultimaCompra ? (
+        {/* Bloco 2: Última Compra ou Pendência */}
+        {isPendenteFilter && stats?.ultimoPedidoPendenteData ? (
+          <div className="bg-orange-50/60 dark:bg-orange-950/20 p-3 rounded-xl border border-orange-100 dark:border-orange-900/30 flex flex-col justify-center min-w-0">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <AlertTriangle size={11} className="text-orange-600 dark:text-orange-400" />
+              <span className="text-[11px] font-medium text-orange-700 dark:text-orange-400 uppercase tracking-wider truncate">Pedido Pendente</span>
+            </div>
             <div className="flex flex-col gap-1">
-              <span className="font-semibold text-blue-700 dark:text-blue-400 text-sm truncate leading-none">
-                {formatCurrency(stats.ultimoPedidoValor || 0)}
+              <span className="font-semibold text-orange-700 dark:text-orange-400 text-sm truncate leading-none">
+                {formatCurrency(stats.ultimoPedidoPendenteValor || 0)}
               </span>
               <div className="flex items-center justify-between gap-1 mt-0.5">
-                <span className="text-[10px] text-muted-foreground truncate">{format(stats.ultimaCompra, "dd/MM/yy")}</span>
-                {stats.ultimoPedidoStatus && (
-                  <span className={cn("text-[8px] px-1.5 py-0.5 rounded-sm font-semibold truncate",
-                    stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400" :
-                      stats.ultimoPedidoStatus.toUpperCase() === 'PENDENTE' ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400" :
-                        stats.ultimoPedidoStatus.toUpperCase() === 'CANCELADO' ? "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400" :
-                          "bg-secondary text-secondary-foreground"
-                  )}>
-                    {stats.ultimoPedidoStatus}
-                  </span>
-                )}
+                <span className="text-[10px] text-muted-foreground truncate">{format(stats.ultimoPedidoPendenteData, "dd/MM/yy")}</span>
+                <span className="text-[8px] px-1.5 py-0.5 rounded-sm font-semibold truncate bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-400">
+                  PENDENTE
+                </span>
               </div>
             </div>
-          ) : (
-            <span className="text-[11px] text-muted-foreground italic truncate mt-1">Nenhuma compra</span>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="bg-blue-50/60 dark:bg-blue-950/20 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 flex flex-col justify-center min-w-0">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <Calendar size={11} className="text-blue-800/70 dark:text-blue-300/70" />
+              <span className="text-[11px] font-medium text-blue-800/70 dark:text-blue-300/70 uppercase tracking-wider truncate">Última Compra</span>
+            </div>
+            {stats?.ultimaCompra ? (
+              <div className="flex flex-col gap-1">
+                <span className="font-semibold text-blue-700 dark:text-blue-400 text-sm truncate leading-none">
+                  {formatCurrency(stats.ultimoPedidoValor || 0)}
+                </span>
+                <div className="flex items-center justify-between gap-1 mt-0.5">
+                  <span className="text-[10px] text-muted-foreground truncate">{format(stats.ultimaCompra, "dd/MM/yy")}</span>
+                  {stats.ultimoPedidoStatus && (
+                    <span className={cn("text-[8px] px-1.5 py-0.5 rounded-sm font-semibold truncate",
+                      stats.ultimoPedidoStatus.toUpperCase() === 'PAGO' ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400" :
+                        stats.ultimoPedidoStatus.toUpperCase() === 'PENDENTE' ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400" :
+                          stats.ultimoPedidoStatus.toUpperCase() === 'CANCELADO' ? "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400" :
+                            "bg-secondary text-secondary-foreground"
+                    )}>
+                      {stats.ultimoPedidoStatus}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <span className="text-[11px] text-muted-foreground italic truncate mt-1">Nenhuma compra</span>
+            )}
+          </div>
+        )}
       </div>
 
       <FeedbackModal
@@ -688,12 +710,13 @@ export default function Clientes() {
         </Select>
 
         <div className="flex gap-2 flex-wrap">
-          {(['todos', 'vip', 'frequente', 'risco', 'pendente'] as FiltroStatus[]).map(filtro => <Button key={filtro} size="sm" variant={filtroStatus === filtro ? 'default' : 'outline'} onClick={() => handleFiltroChange(filtro)} className={cn("rounded-xl h-10 px-4", filtroStatus === filtro && "bg-primary text-primary-foreground", filtro === 'pendente' && filtroStatus !== filtro && "border-yellow-400 text-yellow-700")}>
+          {(['todos', 'vip', 'frequente', 'risco', 'pendente', 'sem_compras'] as FiltroStatus[]).map(filtro => <Button key={filtro} size="sm" variant={filtroStatus === filtro ? 'default' : 'outline'} onClick={() => handleFiltroChange(filtro)} className={cn("rounded-xl h-10 px-4", filtroStatus === filtro && "bg-primary text-primary-foreground", filtro === 'pendente' && filtroStatus !== filtro && "border-yellow-400 text-yellow-700")}>
             {filtro === 'todos' && 'Todos'}
             {filtro === 'vip' && '⭐ VIP'}
             {filtro === 'frequente' && '🔵 Frequentes'}
             {filtro === 'risco' && '⚠️ Risco'}
             {filtro === 'pendente' && '🟡 Pendentes'}
+            {filtro === 'sem_compras' && '👤 Sem Compras'}
           </Button>)}
         </div>
       </div>
@@ -738,6 +761,7 @@ export default function Clientes() {
               contatoInfo={contato}
               onMarcarContato={marcarContato}
               onWhatsAppEnviado={() => marcarContato(cliente.id, 'whatsapp')}
+              isPendenteFilter={filtroStatus === 'pendente'}
             />
           );
         })}
