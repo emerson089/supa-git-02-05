@@ -6,7 +6,7 @@ export const STAGES: Stage[] = [
   { id: 'Travete', label: 'Travete', icon: 'Layers', color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
   { id: 'Destroyed', label: 'Destroyed', icon: 'Zap', color: 'text-orange-600', bgColor: 'bg-orange-100' },
   { id: 'Lavanderia', label: 'Lavanderia', icon: 'Droplets', color: 'text-cyan-600', bgColor: 'bg-cyan-100' },
-  { id: 'Acabamento', label: 'Acabamento', icon: 'Sparkles', color: 'text-teal-600', bgColor: 'bg-teal-100' },
+  { id: 'Acabamento', label: 'Limpado', icon: 'Sparkles', color: 'text-teal-600', bgColor: 'bg-teal-100' },
   { id: 'Aprontamento', label: 'Aprontamento', icon: 'ClipboardCheck', color: 'text-purple-600', bgColor: 'bg-purple-100' },
   { id: 'Vendas', label: 'Vendas / Estoque', icon: 'CheckCircle2', color: 'text-emerald-600', bgColor: 'bg-emerald-100' }
 ];
@@ -15,11 +15,11 @@ export const STAGES: Stage[] = [
 export const RESPONSAVEIS_POR_ETAPA: Record<string, string[]> = {
   'Corte': ['Ildo', 'Zeze'],
   'Costura/Facção': ['Regina', 'Patricia', 'Simone'],
-  'Travete': [],
-  'Destroyed': [],
-  'Lavanderia': [],
-  'Acabamento': [],
-  'Aprontamento': [],
+  'Travete': ['Zeze'],
+  'Destroyed': ['Lavanderia'],
+  'Lavanderia': ['Lavanderia'],
+  'Acabamento': ['Regina', 'Simone'],
+  'Aprontamento': ['Patricia'],
   'Vendas': [],
 };
 

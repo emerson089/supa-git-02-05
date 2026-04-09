@@ -75,8 +75,8 @@ function TrendTooltip({
     const perc = data.anterior > 0 ? Math.abs((diff / data.anterior) * 100) : (data.atual > 0 ? 100 : 0);
 
     return (
-      <div className="bg-card p-3 rounded-lg border shadow-xl min-w-[200px] z-50">
-        <p className="font-medium text-sm border-b pb-2 mb-2">
+      <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-lg min-w-[200px] z-50 text-sm text-gray-700">
+        <p className="font-medium text-sm border-b border-gray-100 pb-2 mb-2 text-gray-800">
           {isAno ? `${label}` : `Dia ${label}`}
         </p>
 
@@ -151,8 +151,8 @@ function WeekdayTooltip({
 }) {
   if (active && payload?.[0]) {
     const data = payload[0].payload;
-    return <div className="bg-card p-3 rounded-lg border shadow-lg">
-      <p className="font-medium text-sm">{data.diaSemana}</p>
+    return <div className="bg-white shadow-lg rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+      <p className="font-medium text-sm text-gray-800">{data.diaSemana}</p>
       <p className="text-primary font-bold text-lg">{formatCurrency(data.valor)}</p>
       <div className="flex gap-4 text-xs text-muted-foreground mt-1">
         <span>{data.pedidos} pedidos</span>
@@ -511,7 +511,7 @@ export default function Dashboard() {
         };
     }
   };
-  return <div className="flex min-h-screen bg-background">
+  return <div className="flex min-h-screen bg-gray-100">
     <AppSidebar />
 
     {/* Mobile Header */}
@@ -523,8 +523,8 @@ export default function Dashboard() {
         {/* Título - apenas desktop */}
         {!isMobile && <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">DASHBOARD GERAL </h1>
-            <p className="text-muted-foreground text-sm">
+            <h1 className="text-2xl font-bold text-gray-800">DASHBOARD GERAL </h1>
+            <p className="text-sm text-gray-500">
               Visão geral do desempenho e controle
             </p>
           </div>
@@ -537,7 +537,7 @@ export default function Dashboard() {
               <div className="space-y-3">
                 {/* Linha 1: Botões de período + Calendário */}
                 <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                  {periodos.map(p => <Button key={p.value} variant={periodo === p.value ? "default" : "outline"} size="sm" onClick={() => handlePeriodoClick(p.value)} className={cn("h-9 whitespace-nowrap flex-shrink-0", periodo === p.value && "shadow-neu-inset")}>
+                  {periodos.map(p => <Button key={p.value} variant={periodo === p.value ? "default" : "ghost"} size="sm" onClick={() => handlePeriodoClick(p.value)} className={cn("h-9 whitespace-nowrap flex-shrink-0 rounded-lg", periodo === p.value ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100")}>
                     {p.label}
                   </Button>)}
 
@@ -581,7 +581,7 @@ export default function Dashboard() {
 
                   {/* Botões de período */}
                   <div className="flex items-center gap-1">
-                    {periodos.map(p => <Button key={p.value} variant={periodo === p.value ? "default" : "ghost"} size="sm" onClick={() => handlePeriodoClick(p.value)} className={cn("h-8", periodo === p.value && "shadow-neu-inset")}>
+                    {periodos.map(p => <Button key={p.value} variant={periodo === p.value ? "default" : "ghost"} size="sm" onClick={() => handlePeriodoClick(p.value)} className={cn("h-8 rounded-lg", periodo === p.value ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100")}>
                       {p.label}
                     </Button>)}
                   </div>
@@ -644,18 +644,18 @@ export default function Dashboard() {
           <KpiCardSkeleton />
           <KpiCardSkeleton />
           <KpiCardSkeleton />
-        </> : kpiCards.map(kpi => <Card key={kpi.title} className={cn("neu-card transition-all duration-200 relative", kpi.clickable && "cursor-pointer hover:scale-[1.02] hover:shadow-lg")} onClick={kpi.clickable ? kpi.onClick : undefined}>
+        </> : kpiCards.map(kpi => <Card key={kpi.title} className={cn("bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-h-[140px] transition-all duration-200 relative", kpi.clickable && "cursor-pointer hover:scale-[1.02] hover:shadow-md")} onClick={kpi.clickable ? kpi.onClick : undefined}>
           {kpi.showBruto && <Badge variant="outline" className="absolute top-2 right-2 text-[10px] bg-amber-50 text-amber-600 border-amber-200">
             Bruto
           </Badge>}
           <CardContent className="p-3 sm:p-5">
             <div className="flex items-start justify-between">
               <div>
-                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl ${kpi.bgColor} flex items-center justify-center mb-2 sm:mb-3`}>
-                  <kpi.icon size={isMobile ? 16 : 20} className={kpi.color} />
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center mb-2 sm:mb-3`}>
+                  <kpi.icon size={isMobile ? 16 : 20} className="text-indigo-600" />
                 </div>
-                <p className="text-xl sm:text-3xl font-bold text-foreground tracking-tight">{kpi.value}</p>
-                <p className="text-[10px] sm:text-xs text-muted-foreground/70 uppercase tracking-wide mt-1 line-clamp-1">{kpi.title}</p>
+                <p className="text-xl sm:text-3xl font-bold text-gray-800 tracking-tight">{kpi.value}</p>
+                <p className="text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider mt-1 line-clamp-1">{kpi.title}</p>
                 {kpi.breakdown && (
                   <div className="flex flex-nowrap items-center gap-1 mt-2 overflow-x-auto pb-1 w-full hide-scrollbar">
                     {kpi.breakdown
@@ -687,7 +687,7 @@ export default function Dashboard() {
 
       {/* Card de Meta Automática + Faturamento + Ritmo Sazonal */}
       <div className="mb-6">
-        <Card className="neu-card border-primary/20 shadow-lg bg-gradient-to-br from-card to-primary/5">
+        <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
           <CardContent className="p-4 sm:p-6">
             {loading ? <div className="flex flex-col sm:flex-row gap-4">
               <Skeleton className="h-24 flex-1" />
@@ -700,9 +700,9 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <Target size={18} className="text-primary" />
                     <h3 className="text-sm font-semibold">Meta Mensal</h3>
-                    {data.metaAutomatica.temHistoricoSazonal ? <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300">
+                    {data.metaAutomatica.temHistoricoSazonal ? <Badge className="text-[10px] bg-indigo-100 text-indigo-700 hover:bg-indigo-100 border-none">
                       Sazonal + {data.metaAutomatica.percentualCrescimento.toFixed(0)}%
-                    </Badge> : data.metaAutomatica.temHistorico ? <Badge variant="secondary" className="text-[10px]">
+                    </Badge> : data.metaAutomatica.temHistorico ? <Badge className="text-[10px] bg-indigo-100 text-indigo-700 hover:bg-indigo-100 border-none">
                       Média 3m + {data.metaAutomatica.percentualCrescimento.toFixed(0)}%
                     </Badge> : <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
                       Sem histórico
@@ -792,7 +792,7 @@ export default function Dashboard() {
                     <span>Esperado até dia {data.previsaoMensal.diasDecorridos}</span>
                     <span>{data.metaAutomatica.percentualEsperadoHoje.toFixed(1)}%</span>
                   </div>
-                  <Progress value={Math.min(data.metaAutomatica.percentualEsperadoHoje, 100)} className="h-2 [&>div]:bg-muted-foreground/40" />
+                  <Progress value={Math.min(data.metaAutomatica.percentualEsperadoHoje, 100)} className="h-2 bg-gray-100 [&>div]:bg-gray-300" />
                 </div>
 
                 {/* Barra: % Realizado */}
@@ -803,7 +803,7 @@ export default function Dashboard() {
                       {data.metaAutomatica.percentualRealizado.toFixed(1)}%
                     </span>
                   </div>
-                  <Progress value={Math.min(data.metaAutomatica.percentualRealizado, 100)} className={cn("h-3", data.metaAutomatica.percentualRealizado >= 100 ? "[&>div]:bg-emerald-500" : data.metaAutomatica.percentualRealizado >= data.metaAutomatica.percentualEsperadoHoje ? "[&>div]:bg-emerald-500" : data.metaAutomatica.diferencaRitmo >= -5 ? "[&>div]:bg-blue-500" : "[&>div]:bg-amber-500")} />
+                  <Progress value={Math.min(data.metaAutomatica.percentualRealizado, 100)} className={cn("h-3 bg-gray-100", data.metaAutomatica.percentualRealizado >= data.metaAutomatica.percentualEsperadoHoje ? "[&>div]:bg-indigo-600" : "[&>div]:bg-amber-500")} />
                 </div>
 
                 {/* Info: Dias e Ritmo */}
@@ -814,8 +814,8 @@ export default function Dashboard() {
               </div>}
 
               {/* Indicador Visual de Status */}
-              {data.metaAutomatica.metaCalculada > 0 && <div className={cn("mt-4 p-3 rounded-lg", data.metaAutomatica.statusMeta === 'atingida' ? "bg-emerald-100 dark:bg-emerald-900/20" : data.metaAutomatica.statusMeta === 'acima' ? "bg-emerald-100 dark:bg-emerald-900/20" : data.metaAutomatica.statusMeta === 'noritmo' ? "bg-blue-100 dark:bg-blue-900/20" : "bg-amber-100 dark:bg-amber-900/20")}>
-                <p className={cn("text-sm font-medium", data.metaAutomatica.statusMeta === 'atingida' ? "text-emerald-700 dark:text-emerald-400" : data.metaAutomatica.statusMeta === 'acima' ? "text-emerald-700 dark:text-emerald-400" : data.metaAutomatica.statusMeta === 'noritmo' ? "text-blue-700 dark:text-blue-400" : "text-amber-700 dark:text-amber-400")}>
+              {data.metaAutomatica.metaCalculada > 0 && <div className={cn("mt-4 p-4 border-l-4 rounded-r-lg", data.metaAutomatica.statusMeta === 'atingida' ? "bg-emerald-50 border-emerald-500 text-emerald-800" : data.metaAutomatica.statusMeta === 'acima' ? "bg-emerald-50 border-emerald-500 text-emerald-800" : data.metaAutomatica.statusMeta === 'noritmo' ? "bg-blue-50 border-blue-500 text-blue-800" : "bg-amber-50 border-amber-500 text-amber-800")}>
+                <p className={cn("text-sm font-medium")}>
                   {data.metaAutomatica.statusMeta === 'atingida' ? '🎉 Meta atingida!' : data.metaAutomatica.statusMeta === 'acima' ? '✅ Acima do ritmo sazonal para este dia do mês!' : data.metaAutomatica.statusMeta === 'noritmo' ? '👍 Dentro do ritmo sazonal esperado' : '⚠️ Ritmo abaixo do esperado para este dia do mês'}
                 </p>
               </div>}
@@ -849,7 +849,7 @@ export default function Dashboard() {
       )}
 
       {/* Tendência de Vendas - Full Width, antes dos Insights */}
-      <Card className="neu-card">
+      <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
@@ -895,20 +895,20 @@ export default function Dashboard() {
                         <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                     <XAxis
                       dataKey="label"
                       fontSize={12}
                       tickLine={false}
                       axisLine={false}
-                      stroke="hsl(var(--muted-foreground))"
+                      stroke="#6B7280"
                       interval={granularity === "mes" ? 4 : 0}
                     />
                     <YAxis
                       fontSize={12}
                       tickLine={false}
                       axisLine={false}
-                      stroke="hsl(var(--muted-foreground))"
+                      stroke="#6B7280"
                       tickFormatter={(value: number) => value >= 1000 ? `R$${(value / 1000).toFixed(0)}k` : `R$${value}`}
                       width={55}
                     />
@@ -964,7 +964,7 @@ export default function Dashboard() {
       {/* Bottom Grid - Ajustado para 3 COLUNAS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Top 5 Modelos */}
-        <Card className="neu-card">
+        <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold">Top 5 Modelos</CardTitle>
             <p className="text-sm text-muted-foreground">
@@ -1031,7 +1031,7 @@ export default function Dashboard() {
         </Card>
 
         {/* NOVO: Vendas por Dia da Semana */}
-        <Card className="neu-card">
+        <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <CalendarIcon size={18} className="text-primary" />
@@ -1058,8 +1058,8 @@ export default function Dashboard() {
                   left: -10,
                   right: 10
                 }}>
-                  <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} fontSize={10} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis dataKey="diaSemana" type="category" width={55} fontSize={11} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" tickFormatter={value => value.slice(0, 3)} />
+                  <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} fontSize={12} stroke="#6B7280" />
+                  <YAxis dataKey="diaSemana" type="category" width={55} fontSize={12} tickLine={false} axisLine={false} stroke="#6B7280" tickFormatter={value => value.slice(0, 3)} />
                   <Tooltip content={<WeekdayTooltip />} />
                   <Bar dataKey="valor" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -1069,7 +1069,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Status de Pedidos */}
-        <Card className="neu-card">
+        <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold">Status de Pedidos</CardTitle>
             <p className="text-sm text-muted-foreground">Distribuição por status</p>
@@ -1098,10 +1098,12 @@ export default function Dashboard() {
                         {sortedStatus.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} className="cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigate(`/pedidos-criados?status=${entry.status}`)} />)}
                       </Pie>
                       <Tooltip formatter={(value: number, name: string) => [`${value} pedidos`, name]} contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
-                        fontSize: "12px"
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid #E5E7EB",
+                        borderRadius: "0.5rem",
+                        fontSize: "0.875rem",
+                        color: "#374151",
+                        boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)"
                       }} />
                     </PieChart>
                   </ResponsiveContainer>
@@ -1170,7 +1172,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Card de Taxas de Excursão */}
-        <Card className="neu-card border-orange-200/60 bg-gradient-to-br from-card to-orange-50/30">
+        <Card className="bg-white rounded-xl shadow-sm border border-orange-200/60">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <Bus size={18} className="text-orange-600" />
@@ -1221,7 +1223,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Produção por Etapa */}
-        <Card className="neu-card">
+        <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>

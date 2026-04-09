@@ -30,7 +30,7 @@ export const ClienteCSVRowSchema = z.object({
 export type ValidatedClienteCSVRow = z.infer<typeof ClienteCSVRowSchema>;
 
 // ==================== CUSTOS DE PRODUÇÃO ====================
-const VALID_TIPOS_CUSTO = ['Material', 'Facção/Costura', 'Lavanderia', 'Acabamento', 'Aviamentos', 'Transporte', 'Outros'] as const;
+const VALID_TIPOS_CUSTO = ['Material', 'Facção/Costura', 'Lavanderia', 'Limpado', 'Aviamentos', 'Transporte', 'Outros'] as const;
 
 export const CustoCSVRowSchema = z.object({
   referencia: z.string().min(1, 'Referência obrigatória').max(50, 'Referência muito longa'),

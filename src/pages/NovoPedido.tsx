@@ -339,27 +339,17 @@ const NovoPedido = () => {
 Ou via PIX manual:`
             : `Para dar andamento, realize o pagamento via PIX:`;
 
-          const mensagem = `Olá, ${clienteNome}! 👋
-
-Seu pedido foi confirmado aqui na *Delookii Jeans*! 🎉
+          const mensagem = `Olá, ${clienteNome}! Pedido confirmado! 🎉
 
 💰 *Total: ${valorFormatado}*
 
 ${blocoLink}
 
-🔑 *Chave PIX:*
-
-\`40548049000106\`
-
-*CNPJ:* 40.548.049/0001-06
-
+*PIX (CNPJ):* \`40.548.049/0001-06\` 
 *Favorecido:* Delookii Confecções Ltda
 
-Após o pagamento, envie o comprovante aqui e já priorizamos o seu pedido. ✅
-
-Qualquer dúvida é só chamar. Estamos sempre por aqui! 😊
-
-*Delookii Jeans — Toritama/PE*`;
+Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido. 
+Qualquer dúvida é só chamar! 😊`;
 
           // Normalizar telefone
           let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');

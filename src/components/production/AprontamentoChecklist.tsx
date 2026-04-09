@@ -21,6 +21,7 @@ const checklistItems = [
   { key: 'bolsa' as const, label: 'Bolsa', icon: ShoppingBag },
   { key: 'cordao' as const, label: 'Cordão', icon: Package },
   { key: 'tag' as const, label: 'Tag', icon: Tag },
+  { key: 'placa_marca' as const, label: 'Placa de marca', icon: CircleDot },
 ];
 
 const defaultChecklist: ChecklistAprontamento = {
@@ -28,6 +29,7 @@ const defaultChecklist: ChecklistAprontamento = {
   bolsa: false,
   cordao: false,
   tag: false,
+  placa_marca: false,
 };
 
 export function AprontamentoChecklist({ lot, open, onClose, onUpdate }: AprontamentoChecklistProps) {
@@ -160,12 +162,12 @@ export function AprontamentoChecklist({ lot, open, onClose, onUpdate }: Aprontam
 // Helper to check if checklist is complete
 export function isChecklistComplete(checklist: ChecklistAprontamento | null | undefined): boolean {
   if (!checklist) return false;
-  return checklist.botao && checklist.bolsa && checklist.cordao && checklist.tag;
+  return checklist.botao && checklist.bolsa && checklist.cordao && checklist.tag && checklist.placa_marca;
 }
 
 // Helper to get checklist progress
 export function getChecklistProgress(checklist: ChecklistAprontamento | null | undefined): { completed: number; total: number } {
   if (!checklist) return { completed: 0, total: 4 };
-  const completed = [checklist.botao, checklist.bolsa, checklist.cordao, checklist.tag].filter(Boolean).length;
-  return { completed, total: 4 };
+  const completed = [checklist.botao, checklist.bolsa, checklist.cordao, checklist.tag, checklist.placa_marca].filter(Boolean).length;
+  return { completed, total: 5 };
 }

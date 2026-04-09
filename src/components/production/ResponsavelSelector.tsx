@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { usePrestadoresServico } from '@/hooks/usePrestadoresServico';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { UserPlus, Loader2 } from 'lucide-react';
 import { GerenciarResponsaveisModal } from '@/components/production/GerenciarResponsaveisModal';
@@ -13,7 +13,7 @@ interface ResponsavelSelectorProps {
 }
 
 export function ResponsavelSelector({ value, onChange, etapaAtual, disabled }: ResponsavelSelectorProps) {
-  const { todosResponsaveis, loading } = usePrestadoresServico(etapaAtual);
+  const { responsaveisEtapa, outrosResponsaveis, todosResponsaveis, loading } = usePrestadoresServico(etapaAtual);
   const [showManagerModal, setShowManagerModal] = useState(false);
 
   if (loading) {
@@ -33,16 +33,36 @@ export function ResponsavelSelector({ value, onChange, etapaAtual, disabled }: R
             <SelectValue placeholder="Selecione o responsável" />
           </SelectTrigger>
           <SelectContent>
-            {todosResponsaveis.length === 0 ? (
+            {responsaveisEtapa.length > 0 && (
+              <SelectGroup>
+                <SelectLabel className="text-[10px] uppercase text-muted-foreground px-2 py-1.5">
+                  Nesta etapa ({etapaAtual})
+                </SelectLabel>
+                {responsaveisEtapa.map((nome) => (
+                  <SelectItem key={nome} value={nome}>
+                    {nome}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            )}
+
+            {outrosResponsaveis.length > 0 && (
+              <SelectGroup>
+                <SelectLabel className="text-[10px] uppercase text-muted-foreground px-2 py-1.5 border-t mt-1">
+                  Outros prestadores
+                </SelectLabel>
+                {outrosResponsaveis.map((nome) => (
+                  <SelectItem key={nome} value={nome}>
+                    {nome}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            )}
+
+            {todosResponsaveis.length === 0 && (
               <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                Nenhum responsável cadastrado para esta etapa
+                Nenhum responsável cadastrado
               </div>
-            ) : (
-              todosResponsaveis.map((nome) => (
-                <SelectItem key={nome} value={nome}>
-                  {nome}
-                </SelectItem>
-              ))
             )}
           </SelectContent>
         </Select>

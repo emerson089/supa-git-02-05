@@ -2,7 +2,7 @@ import {
   Package, LayoutDashboard, Warehouse, Users,
   ShoppingCart, Settings, HelpCircle, LogOut,
   ChevronDown, ChevronRight, List, ArrowLeftRight, 
-  Store, Factory, UserPlus, Settings2, Bus, DollarSign
+  Store, Factory, UserPlus, Settings2, Bus, DollarSign, Wrench
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/contexts/RoleContext';
@@ -61,7 +61,21 @@ const mainNavGroups: NavItem[] = [
     label: 'Produção',
     icon: <Factory size={18} />,
     path: '/producao',
-    roles: ['admin', 'gerente']
+    roles: ['admin', 'gerente'],
+    subItems: [
+      {
+        label: 'Fluxo de Produção',
+        icon: <List size={16} />,
+        path: '/producao',
+        roles: ['admin', 'gerente'] as AppRole[],
+      },
+      {
+        label: 'Peças em Conserto',
+        icon: <Wrench size={16} />,
+        path: '/producao/consertos',
+        roles: ['admin', 'gerente'] as AppRole[],
+      },
+    ],
   },
   {
     label: 'Clientes',
@@ -189,7 +203,9 @@ export function AppSidebar() {
     const handleClick = () => {
       if (hasSubItems) {
         toggleGroup(item.label);
-      } else if (item.path) {
+      }
+      
+      if (item.path) {
         handleNavigate(item.path);
       }
     };
@@ -202,11 +218,11 @@ export function AppSidebar() {
           className={`
             w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
             ${isSubItem ? 'pl-9 pr-3 py-2 text-xs relative' : ''}
-            ${active || (!isSubItem && isParentActive) ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}
+            ${active || (!isSubItem && isParentActive) ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}
           `}
         >
           {isSubItem && (
-            <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full ${active ? 'bg-primary-foreground' : 'bg-muted-foreground/40'}`} />
+            <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full ${active ? 'bg-white' : 'bg-gray-300'}`} />
           )}
           
           <div className="flex items-center gap-3 overflow-hidden">
@@ -239,13 +255,13 @@ export function AppSidebar() {
 
   return (
     <aside 
-      className={`flex-shrink-0 flex flex-col justify-between p-4 bg-background transition-all duration-300 ease-in-out border-r border-border z-20 ${isSidebarExpanded ? 'w-64' : 'w-20'}`}
+      className={`flex-shrink-0 flex flex-col justify-between p-4 bg-white transition-all duration-300 ease-in-out border-r border-gray-200 shadow-sm z-20 ${isSidebarExpanded ? 'w-64' : 'w-20'}`}
       onMouseEnter={() => setIsSidebarExpanded(true)}
       onMouseLeave={() => setIsSidebarExpanded(false)}
     >
       <div className="flex-1 overflow-y-auto no-scrollbar pb-4">
         <div className={`flex items-center gap-3 mb-8 px-2 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}>
-          <div className="w-10 h-10 rounded-xl neu-button flex-shrink-0 flex items-center justify-center text-primary">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex-shrink-0 flex items-center justify-center text-indigo-600">
             <Package size={20} />
           </div>
           <span className={`text-lg font-semibold truncate transition-all duration-300 ${isSidebarExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
@@ -258,12 +274,12 @@ export function AppSidebar() {
         </nav>
       </div>
 
-      <div className="space-y-1 flex-shrink-0 bg-background pt-2">
+      <div className="space-y-1 flex-shrink-0 bg-white pt-2">
         {visibleBottomGroups.map(group => renderNavItem(group))}
 
-        <div className="pt-4 mt-4 border-t border-border">
+        <div className="pt-4 mt-4 border-t border-gray-100">
           <div className={`flex items-center gap-3 px-3 py-2 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}>
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex-shrink-0 flex items-center justify-center text-primary font-semibold text-sm">
+            <div className="w-8 h-8 rounded-full bg-indigo-600/10 flex-shrink-0 flex items-center justify-center text-indigo-600 font-semibold text-sm">
               {userInitial}
             </div>
             <span className={`text-sm text-muted-foreground truncate max-w-[140px] transition-all duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'}`}>
@@ -273,7 +289,7 @@ export function AppSidebar() {
           <button
             onClick={handleSignOut}
             title={!isSidebarExpanded ? 'Sair' : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200 ${!isSidebarExpanded ? 'justify-center' : ''}`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all duration-200 ${!isSidebarExpanded ? 'justify-center' : ''}`}
           >
             <LogOut size={18} className="flex-shrink-0" />
             <span className={`transition-all duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'}`}>

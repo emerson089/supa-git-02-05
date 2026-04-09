@@ -62,20 +62,6 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-const getModelosResumo = (pedido: PedidoPaginatedDB) => {
-  const itens = pedido.pedido_itens || [];
-  if (itens.length === 0) return '-';
-
-  const cleanName = (name: string) => name
-    .replace(/ — Tamanho (PEÇAS)/gi, '')
-    .replace(/-(PEÇAS)/gi, '')
-    .trim();
-
-  const primeiroNome = cleanName(itens[0].produto_nome);
-
-  if (itens.length === 1) return primeiroNome;
-  return `${primeiroNome} +${itens.length - 1}`;
-};
 
 export function MobileOrderCard({
   pedido,
@@ -95,7 +81,7 @@ export function MobileOrderCard({
             {format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })} • {pedido.total_pecas || 0} pçs
           </p>
           <p className="text-xs text-muted-foreground truncate mt-0.5">
-            {getModelosResumo(pedido)}
+            Excursão: {pedido.excursao || '-'}
           </p>
         </div>
         <div className="flex items-start gap-2">

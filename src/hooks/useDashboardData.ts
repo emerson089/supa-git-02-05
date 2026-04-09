@@ -164,7 +164,7 @@ const ETAPA_COLORS: Record<string, string> = {
   "Travete": "hsl(239 84% 67%)",        // Indigo
   "Destroyed": "hsl(25 95% 53%)",       // Orange
   "Lavanderia": "hsl(187 85% 53%)",     // Cyan
-  "Acabamento": "hsl(168 76% 42%)",        // Teal
+  "Acabamento": "hsl(168 76% 42%)",        // Teal (ID remains Acabamento, Label is Limpado)
   "Aprontamento": "hsl(271 81% 56%)",   // Purple
   "Vendas": "hsl(152 76% 43%)",         // Emerald
 };
@@ -526,18 +526,19 @@ async function fetchDashboardData(
   const pecasYoY = pedidosYoYPagos.reduce((sum, p) => sum + (p.total_pecas || 0), 0);
 
   const pedidosPendentesSimples = pedidosSemCancelados.filter(p =>
-    p.status_pagamento === "PENDENTE"
+    (p.status_pagamento || "").toUpperCase() === "PENDENTE"
   ).length;
   const pedidosIncompletos = pedidosSemCancelados.filter(p =>
-    p.status_pagamento === "INCOMPLETO"
+    (p.status_pagamento || "").toUpperCase() === "INCOMPLETO"
   ).length;
   const pedidosPendEntrega = pedidosSemCancelados.filter(p =>
-    p.status_pagamento === "PEND. ENTREGA"
+    (p.status_pagamento || "").toUpperCase() === "PEND. ENTREGA"
   ).length;
   const pedidosPendentes = pedidosPendentesSimples + pedidosIncompletos + pedidosPendEntrega;
-  const pedidosYoYPendentes = pedidosYoYSemCancelados.filter(p =>
-    p.status_pagamento === "PENDENTE" || p.status_pagamento === "INCOMPLETO" || p.status_pagamento === "PEND. ENTREGA"
-  ).length;
+  const pedidosYoYPendentes = pedidosYoYSemCancelados.filter(p => {
+    const s = (p.status_pagamento || "").toUpperCase();
+    return s === "PENDENTE" || s === "INCOMPLETO" || s === "PEND. ENTREGA";
+  }).length;
 
   const producaoData = producao.data || [];
   const producaoYoYData = producaoYoY.data || [];
@@ -842,27 +843,23 @@ async function fetchDashboardData(
     statusMeta,
   };
 
-  // Previsão Mensal
+  // Previsão Mensal — usa a mesma projeção por dias úteis já calculada em metaAutomatica
   const diasDecorridos = getDate(now);
   const diasTotais = getDaysInMonth(now);
-  const mediaDiaria = diasDecorridos > 0
-    ? faturamentoAtualAcumulado / diasDecorridos
-    : 0;
-  const projecaoMensal = mediaDiaria * diasTotais;
 
   const variacaoVsMetaAuto = metaAutomatica.metaCalculada > 0
-    ? ((projecaoMensal - metaAutomatica.metaCalculada) / metaAutomatica.metaCalculada) * 100
+    ? ((projecaoMensalCalc - metaAutomatica.metaCalculada) / metaAutomatica.metaCalculada) * 100
     : 0;
 
   const previsaoMensal: PrevisaoMensal = {
-    projecaoMensal,
-    mediaDiaria,
+    projecaoMensal: projecaoMensalCalc,
+    mediaDiaria: mediaDiariaCalc,
     diasDecorridos,
     diasTotais,
     variacaoVsMeta: variacaoVsMetaAuto,
-    acimaOuAbaixo: projecaoMensal > metaAutomatica.metaCalculada
+    acimaOuAbaixo: projecaoMensalCalc > metaAutomatica.metaCalculada
       ? 'acima'
-      : projecaoMensal < metaAutomatica.metaCalculada
+      : projecaoMensalCalc < metaAutomatica.metaCalculada
         ? 'abaixo'
         : 'igual',
   };

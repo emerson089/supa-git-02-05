@@ -10,6 +10,8 @@ export type StageId =
   | 'Aprontamento'
   | 'Vendas';
 
+export type StatusDefeitos = 'pendente_conserto' | 'em_conserto' | 'conserto_concluido';
+
 export interface Stage {
   id: StageId;
   label: string;
@@ -25,6 +27,7 @@ export interface ChecklistAprontamento {
   bolsa: boolean;
   cordao: boolean;
   tag: boolean;
+  placa_marca: boolean;
 }
 
 // Re-export for backward compatibility

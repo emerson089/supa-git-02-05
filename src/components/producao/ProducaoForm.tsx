@@ -280,6 +280,15 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
           `Modelo: ${formData.modelo_nome_cache}`,
         ];
         if (rolosValue > 0) parts.push(`Rolos de tecido: ${rolosValue}`);
+
+        // Extract list of all sizes in the grade
+        const allSizes = gradeMatch[1].split(',').map(item => {
+          const m = item.trim().match(/^([^\s:]+)/);
+          return m ? m[1] : '';
+        }).filter(Boolean).join(', ');
+        
+        if (allSizes) parts.push(`Tamanhos : ${allSizes}`);
+
         if (gradeLines) {
           parts.push('');
           parts.push('📐 *Grade de Corte:*');
@@ -355,6 +364,11 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
       `Modelo: ${formData.modelo_nome_cache}`,
     ];
     if (rolos > 0) parts.push(`Rolos de tecido: ${rolos}`);
+    
+    // List all sizes currently in the table
+    const allSizes = sizeRows.map(r => r.tamanho).join(', ');
+    if (allSizes) parts.push(`Tamanhos : ${allSizes}`);
+
     if (gradeLines) {
       parts.push('');
       parts.push('📐 *Grade de Corte:*');

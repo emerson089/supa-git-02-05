@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { ChecklistAprontamento } from "@/types/production";
+import { ChecklistAprontamento, StatusDefeitos } from "@/types/production";
 import { Json } from "@/integrations/supabase/types";
 
 export type { ChecklistAprontamento };
@@ -27,6 +27,11 @@ export interface ProducaoData {
   posted_to_stock_at?: string | null;
   unit_cost?: number | null;
   total_cost?: number | null;
+  // Campos de controle de qualidade
+  quantidade_final?: number | null;
+  pecas_com_defeito?: number | null;
+  quantidade_aprovada?: number | null;
+  status_defeitos?: StatusDefeitos | null;
 }
 
 export interface ProducaoInsert {
@@ -54,6 +59,11 @@ export interface ProducaoUpdate {
   integrado_estoque?: boolean;
   prioridade?: PrioridadeType;
   pecas_concluidas?: number;
+  // Campos de controle de qualidade
+  quantidade_final?: number | null;
+  pecas_com_defeito?: number | null;
+  quantidade_aprovada?: number | null;
+  status_defeitos?: StatusDefeitos | null;
 }
 
 // Helper to convert database row to ProducaoData
@@ -163,6 +173,69 @@ export const Producao = {
     const { data, error } = await supabase
       .from("producao")
       .update({ checklist_aprontamento: checklist as unknown as Json })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return toProducaoData(data);
+  },
+
+  async updateQualidade(id: string, qualidade: {
+    quantidade_final: number;
+    pecas_com_defeito: number;
+    quantidade_aprovada: number;
+    status_defeitos?: StatusDefeitos | null;
+  }): Promise<ProducaoData> {
+    console.log('Producao.updateQualidade: Enviando métricas:', { id, qualidade });
+    
+    // Mapeamento explícito para garantir compatibilidade com o schema
+    const payload = {
+      quantidade_final: Number(qualidade.quantidade_final),
+      pecas_com_defeito: Number(qualidade.pecas_com_defeito),
+      quantidade_aprovada: Number(qualidade.quantidade_aprovada),
+      status_defeitos: qualidade.status_defeitos || 'pendente_conserto',
+      // Sincronizar a quantidade oficial do lote
+      quantidade: Number(qualidade.quantidade_aprovada)
+    };
+
+    const { data, error } = await supabase
+      .from("producao")
+      .update(payload as any)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Producao.updateQualidade: Erro retornado pelo Supabase:', error);
+      throw error;
+    }
+
+    return toProducaoData(data);
+  },
+
+  async atualizarStatusDefeitos(id: string, status: StatusDefeitos): Promise<ProducaoData> {
+    const { data, error } = await supabase
+      .from("producao")
+      .update({ status_defeitos: status } as any)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return toProducaoData(data);
+  },
+
+  async devolverAoAprontamento(id: string): Promise<ProducaoData> {
+    const { data, error } = await supabase
+      .from("producao")
+      .update({ processo_atual: 'Aprontamento', status_defeitos: null } as any)
       .eq("id", id)
       .select()
       .single();

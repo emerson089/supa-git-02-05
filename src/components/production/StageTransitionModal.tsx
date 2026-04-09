@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ProducaoData } from '@/entities/Producao';
 import { ResponsavelSelector } from './ResponsavelSelector';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -33,7 +33,7 @@ const STAGE_FIELDS: Record<string, StageFieldConfig> = {
       { key: 'numeracao',  label: 'Numeração das peças (Ex: 34 ao 44)', type: 'text' },
       { key: 'cor_linha',  label: 'Cor da linha',                  type: 'text'    },
       { key: 'qtd_ziper',  label: 'Quantidade de zíper',           type: 'number'  },
-      { key: 'tipo_ziper', label: 'Tipo / cor do zíper',           type: 'text'    },
+      { key: 'tipo_ziper', label: 'Tipo / tamanho do ziper',           type: 'text'    },
       { key: 'abanhado',   label: 'Abanhado',                      type: 'boolean' },
       { key: 'etiquetas',  label: 'Etiquetas por tamanho',         type: 'boolean' },
       { key: 'forro',      label: 'Forro',                         type: 'boolean' },
@@ -59,6 +59,10 @@ const STAGE_FIELDS: Record<string, StageFieldConfig> = {
   },
   'Acabamento': {
     showResponsavel: true,
+    extraFields: []
+  },
+  'Aprontamento': {
+    showResponsavel: true,
     extraFields: [
       { key: 'botao',              label: 'Quantidade de botões',            type: 'number'  },
       { key: 'bolsa_transparente', label: 'Bolsa transparente',              type: 'boolean' },
@@ -66,10 +70,6 @@ const STAGE_FIELDS: Record<string, StageFieldConfig> = {
       { key: 'placa_marca',        label: 'Placa de identificação da marca', type: 'boolean' },
       { key: 'tag',                label: 'Tag da peça',                     type: 'boolean' },
     ]
-  },
-  'Aprontamento': {
-    showResponsavel: true,
-    extraFields: []
   },
   'Vendas': {
     showResponsavel: false,
@@ -110,6 +110,36 @@ export function StageTransitionModal({
   const toStageLabel = STAGES.find(s => s.id === toStage)?.label || toStage;
   const fromStageLabel = STAGES.find(s => s.id === fromStage)?.label || fromStage;
 
+  // Pre-fill Numeração based on Grade de Corte if transitioning to Costura/Facção
+  useEffect(() => {
+    if (toStage === 'Costura/Facção' && lot?.observacoes) {
+      const gradeMatch = lot.observacoes.match(/Grade:\s*([^|]+)/i);
+      if (gradeMatch) {
+        const gradeStr = gradeMatch[1].trim();
+        const items = gradeStr.split(',');
+        const sizes = items.map(item => {
+          const match = item.trim().match(/^([^\s:]+):\d+/);
+          return match ? match[1] : null;
+        }).filter(Boolean) as string[];
+
+        if (sizes.length > 0) {
+          let numeracao = sizes.join(', ');
+          const allNumeric = sizes.every(s => !isNaN(parseInt(s)));
+          
+          if (allNumeric && sizes.length > 1) {
+            const nums = sizes.map(s => parseInt(s)).sort((a,b) => a - b);
+            numeracao = `${nums[0]} ao ${nums[nums.length - 1]}`;
+          }
+
+          setExtras(prev => ({
+            ...prev,
+            numeracao: prev.numeracao || numeracao
+          }));
+        }
+      }
+    }
+  }, [toStage, lot]);
+
   const handleConfirm = () => {
     onConfirm({
       responsavel: config.showResponsavel ? responsavel : undefined,
@@ -133,7 +163,7 @@ export function StageTransitionModal({
 
   const buildResumoWhatsApp = () => {
     const lines: string[] = [];
-    const emoji = toStage === 'Lavanderia' ? '🫧' : toStage === 'Acabamento' ? '✨' : '🧵';
+    const emoji = toStage === 'Lavanderia' ? '🫧' : (toStage === 'Acabamento' || toStage === 'Aprontamento') ? '✨' : '🧵';
 
     lines.push(`${emoji} *${toStageLabel} - Lote #${lot.id_producao}*`);
     if (lot.modelo_nome_cache) lines.push(`📌 Modelo: ${lot.modelo_nome_cache}`);
@@ -156,7 +186,7 @@ export function StageTransitionModal({
       if (extras.cor_resultado) lines.push(`🎨 Cor do resultado: ${extras.cor_resultado}`);
       if (extras.qtd_pecas)     lines.push(`📦 Peças: ${extras.qtd_pecas}`);
       if (extras.processo_especial === 'Sim') lines.push('✅ Processo especial');
-    } else if (toStage === 'Acabamento') {
+    } else if (toStage === 'Acabamento' || toStage === 'Aprontamento') {
       if (extras.botao)                          lines.push(`🔢 Botão: ${extras.botao}x`);
       if (extras.bolsa_transparente  === 'Sim')  lines.push('✅ Bolsa transparente');
       if (extras.cordao              === 'Sim')  lines.push('✅ Cordão');
@@ -278,7 +308,7 @@ export function StageTransitionModal({
           </div>
 
           {/* Copiar resumo — for Costura/Facção and Lavanderia */}
-          {(toStage === 'Costura/Facção' || toStage === 'Lavanderia' || toStage === 'Acabamento') && (
+          {(toStage === 'Costura/Facção' || toStage === 'Lavanderia' || toStage === 'Acabamento' || toStage === 'Aprontamento') && (
             <Button
               type="button"
               variant="outline"

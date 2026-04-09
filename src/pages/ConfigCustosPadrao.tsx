@@ -14,7 +14,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 const TIPOS_CUSTO = [
   'Facção/Costura',
   'Lavanderia',
-  'Acabamento',
+  'Limpado',
   'Aviamentos',
   'Material',
   'Transporte',

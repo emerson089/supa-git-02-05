@@ -50,7 +50,7 @@ function parseObservacao(obs: string | null | undefined) {
     const cortadorMatch   = part.match(/^Cortador:\s*(.+)$/i);
     const corLinhaMatch   = part.match(/^Cor da linha:\s*(.+)$/i);
     const qtdZiperMatch   = part.match(/^Zíper \(qtd\):\s*(.+)$/i);
-    const tipoZiperMatch  = part.match(/^Zíper \(tipo\/cor\):\s*(.+)$/i);
+    const tipoZiperMatch  = part.match(/^Zíper \(tipo\/(cor|tamanho)\):\s*(.+)$/i);
     const booleanMatch      = part.match(/^(Abanhado|Etiquetas|Forro|Processo especial|Bolsa transparente|Cordão|Placa da marca|Tag):\s*(.+)$/i);
     const botaoMatch        = part.match(/^Botão:\s*(\d+)/i);
     const tipoLavadoMatch   = part.match(/^Tipo de lavado:\s*(.+)$/i);
@@ -70,7 +70,7 @@ function parseObservacao(obs: string | null | undefined) {
     } else if (qtdZiperMatch) {
       extras.push({ label: 'Zíper (qtd)', value: qtdZiperMatch[1], icon: 'link2' });
     } else if (tipoZiperMatch) {
-      extras.push({ label: 'Zíper', value: tipoZiperMatch[1], icon: 'link2' });
+      extras.push({ label: 'Zíper', value: tipoZiperMatch[2], icon: 'link2' });
     } else if (booleanMatch) {
       extras.push({ label: booleanMatch[1], value: booleanMatch[2], icon: 'checkcircle2' });
     } else if (tipoLavadoMatch) {
@@ -112,7 +112,7 @@ const STAGE_LABELS: Record<string, string> = {
   'Travete': 'Travete',
   'Destroyed': 'Destroyed',
   'Lavanderia': 'Lavanderia',
-  'Acabamento': 'Acabamento',
+  'Acabamento': 'Limpado',
   'Aprontamento': 'Aprontamento',
   'Vendas': 'Vendas',
 };

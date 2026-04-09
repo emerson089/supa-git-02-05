@@ -25,6 +25,7 @@ import ConfigExcursoes from "./pages/ConfigExcursoes";
 import ConfigCustosPadrao from "./pages/ConfigCustosPadrao";
 import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
+import PecasEmConserto from "./pages/PecasEmConserto";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -141,6 +142,14 @@ function App() {
                   element={
                     <ProtectedRoute allowedRoles={['admin', 'gerente']}>
                       <Index />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/producao/consertos"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                      <PecasEmConserto />
                     </ProtectedRoute>
                   }
                 />

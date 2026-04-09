@@ -90,7 +90,15 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
   } | null>(null);
   
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
-  const quantidade = lot?.quantidade || 0;
+  // Quantity logic:
+  // - qtdCorte: pieces actually cut (used to calculate REAL total costs paid)
+  // - qtdAprovada: approved pieces (used to calculate per-unit selling cost)
+  const qtdCorte = lot?.quantidade_final && lot.quantidade_final > 0
+    ? lot.quantidade_final
+    : (lot?.quantidade || 0);
+  const qtdAprovada = lot?.quantidade || 0;
+  const qtdDefeitos = lot?.pecas_com_defeito || 0;
+  const temDefeitos = qtdDefeitos > 0 && qtdCorte !== qtdAprovada;
 
   useEffect(() => {
     return () => {
@@ -403,15 +411,18 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
   };
 
   // Calculations
+  // custoTecido is a fixed amount (not per-piece), keeps original value
   const custoTecido = localConfig.metros_corte * localConfig.valor_metro;
-  const custoItens = custos.reduce((sum, c) => sum + (c.valor_unitario * quantidade), 0);
+  // Total cost paid = value per piece × ORIGINAL cut quantity (money already spent on defective pieces too)
+  const custoItens = custos.reduce((sum, c) => sum + (c.valor_unitario * qtdCorte), 0);
   const custoTotal = custoTecido + custoItens;
-  const custoUnitario = quantidade > 0 ? custoTotal / quantidade : 0;
+  // Cost per APPROVED piece is higher because defective pieces increased the loss
+  const custoUnitario = qtdAprovada > 0 ? custoTotal / qtdAprovada : 0;
   const lucroUnitario = localConfig.preco_venda - custoUnitario;
-  const lucroTotal = lucroUnitario * quantidade;
+  const lucroTotal = lucroUnitario * qtdAprovada;
   const margem = localConfig.preco_venda > 0 ? (lucroUnitario / localConfig.preco_venda) * 100 : 0;
 
-  const totalPago = custos.filter(c => c.is_paid).reduce((sum, c) => sum + (c.valor_unitario * quantidade), 0);
+  const totalPago = custos.filter(c => c.is_paid).reduce((sum, c) => sum + (c.valor_unitario * qtdCorte), 0);
   const totalPendente = custoItens - totalPago;
 
   // Atualizar preview quando custos mudam
@@ -480,7 +491,12 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
             Custos do Lote {lot.id_producao}
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
-            {lot.modelo_nome_cache || 'Sem modelo'} - {quantidade} peças
+            {lot.modelo_nome_cache || 'Sem modelo'} — {qtdCorte} cortadas
+            {temDefeitos && (
+              <span className="ml-1 text-amber-600 dark:text-amber-400">
+                · {qtdAprovada} aprovadas ({qtdDefeitos} com defeito)
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -612,7 +628,7 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
                 Custos ({custos.length})
               </h4>
               {custos.map(custo => {
-                const custoTotalLinha = custo.valor_unitario * quantidade;
+                const custoTotalLinha = custo.valor_unitario * qtdCorte;
                 return (
                   <div 
                     key={custo.id} 
@@ -649,7 +665,12 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
                         </div>
                         <div className="flex items-center justify-between mt-1">
                           <span className="text-xs text-muted-foreground">
-                            R$ {custo.valor_unitario.toFixed(2)} × {quantidade} pç
+                            R$ {custo.valor_unitario.toFixed(2)} × {qtdCorte} pç
+                            {temDefeitos && (
+                              <span className="text-amber-500 ml-1" title="Calculado sobre o total cortado">
+                                (cortadas)
+                              </span>
+                            )}
                           </span>
                           <div className="flex items-center gap-1.5">
                             {custo.is_paid && (
@@ -730,9 +751,15 @@ export function CustosLoteModal({ lot, open, onClose }: CustosLoteModalProps) {
                       </span>
                     </div>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-2">
-                    * Apenas qtd_com_custo ({previewCustoMedio.novaQtdComCusto} pç) entra no cálculo de valor do estoque
-                  </p>
+                  {temDefeitos ? (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2">
+                      ⚠️ As <strong>{qtdDefeitos}</strong> peças com defeito não entram no estoque. Apenas as {previewCustoMedio.novaQtdComCusto} aprovadas serão adicionadas.
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground mt-2">
+                      * {previewCustoMedio.novaQtdComCusto} peças entrarão no estoque com o custo médio calculado acima.
+                    </p>
+                  )}
                 </div>
               )}
 

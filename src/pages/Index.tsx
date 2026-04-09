@@ -18,6 +18,7 @@ import { ImportProducaoCSVModal } from '@/components/production/ImportProducaoCS
 import { ImportCustosCSVModal } from '@/components/production/ImportCustosCSVModal';
 import { HistoricoProducaoModal } from '@/components/production/HistoricoProducaoModal';
 import { StageTransitionModal, StageTransitionData } from '@/components/production/StageTransitionModal';
+import { QualidadeModal, QualidadeData } from '@/components/production/QualidadeModal';
 import ProducaoForm from '@/components/producao/ProducaoForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
@@ -108,6 +109,11 @@ const Index = () => {
   const [transitionTarget, setTransitionTarget] = useState('');
   const [transitionLoading, setTransitionLoading] = useState(false);
 
+  // Qualidade modal (Aprontamento → Vendas)
+  const [showQualidadeModal, setShowQualidadeModal] = useState(false);
+  const [qualidadeLot, setQualidadeLot] = useState<ProducaoData | null>(null);
+  const [qualidadeLoading, setQualidadeLoading] = useState(false);
+
   // Fetch data from database
   const fetchData = useCallback(async () => {
     try {
@@ -196,7 +202,7 @@ const Index = () => {
   const handleStageChange = async (lot: ProducaoData, newStage: string) => {
     const currentStage = lot.processo_atual;
 
-    // Validação: Se movendo de Aprontamento para Vendas, verifica checklist
+    // Aprontamento → Vendas: abre modal de qualidade especializado
     if (currentStage === 'Aprontamento' && newStage === 'Vendas') {
       const checklist = lot.checklist_aprontamento;
       if (!isChecklistComplete(checklist)) {
@@ -205,6 +211,10 @@ const Index = () => {
         setShowChecklistModal(true);
         return;
       }
+      // Open quality modal instead of standard transition modal
+      setQualidadeLot(lot);
+      setShowQualidadeModal(true);
+      return;
     }
 
     // Open transition modal instead of moving directly
@@ -223,28 +233,44 @@ const Index = () => {
 
     setTransitionLoading(true);
 
+    // Extrair quantidade se informada (suporta chaves 'pecas' ou 'qtd_pecas')
+    const informouQuantidade = data.extras?.pecas || data.extras?.qtd_pecas;
+    const novaQuantidade = informouQuantidade ? parseInt(informouQuantidade) : null;
+    const quantidadeValida = novaQuantidade !== null && !isNaN(novaQuantidade) && novaQuantidade > 0 ? novaQuantidade : null;
+
     // Optimistic update
     const originalLots = [...lots];
     setLots(prev => prev.map(l => 
       l.id === lot.id ? { 
         ...l, 
         processo_atual: newStage,
-        responsavel: data.responsavel || l.responsavel
+        responsavel: data.responsavel || l.responsavel,
+        quantidade: quantidadeValida !== null ? quantidadeValida : l.quantidade
       } : l
     ));
 
     try {
-      // Update database with new stage + responsavel + pecas (if transitioning to Costura/Facção)
+      // Update database with new stage + responsavel + quantidade
       const updateData: Record<string, any> = { processo_atual: newStage };
       if (data.responsavel) {
         updateData.responsavel = data.responsavel;
       }
-      if (newStage === 'Costura/Facção' && data.extras?.pecas) {
-        const pecas = parseInt(data.extras.pecas);
-        if (!isNaN(pecas) && pecas > 0) {
-          updateData.quantidade = pecas;
-        }
+      
+      if (quantidadeValida !== null) {
+        updateData.quantidade = quantidadeValida;
       }
+
+      // Sincronizar checklist ao entrar em Aprontamento
+      if (newStage === 'Aprontamento' && data.extras) {
+        updateData.checklist_aprontamento = {
+          botao: !!data.extras.botao && parseInt(data.extras.botao) > 0,
+          bolsa: data.extras.bolsa_transparente === 'Sim',
+          cordao: data.extras.cordao === 'Sim',
+          tag: data.extras.tag === 'Sim',
+          placa_marca: data.extras.placa_marca === 'Sim',
+        };
+      }
+
       await callWithRetry(() => Producao.update(lot.id, updateData));
 
       // Build observacao with extras
@@ -262,7 +288,7 @@ const Index = () => {
           numeracao:  'Numeração',
           cor_linha:  'Cor da linha',
           qtd_ziper:  'Zíper (qtd)',
-          tipo_ziper: 'Zíper (tipo/cor)',
+          tipo_ziper: 'Zíper (tipo/tamanho)',
           abanhado:   'Abanhado',
           etiquetas:  'Etiquetas',
           forro:      'Forro',
@@ -307,11 +333,21 @@ const Index = () => {
         toast.success(`Movido para ${STAGES.find(s => s.id === newStage)?.label}`);
       }
 
-      // Abrir checklist automaticamente ao entrar em Aprontamento
+      // Abrir checklist automaticamente ao entrar em Aprontamento (apenas se não foi preenchido na transição)
       if (newStage === 'Aprontamento') {
-        const updatedLot = { ...lot, processo_atual: newStage, responsavel: data.responsavel || lot.responsavel };
-        setSelectedLoteForChecklist(updatedLot);
-        setShowChecklistModal(true);
+        const checklist = updateData.checklist_aprontamento;
+        const isComplete = checklist && checklist.botao && checklist.bolsa && checklist.cordao && checklist.tag && checklist.placa_marca;
+        
+        if (!isComplete) {
+          const updatedLot = { 
+            ...lot, 
+            processo_atual: newStage, 
+            responsavel: data.responsavel || lot.responsavel,
+            checklist_aprontamento: checklist
+          };
+          setSelectedLoteForChecklist(updatedLot);
+          setShowChecklistModal(true);
+        }
       }
     } catch (error) {
       console.error("Erro ao mover card:", error);
@@ -319,6 +355,72 @@ const Index = () => {
       setLots(originalLots);
     } finally {
       setTransitionLoading(false);
+    }
+  };
+
+  // Execute quality check move (Aprontamento → Vendas)
+  const executeQualidadeMove = async (data: QualidadeData) => {
+    if (!qualidadeLot) return;
+    const lot = qualidadeLot;
+    setQualidadeLoading(true);
+
+    const originalLots = lots;
+    // Optimistic update
+    setLots(prev => prev.map(l => l.id === lot.id ? {
+      ...l,
+      processo_atual: 'Vendas',
+      quantidade: data.quantidade_aprovada,
+      quantidade_final: data.quantidade_final,
+      pecas_com_defeito: data.pecas_com_defeito,
+      quantidade_aprovada: data.quantidade_aprovada,
+      status_defeitos: data.pecas_com_defeito > 0 ? 'pendente_conserto' : null,
+    } : l));
+
+    try {
+      await callWithRetry(() => Producao.updateQualidade(lot.id, {
+        quantidade_final: data.quantidade_final,
+        pecas_com_defeito: data.pecas_com_defeito,
+        quantidade_aprovada: data.quantidade_aprovada,
+        status_defeitos: data.pecas_com_defeito > 0 ? 'pendente_conserto' : null,
+      }));
+
+      // Update stage
+      await callWithRetry(() => Producao.update(lot.id, { processo_atual: 'Vendas' }));
+
+      // Log
+      const obsParts = [
+        `Qtd final: ${data.quantidade_final}`,
+        `Defeitos: ${data.pecas_com_defeito}`,
+        `Aprovadas: ${data.quantidade_aprovada}`,
+      ];
+      if (data.observacao) obsParts.push(data.observacao);
+
+      await callWithRetry(() => ProducaoLog.create({
+        producao_id: lot.id,
+        processo_anterior: 'Aprontamento',
+        processo_novo: 'Vendas',
+        responsavel: lot.responsavel,
+        observacao: obsParts.join(' | '),
+      }));
+
+      setShowQualidadeModal(false);
+      setQualidadeLot(null);
+
+      if (data.pecas_com_defeito > 0) {
+        toast.success(
+          `Lote enviado para Vendas! ${data.pecas_com_defeito} peça(s) registrada(s) para conserto.`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.success('Lote movido para Vendas. Abra os Custos para enviar ao estoque.');
+      }
+    } catch (error: any) {
+      console.error('Erro ao mover para Vendas:', error);
+      const errorMessage = error?.message || error?.details || 'Erro interno desconhecido';
+      toast.error(`Falha no DB: ${errorMessage}`);
+      setLots(originalLots);
+    } finally {
+      setQualidadeLoading(false);
     }
   };
 
@@ -793,6 +895,18 @@ const Index = () => {
         toStage={transitionTarget}
         onConfirm={executeStageMove}
         loading={transitionLoading}
+      />
+
+      {/* Qualidade Modal (Aprontamento → Vendas) */}
+      <QualidadeModal
+        open={showQualidadeModal}
+        onOpenChange={(open) => {
+          setShowQualidadeModal(open);
+          if (!open) setQualidadeLot(null);
+        }}
+        lot={qualidadeLot}
+        onConfirm={executeQualidadeMove}
+        loading={qualidadeLoading}
       />
 
       {/* History Modal */}

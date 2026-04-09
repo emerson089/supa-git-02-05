@@ -34,7 +34,7 @@ interface ParsedCusto {
   error?: string;
 }
 
-const VALID_TIPOS = ['Material', 'Facção/Costura', 'Lavanderia', 'Acabamento', 'Aviamentos', 'Transporte', 'Outros'];
+const VALID_TIPOS = ['Material', 'Facção/Costura', 'Lavanderia', 'Limpado', 'Aviamentos', 'Transporte', 'Outros'];
 
 export function ImportCustosCSVModal({ open, onOpenChange, onSuccess }: ImportCustosCSVModalProps) {
   const [isDragOver, setIsDragOver] = useState(false);

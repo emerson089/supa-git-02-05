@@ -1,6 +1,6 @@
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreVertical, ArrowRight, ArrowLeft, Trash2, Pencil, DollarSign, PackageCheck, Package, Flame, AlertTriangle, Circle, Clock, History } from 'lucide-react';
+import { MoreVertical, ArrowRight, ArrowLeft, Trash2, Pencil, DollarSign, PackageCheck, Package, Flame, AlertTriangle, Circle, Clock, History, Wrench } from 'lucide-react';
 import { ProducaoData } from '@/entities/Producao';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { useLoteCustos } from '@/hooks/useLoteCustos';
@@ -140,6 +140,28 @@ export function ProductionCard({
               Sem custo
             </Badge>
           ) : null}
+
+          {/* Badge de peças em conserto */}
+          {(lot.pecas_com_defeito ?? 0) > 0 && (
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[9px] px-1.5 py-0.5",
+                lot.status_defeitos === 'conserto_concluido'
+                  ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700"
+                  : lot.status_defeitos === 'em_conserto'
+                  ? "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700"
+                  : "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700"
+              )}
+            >
+              <Wrench size={10} className="mr-1" />
+              {lot.status_defeitos === 'conserto_concluido'
+                ? `${lot.pecas_com_defeito} concluído`
+                : lot.status_defeitos === 'em_conserto'
+                ? `${lot.pecas_com_defeito} consertando`
+                : `${lot.pecas_com_defeito} conserto`}
+            </Badge>
+          )}
         </div>
         
         <div className="flex items-center gap-1">
@@ -149,7 +171,11 @@ export function ProductionCard({
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-lg hover:bg-muted/50 opacity-0 group-hover:opacity-100">
+              <button 
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-lg hover:bg-muted/50 opacity-40 hover:opacity-100 group-hover:opacity-100"
+              >
                 <MoreVertical size={14} />
               </button>
             </DropdownMenuTrigger>

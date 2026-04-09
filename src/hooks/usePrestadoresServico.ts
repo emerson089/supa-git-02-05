@@ -49,15 +49,22 @@ export function usePrestadoresServico(etapaAtual?: string) {
     ? prestadores.filter(p => p.etapas.includes(etapaAtual))
     : prestadores;
 
-  // Combina com os responsáveis padrão da etapa
   const responsaveisPadrao = etapaAtual ? RESPONSAVEIS_POR_ETAPA[etapaAtual] || [] : [];
 
   // Lista final: responsáveis padrão + prestadores do banco (sem duplicados)
-  const nomesDosPrestadores = prestadoresFiltrados.map(p => p.nome);
-  const todosResponsaveis = [
-    ...responsaveisPadrao.filter(r => !nomesDosPrestadores.includes(r)),
-    ...nomesDosPrestadores
+  const nomesDosPrestadoresBase = prestadores.map(p => p.nome);
+  const nomesFiltrados = prestadoresFiltrados.map(p => p.nome);
+  
+  // Responsáveis que pertencem à etapa atual (padrão ou banco)
+  const responsaveisEtapa = [
+    ...responsaveisPadrao,
+    ...nomesFiltrados.filter(n => !responsaveisPadrao.includes(n))
   ];
+
+  // Outros prestadores cadastrados no sistema
+  const outrosResponsaveis = nomesDosPrestadoresBase.filter(n => !responsaveisEtapa.includes(n));
+
+  const todosResponsaveis = [...responsaveisEtapa, ...outrosResponsaveis];
 
   // Função para adicionar novo prestador
   const addPrestador = async (nome: string, etapas: string[]) => {
@@ -136,7 +143,9 @@ export function usePrestadoresServico(etapaAtual?: string) {
   return {
     prestadores,       // Todos os prestadores do banco
     prestadoresFiltrados, // Filtrados por etapaAtual
-    todosResponsaveis, // Padrão + banco 
+    responsaveisEtapa,   // Padrão + banco (desta etapa)
+    outrosResponsaveis,  // Do banco (outras etapas)
+    todosResponsaveis, // Todos (etapa primeiro)
     loading,
     addPrestador,
     updatePrestador,

@@ -426,6 +426,7 @@ export default function PedidosCriados() {
         return; // Impede a mudança de status
       }
       updates.estornoRealizado = false;
+      updatePedido(pedidoId, updates); // ADICIONADO: Persistir a reativação
       toast.success(`Pedido reativado! ${pedidoItem.total_pecas} peças subtraídas do estoque.`);
     }
     // CASO 2: Cancelando (indo para cancelado)
@@ -447,6 +448,8 @@ export default function PedidosCriados() {
       } else {
         toast.success('Status atualizado com sucesso!');
       }
+      
+      updatePedido(pedidoId, updates); // ADICIONADO: Persistir o cancelamento
     } else {
       // Para outros status (incluindo SEPARADO e NO CARRO), atualiza o banco IMEDIATAMENTE
       // Isso evita que a interface fique travada esperando o WhatsApp
@@ -1278,7 +1281,7 @@ Qualquer dúvida é só chamar! 😊`;
                         Cliente
                       </TableHead>
                       <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3">
-                        Modelos
+                        Excursão
                       </TableHead>
                       <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
                         Qtd
@@ -1313,8 +1316,8 @@ Qualquer dúvida é só chamar! 😊`;
                       <TableCell className="py-2.5">
                         <span className="font-semibold text-foreground text-sm">{pedido.cliente_nome}</span>
                       </TableCell>
-                      <TableCell className="py-2.5 text-sm text-muted-foreground max-w-[150px] truncate">
-                        {getModelosResumo(pedido)}
+                      <TableCell className="py-2.5 text-sm text-muted-foreground max-w-[200px] truncate">
+                        {pedido.excursao || '-'}
                       </TableCell>
                       <TableCell className="py-2.5 text-center">
                         <span className="font-bold text-primary text-sm">{pedido.total_pecas || 0}</span>
