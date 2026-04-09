@@ -2,7 +2,7 @@ import {
   Package, LayoutDashboard, Warehouse, Users,
   ShoppingCart, Settings, HelpCircle, LogOut,
   ChevronDown, ChevronRight, List, ArrowLeftRight, 
-  Store, Factory, UserPlus, Settings2, Bus, DollarSign, Wrench
+  Store, Factory, UserPlus, Settings2, Bus, DollarSign, Wrench, FileText
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/contexts/RoleContext';
@@ -108,6 +108,12 @@ const bottomNavGroups: NavItem[] = [
     label: 'Custos Padrão',
     icon: <DollarSign size={18} />,
     path: '/configuracoes/custos-padrao',
+    roles: ['admin', 'gerente']
+  },
+  {
+    label: 'Catálogo CRM',
+    icon: <FileText size={18} />,
+    path: '/configuracoes/catalogo',
     roles: ['admin', 'gerente']
   },
   {

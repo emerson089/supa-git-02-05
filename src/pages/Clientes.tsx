@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, memo, useEffect } from 'react';
-import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw, ChevronLeft, ChevronRight, ChevronsUpDown, Check, CheckCircle2, PhoneCall, MessageCircle, MessageSquarePlus } from 'lucide-react';
+import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw, ChevronLeft, ChevronRight, ChevronsUpDown, Check, CheckCircle2, PhoneCall, MessageCircle, MessageSquarePlus, Send, Loader2 } from 'lucide-react';
 import { useExcursoesAtivas } from '@/hooks/useExcursoes';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -20,6 +20,8 @@ import { useClientesCRMBatch, useClientesCRMFilter, getClienteStatusFromStats, h
 import { ImportCSVModal } from '@/components/clientes/ImportCSVModal';
 import { ClearDataModal } from '@/components/clientes/ClearDataModal';
 import { WhatsAppButton } from '@/components/clientes/WhatsAppButton';
+import { WhatsAppCatalogButton } from '@/components/clientes/WhatsAppCatalogButton';
+import { TransmissaoManagerModal } from '@/components/clientes/TransmissaoManagerModal';
 import { ClienteGridSkeleton } from '@/components/clientes/ClienteCardSkeleton';
 import { ClienteSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
@@ -219,7 +221,10 @@ const ClienteCard = memo(function ClienteCard({
 
       {/* Ações: Div dedicada abaixo do nome com gap-4 */}
       <div className="flex items-center gap-4 mb-5 border-b border-border/40 pb-4">
-        <WhatsAppButton cliente={clienteForWhatsApp} stats={statsForWhatsApp} onContatoRegistrado={onWhatsAppEnviado} />
+        <div className="flex items-center">
+          <WhatsAppButton cliente={clienteForWhatsApp} stats={statsForWhatsApp} onContatoRegistrado={onWhatsAppEnviado} />
+          <WhatsAppCatalogButton cliente={clienteForWhatsApp} />
+        </div>
         {cliente.telefone && (
           <a
             href={`tel:${cliente.telefone.replace(/\D/g, '')}`}
@@ -408,11 +413,17 @@ export default function Clientes() {
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
+  const [transmissaoModalOpen, setTransmissaoModalOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<ClientePaginatedDB | null>(null);
   const [formData, setFormData] = useState(emptyCliente);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clienteToDelete, setClienteToDelete] = useState<ClientePaginatedDB | null>(null);
   const [excursaoPopoverOpen, setExcursaoPopoverOpen] = useState(false);
+  
+  // Transmissao all clients state
+  const [clientesTransmissao, setClientesTransmissao] = useState<ClientePaginatedDB[]>([]);
+  const [isCarregandoTransmissao, setIsCarregandoTransmissao] = useState(false);
+
   const { data: excursoesAtivas } = useExcursoesAtivas();
 
   const crmFilterStatus = filtroStatus !== 'todos' ? filtroStatus : null;
@@ -589,6 +600,39 @@ export default function Clientes() {
     }
   };
 
+  const handleOpenTransmissao = async () => {
+    if (!user?.id) {
+       toast.error("Você precisa estar logado.");
+       return;
+    }
+  
+    setIsCarregandoTransmissao(true);
+    try {
+      let query = supabase.from('clientes').select('id, nome, telefone, cidade, estado, excursao, created_at, user_id').eq('user_id', user.id);
+      
+      // If a filter is active, we restrict by those precise IDs
+      if (filtroStatus !== 'todos') {
+        if (!crmFilterIds || crmFilterIds.length === 0) {
+          toast.error("Nenhum cliente neste filtro atende aos critérios.");
+          setIsCarregandoTransmissao(false);
+          return;
+        }
+        query = query.in('id', crmFilterIds);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      setClientesTransmissao(data || []);
+      setTransmissaoModalOpen(true);
+    } catch (e) {
+      console.error("Erro carregr fila transmissao:", e);
+      toast.error("Falha ao preparar lista de clientes.");
+    } finally {
+      setIsCarregandoTransmissao(false);
+    }
+  };
+
   // Pagination info
   const totalCount = paginatedData?.count || 0;
   const totalPages = paginatedData?.totalPages || 1;
@@ -610,6 +654,16 @@ export default function Clientes() {
           <p className="text-muted-foreground mt-1">Painel CRM - Gerencie sua base de clientes</p>
         </div>
         <div className="flex gap-3 flex-wrap">
+          {user?.id && (
+            <Button onClick={handleOpenTransmissao} disabled={isCarregandoTransmissao} className="h-11 px-5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white transition-colors shadow-lg shadow-orange-500/20">
+              {isCarregandoTransmissao ? (
+                 <Loader2 size={18} className="mr-2 animate-spin" />
+              ) : (
+                 <Send size={18} className="mr-2" />
+              )}
+              <span className="hidden sm:inline">Transmitir Catálogo</span>
+            </Button>
+          )}
           <Button onClick={() => setClearDataModalOpen(true)} variant="outline" className="h-11 px-5 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 transition-colors">
             <AlertTriangle size={18} className="mr-2" />
             <span className="hidden sm:inline">Limpar Dados</span>
@@ -915,6 +969,14 @@ export default function Clientes() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    {/* Modal de Transmissão */}
+    <TransmissaoManagerModal 
+      open={transmissaoModalOpen} 
+      onOpenChange={setTransmissaoModalOpen}
+      clientes={clientesTransmissao}
+      filtroAtual={filtroStatus}
+    />
 
     {/* Bottom Navigation */}
     <BottomNavigation />

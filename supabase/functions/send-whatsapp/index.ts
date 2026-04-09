@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
 
     // Parse and validate body
     const body = await req.json();
-    const { phone, message } = body;
+    const { phone, message, type = 'text', documentUrl, fileName, caption } = body;
 
     if (!phone || typeof phone !== "string" || phone.length < 12 || phone.length > 13) {
       return new Response(JSON.stringify({ error: "Telefone inválido" }), {
@@ -47,8 +47,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!message || typeof message !== "string" || message.trim().length === 0) {
-      return new Response(JSON.stringify({ error: "Mensagem não pode estar vazia" }), {
+    if (type === 'text') {
+      if (!message || typeof message !== "string" || message.trim().length === 0) {
+        return new Response(JSON.stringify({ error: "Mensagem não pode estar vazia" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (type === 'document') {
+      if (!documentUrl || typeof documentUrl !== "string" || documentUrl.trim().length === 0) {
+        return new Response(JSON.stringify({ error: "URL do documento não informada" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      return new Response(JSON.stringify({ error: "Tipo de mensagem inválido" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -67,7 +81,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-text`;
+    let zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-text`;
+    let requestBody: any = { phone, message };
+
+    if (type === 'document') {
+      zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-document/pdf`;
+      requestBody = {
+        phone,
+        document: documentUrl,
+        extension: ".pdf",
+        fileName: fileName || "catalogo.pdf",
+        caption: caption || message || ""
+      };
+    }
 
     const zapiResponse = await fetch(zapiUrl, {
       method: "POST",
@@ -75,7 +101,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
         "Client-Token": clientToken,
       },
-      body: JSON.stringify({ phone, message }),
+      body: JSON.stringify(requestBody),
     });
 
     const zapiData = await zapiResponse.json();

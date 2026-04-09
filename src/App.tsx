@@ -23,6 +23,7 @@ import ConfigUsuarios from "./pages/ConfigUsuarios";
 import ConfigTiposAjuste from "./pages/ConfigTiposAjuste";
 import ConfigExcursoes from "./pages/ConfigExcursoes";
 import ConfigCustosPadrao from "./pages/ConfigCustosPadrao";
+import ConfigCatalogo from "./pages/ConfigCatalogo";
 import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 import PecasEmConserto from "./pages/PecasEmConserto";
@@ -115,6 +116,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['admin', 'gerente']}>
                     <ConfigCustosPadrao />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/configuracoes/catalogo"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                    <ConfigCatalogo />
                   </ProtectedRoute>
                 }
               />
