@@ -309,46 +309,15 @@ const NovoPedido = () => {
           const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
           const valorFormatado = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-          // Gerar link InfinitePay (falha silenciosamente)
-          let linkInfinitePay = '';
-          try {
-            const { data: linkData } = await supabase.functions.invoke('create-infinitepay-link', {
-              body: {
-                pedido_id: pedidoCriado.id,
-                items: itensFormatados.map(item => ({
-                  description: item.produtoNome,
-                  quantity: item.quantidade,
-                  price: Math.round(item.valorUnitario * 100),
-                })),
-                customer: {
-                  name: cliente?.nome || clienteNome,
-                  phone_number: telefone.replace(/\D/g, ''),
-                },
-              },
-            });
-            linkInfinitePay = linkData?.link || '';
-          } catch (ipErr) {
-            console.error('Erro ao gerar link InfinitePay:', ipErr);
-          }
-
-          const blocoLink = linkInfinitePay
-            ? `Para pagar, acesse o link abaixo:
-
-🔗 *Link de Pagamento:* ${linkInfinitePay}
-
-Ou via PIX manual:`
-            : `Para dar andamento, realize o pagamento via PIX:`;
-
           const mensagem = `Olá, ${clienteNome}! Pedido confirmado! 🎉
 
-💰 *Total: ${valorFormatado}*
+💰 Total: ${valorFormatado}
 
-${blocoLink}
+PIX (CNPJ): 40.548.049/0001-06
+Favorecido: Delookii Confecções Ltda
 
-*PIX (CNPJ):* \`40.548.049/0001-06\` 
-*Favorecido:* Delookii Confecções Ltda
+Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido.
 
-Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido. 
 Qualquer dúvida é só chamar! 😊`;
 
           // Normalizar telefone
