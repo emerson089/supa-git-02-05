@@ -209,6 +209,7 @@ const ConfigCatalogo = () => {
                           Abrir em nova aba
                         </button>
                       </div>
+                    </div>
                   </div>
 
                   <div className="mt-6 flex items-start gap-3 bg-yellow-50 dark:bg-yellow-950/40 p-4 rounded-xl border border-yellow-200/60 dark:border-yellow-900/40">
@@ -226,6 +227,23 @@ const ConfigCatalogo = () => {
                 </div>
               )}
             </Card>
+
+            {/* Inline PDF Preview */}
+            {showPreview && currentUrl && (
+              <Card className="p-4 neu-card border-none rounded-2xl col-span-full">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-lg">Preview do Catálogo</h3>
+                  <Button variant="ghost" size="sm" onClick={() => setShowPreview(false)}>
+                    Fechar
+                  </Button>
+                </div>
+                <iframe
+                  src={currentUrl}
+                  className="w-full h-[70vh] rounded-xl border border-border"
+                  title="Preview do Catálogo PDF"
+                />
+              </Card>
+            )}
 
           </div>
         </div>
