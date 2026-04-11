@@ -49,26 +49,20 @@ export const WhatsAppCatalogButton = forwardRef<HTMLButtonElement, WhatsAppCatal
           throw new Error("Usuário não autenticado.");
         }
 
-        // Obter URL pública do catálogo
-        const { data: { publicUrl } } = supabase.storage
+        // Obter URL assinada do catálogo (7 dias de validade)
+        const { data: signedData, error: signedError } = await supabase.storage
           .from('lotes')
-          .getPublicUrl(`${user.id}/catalogos/oficial.pdf`);
+          .createSignedUrl(`${user.id}/catalogos/oficial.pdf`, 604800);
 
-        // Checar se o catálogo realmente existe
-        try {
-          const check = await fetch(publicUrl, { method: 'HEAD' });
-          if (!check.ok) {
-            throw new Error("Catálogo PDF oficial não encontrado. Por favor, faça o upload nas Configurações.");
-          }
-        } catch (fetchErr) {
-          // Fallback if CORS prevents HEAD, but usually it works. Ignore to still try sending.
+        if (signedError || !signedData?.signedUrl) {
+          throw new Error("Catálogo PDF oficial não encontrado. Por favor, faça o upload nas Configurações.");
         }
 
         const { data, error } = await supabase.functions.invoke('send-whatsapp', {
           body: { 
             type: 'document',
             phone: phoneResult.phone, 
-            documentUrl: publicUrl,
+            documentUrl: signedData.signedUrl,
             fileName: 'Catalogo Delookii.pdf',
             caption: 'Olá ' + cliente.nome.split(' ')[0] + '! Segue o nosso catálogo mais recente com todas as novidades. Qualquer dúvida, estou à disposição!'
           },
