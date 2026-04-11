@@ -1,35 +1,30 @@
 
 
-## Corrigir autenticação da Edge Function `send-whatsapp`
+## Congelar seção inferior do Sidebar
 
 ### Problema
-A função usa `supabase.auth.getClaims(token)` que não é suportado no ambiente Edge Functions.
+A seção inferior do sidebar (Usuários, Tipos de Ajuste, Excursões, Custos Padrão, Catálogo CRM, Ajuda, perfil e Sair) não fica fixa — quando a tela é menor, ela pode ser empurrada para fora da área visível.
 
 ### Correção
-Substituir `getClaims` por `auth.getUser()` via service role client, seguindo o padrão já usado nas outras Edge Functions administrativas do projeto.
 
-### Alteração em `supabase/functions/send-whatsapp/index.ts`
+**Arquivo:** `src/components/layout/AppSidebar.tsx`
 
-Trocar o bloco de validação de auth (linhas 28-38) por:
+A estrutura do sidebar já usa `flex flex-col` com a parte superior tendo `flex-1 overflow-y-auto` e a inferior `flex-shrink-0`. Porém, se o conteúdo inferior for maior que o espaço disponível, ele pode estourar. A correção:
 
-```typescript
-const adminClient = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-);
+1. Adicionar `overflow-y-auto` na seção inferior para que, se necessário, ela role independentemente
+2. Garantir que a seção inferior tenha um `max-height` relativo e `min-h-0` para não ultrapassar o espaço
+3. Adicionar `sticky bottom-0` e fundo sólido para garantir que fique sempre visível e colada ao fundo
 
-const token = authHeader.replace("Bearer ", "");
-const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
-if (userError || !user) {
-  return new Response(JSON.stringify({ error: "Token inválido" }), {
-    status: 401,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+```text
+Antes (linha 283):
+  <div className="space-y-1 flex-shrink-0 bg-white pt-2">
+
+Depois:
+  <div className="space-y-1 flex-shrink-0 bg-white pt-2 border-t border-gray-100 sticky bottom-0">
 ```
 
-- Remove o `supabase` client com anon key (não é mais necessário para auth)
-- Usa `adminClient` com service role para validar o JWT via `getUser(token)`
-- Resto da função (validação de body, chamada Z-API) permanece inalterado
-- Deploy automático após alteração
+Também ajustar o container pai (`aside`) para usar `overflow-hidden` e manter a seção superior como única área rolável, removendo o `justify-between` e usando `flex-col` com a parte de cima ocupando todo espaço restante.
+
+### Resultado
+Os itens de configuração, perfil do usuário e botão Sair ficarão sempre visíveis na parte inferior do sidebar, independente de quantos itens existam na navegação principal acima.
 

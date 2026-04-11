@@ -44,6 +44,8 @@ const ConfigCatalogo = () => {
         setCurrentUrl(data.publicUrl + '?t=' + new Date().getTime()); // cache buster
       } else {
         setCurrentUrl(null);
+      } else {
+        setCurrentUrl(data.signedUrl);
       }
     } catch (e) {
       console.error('Erro ao verificar catálogo:', e);
