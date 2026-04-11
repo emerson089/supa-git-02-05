@@ -20,7 +20,6 @@ import { useClientesCRMBatch, useClientesCRMFilter, getClienteStatusFromStats, h
 import { ImportCSVModal } from '@/components/clientes/ImportCSVModal';
 import { ClearDataModal } from '@/components/clientes/ClearDataModal';
 import { WhatsAppButton } from '@/components/clientes/WhatsAppButton';
-import { WhatsAppCatalogButton } from '@/components/clientes/WhatsAppCatalogButton';
 import { TransmissaoManagerModal } from '@/components/clientes/TransmissaoManagerModal';
 import { ClienteGridSkeleton } from '@/components/clientes/ClienteCardSkeleton';
 import { ClienteSchema } from '@/lib/validations';
@@ -223,7 +222,6 @@ const ClienteCard = memo(function ClienteCard({
       <div className="flex items-center gap-4 mb-5 border-b border-border/40 pb-4">
         <div className="flex items-center">
           <WhatsAppButton cliente={clienteForWhatsApp} stats={statsForWhatsApp} onContatoRegistrado={onWhatsAppEnviado} />
-          <WhatsAppCatalogButton cliente={clienteForWhatsApp} />
         </div>
         {cliente.telefone && (
           <a
