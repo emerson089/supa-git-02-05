@@ -1114,12 +1114,9 @@ Qualquer dúvida é só chamar! 😊`;
 
               {/* Filters Sheet + New Order Button */}
               <div className="flex gap-2">
-                <div className="flex-1">
+                  <div className="flex-1">
                   <MobileFiltersSheet filterStatusPagamento={filterStatusPagamento} filterStatusPedido={filterStatusPedido} filterStatusEntrega={filterStatusEntrega} filterModelo={filterModelo} startDate={startDate} endDate={endDate} onFilterStatusPagamentoChange={setFilterStatusPagamento} onFilterStatusPedidoChange={setFilterStatusPedido} onFilterStatusEntregaChange={setFilterStatusEntrega} onFilterModeloChange={setFilterModelo} onStartDateChange={setStartDate} onEndDateChange={setEndDate} onClearAll={clearAllFilters} activeCount={activeFilterCount} />
                 </div>
-                <Button onClick={() => setSummaryModalOpen(true)} variant="outline" className="h-11 px-3 rounded-xl border-primary/20 text-primary hover:bg-primary/10">
-                  <ShoppingBag className="h-5 w-5" />
-                </Button>
                 <Button onClick={() => navigate('/pedidos/novo')} className="h-11 px-4 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-medium gap-2">
                   <Plus className="h-4 w-4" />
                   Novo
@@ -1209,11 +1206,6 @@ Qualquer dúvida é só chamar! 😊`;
                   <Button variant="outline" onClick={() => setClearDataModalOpen(true)} className="h-10 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 gap-2">
                     <Trash2 className="h-4 w-4" />
                     Limpar Dados
-                  </Button>
-
-                  <Button variant="outline" onClick={() => setSummaryModalOpen(true)} className="h-10 rounded-xl border-primary/20 text-primary hover:bg-primary/10 gap-2">
-                    <ShoppingBag className="h-4 w-4" />
-                    Modelo/Cat.
                   </Button>
 
                   <Button variant="outline" onClick={exportCSV} disabled={exportingCSV || pedidosList.length === 0} className="h-10 rounded-xl neu-button border-0 bg-background gap-2">
