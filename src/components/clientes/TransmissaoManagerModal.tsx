@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, X, Loader2, CheckCircle2, AlertTriangle, Send } from 'lucide-react';
+import { Play, Pause, Loader2, CheckCircle2, AlertTriangle, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -8,11 +8,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ClientePaginatedDB } from '@/hooks/useClientesPaginated';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCatalogos, Catalogo } from '@/hooks/useCatalogos';
 
 interface TransmissaoManagerModalProps {
   open: boolean;
@@ -24,12 +32,8 @@ interface TransmissaoManagerModalProps {
 const normalizePhoneE164 = (raw: string): { valid: boolean; phone: string } => {
   let digits = raw.replace(/\D/g, '');
   digits = digits.replace(/^0+/, '');
-  if (!digits.startsWith('55')) {
-    digits = '55' + digits;
-  }
-  if (digits.length < 12 || digits.length > 13) {
-    return { valid: false, phone: '' };
-  }
+  if (!digits.startsWith('55')) digits = '55' + digits;
+  if (digits.length < 12 || digits.length > 13) return { valid: false, phone: '' };
   return { valid: true, phone: digits };
 };
 
@@ -40,24 +44,30 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   filtroAtual,
 }) => {
   const { user } = useAuth();
+  const { catalogos, loading: loadingCatalogos } = useCatalogos();
+  const [selectedCatalogoId, setSelectedCatalogoId] = useState<string>('');
   const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sucessos, setSucessos] = useState(0);
   const [falhas, setFalhas] = useState(0);
   const [logs, setLogs] = useState<{ id: string; msg: string; type: 'success' | 'error' }[]>([]);
   const [countdown, setCountdown] = useState(0);
-  
-  // Ref para controlar timeout no React StrictMode / rerenders
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-select active catalog
+  useEffect(() => {
+    if (catalogos.length > 0 && !selectedCatalogoId) {
+      const ativo = catalogos.find((c) => c.ativo);
+      setSelectedCatalogoId(ativo?.id || catalogos[0].id);
+    }
+  }, [catalogos, selectedCatalogoId]);
+
+  const selectedCatalogo = catalogos.find((c) => c.id === selectedCatalogoId) || null;
 
   const getFiltroLabel = () => {
     const map: Record<string, string> = {
-      'todos': 'Todos',
-      'vip': 'VIPs',
-      'frequente': 'Frequentes',
-      'risco': 'Risco',
-      'pendente': 'Pendentes',
-      'sem_compras': 'Sem Compras'
+      'todos': 'Todos', 'vip': 'VIPs', 'frequente': 'Frequentes',
+      'risco': 'Risco', 'pendente': 'Pendentes', 'sem_compras': 'Sem Compras',
     };
     return map[filtroAtual] || filtroAtual;
   };
@@ -65,12 +75,9 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const total = clientes.length;
   const progressPercent = total === 0 ? 0 : Math.round((currentIndex / total) * 100);
 
-  // Limpa o processo quando a aba for fechada via "pause"
   const handlePause = () => {
     setStatus('paused');
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
   };
 
   const logMessage = (msg: string, type: 'success' | 'error') => {
@@ -79,7 +86,6 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
   const processNext = async (index: number) => {
     if (status === 'paused' || status === 'idle') return;
-
     if (index >= total) {
       setStatus('completed');
       logMessage('Transmissão concluída com sucesso!', 'success');
@@ -99,24 +105,29 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
     try {
       if (!user?.id) throw new Error("Usuário não autenticado");
+      if (!selectedCatalogo) throw new Error("Nenhum catálogo selecionado");
 
-      // 1. Obter URL assinada do catálogo (7 dias)
       const { data: signedData, error: signedError } = await supabase.storage
         .from('lotes')
-        .createSignedUrl(`${user.id}/catalogos/oficial.pdf`, 604800);
+        .createSignedUrl(selectedCatalogo.file_path, 604800);
 
       if (signedError || !signedData?.signedUrl) {
-        throw new Error("Catálogo não encontrado. Faça upload nas Configurações.");
+        throw new Error("Catálogo não encontrado no storage.");
       }
 
-      // 2. Chamar função de envio
+      const caption = selectedCatalogo.mensagem
+        ? selectedCatalogo.mensagem.replace(/\{nome\}/g, cliente.nome.split(' ')[0])
+        : `Olá ${cliente.nome.split(' ')[0]}! Segue nosso catálogo atualizado!`;
+
+      const fileName = `${selectedCatalogo.nome.replace(/[^a-zA-Z0-9 ]/g, '')}.pdf`;
+
       const { error } = await supabase.functions.invoke('send-whatsapp', {
-        body: { 
+        body: {
           type: 'document',
-          phone: phoneResult.phone, 
+          phone: phoneResult.phone,
           documentUrl: signedData.signedUrl,
-          fileName: 'Catalogo_Delookii.pdf',
-          caption: `Olá ${cliente.nome.split(' ')[0]}! Tudo bem? Segue nosso catálogo atualizado com todas as novidades! Qualquer dúvida, pode me chamar. 👇`
+          fileName,
+          caption,
         },
       });
 
@@ -124,7 +135,6 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
       logMessage(`Enviado para ${cliente.nome.split(' ')[0]}`, 'success');
       setSucessos((prev) => prev + 1);
-
     } catch (err: any) {
       console.error(err);
       const errorMsg = err.details?.error || err.message || "Erro desconhecido";
@@ -137,54 +147,39 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
   const agendarProximo = (nextIndex: number) => {
     setCurrentIndex(nextIndex);
-    
     if (nextIndex >= total) {
       setStatus('completed');
       toast.success('Transmissão finalizada!');
       return;
     }
-
-    // Intervalo aleatório entre 15 e 40 segundos para evitar bloqueio
     const randomSeconds = Math.floor(Math.random() * (40 - 15 + 1)) + 15;
     setCountdown(randomSeconds);
   };
 
-  // Efeito para tratar o countdown e disparo do próximo
   useEffect(() => {
     if (status !== 'running') return;
     if (currentIndex >= total) return;
 
     if (countdown > 0) {
-      timeoutRef.current = setTimeout(() => {
-        setCountdown((prev) => prev - 1);
-      }, 1000);
+      timeoutRef.current = setTimeout(() => setCountdown((prev) => prev - 1), 1000);
     } else if (countdown === 0) {
-      // Dispara o envio
       processNext(currentIndex);
     }
 
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, [countdown, status, currentIndex]);
 
   const handleStart = () => {
-    if (total === 0) {
-      toast.error('Nenhum cliente na lista selecionada.');
-      return;
-    }
-    
-    // Confirmação de catálogo
+    if (total === 0) { toast.error('Nenhum cliente na lista.'); return; }
+    if (!selectedCatalogo) { toast.error('Selecione um catálogo antes de iniciar.'); return; }
+
     if (status === 'idle') {
-      const confirm = window.confirm(`Você está prester a iniciar o envio automátio para ${total} clientes. Lembre-se de manter esta janela aberta. Deseja continuar?`);
+      const confirm = window.confirm(`Iniciar envio automático para ${total} clientes? Mantenha esta janela aberta.`);
       if (!confirm) return;
     }
 
     setStatus('running');
-    // Se estava idle, aciona o disparo imediato do índice zero definindo countdown para 0
-    if (status === 'idle') {
-        processNext(0);
-    }
+    if (status === 'idle') processNext(0);
   };
 
   const resetQueue = () => {
@@ -199,13 +194,11 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   return (
     <Dialog open={open} onOpenChange={(val) => {
       if (!val && status === 'running') {
-        toast.error('Pause a transmissão antes de fechar a janela.');
+        toast.error('Pause a transmissão antes de fechar.');
         return;
       }
       onOpenChange(val);
-      if (!val && (status === 'completed' || status === 'paused')) {
-          resetQueue(); // Clean up if they re-open
-      }
+      if (!val && (status === 'completed' || status === 'paused')) resetQueue();
     }}>
       <DialogContent className="sm:max-w-[500px] gap-0 p-0 overflow-hidden bg-background">
         <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-6 text-white text-center rounded-t-xl">
@@ -218,9 +211,34 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
           </DialogDescription>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-5">
+          {/* Catalog Selector */}
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">Catálogo a enviar</label>
+            {loadingCatalogos ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 size={14} className="animate-spin" /> Carregando...
+              </div>
+            ) : catalogos.length === 0 ? (
+              <p className="text-sm text-destructive">Nenhum catálogo cadastrado. Vá em Configurações → Catálogo PDF.</p>
+            ) : (
+              <Select value={selectedCatalogoId} onValueChange={setSelectedCatalogoId} disabled={status === 'running'}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione um catálogo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {catalogos.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.nome} {cat.ativo ? '(Ativo)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
           <div className="flex flex-col items-center justify-center bg-secondary/40 p-4 rounded-xl border border-border">
-            <p className="text-sm font-medium text-foreground mb-1">Público Alvo Selecionado</p>
+            <p className="text-sm font-medium text-foreground mb-1">Público Alvo</p>
             <p className="text-2xl font-bold text-primary">{total}</p>
             <p className="text-xs text-muted-foreground font-medium bg-background px-2 py-1 rounded-md mt-2 border border-border">
               Filtro: {getFiltroLabel()}
@@ -231,9 +249,8 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
             <div className="flex justify-between items-end">
               <div>
                 <p className="font-semibold text-lg">{progressPercent}% Concluído</p>
-                <p className="text-sm text-muted-foreground">{currentIndex} de {total} enviados</p>
+                <p className="text-sm text-muted-foreground">{currentIndex} de {total}</p>
               </div>
-              
               {status === 'running' && countdown > 0 && (
                 <div className="flex items-center gap-1.5 text-xs font-medium text-orange-600 bg-orange-100 dark:bg-orange-950/40 px-2 py-1 rounded-md animate-pulse">
                   <Loader2 size={12} className="animate-spin" />
@@ -241,9 +258,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                 </div>
               )}
             </div>
-            
             <Progress value={progressPercent} className="h-3" />
-            
             <div className="grid grid-cols-2 gap-4 mt-2">
               <div className="flex items-center gap-2 text-sm bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2 rounded-lg border border-emerald-100 dark:border-emerald-900/30">
                 <CheckCircle2 size={16} className="text-emerald-500" />
@@ -256,15 +271,13 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
             </div>
           </div>
 
-          {/* Controls */}
           <div className="flex justify-center gap-3 pt-2">
             {(status === 'idle' || status === 'paused') && (
-              <Button onClick={handleStart} className="w-full h-12 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold">
+              <Button onClick={handleStart} className="w-full h-12 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold" disabled={catalogos.length === 0}>
                 <Play className="mr-2 h-5 w-5 fill-current" />
                 {status === 'paused' ? 'Retomar Envio' : 'Iniciar Transmissão'}
               </Button>
             )}
-            
             {status === 'running' && (
               <Button onClick={handlePause} variant="outline" className="w-full h-12 rounded-xl font-semibold border-orange-200 hover:bg-orange-50 text-orange-700">
                 <Pause className="mr-2 h-5 w-5 fill-current" />
@@ -275,7 +288,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
           <div className="bg-secondary/50 p-4 rounded-xl text-xs space-y-1 h-32 overflow-y-auto font-mono">
             {logs.length === 0 ? (
-              <p className="text-muted-foreground opacity-50 text-center mt-6">Os registros de envio aparecerão aqui.</p>
+              <p className="text-muted-foreground opacity-50 text-center mt-6">Os registros aparecerão aqui.</p>
             ) : (
               logs.map((log) => (
                 <div key={log.id} className={`flex items-start gap-2 ${log.type === 'error' ? 'text-destructive' : 'text-foreground'}`}>
