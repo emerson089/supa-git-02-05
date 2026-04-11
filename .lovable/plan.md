@@ -1,44 +1,49 @@
 
 
-## Correções necessárias
+## Problema: "Visualizar Catálogo Atual" não abre o PDF
 
-### 1. Corrigir erro de build em `ConfigCatalogo.tsx` (linhas 42-49)
+### Diagnóstico
 
-O código tem um bloco `if/else` duplicado — resquício de uma edição parcial. Substituir toda a lógica de verificação por `createSignedUrl`:
+O link usa `target="_blank"` para abrir o PDF em uma nova aba. Dentro do preview do Lovable (iframe), popups/novas abas são frequentemente bloqueados pelo navegador. Mesmo fora do preview, alguns navegadores bloqueiam popups silenciosamente.
 
-```typescript
-// Substituir linhas 42-49 por:
-const { data, error: signedError } = await supabase.storage
-  .from(BUCKET_NAME)
-  .createSignedUrl(FILE_PATH, 3600);
+Além disso, a URL assinada tem validade de 1 hora — se o usuário deixar a página aberta e clicar depois, a URL já expirou e retorna erro.
 
-if (signedError || !data?.signedUrl) {
-  setCurrentUrl(null);
-} else {
-  setCurrentUrl(data.signedUrl);
-}
-```
+### Solução
 
-Também remover as linhas 33-40 (o `list` + `getPublicUrl` que não são mais necessários).
+Substituir o link externo por um **preview inline do PDF** embutido na própria página, usando um `<iframe>` ou `<object>` para renderizar o PDF diretamente no card. Adicionar também um botão de download como alternativa.
 
-### 2. Corrigir `TransmissaoManagerModal.tsx` (linhas 103-106)
+### Alteração
 
-Substituir `getPublicUrl` por `createSignedUrl` com 7 dias de validade:
+**Arquivo:** `src/pages/ConfigCatalogo.tsx` (linhas 183-185)
 
-```typescript
-const { data: signedData, error: signedError } = await supabase.storage
-  .from('lotes')
-  .createSignedUrl(`${user.id}/catalogos/oficial.pdf`, 604800);
+Substituir o `<a>` por dois botões:
+1. Um botão "Visualizar" que mostra/esconde um iframe inline com o PDF
+2. Um botão "Baixar" que usa `window.open()` com uma URL assinada nova (gerada no momento do clique)
 
-if (signedError || !signedData?.signedUrl) {
-  throw new Error("Catálogo não encontrado. Faça upload nas Configurações.");
-}
+```tsx
+// Adicionar estado para controlar preview
+const [showPreview, setShowPreview] = useState(false);
 
-// Usar signedData.signedUrl como documentUrl na chamada da edge function
+// Função para abrir em nova aba com URL fresca
+const handleDownload = async () => {
+  const { data } = await supabase.storage
+    .from(BUCKET_NAME)
+    .createSignedUrl(FILE_PATH, 3600);
+  if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+};
+
+// No JSX, substituir o <a> por:
+<div className="flex gap-2">
+  <button onClick={() => setShowPreview(!showPreview)}>Visualizar</button>
+  <button onClick={handleDownload}>Abrir em nova aba</button>
+</div>
+
+// Abaixo do card de status, se showPreview && currentUrl:
+<iframe src={currentUrl} className="w-full h-[70vh] rounded-xl" />
 ```
 
 ### Resultado
-- Build error resolvido
-- Catálogo carrega corretamente na página de configurações
-- Transmissão em massa envia o PDF real via WhatsApp
+- O PDF aparece diretamente na página, sem depender de popup
+- Botão alternativo gera URL fresca no momento do clique, evitando expiração
+- Funciona dentro do preview do Lovable e em qualquer navegador
 
