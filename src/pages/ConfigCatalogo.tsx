@@ -31,19 +31,14 @@ const ConfigCatalogo = () => {
   const fetchCurrentCatalog = async () => {
     setIsLoadingUrl(true);
     try {
-      const { data } = await supabase.storage.from(BUCKET_NAME).getPublicUrl(FILE_PATH);
-      
-      // Checar se o arquivo existe fazendo um HEAD request (opcional mas seguro)
-      try {
-        const response = await fetch(data.publicUrl, { method: 'HEAD' });
-        if (response.ok) {
-          setCurrentUrl(data.publicUrl + '?t=' + new Date().getTime()); // cache buster
-        } else {
-          setCurrentUrl(null);
-        }
-      } catch {
-        // Ignora CORS do HEAD, assume null
+      const { data, error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .createSignedUrl(FILE_PATH, 3600); // 1h
+
+      if (error || !data?.signedUrl) {
         setCurrentUrl(null);
+      } else {
+        setCurrentUrl(data.signedUrl);
       }
     } catch (e) {
       console.error(e);
