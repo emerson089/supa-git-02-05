@@ -64,6 +64,18 @@ const ConfigCatalogo = () => {
     }
   };
 
+  const handleOpenInNewTab = async () => {
+    try {
+      const { data } = await supabase.storage
+        .from(BUCKET_NAME)
+        .createSignedUrl(FILE_PATH, 3600);
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+      else toast.error('Não foi possível gerar o link do catálogo.');
+    } catch {
+      toast.error('Erro ao abrir catálogo.');
+    }
+  };
+
   const handleUpload = async () => {
     if (!file) return;
 
@@ -78,6 +90,7 @@ const ConfigCatalogo = () => {
 
       toast.success('Catálogo enviado com sucesso!');
       setFile(null);
+      setShowPreview(false);
       fetchCurrentCatalog();
     } catch (error: any) {
       console.error('Error uploading catalog:', error);
