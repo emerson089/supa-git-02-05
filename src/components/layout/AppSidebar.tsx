@@ -222,34 +222,47 @@ export function AppSidebar() {
           onClick={handleClick}
           title={!isSidebarExpanded && !isSubItem ? item.label : undefined}
           className={`
-            w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
-            ${isSubItem ? 'pl-9 pr-3 py-2 text-xs relative' : ''}
-            ${active || (!isSubItem && isParentActive) ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}
+            w-full flex items-center justify-between px-3 py-2 rounded-xl text-[13px] transition-all duration-200 outline-none
+            ${isSubItem ? 'pl-[42px] pr-3 py-2 relative' : ''}
+            ${
+              active || (!isSubItem && isParentActive) 
+                ? 'bg-indigo-50/80 text-indigo-700 font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.02)]' 
+                : 'text-slate-500 font-medium hover:text-slate-800 hover:bg-slate-100/60'
+            }
           `}
         >
           {isSubItem && (
-            <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full ${active ? 'bg-white' : 'bg-gray-300'}`} />
+            <div 
+              className={`absolute left-[22px] top-1/2 -translate-y-1/2 rounded-full transition-colors duration-200
+                ${active ? 'bg-indigo-600 w-[5px] h-[5px]' : 'bg-slate-300 w-1 h-1 group-hover/btn:bg-slate-400'}`} 
+            />
           )}
           
-          <div className="flex items-center gap-3 overflow-hidden">
-            {item.icon && <span className="flex-shrink-0">{item.icon}</span>}
-            <span className={`truncate transition-opacity duration-300 ${isSidebarExpanded || isSubItem ? 'opacity-100' : 'opacity-0 w-0'}`}>
+          <div className="flex items-center gap-[14px] overflow-hidden">
+            {item.icon && (
+              <span className={`flex-shrink-0 transition-colors duration-200 ${active || isParentActive ? 'text-indigo-600' : 'text-slate-400'}`}>
+                {item.icon}
+              </span>
+            )}
+            <span className={`truncate transition-all duration-300 ${isSidebarExpanded || isSubItem ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 w-0'}`}>
               {item.label}
             </span>
           </div>
 
           {(hasSubItems && isSidebarExpanded) && (
-            <span className="flex-shrink-0 transition-transform duration-200">
-              {isGroupExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            <span className={`flex-shrink-0 transition-all duration-300 ${isGroupExpanded ? 'rotate-90 text-indigo-400' : 'text-slate-400'}`}>
+              <ChevronRight size={14} />
             </span>
           )}
         </button>
 
         {/* SubItems Render */}
         {hasSubItems && isGroupExpanded && isSidebarExpanded && (
-          <div className="mt-1 mb-2 space-y-1">
+          <div className="mt-1 mb-2 relative space-y-0.5">
+            {/* Thread line guiding nested items */}
+            <div className="absolute left-[24px] top-0 bottom-3 w-[1.5px] bg-slate-100/80 rounded-full" />
             {item.subItems?.map(subItem => (
-               <div key={subItem.label}>
+               <div key={subItem.label} className="group/btn relative">
                  {renderNavItem(subItem, true)}
                </div>
             ))}
@@ -261,44 +274,67 @@ export function AppSidebar() {
 
   return (
     <aside 
-      className={`flex-shrink-0 flex flex-col justify-between p-4 bg-white transition-all duration-300 ease-in-out border-r border-gray-200 shadow-sm z-20 ${isSidebarExpanded ? 'w-64' : 'w-20'}`}
+      className={`group flex-shrink-0 flex flex-col justify-between p-4 bg-white transition-all duration-300 ease-in-out border-r border-slate-200/60 shadow-sm z-20 sticky top-0 h-screen ${isSidebarExpanded ? 'w-[260px]' : 'w-20'}`}
       onMouseEnter={() => setIsSidebarExpanded(true)}
       onMouseLeave={() => setIsSidebarExpanded(false)}
+      style={{ willChange: 'width' }}
     >
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-4">
-        <div className={`flex items-center gap-3 mb-8 px-2 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}>
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex-shrink-0 flex items-center justify-center text-indigo-600">
-            <Package size={20} />
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-4 space-y-6">
+        <div className={`flex items-center gap-[14px] px-2 mb-2 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}>
+          <div className="w-9 h-9 rounded-xl bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white shadow-md shadow-indigo-600/20 transition-all">
+            <Package size={18} strokeWidth={2.5} />
           </div>
-          <span className={`text-lg font-semibold truncate transition-all duration-300 ${isSidebarExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
+          <span 
+            className={`text-[15px] font-bold text-slate-900 tracking-tight whitespace-nowrap transition-all duration-300 
+            ${isSidebarExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 w-0 overflow-hidden'}`}
+          >
             Deloockii Jeans
           </span>
         </div>
 
-        <nav className="space-y-1">
-          {visibleNavGroups.map(group => renderNavItem(group))}
-        </nav>
+        <div>
+          {isSidebarExpanded && (
+            <div className="px-3 mb-2 text-[11px] font-bold tracking-widest text-slate-400/80 uppercase">
+              Principal
+            </div>
+          )}
+          <nav className="space-y-1">
+            {visibleNavGroups.map(group => renderNavItem(group))}
+          </nav>
+        </div>
       </div>
 
-      <div className="space-y-1 flex-shrink-0 bg-white pt-2">
-        {visibleBottomGroups.map(group => renderNavItem(group))}
+      <div className="flex-shrink-0 bg-white pt-3 border-t border-slate-100">
+        <div>
+          {isSidebarExpanded && (
+            <div className="px-3 mb-2 text-[11px] font-bold tracking-widest text-slate-400/80 uppercase">
+              Ajustes
+            </div>
+          )}
+          <div className="space-y-1">
+            {visibleBottomGroups.map(group => renderNavItem(group))}
+          </div>
+        </div>
 
-        <div className="pt-4 mt-4 border-t border-gray-100">
-          <div className={`flex items-center gap-3 px-3 py-2 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}>
-            <div className="w-8 h-8 rounded-full bg-indigo-600/10 flex-shrink-0 flex items-center justify-center text-indigo-600 font-semibold text-sm">
+        <div className="pt-3 mt-3 border-t border-slate-100">
+          <div className={`flex items-center gap-[14px] px-3 py-2 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}>
+            <div className="w-[34px] h-[34px] rounded-full bg-slate-100 border border-slate-200 flex-shrink-0 flex items-center justify-center text-slate-600 font-bold text-[13px] shadow-sm">
               {userInitial}
             </div>
-            <span className={`text-sm text-muted-foreground truncate max-w-[140px] transition-all duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'}`}>
-              {userEmail}
-            </span>
+            <div className={`flex flex-col transition-all duration-300 ${isSidebarExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
+              <span className="text-[13px] font-semibold text-slate-800 leading-tight">Membro</span>
+              <span className="text-[11px] font-medium text-slate-400 truncate max-w-[140px]">
+                {userEmail}
+              </span>
+            </div>
           </div>
           <button
             onClick={handleSignOut}
             title={!isSidebarExpanded ? 'Sair' : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all duration-200 ${!isSidebarExpanded ? 'justify-center' : ''}`}
+            className={`mt-2 w-full flex items-center gap-[14px] px-3 py-2 rounded-xl text-[13px] font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 outline-none ${!isSidebarExpanded ? 'justify-center' : ''}`}
           >
-            <LogOut size={18} className="flex-shrink-0" />
-            <span className={`transition-all duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'}`}>
+            <LogOut size={16} className="flex-shrink-0" />
+            <span className={`transition-all duration-300 ${isSidebarExpanded ? 'opacity-100 -translate-x-0' : 'opacity-0 -translate-x-4 w-0 hidden'}`}>
               Sair
             </span>
           </button>
