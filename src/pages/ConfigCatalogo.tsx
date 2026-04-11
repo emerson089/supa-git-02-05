@@ -194,10 +194,21 @@ const ConfigCatalogo = () => {
                         Seus clientes irão receber este arquivo quando você usar a função de envio pelo Zap.
                       </p>
                       
-                      <a href={currentUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-emerald-600 hover:text-emerald-500 underline decoration-emerald-600/30 underline-offset-2">
-                        Visualizar Catálogo Atual
-                      </a>
-                    </div>
+                      <div className="flex gap-2 flex-wrap">
+                        <button 
+                          onClick={() => setShowPreview(!showPreview)} 
+                          className="text-xs font-semibold text-emerald-600 hover:text-emerald-500 underline decoration-emerald-600/30 underline-offset-2"
+                        >
+                          {showPreview ? 'Ocultar Preview' : 'Visualizar Catálogo'}
+                        </button>
+                        <span className="text-emerald-300">|</span>
+                        <button 
+                          onClick={handleOpenInNewTab} 
+                          className="text-xs font-semibold text-emerald-600 hover:text-emerald-500 underline decoration-emerald-600/30 underline-offset-2"
+                        >
+                          Abrir em nova aba
+                        </button>
+                      </div>
                   </div>
 
                   <div className="mt-6 flex items-start gap-3 bg-yellow-50 dark:bg-yellow-950/40 p-4 rounded-xl border border-yellow-200/60 dark:border-yellow-900/40">
