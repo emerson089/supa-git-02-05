@@ -1,30 +1,44 @@
 
 
-## Congelar seção inferior do Sidebar
+## Correções necessárias
 
-### Problema
-A seção inferior do sidebar (Usuários, Tipos de Ajuste, Excursões, Custos Padrão, Catálogo CRM, Ajuda, perfil e Sair) não fica fixa — quando a tela é menor, ela pode ser empurrada para fora da área visível.
+### 1. Corrigir erro de build em `ConfigCatalogo.tsx` (linhas 42-49)
 
-### Correção
+O código tem um bloco `if/else` duplicado — resquício de uma edição parcial. Substituir toda a lógica de verificação por `createSignedUrl`:
 
-**Arquivo:** `src/components/layout/AppSidebar.tsx`
+```typescript
+// Substituir linhas 42-49 por:
+const { data, error: signedError } = await supabase.storage
+  .from(BUCKET_NAME)
+  .createSignedUrl(FILE_PATH, 3600);
 
-A estrutura do sidebar já usa `flex flex-col` com a parte superior tendo `flex-1 overflow-y-auto` e a inferior `flex-shrink-0`. Porém, se o conteúdo inferior for maior que o espaço disponível, ele pode estourar. A correção:
-
-1. Adicionar `overflow-y-auto` na seção inferior para que, se necessário, ela role independentemente
-2. Garantir que a seção inferior tenha um `max-height` relativo e `min-h-0` para não ultrapassar o espaço
-3. Adicionar `sticky bottom-0` e fundo sólido para garantir que fique sempre visível e colada ao fundo
-
-```text
-Antes (linha 283):
-  <div className="space-y-1 flex-shrink-0 bg-white pt-2">
-
-Depois:
-  <div className="space-y-1 flex-shrink-0 bg-white pt-2 border-t border-gray-100 sticky bottom-0">
+if (signedError || !data?.signedUrl) {
+  setCurrentUrl(null);
+} else {
+  setCurrentUrl(data.signedUrl);
+}
 ```
 
-Também ajustar o container pai (`aside`) para usar `overflow-hidden` e manter a seção superior como única área rolável, removendo o `justify-between` e usando `flex-col` com a parte de cima ocupando todo espaço restante.
+Também remover as linhas 33-40 (o `list` + `getPublicUrl` que não são mais necessários).
+
+### 2. Corrigir `TransmissaoManagerModal.tsx` (linhas 103-106)
+
+Substituir `getPublicUrl` por `createSignedUrl` com 7 dias de validade:
+
+```typescript
+const { data: signedData, error: signedError } = await supabase.storage
+  .from('lotes')
+  .createSignedUrl(`${user.id}/catalogos/oficial.pdf`, 604800);
+
+if (signedError || !signedData?.signedUrl) {
+  throw new Error("Catálogo não encontrado. Faça upload nas Configurações.");
+}
+
+// Usar signedData.signedUrl como documentUrl na chamada da edge function
+```
 
 ### Resultado
-Os itens de configuração, perfil do usuário e botão Sair ficarão sempre visíveis na parte inferior do sidebar, independente de quantos itens existam na navegação principal acima.
+- Build error resolvido
+- Catálogo carrega corretamente na página de configurações
+- Transmissão em massa envia o PDF real via WhatsApp
 
