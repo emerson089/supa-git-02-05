@@ -22,6 +22,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCatalogos, Catalogo } from '@/hooks/useCatalogos';
 
+const SAUDACOES = [
+  'Olá', 'Oii', 'Oie', 'Opa', 'Olaa', 'Oiii', 'E aí', 'Fala', 'Oi'
+];
+
+type Velocidade = 'ultra_seguro' | 'normal' | 'rapido';
+
+const VELOCIDADES: Record<Velocidade, { min: number; max: number; label: string }> = {
+  ultra_seguro: { min: 15, max: 40, label: 'Ultra Seguro (15-40s)' },
+  normal: { min: 5, max: 10, label: 'Normal (5-10s)' },
+  rapido: { min: 1, max: 3, label: 'Rápido (1-3s)' },
+};
+
 interface TransmissaoManagerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -46,13 +58,46 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const { user } = useAuth();
   const { catalogos, loading: loadingCatalogos } = useCatalogos();
   const [selectedCatalogoId, setSelectedCatalogoId] = useState<string>('');
+  const [velocidade, setVelocidade] = useState<Velocidade>('ultra_seguro');
   const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sucessos, setSucessos] = useState(0);
   const [falhas, setFalhas] = useState(0);
   const [logs, setLogs] = useState<{ id: string; msg: string; type: 'success' | 'error' }[]>([]);
   const [countdown, setCountdown] = useState(0);
+  const [hasPersistedData, setHasPersistedData] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const STORAGE_KEY = `transmissao_progresso_${filtroAtual}`;
+
+  // Carregar progresso salvo
+  useEffect(() => {
+    if (open && status === 'idle') {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const data = JSON.parse(saved);
+          if (data.currentIndex > 0 && data.currentIndex < clientes.length) {
+            setHasPersistedData(true);
+          }
+        } catch (e) {
+          console.error('Erro ao carregar progresso:', e);
+        }
+      }
+    }
+  }, [open, status, clientes.length]);
+
+  // Bloqueio de fechamento de aba
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (status === 'running') {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [status]);
 
   // Auto-select active catalog
   useEffect(() => {
@@ -115,9 +160,14 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
         throw new Error("Catálogo não encontrado no storage.");
       }
 
-      const caption = selectedCatalogo.mensagem
+      const saudacaoAleatoria = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
+      
+      const baseCaption = selectedCatalogo.mensagem
         ? selectedCatalogo.mensagem.replace(/\{nome\}/g, cliente.nome.split(' ')[0])
-        : `Olá ${cliente.nome.split(' ')[0]}! Segue nosso catálogo atualizado!`;
+        : `Segue nosso catálogo atualizado!`;
+
+      // Se a mensagem original já começa com saudação ou tem {nome}, tentamos ser inteligentes
+      const caption = `${saudacaoAleatoria} ${cliente.nome.split(' ')[0]}! ${baseCaption}`;
 
       const fileName = `${selectedCatalogo.nome.replace(/[^a-zA-Z0-9 ]/g, '')}.pdf`;
 
@@ -135,11 +185,29 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
       logMessage(`Enviado para ${cliente.nome.split(' ')[0]}`, 'success');
       setSucessos((prev) => prev + 1);
+      
+      // Salvar progresso
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        currentIndex: index + 1,
+        sucessos: sucessos + 1,
+        falhas,
+        selectedCatalogoId
+      }));
+
     } catch (err: any) {
       console.error(err);
       const errorMsg = err.details?.error || err.message || "Erro desconhecido";
       logMessage(`Falha (${cliente.nome.split(' ')[0]}): ${errorMsg}`, 'error');
-      setFalhas((prev) => prev + 1);
+      setFalhas((prev) => {
+        const next = prev + 1;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            currentIndex: index + 1,
+            sucessos,
+            falhas: next,
+            selectedCatalogoId
+          }));
+        return next;
+      });
     }
 
     agendarProximo(index + 1);
@@ -152,7 +220,8 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
       toast.success('Transmissão finalizada!');
       return;
     }
-    const randomSeconds = Math.floor(Math.random() * (40 - 15 + 1)) + 15;
+    const config = VELOCIDADES[velocidade];
+    const randomSeconds = Math.floor(Math.random() * (config.max - config.min + 1)) + config.min;
     setCountdown(randomSeconds);
   };
 
@@ -174,12 +243,34 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     if (!selectedCatalogo) { toast.error('Selecione um catálogo antes de iniciar.'); return; }
 
     if (status === 'idle') {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.currentIndex > 0 && data.currentIndex < total) {
+            setCurrentIndex(data.currentIndex);
+            setSucessos(data.sucessos);
+            setFalhas(data.falhas);
+            if (data.selectedCatalogoId) setSelectedCatalogoId(data.selectedCatalogoId);
+            setHasPersistedData(false);
+            setStatus('running');
+            processNext(data.currentIndex);
+            return;
+        }
+      }
+
       const confirm = window.confirm(`Iniciar envio automático para ${total} clientes? Mantenha esta janela aberta.`);
       if (!confirm) return;
     }
 
     setStatus('running');
     if (status === 'idle') processNext(0);
+  };
+
+  const handleReset = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    resetQueue();
+    setHasPersistedData(false);
+    toast.info('Progresso resetado.');
   };
 
   const resetQueue = () => {
@@ -189,6 +280,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     setFalhas(0);
     setLogs([]);
     setCountdown(0);
+    localStorage.removeItem(STORAGE_KEY);
   };
 
   return (
@@ -212,29 +304,51 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Catalog Selector */}
-          <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Catálogo a enviar</label>
-            {loadingCatalogos ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 size={14} className="animate-spin" /> Carregando...
-              </div>
-            ) : catalogos.length === 0 ? (
-              <p className="text-sm text-destructive">Nenhum catálogo cadastrado. Vá em Configurações → Catálogo PDF.</p>
-            ) : (
-              <Select value={selectedCatalogoId} onValueChange={setSelectedCatalogoId} disabled={status === 'running'}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecione um catálogo" />
+          {/* Catalog Selection Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Catálogo</label>
+              {loadingCatalogos ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground h-10">
+                  <Loader2 size={14} className="animate-spin" /> Carregando...
+                </div>
+              ) : catalogos.length === 0 ? (
+                <p className="text-xs text-destructive">Nenhum catálogo cadastrado.</p>
+              ) : (
+                <Select value={selectedCatalogoId} onValueChange={setSelectedCatalogoId} disabled={status === 'running'}>
+                  <SelectTrigger className="w-full h-10 shadow-sm border-border bg-background">
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {catalogos.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.nome} {cat.ativo ? '(Ativo)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Velocidade</label>
+              <Select 
+                value={velocidade} 
+                onValueChange={(v) => setVelocidade(v as Velocidade)} 
+                disabled={status === 'running'}
+              >
+                <SelectTrigger className="w-full h-10 shadow-sm border-border bg-background">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {catalogos.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.nome} {cat.ativo ? '(Ativo)' : ''}
+                  {Object.entries(VELOCIDADES).map(([key, config]) => (
+                    <SelectItem key={key} value={key}>
+                      {config.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            )}
+            </div>
           </div>
 
           <div className="flex flex-col items-center justify-center bg-secondary/40 p-4 rounded-xl border border-border">
@@ -271,13 +385,37 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
             </div>
           </div>
 
-          <div className="flex justify-center gap-3 pt-2">
-            {(status === 'idle' || status === 'paused') && (
-              <Button onClick={handleStart} className="w-full h-12 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold" disabled={catalogos.length === 0}>
-                <Play className="mr-2 h-5 w-5 fill-current" />
-                {status === 'paused' ? 'Retomar Envio' : 'Iniciar Transmissão'}
-              </Button>
+          <div className="flex flex-col gap-3 pt-2">
+            {hasPersistedData && status === 'idle' && (
+              <div className="bg-orange-50 dark:bg-orange-950/20 p-3 rounded-lg border border-orange-100 dark:border-orange-900/30 mb-2">
+                <p className="text-xs text-orange-800 dark:text-orange-300 font-medium mb-2 flex items-center gap-1.5">
+                  <AlertTriangle size={14} /> Existe um envio anterior não finalizado.
+                </p>
+                <div className="flex gap-2">
+                  <Button onClick={handleStart} className="flex-1 h-9 bg-orange-600 hover:bg-orange-700 text-white text-xs">
+                    Retomar de onde parei
+                  </Button>
+                  <Button onClick={handleReset} variant="outline" className="h-9 text-xs border-orange-200">
+                    Recomeçar do zero
+                  </Button>
+                </div>
+              </div>
             )}
+
+            {(status === 'idle' || status === 'paused') && !hasPersistedData && (
+              <div className="flex gap-3">
+                <Button onClick={handleStart} className="flex-1 h-12 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold" disabled={catalogos.length === 0}>
+                  <Play className="mr-2 h-5 w-5 fill-current" />
+                  {status === 'paused' ? 'Retomar Envio' : 'Iniciar Transmissão'}
+                </Button>
+                {status === 'paused' && (
+                    <Button onClick={handleReset} variant="outline" className="h-12 px-4 rounded-xl border-border text-muted-foreground" title="Resetar tudo">
+                        Limpar
+                    </Button>
+                )}
+              </div>
+            )}
+            
             {status === 'running' && (
               <Button onClick={handlePause} variant="outline" className="w-full h-12 rounded-xl font-semibold border-orange-200 hover:bg-orange-50 text-orange-700">
                 <Pause className="mr-2 h-5 w-5 fill-current" />
