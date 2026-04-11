@@ -261,7 +261,7 @@ export function AppSidebar() {
 
   return (
     <aside 
-      className={`flex-shrink-0 flex flex-col justify-between p-4 bg-white transition-all duration-300 ease-in-out border-r border-gray-200 shadow-sm z-20 ${isSidebarExpanded ? 'w-64' : 'w-20'}`}
+      className={`flex-shrink-0 flex flex-col p-4 bg-white transition-all duration-300 ease-in-out border-r border-gray-200 shadow-sm z-20 overflow-hidden ${isSidebarExpanded ? 'w-64' : 'w-20'}`}
       onMouseEnter={() => setIsSidebarExpanded(true)}
       onMouseLeave={() => setIsSidebarExpanded(false)}
     >
@@ -280,7 +280,7 @@ export function AppSidebar() {
         </nav>
       </div>
 
-      <div className="space-y-1 flex-shrink-0 bg-white pt-2">
+      <div className="space-y-1 flex-shrink-0 bg-white pt-2 border-t border-gray-100 sticky bottom-0 overflow-y-auto max-h-[45vh]">
         {visibleBottomGroups.map(group => renderNavItem(group))}
 
         <div className="pt-4 mt-4 border-t border-gray-100">
