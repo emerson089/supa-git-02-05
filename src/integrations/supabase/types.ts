@@ -529,8 +529,10 @@ export type Database = {
       excursoes: {
         Row: {
           ativo: boolean
+          contato: string | null
           created_at: string | null
           id: string
+          localizacao: string | null
           nome: string
           taxa: number
           updated_at: string | null
@@ -538,8 +540,10 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
+          contato?: string | null
           created_at?: string | null
           id?: string
+          localizacao?: string | null
           nome: string
           taxa?: number
           updated_at?: string | null
@@ -547,8 +551,10 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
+          contato?: string | null
           created_at?: string | null
           id?: string
+          localizacao?: string | null
           nome?: string
           taxa?: number
           updated_at?: string | null

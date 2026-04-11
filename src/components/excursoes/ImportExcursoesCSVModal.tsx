@@ -129,6 +129,8 @@ export function ImportExcursoesCSVModal({ open, onOpenChange }: ImportExcursoesC
             </p>
             <ul className="text-muted-foreground space-y-1 text-xs">
               <li>• <code className="bg-muted px-1 rounded">EXCURSAO</code> → Nome da excursão</li>
+              <li>• <code className="bg-muted px-1 rounded">CONTATO</code> → WhatsApp/Telefone</li>
+              <li>• <code className="bg-muted px-1 rounded">LOCALIZACAO</code> → Ponto/Cidade</li>
               <li>• <code className="bg-muted px-1 rounded">VALOR COBRADO EXCURSAO</code> → Taxa (R$ 10,00)</li>
             </ul>
             <p className="text-xs text-muted-foreground mt-3 italic">
@@ -171,6 +173,8 @@ export function ImportExcursoesCSVModal({ open, onOpenChange }: ImportExcursoesC
               <thead className="bg-muted/50 sticky top-0">
                 <tr>
                   <th className="text-left p-3 font-medium">Nome</th>
+                  <th className="text-left p-3 font-medium">Contato</th>
+                  <th className="text-left p-3 font-medium">Local</th>
                   <th className="text-right p-3 font-medium">Taxa</th>
                   <th className="text-center p-3 font-medium text-muted-foreground text-xs">Qtd</th>
                 </tr>
@@ -179,6 +183,8 @@ export function ImportExcursoesCSVModal({ open, onOpenChange }: ImportExcursoesC
                 {parsedData.map((exc, i) => (
                   <tr key={i} className="border-t">
                     <td className="p-3">{exc.nome}</td>
+                    <td className="p-3 text-xs text-muted-foreground">{exc.contato || '-'}</td>
+                    <td className="p-3 text-xs text-muted-foreground">{exc.localizacao || '-'}</td>
                     <td className="p-3 text-right text-emerald-600 font-medium">
                       {formatCurrency(exc.taxa)}
                     </td>

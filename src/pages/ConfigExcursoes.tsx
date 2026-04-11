@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, Bus, Upload, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Bus, Upload, Search, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ const ConfigExcursoes = () => {
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingExcursao, setEditingExcursao] = useState<Excursao | null>(null);
-  const [formData, setFormData] = useState({ nome: '', taxa: '' });
+  const [formData, setFormData] = useState({ nome: '', taxa: '', contato: '', localizacao: '' });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteMultipleConfirm, setShowDeleteMultipleConfirm] = useState(false);
@@ -40,13 +40,18 @@ const ConfigExcursoes = () => {
   );
   const handleOpenNew = () => {
     setEditingExcursao(null);
-    setFormData({ nome: '', taxa: '' });
+    setFormData({ nome: '', taxa: '', contato: '', localizacao: '' });
     setShowModal(true);
   };
 
   const handleOpenEdit = (excursao: Excursao) => {
     setEditingExcursao(excursao);
-    setFormData({ nome: excursao.nome, taxa: excursao.taxa.toString() });
+    setFormData({ 
+      nome: excursao.nome, 
+      taxa: excursao.taxa.toString(),
+      contato: excursao.contato || '',
+      localizacao: excursao.localizacao || ''
+    });
     setShowModal(true);
   };
 
@@ -66,11 +71,21 @@ const ConfigExcursoes = () => {
       if (editingExcursao) {
         await updateExcursao.mutateAsync({
           id: editingExcursao.id,
-          data: { nome: formData.nome.trim(), taxa },
+          data: { 
+            nome: formData.nome.trim(), 
+            taxa,
+            contato: formData.contato.trim(),
+            localizacao: formData.localizacao.trim()
+          },
         });
         toast.success('Excursão atualizada com sucesso!');
       } else {
-        await addExcursao.mutateAsync({ nome: formData.nome.trim(), taxa });
+        await addExcursao.mutateAsync({ 
+          nome: formData.nome.trim(), 
+          taxa,
+          contato: formData.contato.trim(),
+          localizacao: formData.localizacao.trim()
+        });
         toast.success('Excursão cadastrada com sucesso!');
       }
       setShowModal(false);
@@ -128,6 +143,40 @@ const ConfigExcursoes = () => {
     } else {
       setSelectedIds(new Set(filteredExcursoes.map((e) => e.id)));
     }
+  };
+
+  const handleExportCSV = () => {
+    if (!filteredExcursoes || filteredExcursoes.length === 0) {
+      toast.error('Não há dados para exportar');
+      return;
+    }
+
+    // Estrutura solicitada: Nome;Contato;Localização;Taxa
+    const header = ['Nome', 'Contato', 'Localizacao', 'Taxa'];
+    const rows = filteredExcursoes.map(e => [
+      e.nome,
+      e.contato || '',
+      e.localizacao || '',
+      e.taxa.toFixed(2)
+    ]);
+
+    const csvContent = [
+      header.join(';'),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(';'))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `excursoes_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Arquivo exportado com sucesso!');
   };
 
   const handleDeleteMultiple = async () => {
@@ -203,13 +252,17 @@ const ConfigExcursoes = () => {
                 )}
               </div>
               <div className="flex gap-2">
+                <Button variant="outline" onClick={handleExportCSV} className="gap-2">
+                  <Download size={18} />
+                  Exportar CSV
+                </Button>
                 <Button variant="outline" onClick={() => setShowImportModal(true)} className="gap-2">
                   <Upload size={18} />
                   Importar CSV
                 </Button>
                 <Button onClick={handleOpenNew} className="gap-2">
                   <Plus size={18} />
-                  Nova Excursão
+                  Nova
                 </Button>
               </div>
             </div>
@@ -250,9 +303,21 @@ const ConfigExcursoes = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-foreground truncate">{excursao.nome}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Taxa: <span className="font-semibold text-emerald-600">{formatCurrency(excursao.taxa)}</span>
-                        </p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                          <p className="text-sm text-muted-foreground">
+                            Taxa: <span className="font-semibold text-emerald-600">{formatCurrency(excursao.taxa)}</span>
+                          </p>
+                          {excursao.contato && (
+                            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                              <span className="opacity-70">Contato:</span> {excursao.contato}
+                            </p>
+                          )}
+                          {excursao.localizacao && (
+                            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                              <span className="opacity-70">Local:</span> {excursao.localizacao}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -316,6 +381,26 @@ const ConfigExcursoes = () => {
                 value={formData.taxa}
                 onChange={(e) => setFormData((prev) => ({ ...prev, taxa: e.target.value }))}
                 placeholder="15.00"
+                className="h-12 rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contato">Contato/WhatsApp</Label>
+              <Input
+                id="contato"
+                value={formData.contato}
+                onChange={(e) => setFormData((prev) => ({ ...prev, contato: e.target.value }))}
+                placeholder="(88) 99999-8888"
+                className="h-12 rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="localizacao">Localização/Ponto</Label>
+              <Input
+                id="localizacao"
+                value={formData.localizacao}
+                onChange={(e) => setFormData((prev) => ({ ...prev, localizacao: e.target.value }))}
+                placeholder="Ex: Setor Verde - Vaga 79"
                 className="h-12 rounded-xl"
               />
             </div>

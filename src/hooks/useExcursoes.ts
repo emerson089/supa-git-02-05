@@ -7,6 +7,8 @@ export interface Excursao {
   user_id: string;
   nome: string;
   taxa: number;
+  contato?: string | null;
+  localizacao?: string | null;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -15,12 +17,16 @@ export interface Excursao {
 export interface ExcursaoInsert {
   nome: string;
   taxa: number;
+  contato?: string;
+  localizacao?: string;
   ativo?: boolean;
 }
 
 export interface ExcursaoUpdate {
   nome?: string;
   taxa?: number;
+  contato?: string;
+  localizacao?: string;
   ativo?: boolean;
 }
 

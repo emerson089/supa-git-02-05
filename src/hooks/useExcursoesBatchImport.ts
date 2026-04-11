@@ -5,6 +5,8 @@ import { ExcursaoCSVRowSchema, sanitizeString, safeParseNumber } from '@/lib/csv
 
 export interface ExcursaoParseResult {
   nome: string;
+  contato: string;
+  localizacao: string;
   taxa: number;
   occurrences: number;
 }
@@ -104,7 +106,9 @@ export function parseExcursoesCSV(csvContent: string): {
   const header = headerCols.map(h => sanitizeString(h).toUpperCase());
   
   // Procura por colunas de excursão e valor
-  const excursaoIdx = header.findIndex(h => h.includes('EXCURSAO') || h.includes('EXCURSÃO'));
+  const excursaoIdx = header.findIndex(h => h.includes('EXCURSAO') || h.includes('EXCURSÃO') || h === 'NOME');
+  const contatoIdx = header.findIndex(h => h.includes('CONTATO') || h === 'WHATSAPP' || h === 'TELEFONE');
+  const localizacaoIdx = header.findIndex(h => h.includes('LOCALIZACAO') || h.includes('LOCALIZAÇÃO') || h === 'LOCAL' || h === 'ORIGEM');
   const valorIdx = header.findIndex(h => 
     (h.includes('VALOR') && (h.includes('EXCURSAO') || h.includes('EXCURSÃO'))) ||
     h.includes('TAXA') ||
@@ -118,6 +122,8 @@ export function parseExcursoesCSV(csvContent: string): {
   // Mapa para agrupar por nome normalizado
   const grouped = new Map<string, { 
     nomeOriginal: string; 
+    contato: string;
+    localizacao: string;
     taxas: number[]; 
     count: number;
   }>();
@@ -131,14 +137,21 @@ export function parseExcursoesCSV(csvContent: string): {
     
     const nomeNormalizado = normalizeForComparison(nomeRaw);
     const taxa = valorIdx !== -1 ? parseValorBRL(cols[valorIdx] || '') : 0;
+    const contato = contatoIdx !== -1 ? sanitizeString(cols[contatoIdx] || '') : '';
+    const localizacao = localizacaoIdx !== -1 ? sanitizeString(cols[localizacaoIdx] || '') : '';
     
     if (grouped.has(nomeNormalizado)) {
       const existing = grouped.get(nomeNormalizado)!;
       existing.taxas.push(taxa);
+      // Se o contato/localização estiver vazio no existente mas não no novo, atualiza
+      if (!existing.contato && contato) existing.contato = contato;
+      if (!existing.localizacao && localizacao) existing.localizacao = localizacao;
       existing.count++;
     } else {
       grouped.set(nomeNormalizado, {
         nomeOriginal: capitalizeWords(nomeRaw),
+        contato,
+        localizacao,
         taxas: [taxa],
         count: 1,
       });
@@ -165,12 +178,16 @@ export function parseExcursoesCSV(csvContent: string): {
     // Valida com Zod
     const validation = ExcursaoCSVRowSchema.safeParse({
       nome: data.nomeOriginal,
+      contato: data.contato,
+      localizacao: data.localizacao,
       taxa: taxaMaisComum,
     });
     
     if (validation.success) {
       excursoes.push({
         nome: validation.data.nome,
+        contato: validation.data.contato || '',
+        localizacao: validation.data.localizacao || '',
         taxa: validation.data.taxa,
         occurrences: data.count,
       });
@@ -217,6 +234,8 @@ export function useExcursoesBatchImport() {
         .insert(
           novas.map(e => ({
             nome: e.nome,
+            contato: e.contato,
+            localizacao: e.localizacao,
             taxa: e.taxa,
             user_id: user.id,
             ativo: true,

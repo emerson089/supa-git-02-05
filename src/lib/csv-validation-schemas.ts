@@ -82,6 +82,8 @@ export type ValidatedProducaoCSVRow = z.infer<typeof ProducaoCSVRowSchema>;
 // ==================== EXCURSÕES ====================
 export const ExcursaoCSVRowSchema = z.object({
   nome: z.string().min(1, 'Nome obrigatório').max(255, 'Nome muito longo'),
+  contato: z.string().max(50, 'Contato muito longo').optional().default(''),
+  localizacao: z.string().max(100, 'Localização muito longa').optional().default(''),
   taxa: z.number().min(0, 'Taxa inválida').max(10000, 'Taxa muito alta'),
 });
 
