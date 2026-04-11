@@ -100,17 +100,21 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     try {
       if (!user?.id) throw new Error("Usuário não autenticado");
 
-      // 1. Obter URL pública do catálogo
-      const { data: { publicUrl } } = supabase.storage
+      // 1. Obter URL assinada do catálogo (7 dias)
+      const { data: signedData, error: signedError } = await supabase.storage
         .from('lotes')
-        .getPublicUrl(`${user.id}/catalogos/oficial.pdf`);
+        .createSignedUrl(`${user.id}/catalogos/oficial.pdf`, 604800);
+
+      if (signedError || !signedData?.signedUrl) {
+        throw new Error("Catálogo não encontrado. Faça upload nas Configurações.");
+      }
 
       // 2. Chamar função de envio
       const { error } = await supabase.functions.invoke('send-whatsapp', {
         body: { 
           type: 'document',
           phone: phoneResult.phone, 
-          documentUrl: publicUrl,
+          documentUrl: signedData.signedUrl,
           fileName: 'Catalogo_Delookii.pdf',
           caption: `Olá ${cliente.nome.split(' ')[0]}! Tudo bem? Segue nosso catálogo atualizado com todas as novidades! Qualquer dúvida, pode me chamar. 👇`
         },

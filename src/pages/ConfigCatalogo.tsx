@@ -31,18 +31,11 @@ const ConfigCatalogo = () => {
   const fetchCurrentCatalog = async () => {
     setIsLoadingUrl(true);
     try {
-      // Usa a API do Supabase para listar e checar se o arquivo existe em vez de usar um fetch (que pode falhar por CORS)
-      const folderPath = user?.id ? `${user.id}/catalogos` : 'catalogos';
-      const { data: files, error } = await supabase.storage.from(BUCKET_NAME).list(folderPath, {
-        search: 'oficial.pdf'
-      });
+      const { data, error: signedError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .createSignedUrl(FILE_PATH, 3600);
 
-      const fileExists = files && files.some(f => f.name === 'oficial.pdf');
-
-      if (fileExists && !error) {
-        const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(FILE_PATH);
-        setCurrentUrl(data.publicUrl + '?t=' + new Date().getTime()); // cache buster
-      } else {
+      if (signedError || !data?.signedUrl) {
         setCurrentUrl(null);
       } else {
         setCurrentUrl(data.signedUrl);
