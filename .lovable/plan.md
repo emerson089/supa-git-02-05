@@ -1,58 +1,30 @@
 
 
-## Problema
+## Congelar seção inferior do Sidebar
 
-O bucket `lotes` é **privado** (`Is Public: No`), mas o código usa `getPublicUrl()` que gera uma URL pública. Como o bucket não é público, o HEAD request retorna 403 e o catálogo aparece como "não disponível" mesmo após upload bem-sucedido.
+### Problema
+A seção inferior do sidebar (Usuários, Tipos de Ajuste, Excursões, Custos Padrão, Catálogo CRM, Ajuda, perfil e Sair) não fica fixa — quando a tela é menor, ela pode ser empurrada para fora da área visível.
 
-O mesmo problema afeta o `WhatsAppCatalogButton` que também usa `getPublicUrl` para enviar o catálogo via WhatsApp.
+### Correção
 
-## Correção
+**Arquivo:** `src/components/layout/AppSidebar.tsx`
 
-### 1. `src/pages/ConfigCatalogo.tsx` - Exibir catálogo atual
+A estrutura do sidebar já usa `flex flex-col` com a parte superior tendo `flex-1 overflow-y-auto` e a inferior `flex-shrink-0`. Porém, se o conteúdo inferior for maior que o espaço disponível, ele pode estourar. A correção:
 
-Substituir `getPublicUrl` + HEAD check por `createSignedUrl` (URL temporária autenticada):
+1. Adicionar `overflow-y-auto` na seção inferior para que, se necessário, ela role independentemente
+2. Garantir que a seção inferior tenha um `max-height` relativo e `min-h-0` para não ultrapassar o espaço
+3. Adicionar `sticky bottom-0` e fundo sólido para garantir que fique sempre visível e colada ao fundo
 
-```typescript
-const fetchCurrentCatalog = async () => {
-  setIsLoadingUrl(true);
-  try {
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(FILE_PATH, 3600); // 1h
+```text
+Antes (linha 283):
+  <div className="space-y-1 flex-shrink-0 bg-white pt-2">
 
-    if (error || !data?.signedUrl) {
-      setCurrentUrl(null);
-    } else {
-      setCurrentUrl(data.signedUrl);
-    }
-  } catch (e) {
-    console.error(e);
-    setCurrentUrl(null);
-  } finally {
-    setIsLoadingUrl(false);
-  }
-};
+Depois:
+  <div className="space-y-1 flex-shrink-0 bg-white pt-2 border-t border-gray-100 sticky bottom-0">
 ```
 
-### 2. `src/components/clientes/WhatsAppCatalogButton.tsx` - Enviar catálogo via WhatsApp
+Também ajustar o container pai (`aside`) para usar `overflow-hidden` e manter a seção superior como única área rolável, removendo o `justify-between` e usando `flex-col` com a parte de cima ocupando todo espaço restante.
 
-Substituir `getPublicUrl` por `createSignedUrl` com validade longa (ex: 7 dias = 604800s) para que o link funcione quando o cliente abrir:
-
-```typescript
-const { data, error } = await supabase.storage
-  .from('lotes')
-  .createSignedUrl(`${user.id}/catalogos/oficial.pdf`, 604800);
-
-if (error || !data?.signedUrl) {
-  throw new Error("Catálogo PDF não encontrado.");
-}
-// Usar data.signedUrl como documentUrl
-```
-
-### Resumo
-
-| Arquivo | Problema | Solução |
-|---------|----------|---------|
-| ConfigCatalogo.tsx | `getPublicUrl` em bucket privado = 403 | `createSignedUrl` (1h) |
-| WhatsAppCatalogButton.tsx | `getPublicUrl` gera link inacessível | `createSignedUrl` (7 dias) |
+### Resultado
+Os itens de configuração, perfil do usuário e botão Sair ficarão sempre visíveis na parte inferior do sidebar, independente de quantos itens existam na navegação principal acima.
 
