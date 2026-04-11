@@ -18,6 +18,7 @@ const ConfigCatalogo = () => {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const [isLoadingUrl, setIsLoadingUrl] = useState(true);
 
   const BUCKET_NAME = 'lotes';
@@ -63,6 +64,18 @@ const ConfigCatalogo = () => {
     }
   };
 
+  const handleOpenInNewTab = async () => {
+    try {
+      const { data } = await supabase.storage
+        .from(BUCKET_NAME)
+        .createSignedUrl(FILE_PATH, 3600);
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+      else toast.error('Não foi possível gerar o link do catálogo.');
+    } catch {
+      toast.error('Erro ao abrir catálogo.');
+    }
+  };
+
   const handleUpload = async () => {
     if (!file) return;
 
@@ -77,6 +90,7 @@ const ConfigCatalogo = () => {
 
       toast.success('Catálogo enviado com sucesso!');
       setFile(null);
+      setShowPreview(false);
       fetchCurrentCatalog();
     } catch (error: any) {
       console.error('Error uploading catalog:', error);
@@ -180,9 +194,21 @@ const ConfigCatalogo = () => {
                         Seus clientes irão receber este arquivo quando você usar a função de envio pelo Zap.
                       </p>
                       
-                      <a href={currentUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-emerald-600 hover:text-emerald-500 underline decoration-emerald-600/30 underline-offset-2">
-                        Visualizar Catálogo Atual
-                      </a>
+                      <div className="flex gap-2 flex-wrap">
+                        <button 
+                          onClick={() => setShowPreview(!showPreview)} 
+                          className="text-xs font-semibold text-emerald-600 hover:text-emerald-500 underline decoration-emerald-600/30 underline-offset-2"
+                        >
+                          {showPreview ? 'Ocultar Preview' : 'Visualizar Catálogo'}
+                        </button>
+                        <span className="text-emerald-300">|</span>
+                        <button 
+                          onClick={handleOpenInNewTab} 
+                          className="text-xs font-semibold text-emerald-600 hover:text-emerald-500 underline decoration-emerald-600/30 underline-offset-2"
+                        >
+                          Abrir em nova aba
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -201,6 +227,23 @@ const ConfigCatalogo = () => {
                 </div>
               )}
             </Card>
+
+            {/* Inline PDF Preview */}
+            {showPreview && currentUrl && (
+              <Card className="p-4 neu-card border-none rounded-2xl col-span-full">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-lg">Preview do Catálogo</h3>
+                  <Button variant="ghost" size="sm" onClick={() => setShowPreview(false)}>
+                    Fechar
+                  </Button>
+                </div>
+                <iframe
+                  src={currentUrl}
+                  className="w-full h-[70vh] rounded-xl border border-border"
+                  title="Preview do Catálogo PDF"
+                />
+              </Card>
+            )}
 
           </div>
         </div>
