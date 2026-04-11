@@ -18,6 +18,7 @@ const ConfigCatalogo = () => {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const [isLoadingUrl, setIsLoadingUrl] = useState(true);
 
   const BUCKET_NAME = 'lotes';
