@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      catalogos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          file_path: string
+          id: string
+          mensagem: string
+          nome: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          file_path: string
+          id?: string
+          mensagem?: string
+          nome: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          file_path?: string
+          id?: string
+          mensagem?: string
+          nome?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       cliente_contatos: {
         Row: {
           canal: string
