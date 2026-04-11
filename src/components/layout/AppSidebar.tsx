@@ -222,8 +222,8 @@ export function AppSidebar() {
           onClick={handleClick}
           title={!isSidebarExpanded && !isSubItem ? item.label : undefined}
           className={`
-            w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
-            ${isSubItem ? 'pl-9 pr-3 py-2 text-xs relative' : ''}
+            w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200
+            ${isSubItem ? 'pl-9 pr-3 py-1 text-xs relative' : ''}
             ${active || (!isSubItem && isParentActive) ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}
           `}
         >
@@ -247,7 +247,7 @@ export function AppSidebar() {
 
         {/* SubItems Render */}
         {hasSubItems && isGroupExpanded && isSidebarExpanded && (
-          <div className="mt-1 mb-2 space-y-1">
+          <div className="mt-0.5 mb-1 space-y-0.5">
             {item.subItems?.map(subItem => (
                <div key={subItem.label}>
                  {renderNavItem(subItem, true)}
@@ -261,41 +261,41 @@ export function AppSidebar() {
 
   return (
     <aside 
-      className={`flex-shrink-0 flex flex-col justify-between p-4 bg-white transition-all duration-300 ease-in-out border-r border-gray-200 shadow-sm z-20 ${isSidebarExpanded ? 'w-64' : 'w-20'}`}
+      className={`flex-shrink-0 flex flex-col justify-between p-3 bg-white transition-all duration-300 ease-in-out border-r border-gray-200 shadow-sm z-20 ${isSidebarExpanded ? 'w-60' : 'w-16'}`}
       onMouseEnter={() => setIsSidebarExpanded(true)}
       onMouseLeave={() => setIsSidebarExpanded(false)}
     >
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-4">
-        <div className={`flex items-center gap-3 mb-8 px-2 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}>
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex-shrink-0 flex items-center justify-center text-indigo-600">
-            <Package size={20} />
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-2">
+        <div className={`flex items-center gap-2 mb-4 px-1 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}>
+          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex-shrink-0 flex items-center justify-center text-indigo-600">
+            <Package size={16} />
           </div>
-          <span className={`text-lg font-semibold truncate transition-all duration-300 ${isSidebarExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
+          <span className={`text-base font-semibold truncate transition-all duration-300 ${isSidebarExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
             Deloockii Jeans
           </span>
         </div>
 
-        <nav className="space-y-1">
+        <nav className="space-y-0.5">
           {visibleNavGroups.map(group => renderNavItem(group))}
         </nav>
       </div>
 
-      <div className="space-y-1 flex-shrink-0 bg-white pt-2">
+      <div className="space-y-0.5 flex-shrink-0 bg-white pt-1">
         {visibleBottomGroups.map(group => renderNavItem(group))}
 
-        <div className="pt-4 mt-4 border-t border-gray-100">
-          <div className={`flex items-center gap-3 px-3 py-2 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}>
-            <div className="w-8 h-8 rounded-full bg-indigo-600/10 flex-shrink-0 flex items-center justify-center text-indigo-600 font-semibold text-sm">
+        <div className="pt-2 mt-2 border-t border-gray-100">
+          <div className={`flex items-center gap-2 px-3 py-1 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}>
+            <div className="w-7 h-7 rounded-full bg-indigo-600/10 flex-shrink-0 flex items-center justify-center text-indigo-600 font-semibold text-xs">
               {userInitial}
             </div>
-            <span className={`text-sm text-muted-foreground truncate max-w-[140px] transition-all duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'}`}>
+            <span className={`text-xs text-muted-foreground truncate max-w-[130px] transition-all duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'}`}>
               {userEmail}
             </span>
           </div>
           <button
             onClick={handleSignOut}
             title={!isSidebarExpanded ? 'Sair' : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all duration-200 ${!isSidebarExpanded ? 'justify-center' : ''}`}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all duration-200 ${!isSidebarExpanded ? 'justify-center' : ''}`}
           >
             <LogOut size={18} className="flex-shrink-0" />
             <span className={`transition-all duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'}`}>
