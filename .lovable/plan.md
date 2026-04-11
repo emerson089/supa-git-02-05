@@ -1,49 +1,69 @@
 
 
-## Problema: "Visualizar Catálogo Atual" não abre o PDF
+## Plano atualizado: Múltiplos Catálogos + Mensagem Personalizada + Tooltip de formatação WhatsApp
 
-### Diagnóstico
+Este plano incorpora o pedido anterior (múltiplos catálogos com mensagem personalizada) e adiciona o tooltip de formatação no campo de mensagem.
 
-O link usa `target="_blank"` para abrir o PDF em uma nova aba. Dentro do preview do Lovable (iframe), popups/novas abas são frequentemente bloqueados pelo navegador. Mesmo fora do preview, alguns navegadores bloqueiam popups silenciosamente.
+### 1. Migração SQL — Tabela `catalogos`
 
-Além disso, a URL assinada tem validade de 1 hora — se o usuário deixar a página aberta e clicar depois, a URL já expirou e retorna erro.
+```sql
+CREATE TABLE public.catalogos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  nome TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  mensagem TEXT NOT NULL DEFAULT '',
+  ativo BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
-### Solução
+ALTER TABLE public.catalogos ENABLE ROW LEVEL SECURITY;
 
-Substituir o link externo por um **preview inline do PDF** embutido na própria página, usando um `<iframe>` ou `<object>` para renderizar o PDF diretamente no card. Adicionar também um botão de download como alternativa.
-
-### Alteração
-
-**Arquivo:** `src/pages/ConfigCatalogo.tsx` (linhas 183-185)
-
-Substituir o `<a>` por dois botões:
-1. Um botão "Visualizar" que mostra/esconde um iframe inline com o PDF
-2. Um botão "Baixar" que usa `window.open()` com uma URL assinada nova (gerada no momento do clique)
-
-```tsx
-// Adicionar estado para controlar preview
-const [showPreview, setShowPreview] = useState(false);
-
-// Função para abrir em nova aba com URL fresca
-const handleDownload = async () => {
-  const { data } = await supabase.storage
-    .from(BUCKET_NAME)
-    .createSignedUrl(FILE_PATH, 3600);
-  if (data?.signedUrl) window.open(data.signedUrl, '_blank');
-};
-
-// No JSX, substituir o <a> por:
-<div className="flex gap-2">
-  <button onClick={() => setShowPreview(!showPreview)}>Visualizar</button>
-  <button onClick={handleDownload}>Abrir em nova aba</button>
-</div>
-
-// Abaixo do card de status, se showPreview && currentUrl:
-<iframe src={currentUrl} className="w-full h-[70vh] rounded-xl" />
+CREATE POLICY "Users manage own catalogos" ON public.catalogos
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 ```
 
-### Resultado
-- O PDF aparece diretamente na página, sem depender de popup
-- Botão alternativo gera URL fresca no momento do clique, evitando expiração
-- Funciona dentro do preview do Lovable e em qualquer navegador
+### 2. Refatorar `ConfigCatalogo.tsx`
+
+- Campo "Nome do catálogo" (input)
+- Campo "Mensagem personalizada" (textarea) com placeholder sugerindo `{nome}`
+- **Tooltip de formatação** ao lado do label da mensagem: ícone de info com texto explicando que `*texto*` fica **negrito**, `_texto_` fica _itálico_ e `~texto~` fica ~~riscado~~ no WhatsApp — usando o componente `Tooltip` já existente no projeto
+- Upload com path único `{user_id}/catalogos/{uuid}.pdf`
+- Listagem de todos os catálogos com ações: Ativar, Visualizar (iframe), Excluir
+- Badge "Ativo" no catálogo marcado
+- Migração automática do `oficial.pdf` legado na primeira carga
+
+### 3. Refatorar `TransmissaoManagerModal.tsx`
+
+- Buscar catálogos do usuário ao abrir
+- Seletor (dropdown) para escolher qual catálogo enviar
+- Usar `mensagem` do catálogo selecionado como `caption`, substituindo `{nome}` pelo primeiro nome do cliente
+- Gerar `signedUrl` do `file_path` do catálogo escolhido
+
+### 4. Refatorar `WhatsAppCatalogButton.tsx`
+
+- Buscar catálogo ativo (`ativo = true`) do usuário
+- Usar `file_path` e `mensagem` do catálogo ativo (com substituição de `{nome}`)
+
+### Detalhe do tooltip de formatação
+
+No campo "Mensagem personalizada", ao lado do label, haverá um ícone `Info` com tooltip contendo:
+
+```
+Dicas de formatação WhatsApp:
+• *texto* → negrito
+• _texto_ → itálico
+• ~texto~ → riscado
+• {nome} → nome do cliente
+```
+
+Usa o componente `Tooltip` de `@/components/ui/tooltip` já existente no projeto, mantendo o padrão visual Delookii.
+
+### Arquivos alterados
+- Nova migração SQL
+- `src/pages/ConfigCatalogo.tsx` — reescrita completa
+- `src/components/clientes/TransmissaoManagerModal.tsx` — seletor de catálogo
+- `src/components/clientes/WhatsAppCatalogButton.tsx` — usar catálogo ativo do banco
 
