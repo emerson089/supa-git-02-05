@@ -975,22 +975,47 @@ Qualquer dúvida é só chamar! 😊`;
         toast.error('Nenhum pedido encontrado para exportar');
         return;
       }
-      const headers = ['Data', 'Cliente', 'Modelos', 'Qtd', 'Valor', 'Pagamento', 'Pedido', 'Entrega'];
-      const rows = allPedidos.map(pedido => [
-        format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm"),
-        pedido.cliente_nome || '',
-        (() => {
-          const itens = pedido.pedido_itens || [];
-          if (itens.length === 0) return '-';
-          const grouped = groupItensByModel(itens, buildModeloGroupConfig(itens));
-          return grouped.map(g => `${g.nomeExibicao}(${g.quantidadeTotal})`).join('; ');
-        })(),
-        pedido.total_pecas?.toString() || '',
-        pedido.valor_total?.toFixed(2) || '',
-        pedido.status_pagamento || '',
-        pedido.status_pedido || '',
-        pedido.status_entrega || ''
-      ]);
+      const headers = ['ID Pedido', 'Data', 'Cliente', 'Telefone', 'Excursão', 'Produto', 'Quantidade', 'Valor Unit.', 'Desconto', 'Status'];
+      
+      const rows: string[][] = [];
+      
+      allPedidos.forEach(pedido => {
+        const itens = pedido.pedido_itens || [];
+        const dataFormatada = format(new Date(pedido.created_at), "dd/MM/yyyy");
+        const idPedido = pedido.id.substring(0, 8); // ID Curto para legibilidade
+        
+        if (itens.length === 0) {
+          // Caso raro: pedido sem itens, exporta o cabeçalho do pedido
+          rows.push([
+            idPedido,
+            dataFormatada,
+            pedido.cliente_nome || '',
+            pedido.telefone || '',
+            pedido.excursao || '',
+            '-',
+            '0',
+            '0.00',
+            pedido.desconto?.toFixed(2) || '0.00',
+            pedido.status_pagamento || ''
+          ]);
+        } else {
+          // Exporta uma linha para cada item
+          itens.forEach(item => {
+            rows.push([
+              idPedido,
+              dataFormatada,
+              pedido.cliente_nome || '',
+              pedido.telefone || '',
+              pedido.excursao || '',
+              item.produto_nome || '',
+              item.quantidade.toString(),
+              item.valor_unitario.toFixed(2),
+              pedido.desconto?.toFixed(2) || '0.00',
+              pedido.status_pagamento || ''
+            ]);
+          });
+        }
+      });
       const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))].join('\n');
       const blob = new Blob(['\uFEFF' + csvContent], {
         type: 'text/csv;charset=utf-8;'

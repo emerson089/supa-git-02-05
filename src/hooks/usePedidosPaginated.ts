@@ -22,6 +22,7 @@ export interface PedidoPaginatedDB {
   observacoes: string | null;
   total_pecas: number | null;
   valor_total: number | null;
+  desconto: number | null;
   estorno_realizado: boolean | null;
   notificado_separado: boolean | null;
   notificado_no_carro: boolean | null;
