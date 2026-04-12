@@ -975,7 +975,7 @@ Qualquer dúvida é só chamar! 😊`;
         toast.error('Nenhum pedido encontrado para exportar');
         return;
       }
-      const headers = ['ID Pedido', 'Data', 'Cliente', 'Telefone', 'Excursão', 'Produto', 'Quantidade', 'Valor Unit.', 'Desconto', 'Status'];
+      const headers = ['ID Pedido', 'Data', 'Cliente', 'Telefone', 'Excursão', 'Produto', 'Quantidade', 'Valor Unit.', 'Desconto', 'Pagamento', 'Pedido', 'Entrega'];
       
       const rows: string[][] = [];
       
@@ -996,7 +996,9 @@ Qualquer dúvida é só chamar! 😊`;
             '0',
             '0.00',
             pedido.desconto?.toFixed(2) || '0.00',
-            pedido.status_pagamento || ''
+            pedido.status_pagamento || '',
+            pedido.status_pedido || '',
+            pedido.status_entrega || ''
           ]);
         } else {
           // Exporta uma linha para cada item
@@ -1011,7 +1013,9 @@ Qualquer dúvida é só chamar! 😊`;
               item.quantidade.toString(),
               item.valor_unitario.toFixed(2),
               pedido.desconto?.toFixed(2) || '0.00',
-              pedido.status_pagamento || ''
+              pedido.status_pagamento || '',
+              pedido.status_pedido || '',
+              pedido.status_entrega || ''
             ]);
           });
         }
