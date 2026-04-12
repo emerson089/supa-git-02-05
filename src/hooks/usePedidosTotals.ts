@@ -59,6 +59,11 @@ export function usePedidosTotals(params: TotalsParams) {
         if (params.statusEntrega && params.statusEntrega.length > 0) {
           q = q.in('status_entrega', params.statusEntrega);
         }
+        
+        // DEFAULT: Exclude canceled orders from totals if no specific status filters are active
+        if (!params.statusPagamento?.length && !params.statusPedido?.length && !params.statusEntrega?.length) {
+          q = q.not('status_pagamento', 'in', '("CANCELADO", "GOLPE CANCELADO")');
+        }
 
         // Apply date filters
         if (params.startDate) {

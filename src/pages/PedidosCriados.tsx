@@ -147,6 +147,7 @@ export default function PedidosCriados() {
   } = usePedidos();
   const {
     itens: estoqueItens,
+    getItemById,
     updateItem: updateEstoqueItem
   } = useEstoque();
 
@@ -1003,13 +1004,26 @@ Qualquer dúvida é só chamar! 😊`;
         } else {
           // Exporta uma linha para cada item
           itens.forEach(item => {
+            const itemEstoque = getItemById(item.produto_id || '');
+            let refTecnica = '';
+            if (itemEstoque?.localizacao) {
+              try {
+                const loc = JSON.parse(itemEstoque.localizacao);
+                refTecnica = loc.referencia || '';
+              } catch (e) {}
+            }
+            
+            // Usa o nome do estoque se disponível, fallback para o nome salvo no item
+            const nomeParaParse = itemEstoque?.nome || item.produto_nome || '';
+            const info = parseProductName(nomeParaParse, refTecnica);
+            
             rows.push([
               idPedido,
               dataFormatada,
               pedido.cliente_nome || '',
               pedido.telefone || '',
               pedido.excursao || '',
-              item.produto_nome || '',
+              info.nomeExibicao,
               item.quantidade.toString(),
               item.valor_unitario.toFixed(2),
               pedido.desconto?.toFixed(2) || '0.00',
