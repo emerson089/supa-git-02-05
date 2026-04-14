@@ -15,6 +15,7 @@ export interface Cliente {
   estado: string;
   excursao: string;
   dataCadastro: string;
+  isNovo?: boolean;
 }
 
 interface ClientesContextType {

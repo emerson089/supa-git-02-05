@@ -4,6 +4,7 @@ import { Cliente } from '@/contexts/ClientesContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useClienteContatos } from '@/hooks/useClienteContatos';
 
 interface WhatsAppCatalogButtonProps {
   cliente: Cliente;
@@ -24,24 +25,33 @@ interface CatalogoAtivo {
   nome: string;
 }
 
+const SAUDACOES = [
+  'Olá', 'Oii', 'Oie', 'Opa', 'Olaa', 'Oiii', 'E aí', 'Fala', 'Oi', 'Tudo bem?', 
+  'Bom dia', 'Boa tarde', 'Boa noite', 'Oiie', 'Opaa', 'Olá, tudo bem?', 'Oi, tudo bom?',
+  'Hey', 'Salve', 'Opa! Tudo certo?', 'Tudo certo por aí?', 'Oi como vai?', 'Passando por aqui para deixar...',
+  'Oi, passando para te mandar...', 'Oi! Tudo tranquilo?', 'E aí, beleza?'
+];
+
 export const WhatsAppCatalogButton = forwardRef<HTMLButtonElement, WhatsAppCatalogButtonProps>(
   function WhatsAppCatalogButton({ cliente }, ref) {
     const { user } = useAuth();
     const { toast } = useToast();
+    const { marcarContato } = useClienteContatos();
     const [enviando, setEnviando] = useState(false);
-    const [catalogoAtivo, setCatalogoAtivo] = useState<CatalogoAtivo | null>(null);
+    const [catalogosAtivos, setCatalogosAtivos] = useState<CatalogoAtivo[]>([]);
+    const [loadingAtivos, setLoadingAtivos] = useState(true);
 
     useEffect(() => {
       if (!user?.id) return;
+      setLoadingAtivos(true);
       supabase
         .from('catalogos')
         .select('file_path, mensagem, nome')
         .eq('user_id', user.id)
         .eq('ativo', true)
-        .limit(1)
-        .single()
         .then(({ data }) => {
-          if (data) setCatalogoAtivo(data as CatalogoAtivo);
+          if (data) setCatalogosAtivos(data as CatalogoAtivo[]);
+          setLoadingAtivos(false);
         });
     }, [user?.id]);
 
@@ -52,49 +62,78 @@ export const WhatsAppCatalogButton = forwardRef<HTMLButtonElement, WhatsAppCatal
         return;
       }
 
+      if (catalogosAtivos.length === 0) {
+        toast({ title: "Nenhum catálogo ativo", description: "Ative pelo menos um catálogo nas configurações.", variant: "destructive" });
+        return;
+      }
+
       setEnviando(true);
       try {
         if (!user?.id) throw new Error("Usuário não autenticado.");
 
-        const filePath = catalogoAtivo?.file_path || `${user.id}/catalogos/oficial.pdf`;
+        for (const cat of catalogosAtivos) {
+          const isFirst = catalogosAtivos.indexOf(cat) === 0;
+          const filePath = cat.file_path;
 
-        const { data: signedData, error: signedError } = await supabase.storage
-          .from('lotes')
-          .createSignedUrl(filePath, 604800);
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from('lotes')
+            .createSignedUrl(filePath, 604800);
 
-        if (signedError || !signedData?.signedUrl) {
-          throw new Error("Catálogo PDF não encontrado. Faça upload nas Configurações.");
+          if (signedError || !signedData?.signedUrl) {
+            console.error(`Catálogo ${cat.nome} não encontrado.`);
+            continue;
+          }
+
+          let caption = '';
+          if (isFirst) {
+            const hasNameTag = cat.mensagem?.includes('{nome}');
+            const saudacaoAleatoria = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
+            
+            const baseCaption = cat.mensagem || `Segue o nosso catálogo "${cat.nome}".`;
+            
+            caption = hasNameTag
+              ? baseCaption.replace(/\{nome\}/g, cliente.nome.split(' ')[0])
+              : `${saudacaoAleatoria} ${cliente.nome.split(' ')[0]}! ${baseCaption}`;
+          } else {
+            // No segundo catálogo em diante, não adicionamos saudação automática
+            // Enviamos apenas a mensagem se ela existir, senão vai vazio
+            caption = cat.mensagem
+              ? cat.mensagem.replace(/\{nome\}/g, cliente.nome.split(' ')[0])
+              : '';
+          }
+
+          const fileName = `${cat.nome.replace(/[^a-zA-Z0-9 ]/g, '')}.pdf`;
+
+          const { error } = await supabase.functions.invoke('send-whatsapp', {
+            body: {
+              type: 'document',
+              phone: phoneResult.phone,
+              documentUrl: signedData.signedUrl,
+              fileName,
+              caption,
+            },
+          });
+
+          if (error) throw error;
+          
+          // Pequeno delay entre catálogos para garantir ordem
+          if (catalogosAtivos.length > 1) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          }
         }
 
-        const caption = catalogoAtivo?.mensagem
-          ? catalogoAtivo.mensagem.replace(/\{nome\}/g, cliente.nome.split(' ')[0])
-          : `Olá ${cliente.nome.split(' ')[0]}! Segue o nosso catálogo mais recente com todas as novidades. Qualquer dúvida, estou à disposição!`;
-
-        const fileName = catalogoAtivo?.nome
-          ? `${catalogoAtivo.nome.replace(/[^a-zA-Z0-9 ]/g, '')}.pdf`
-          : 'Catalogo Delookii.pdf';
-
-        const { error } = await supabase.functions.invoke('send-whatsapp', {
-          body: {
-            type: 'document',
-            phone: phoneResult.phone,
-            documentUrl: signedData.signedUrl,
-            fileName,
-            caption,
-          },
-        });
-
-        if (error) throw error;
+        // Registrar contato
+        marcarContato(cliente.id, 'whatsapp');
 
         toast({
-          title: "✅ Catálogo enviado!",
-          description: `Catálogo enviado para ${cliente.nome.split(' ')[0]} via WhatsApp.`,
+          title: "✅ Envio concluído!",
+          description: `${catalogosAtivos.length} catálogo(s) enviado(s) para ${cliente.nome.split(' ')[0]}.`,
         });
       } catch (err: any) {
         console.error('Erro ao enviar Catálogo:', err);
         toast({
           title: "Erro ao enviar",
-          description: err?.message || "Não foi possível enviar o catálogo.",
+          description: err?.message || "Não foi possível enviar o(s) catálogo(s).",
           variant: "destructive",
         });
       } finally {

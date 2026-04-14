@@ -21,7 +21,7 @@ const ConfigCatalogo = () => {
 
   const [file, setFile] = useState<File | null>(null);
   const [nome, setNome] = useState('');
-  const [mensagem, setMensagem] = useState('Olá {nome}! Tudo bem? Segue nosso catálogo atualizado com todas as novidades! Qualquer dúvida, pode me chamar. 👇');
+  const [mensagem, setMensagem] = useState('');
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState('');
@@ -53,7 +53,7 @@ const ConfigCatalogo = () => {
       toast.success('Catálogo enviado com sucesso!');
       setFile(null);
       setNome('');
-      setMensagem('Olá {nome}! Tudo bem? Segue nosso catálogo atualizado com todas as novidades! Qualquer dúvida, pode me chamar. 👇');
+      setMensagem('');
     } catch (error: any) {
       console.error('Error uploading catalog:', error);
       toast.error(`Erro ao salvar: ${error.message || 'Verifique sua conexão'}`);
@@ -243,17 +243,15 @@ const ConfigCatalogo = () => {
                         >
                           <Eye size={14} />
                         </Button>
-                        {!cat.ativo && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-primary"
-                            onClick={() => ativarCatalogo(cat.id)}
-                            title="Ativar como padrão"
-                          >
-                            <Star size={14} />
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn("h-8 w-8", cat.ativo ? "text-primary" : "text-muted-foreground")}
+                          onClick={() => ativarCatalogo(cat.id, cat.ativo)}
+                          title={cat.ativo ? "Desativar para envio" : "Ativar para envio"}
+                        >
+                          <Star size={14} className={cn(cat.ativo && "fill-current")} />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"

@@ -67,20 +67,22 @@ export const useCatalogos = () => {
     await fetchCatalogos();
   };
 
-  const ativarCatalogo = async (id: string) => {
+  const ativarCatalogo = async (id: string, currentlyAtivo: boolean) => {
     if (!user?.id) return;
-    // Deactivate all
-    await supabase
+    
+    // Just toggle the selected one
+    const { error } = await supabase
       .from('catalogos')
-      .update({ ativo: false })
-      .eq('user_id', user.id);
-    // Activate selected
-    await supabase
-      .from('catalogos')
-      .update({ ativo: true })
+      .update({ ativo: !currentlyAtivo })
       .eq('id', id);
+      
+    if (error) {
+      toast.error('Erro ao atualizar status');
+      return;
+    }
+
     await fetchCatalogos();
-    toast.success('Catálogo ativado!');
+    toast.success(!currentlyAtivo ? 'Catálogo ativado!' : 'Catálogo desativado');
   };
 
   const excluirCatalogo = async (catalogo: Catalogo) => {
@@ -111,7 +113,7 @@ export const useCatalogos = () => {
         user_id: user.id,
         nome: 'Catálogo Principal',
         file_path: legacyPath,
-        mensagem: 'Olá {nome}! Tudo bem? Segue nosso catálogo atualizado com todas as novidades! Qualquer dúvida, pode me chamar. 👇',
+        mensagem: '',
         ativo: true,
       });
       await fetchCatalogos();
@@ -125,10 +127,12 @@ export const useCatalogos = () => {
   }, [loading, catalogos.length, migrateLegacy]);
 
   const catalogoAtivo = catalogos.find((c) => c.ativo) || null;
+  const catalogosAtivos = catalogos.filter((c) => c.ativo);
 
   return {
     catalogos,
     catalogoAtivo,
+    catalogosAtivos,
     loading,
     uploadCatalogo,
     ativarCatalogo,

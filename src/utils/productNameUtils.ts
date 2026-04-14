@@ -43,8 +43,19 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
   const refCurta = numeros ? `REF ${numeros.slice(-3).padStart(3, '0')}` : "";
 
   // 4. Limpar o nome (remover referências que estejam no campo nome)
-  // Divide por " — " ou " - " e pega a primeira parte
-  const nomeBase = currentName.split(/\s*[—|-]\s*/)[0].trim();
+  // Divide por " — ", " - " ou ":" e pega a primeira parte, mas remove a refBase especificamente se estiver lá
+  let nomeBase = currentName;
+  
+  // Se o nome contém a referência completa, removemos ela primeiro
+  if (refBase && nomeBase.includes(refBase)) {
+    nomeBase = nomeBase.replace(refBase, '').trim();
+  }
+  
+  // Remove sufixos de separadores e códigos residuais
+  nomeBase = nomeBase.split(/\s*[—|-|:]\s*/)[0].trim();
+  
+  // Limpeza final de qualquer caractere de pontuação que tenha sobrado no fim
+  nomeBase = nomeBase.replace(/[\s—\-:]+$/, "").trim();
 
   // 5. Gerar nome de exibição padronizado: "Nome XXX"
   const numDisplay = numeros ? numeros.slice(-3).padStart(3, '0') : '';

@@ -1186,7 +1186,7 @@ export default function Estoque() {
           {/* Upload de Imagem */}
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground/70 uppercase tracking-wider">Imagem do Produto</Label>
-            <div onClick={() => fileInputRef.current?.click()} className="relative w-full h-32 rounded-xl bg-background shadow-[inset_3px_3px_8px_hsl(var(--muted)/0.4),inset_-3px_-3px_8px_hsl(var(--background))] border border-border/30 cursor-pointer hover:border-primary/50 transition-colors flex items-center justify-center overflow-hidden group">
+            <div onClick={() => fileInputRef.current?.click()} className="relative w-full h-48 rounded-xl bg-background shadow-[inset_3px_3px_8px_hsl(var(--muted)/0.4),inset_-3px_-3px_8px_hsl(var(--background))] border border-border/30 cursor-pointer hover:border-primary/50 transition-colors flex items-center justify-center overflow-hidden group">
               {novoModeloForm.imagemPreview ? <>
                 <img src={novoModeloForm.imagemPreview} alt="Preview" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

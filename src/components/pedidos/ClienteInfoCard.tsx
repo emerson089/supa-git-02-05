@@ -193,7 +193,7 @@ export function ClienteInfoCard({
   };
 
   return (
-    <div className="neu-card p-7">
+    <div className="neu-card p-4 sm:p-7">
       <h2 className="text-lg font-bold text-foreground mb-6 pb-4 border-b border-border/30">Informações do Cliente</h2>
       
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-5 gap-y-5">

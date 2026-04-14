@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -14,7 +15,7 @@ import {
     TAMANHOS_NUMERICOS,
 } from '@/hooks/useModelosPadronizados';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
-import { useUpdateItem } from '@/hooks/useEstoqueData';
+import { useUpdateItem, useAddMovimentacao } from '@/hooks/useEstoqueData';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -30,6 +31,7 @@ import {
     Pencil,
     Check,
     X,
+    Loader2,
 } from 'lucide-react';
 import { EtiquetasModal } from './EtiquetasModal';
 
@@ -72,10 +74,13 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editingQtd, setEditingQtd] = useState('');
     const [saving, setSaving] = useState(false);
+    const [qtdGrade, setQtdGrade] = useState('');
+    const [applyingGrade, setApplyingGrade] = useState(false);
 
     const { user } = useAuth();
     const queryClient = useQueryClient();
     const { mutateAsync: updateItem } = useUpdateItem();
+    const { mutateAsync: addMovimentacao } = useAddMovimentacao();
 
     useEffect(() => {
         if (modelo) {
@@ -106,9 +111,24 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
     const saveEdit = async (v: VariacaoModelo) => {
         const novaQtd = parseInt(editingQtd, 10);
         if (isNaN(novaQtd) || novaQtd < 0) return;
+
+        const diff = novaQtd - v.quantidade;
+        if (diff === 0) {
+            setEditingId(null);
+            return;
+        }
+
         setSaving(true);
         try {
             await updateItem({ id: v.id, quantidade: novaQtd });
+            await addMovimentacao({
+                itemId: v.id,
+                tipo: diff > 0 ? 'entrada' : 'saida',
+                quantidade: Math.abs(diff),
+                motivo: `Ajuste manual (Individual) - Tam ${v.tamanho}`,
+                producaoId: null
+            });
+
             setLocalVariacoes(prev =>
                 prev.map(lv => lv.id === v.id ? { ...lv, quantidade: novaQtd } : lv)
             );
@@ -119,30 +139,54 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
         }
     };
 
+    const handleApplyGrade = async () => {
+        const valorGrade = parseInt(qtdGrade, 10);
+        if (isNaN(valorGrade) || valorGrade < 0) return;
+
+        setApplyingGrade(true);
+        try {
+            for (const v of localVariacoes) {
+                const diff = valorGrade - v.quantidade;
+                if (diff !== 0) {
+                    await updateItem({ id: v.id, quantidade: valorGrade });
+                    await addMovimentacao({
+                        itemId: v.id,
+                        tipo: diff > 0 ? 'entrada' : 'saida',
+                        quantidade: Math.abs(diff),
+                        motivo: `Ajuste manual (Grade) - Tam ${v.tamanho}`,
+                        producaoId: null
+                    });
+                }
+            }
+
+            setLocalVariacoes(prev => prev.map(v => ({ ...v, quantidade: valorGrade })));
+            setQtdGrade('');
+            queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
+        } finally {
+            setApplyingGrade(false);
+        }
+    };
+
     return (
         <>
             <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-                <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0">
-                    <DialogHeader className="px-6 pt-6 pb-4 border-b border-border bg-gradient-to-r from-purple-500/5 to-indigo-500/10">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <DialogTitle className="text-xl font-bold">{nome}</DialogTitle>
-                                <div className="flex items-center gap-2 mt-1.5">
-                                    <Badge className="bg-purple-100 text-purple-700 border-purple-200 border text-[10px] font-bold uppercase tracking-wider rounded-md gap-1">
-                                        <Layers className="h-3 w-3" />
-                                        Modelo Padronizado
-                                    </Badge>
-                                    <span className="text-xs text-muted-foreground font-mono">{meta.referencia}</span>
-                                </div>
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0 rounded-2xl sm:rounded-3xl border-0 shadow-2xl">
+                    <DialogHeader className="px-5 sm:px-8 pt-6 pb-5 border-b border-border bg-gradient-to-br from-purple-500/5 via-indigo-500/5 to-transparent">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
+                            <div className="flex-1 min-w-0 space-y-2">
+                                <DialogTitle className="text-xl sm:text-2xl font-black text-foreground leading-tight tracking-tight break-words">
+                                    {nome}
+                                </DialogTitle>
                             </div>
+                            
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="gap-2 shrink-0 border-purple-200 text-purple-700 hover:bg-purple-50"
+                                className="w-full sm:w-auto h-10 sm:h-9 gap-2 shrink-0 border-indigo-200 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl font-bold shadow-sm"
                                 onClick={() => setShowEtiquetas(true)}
                             >
                                 <Printer className="h-4 w-4" />
-                                Imprimir Etiquetas
+                                <span className="sm:text-xs">Imprimir Etiquetas</span>
                             </Button>
                         </div>
                     </DialogHeader>
@@ -211,23 +255,55 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                             <Separator />
 
                             {/* Tabela de variações */}
-                            <div className="space-y-3">
-                                <h3 className="font-bold text-sm flex items-center gap-2">
-                                    <Tags className="h-4 w-4 text-primary" />
-                                    Variações e Estoque
-                                </h3>
+                            <div className="space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 py-3 px-4 rounded-xl bg-primary/5 border border-primary/10 shadow-sm">
+                                    <div className="space-y-1.5 flex-1 max-w-[280px]">
+                                        <Label htmlFor="qtd-grade" className="text-[10px] uppercase font-bold text-primary tracking-widest">
+                                            QTD para TODAS as numerações
+                                        </Label>
+                                        <div className="flex gap-2">
+                                            <Input
+                                                id="qtd-grade"
+                                                type="number"
+                                                min={0}
+                                                placeholder="Ex: 34"
+                                                className="h-10 shadow-sm bg-background border-primary/20"
+                                                value={qtdGrade}
+                                                onChange={e => setQtdGrade(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && handleApplyGrade()}
+                                            />
+                                            <Button
+                                                size="sm"
+                                                className="gap-2 shrink-0 h-10 px-4"
+                                                onClick={handleApplyGrade}
+                                                disabled={applyingGrade || !qtdGrade}
+                                            >
+                                                {applyingGrade ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                                Aplicar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="text-right hidden sm:block">
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-1 opacity-70">Total Atual</p>
+                                        <p className="text-3xl font-black text-primary leading-none tracking-tight">{totalPecas} <span className="text-sm font-bold opacity-50 uppercase">pçs</span></p>
+                                    </div>
+                                </div>
 
-                                <div className="rounded-xl border border-border overflow-hidden">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="bg-muted/40 border-b border-border">
-                                                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tamanho</th>
-                                                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Referência</th>
-                                                <th className="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Código de Barras</th>
-                                                <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Qtd.</th>
-                                                <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                                            </tr>
-                                        </thead>
+                                <div className="space-y-3">
+                                    <h3 className="font-bold text-sm flex items-center gap-2 px-1">
+                                        <Tags className="h-4 w-4 text-primary" />
+                                        Estoque por Tamanho
+                                    </h3>
+
+                                    <div className="rounded-xl border border-border overflow-hidden bg-background shadow-sm">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="bg-muted/40 border-b border-border">
+                                                    <th className="text-left px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Tamanho</th>
+                                                    <th className="text-right px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Quantidade</th>
+                                                    <th className="text-right px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Status</th>
+                                                </tr>
+                                            </thead>
                                         <tbody>
                                             {localVariacoes.length === 0 ? (
                                                 <tr>
@@ -244,16 +320,10 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                                             idx % 2 === 0 ? 'bg-background' : 'bg-muted/10'
                                                         )}
                                                     >
-                                                        <td className="px-4 py-3">
-                                                            <span className="font-bold text-base">{v.tamanho}</span>
+                                                        <td className="px-5 py-4">
+                                                            <span className="font-black text-xl">{v.tamanho}</span>
                                                         </td>
-                                                        <td className="px-4 py-3">
-                                                            <code className="text-xs font-mono bg-muted px-2 py-1 rounded">{v.referencia}</code>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-center">
-                                                            <BarcodeInline value={v.referencia} />
-                                                        </td>
-                                                        <td className="px-4 py-3 text-right">
+                                                        <td className="px-5 py-4 text-right">
                                                             {editingId === v.id ? (
                                                                 <div className="flex items-center justify-end gap-1">
                                                                     <Input
@@ -290,9 +360,9 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                                                 </div>
                                                             )}
                                                         </td>
-                                                        <td className="px-4 py-3 text-right">
-                                                            <Badge className={cn('text-[10px] border', getStockColor(v.quantidade))}>
-                                                                {v.quantidade === 0 ? 'Esgotado' : v.quantidade <= 3 ? 'Baixo' : 'OK'}
+                                                        <td className="px-5 py-4 text-right">
+                                                            <Badge className={cn('text-[10px] border font-bold uppercase', getStockColor(v.quantidade))}>
+                                                                {v.quantidade === 0 ? 'Esgotado' : v.quantidade <= 3 ? 'Baixo' : 'Em Dia'}
                                                             </Badge>
                                                         </td>
                                                     </tr>
@@ -303,7 +373,8 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                 </div>
                             </div>
                         </div>
-                    </ScrollArea>
+                    </div>
+                </ScrollArea>
                 </DialogContent>
             </Dialog>
 

@@ -644,42 +644,61 @@ export default function Dashboard() {
           <KpiCardSkeleton />
           <KpiCardSkeleton />
           <KpiCardSkeleton />
-        </> : kpiCards.map(kpi => <Card key={kpi.title} className={cn("bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-h-[140px] transition-all duration-200 relative", kpi.clickable && "cursor-pointer hover:scale-[1.02] hover:shadow-md")} onClick={kpi.clickable ? kpi.onClick : undefined}>
-          {kpi.showBruto && <Badge variant="outline" className="absolute top-2 right-2 text-[10px] bg-amber-50 text-amber-600 border-amber-200">
+        </> : kpiCards.map(kpi => <Card 
+            key={kpi.title} 
+            className={cn(
+              "bg-white rounded-xl shadow-sm border border-gray-200 transition-all duration-200 relative overflow-hidden", 
+              kpi.clickable && "cursor-pointer hover:shadow-md active:scale-[0.98]"
+            )} 
+            onClick={kpi.clickable ? kpi.onClick : undefined}
+          >
+          {kpi.showBruto && <Badge variant="outline" className="absolute top-2 right-2 text-[8px] sm:text-[10px] bg-amber-50 text-amber-600 border-amber-200 px-1 py-0">
             Bruto
           </Badge>}
-          <CardContent className="p-3 sm:p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center mb-2 sm:mb-3`}>
-                  <kpi.icon size={isMobile ? 16 : 20} className="text-indigo-600" />
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex flex-col gap-3">
+              {/* Top Row: Icon and Variation */}
+              <div className="flex items-center justify-between w-full">
+                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-indigo-600/10 flex items-center justify-center">
+                  <kpi.icon size={isMobile ? 18 : 22} className="text-indigo-600" />
                 </div>
-                <p className="text-xl sm:text-3xl font-bold text-gray-800 tracking-tight">{kpi.value}</p>
-                <p className="text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider mt-1 line-clamp-1">{kpi.title}</p>
-                {kpi.breakdown && (
-                  <div className="flex flex-nowrap items-center gap-1 mt-2 overflow-x-auto pb-1 w-full hide-scrollbar">
-                    {kpi.breakdown
-                      .filter((item: { label: string; value: number; colorClass: string }) => item.value >= 0)
-                      .map((item: { label: string; value: number; colorClass: string }) => (
-                        <span
-                          key={item.label}
-                          className={`inline-flex items-center flex-shrink-0 gap-0.5 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-semibold whitespace-nowrap ${item.colorClass}`}
-                        >
-                          {item.value} {item.label}
-                        </span>
-                      ))}
+                <div className="flex flex-col items-end">
+                  <div className={`flex items-center gap-1 text-[10px] sm:text-xs font-bold ${(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? "text-emerald-600" : "text-red-500"}`}>
+                    {(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? <TrendingUp size={isMobile ? 12 : 14} /> : <TrendingDown size={isMobile ? 12 : 14} />}
+                    <span>{kpi.variation.value.toFixed(1)}%</span>
                   </div>
-                )}
-              </div>
-              <div className="flex flex-col items-end">
-                <div className={`flex items-center gap-1 text-[10px] sm:text-xs font-semibold ${(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? "text-emerald-600" : "text-red-500"}`}>
-                  {(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? <TrendingUp size={isMobile ? 12 : 14} /> : <TrendingDown size={isMobile ? 12 : 14} />}
-                  <span>{kpi.variation.value.toFixed(1)}%</span>
+                  <span className="text-[7px] sm:text-[9px] text-muted-foreground/60 uppercase font-medium">
+                    vs. {anoPassado}
+                  </span>
                 </div>
-                <span className="text-[8px] sm:text-[10px] text-muted-foreground/50 mt-0.5">
-                  vs. mesmo período de {anoPassado}
-                </span>
               </div>
+
+              {/* Main Info Row */}
+              <div className="space-y-0.5">
+                <p className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight leading-none break-all">
+                  {kpi.value}
+                </p>
+                <p className="text-[9px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest truncate">
+                  {kpi.title}
+                </p>
+              </div>
+
+              {/* Breakdown Tags (If any) */}
+              {kpi.breakdown && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  {kpi.breakdown
+                    .filter((item: { label: string; value: number; colorClass: string }) => item.value >= 0)
+                    .map((item: { label: string; value: number; colorClass: string }) => (
+                      <span
+                        key={item.label}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] sm:text-[10px] font-bold border border-transparent transition-colors shadow-sm ${item.colorClass}`}
+                      >
+                        <span className="opacity-70">{item.value}</span>
+                        <span className="uppercase tracking-tighter">{item.label}</span>
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>)}
@@ -1012,7 +1031,7 @@ export default function Dashboard() {
                               {modelo.nome}
                             </span>
                           </span>
-                          <span className="font-medium flex-shrink-0 ml-2">{modelo.quantidade} un</span>
+                          <span className="font-medium flex-shrink-0 ml-2">{modelo.quantidade} peças</span>
                         </div>
                         <Progress value={modelo.quantidade / maxModelo * 100} className="h-2" />
                       </div>

@@ -128,7 +128,7 @@ export function MobileProductCard({
       {/* Stock status indicator */}
       <div 
         className={cn(
-          "absolute top-2 right-2 w-3 h-3 rounded-full z-10",
+          "absolute top-2 left-2 w-2.5 h-2.5 rounded-full z-20 shadow-sm border border-white dark:border-gray-900",
           stockStatus.color
         )}
         title={stockStatus.label}

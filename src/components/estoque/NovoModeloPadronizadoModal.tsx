@@ -193,7 +193,7 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
                         {/* ── Imagem ─────────────────────────────── */}
                         <div className="flex gap-6 items-start">
                             <div
-                                className="relative w-28 h-28 shrink-0 rounded-xl border-2 border-dashed border-border cursor-pointer overflow-hidden bg-muted/30 hover:border-primary/50 transition-colors group"
+                                className="relative w-36 h-48 shrink-0 rounded-xl border-2 border-dashed border-border cursor-pointer overflow-hidden bg-muted/30 hover:border-primary/50 transition-colors group shadow-sm"
                                 onClick={() => fileInputRef.current?.click()}
                             >
                                 {imagemPreview ? (

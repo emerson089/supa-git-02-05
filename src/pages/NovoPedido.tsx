@@ -4,6 +4,7 @@ import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/contexts/AuthContext';
 import { ClienteInfoCard } from '@/components/pedidos/ClienteInfoCard';
 import { ClienteInsightsCard } from '@/components/pedidos/ClienteInsightsCard';
 import { statusPagamentoOptions, statusPedidoOptions, statusEntregaOptions } from '@/components/pedidos/StatusSelector';
@@ -40,6 +41,7 @@ function formatPhone(phone: string): string {
 const STORAGE_KEY = 'novo-pedido-draft';
 const NovoPedido = () => {
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const {
     clientes,
@@ -303,13 +305,10 @@ const NovoPedido = () => {
       });
       toast.success('Pedido cadastrado com sucesso! Estoque atualizado.');
 
-      // Enviar WhatsApp automaticamente se ativado
-      if (enviarWhatsApp && telefone) {
-        try {
-          const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
-          const valorFormatado = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-          const mensagem = `Olá, ${clienteNome}! Pedido confirmado! 🎉
+      // Geração da mensagem de WhatsApp (mesma para cliente e gerente)
+      const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
+      const valorFormatado = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const mensagem = `Olá, ${clienteNome}! Pedido confirmado! 🎉
 
 💰 Total: ${valorFormatado}
 
@@ -320,7 +319,10 @@ Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido.
 
 Qualquer dúvida é só chamar! 😊`;
 
-          // Normalizar telefone
+      // 1. Enviar WhatsApp para o CLIENTE automaticamente se ativado
+      if (enviarWhatsApp && telefone) {
+        try {
+          // Normalizar telefone do cliente
           let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
           if (!digits.startsWith('55')) digits = '55' + digits;
 
@@ -328,11 +330,36 @@ Qualquer dúvida é só chamar! 😊`;
             await supabase.functions.invoke('send-whatsapp', {
               body: { phone: digits, message: mensagem },
             });
-            toast.success('Resumo enviado via WhatsApp!');
+            toast.success('Resumo enviado ao cliente via WhatsApp!');
           }
         } catch (whatsErr) {
-          console.error('Erro ao enviar WhatsApp:', whatsErr);
-          toast.error('Pedido criado, mas não foi possível enviar o WhatsApp.');
+          console.error('Erro ao enviar WhatsApp ao cliente:', whatsErr);
+          toast.error('Pedido criado, mas erro ao notificar cliente.');
+        }
+      }
+
+      // 2. Enviar WhatsApp para os ADMINISTRADORES (Configurações -> Notificações)
+      const metadata = user?.user_metadata || {};
+      const adminNumbers = (metadata.notification_numbers || []) as string[];
+      const notifyOnOrderGlobal = metadata.notify_on_order !== false;
+
+      if (notifyOnOrderGlobal && adminNumbers.length > 0) {
+        const dataHora = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+        const msgAdmin = `NOTIFICAÇÃO DE VENDA\nCliente: ${cliente?.nome || 'Não Informado'}\nData: ${dataHora}\n💰 Total: ${valorFormatado}\nQuantidade de pecas : ${totalPecas}`;
+        
+        // Enviar para cada número da lista (em paralelo mas silenciosamente para não poluir UI)
+        adminNumbers.forEach(async (adminPhone) => {
+          try {
+            await supabase.functions.invoke('send-whatsapp', {
+              body: { phone: adminPhone, message: msgAdmin },
+            });
+          } catch (err) {
+            console.error('Erro ao notificar administrador:', adminPhone, err);
+          }
+        });
+        
+        if (!enviarWhatsApp || !telefone) {
+          toast.success('Gerência notificada via WhatsApp!');
         }
       }
 
@@ -425,7 +452,7 @@ Qualquer dúvida é só chamar! 😊`;
     {!isMobile && <AppSidebar />}
 
     {/* Main Content */}
-    <main className={cn("flex-1 flex flex-col h-screen overflow-hidden", isMobile && "pt-14 pb-20")}>
+    <main className={cn("flex-1 flex flex-col h-screen overflow-hidden", isMobile && "pt-14 pb-28")}>
       {/* Header - Desktop only */}
       {!isMobile && <header className="px-8 py-6 flex-shrink-0">
         <h1 className="text-2xl font-bold text-foreground">NOVO PEDIDO</h1>
@@ -435,7 +462,7 @@ Qualquer dúvida é só chamar! 😊`;
       </header>}
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
+      <div className={cn("flex-1 overflow-y-auto pb-8", isMobile ? "px-4" : "px-8")}>
         <div className="max-w-5xl space-y-8">
           {/* Cliente Info Card */}
           <ClienteInfoCard clienteId={clienteId} cidade={cidade} estado={estado} telefone={telefone} excursao={excursao} excursaoId={excursaoId} taxaExcursao={taxaExcursao} onClienteChange={setClienteId} onCidadeChange={setCidade} onEstadoChange={setEstado} onTelefoneChange={setTelefone} onExcursaoChange={setExcursao} onExcursaoIdChange={setExcursaoId} onTaxaExcursaoChange={setTaxaExcursao} onAddCliente={handleAddCliente} />

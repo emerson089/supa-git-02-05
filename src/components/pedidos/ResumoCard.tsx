@@ -45,7 +45,7 @@ export function ResumoCard({
   const temDesconto = desconto > 0;
 
   return (
-    <div className="neu-card p-7">
+    <div className="neu-card p-4 sm:p-7">
       {/* Linha auxiliar: Subtotal e Taxa Excursão */}
       {(taxaExcursao > 0 || valorItens > 0) && (
         <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-muted-foreground">
@@ -123,28 +123,28 @@ export function ResumoCard({
       </div>
 
       {/* WhatsApp toggle + Botões */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/30">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-6 border-t border-border/30">
         {/* WhatsApp toggle */}
         {onEnviarWhatsAppChange && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
             <Switch
               id="enviar-whatsapp"
               checked={enviarWhatsApp}
               onCheckedChange={onEnviarWhatsAppChange}
             />
-            <Label htmlFor="enviar-whatsapp" className="flex items-center gap-2 text-sm cursor-pointer">
+            <Label htmlFor="enviar-whatsapp" className="flex items-center gap-2 text-sm cursor-pointer font-medium">
               <MessageCircle className="h-4 w-4 text-[#25D366]" />
               Enviar resumo via WhatsApp
             </Label>
           </div>
         )}
 
-        <div className="flex items-center gap-4 ml-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
           <Button
             type="button"
             variant="outline"
             onClick={onLimpar}
-            className="h-12 px-8 rounded-xl border-border bg-background hover:bg-muted/50 text-foreground font-medium"
+            className="h-12 w-full sm:w-auto px-8 rounded-xl border-border bg-background hover:bg-muted/50 text-foreground font-medium order-2 sm:order-1"
           >
             Limpar Formulário
           </Button>
@@ -152,7 +152,7 @@ export function ResumoCard({
             type="button"
             onClick={onCriarPedido}
             disabled={isLoading || disabled}
-            className="h-12 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-12 w-full sm:w-auto px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium disabled:opacity-50 disabled:cursor-not-allowed order-1 sm:order-2 shadow-lg shadow-primary/20"
           >
             {isLoading ? 'Criando...' : disabled ? 'Estoque Insuficiente' : 'Criar Pedido'}
           </Button>

@@ -143,14 +143,10 @@ export function ModeloPadronizadoCard({
                 <div className="p-4 flex flex-col flex-1 gap-3">
                     {/* Head */}
                     <div className="space-y-1">
-                        <div className="flex items-start justify-between gap-2">
-                            <h3 className="font-bold text-base text-foreground line-clamp-2 leading-tight">{meta.referencia}</h3>
-                            <Badge className="shrink-0 bg-purple-100 text-purple-700 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded-md gap-1 whitespace-nowrap">
-                                <Layers className="h-2.5 w-2.5" />
-                                Modelo Pad.
-                            </Badge>
-                        </div>
-                        <p className="text-sm text-foreground/80 font-medium line-clamp-1">{nome.split('—')[0].trim()}</p>
+                        <h3 className="font-bold text-base text-foreground line-clamp-2 leading-tight">
+                            {nome.split('—')[0].trim()}
+                        </h3>
+                        <p className="text-sm text-foreground/80 font-medium line-clamp-1">{meta.referencia}</p>
                         <p className="text-xs text-muted-foreground">{TIPO_GARMENT_LABELS[meta.tipo]}</p>
                     </div>
 

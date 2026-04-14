@@ -13,6 +13,7 @@ export interface ClienteCRMBatchStats {
   ultimoPedidoStatus: string | null;
   ultimoPedidoPendenteValor: number | null;
   ultimoPedidoPendenteData: Date | null;
+  createdAt?: Date;
 }
 
 export type ClienteStatusLabel = 'VIP' | 'Frequente' | 'Inativo';
@@ -171,6 +172,28 @@ async function fetchAllPedidosMinimal(userId: string) {
   }
   return allPedidos;
 }
+async function fetchAllClientesMinimal(userId: string) {
+  let allClientes: { id: string; created_at: string }[] = [];
+  let from = 0;
+  let hasMore = true;
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('id, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE_CRM - 1);
+    if (error) throw error;
+    if (data && data.length > 0) {
+      allClientes = [...allClientes, ...data];
+      from += PAGE_SIZE_CRM;
+      hasMore = data.length === PAGE_SIZE_CRM;
+    } else {
+      hasMore = false;
+    }
+  }
+  return allClientes;
+}
 
 /**
  * Hook to get IDs of clients that match a CRM status filter.
@@ -179,7 +202,7 @@ async function fetchAllPedidosMinimal(userId: string) {
  * or highest total purchased for 'maior_historico' sorting).
  */
 export function useClientesCRMFilter(
-  filtroStatus: 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | null,
+  filtroStatus: 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | 'novos' | null,
   ordenacao?: 'nome' | 'recente' | 'maior_historico'
 ) {
   const { user } = useAuth();
@@ -193,12 +216,7 @@ export function useClientesCRMFilter(
 
       // STEP 1: Fetch all client IDs for this user first
       // This ensures clients with no orders are also evaluated
-      const { data: allClientes, error: clientesError } = await supabase
-        .from('clientes')
-        .select('id')
-        .eq('user_id', user.id);
-
-      if (clientesError) throw clientesError;
+      const allClientes = await fetchAllClientesMinimal(user.id);
       if (!allClientes || allClientes.length === 0) return [];
 
       // STEP 2: Fetch all orders with minimal fields for filtering
@@ -220,6 +238,7 @@ export function useClientesCRMFilter(
           ultimoPedidoStatus: null,
           ultimoPedidoPendenteValor: null,
           ultimoPedidoPendenteData: null,
+          createdAt: new Date(cliente.created_at),
         });
       }
 
@@ -286,6 +305,9 @@ export function useClientesCRMFilter(
             break;
           case 'sem_compras':
             matches = stats.totalComprado === 0 && stats.ultimaCompra === null;
+            break;
+          case 'novos':
+            matches = differenceInDays(hoje, stats.createdAt) < 7;
             break;
         }
 

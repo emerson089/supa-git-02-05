@@ -198,7 +198,7 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                         </span>
                         {produtoSelecionado?.referencia && (
                           <span className="text-[10px] text-muted-foreground mt-0.5 truncate w-full text-left">
-                            Ref: {produtoSelecionado.referencia}
+                            Ref: {produtoSelecionado.referencia.slice(-3)}
                           </span>
                         )}
                       </>
@@ -240,13 +240,25 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                           {(() => {
                             const refToDisplay = produto.refBase || produto.referencia;
                             const totalModelEstoque = produto.totalModelEstoque ?? produto.quantidadeDisponivel;
-                            const refDisplay = refToDisplay ? `ref ${refToDisplay} · ` : '';
-                            const qtdDisplay = produto.quantidadeDisponivel === 0
-                              ? (produto.gradeReserved ? 'Todos em grade' : 'Esgotado')
-                              : produto.gradeReserved
-                                ? `${produto.quantidadeDisponivel} fora da grade`
-                                : `${totalModelEstoque} em estoque`;
-                            return refDisplay + qtdDisplay;
+                            const lastThree = refToDisplay ? refToDisplay.slice(-3) : '';
+                            const refDisplay = lastThree ? `REF ${lastThree} · ` : '';
+                            
+                            if (produto.quantidadeDisponivel === 0) {
+                              return refDisplay + (produto.gradeReserved ? 'Todos em grade' : 'Esgotado');
+                            }
+                            
+                            const count = produto.quantidadeDisponivel;
+                            const statusText = produto.gradeReserved ? 'FORA DA GRADE' : 'EM ESTOQUE';
+                            
+                            return (
+                              <>
+                                {refDisplay}
+                                <span className="font-extrabold italic">
+                                  <span className="text-red-600">{count}</span>
+                                  <span className="text-foreground"> {statusText}</span>
+                                </span>
+                              </>
+                            );
                           })()}
                         </span>
                       </div>

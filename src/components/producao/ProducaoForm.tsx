@@ -725,7 +725,7 @@ function ImagePreview({ imagePath, onRemove }: { imagePath: string; onRemove: ()
 
   return (
     <div className="relative">
-      <div className="border border-border rounded-lg overflow-hidden bg-muted flex items-center justify-center h-40">
+      <div className="border border-border rounded-lg overflow-hidden bg-muted flex items-center justify-center h-48">
         {loading ? (
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         ) : signedUrl ? (

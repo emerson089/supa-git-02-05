@@ -49,7 +49,7 @@ const emptyCliente = {
   excursao: ''
 };
 type Ordenacao = 'nome' | 'recente' | 'maior_historico';
-type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras';
+type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | 'novos';
 const PAGE_SIZE = 24;
 function formatCurrency(value: number): string {
   return value.toLocaleString('pt-BR', {
@@ -157,13 +157,14 @@ const ClienteCard = memo(function ClienteCard({
     cidade: cliente.cidade,
     estado: cliente.estado,
     excursao: cliente.excursao,
-    dataCadastro
+    dataCadastro,
+    isNovo: differenceInDays(new Date(), new Date(cliente.created_at)) < 7
   };
 
   const statsForWhatsApp = stats ? { ...stats, clienteId: stats.clienteId } : undefined;
 
   return (
-    <div className={cn("neu-card p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group flex flex-col h-full", borderClass)}>
+    <div className={cn("neu-card p-4 sm:p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group flex flex-col h-full", borderClass)}>
       {/* Topo: Avatar, Nome, Data e Badges */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -214,19 +215,24 @@ const ClienteCard = memo(function ClienteCard({
                 {status.label}
               </Badge>
             )}
+            {clienteForWhatsApp.isNovo && (
+              <Badge className="text-[10px] px-1.5 py-0.5 whitespace-nowrap bg-emerald-500 hover:bg-emerald-600 text-white border-0 shadow-sm animate-pulse">
+                NOVO
+              </Badge>
+            )}
           </div>
         </div>
       </div>
 
       {/* Ações: Div dedicada abaixo do nome com gap-4 */}
-      <div className="flex items-center gap-4 mb-5 border-b border-border/40 pb-4">
+      <div className="flex items-center gap-2 sm:gap-4 mb-5 border-b border-border/40 pb-4">
         <div className="flex items-center">
           <WhatsAppButton cliente={clienteForWhatsApp} stats={statsForWhatsApp} onContatoRegistrado={onWhatsAppEnviado} />
         </div>
         {cliente.telefone && (
           <a
             href={`tel:${cliente.telefone.replace(/\D/g, '')}`}
-            className="w-8 h-8 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 flex items-center justify-center transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 flex items-center justify-center transition-colors flex-shrink-0"
             title="Ligar"
           >
             <PhoneCall size={14} className="text-blue-500" />
@@ -235,7 +241,7 @@ const ClienteCard = memo(function ClienteCard({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center transition-colors"
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center transition-colors flex-shrink-0"
               title="Marcar como contatado"
             >
               <CheckCircle2 size={14} className="text-emerald-500" />
@@ -256,10 +262,10 @@ const ClienteCard = memo(function ClienteCard({
 
         <div className="flex-1" /> {/* Empurra os próximos pra direita */}
 
-        <button onClick={() => onEdit(cliente)} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors">
+        <button onClick={() => onEdit(cliente)} className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors flex-shrink-0">
           <Pencil size={14} className="text-muted-foreground hover:text-primary" />
         </button>
-        <button onClick={() => onDelete(cliente)} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors">
+        <button onClick={() => onDelete(cliente)} className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors flex-shrink-0">
           <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
         </button>
       </div>
@@ -269,9 +275,9 @@ const ClienteCard = memo(function ClienteCard({
         <div className="mb-4">
           <button
             onClick={() => setFeedbackOpen(true)}
-            className="w-full h-9 rounded-xl border border-dashed border-orange-300 dark:border-orange-800/30 text-orange-600 dark:text-orange-400 bg-orange-50/50 dark:bg-orange-950/20 hover:bg-orange-50 dark:hover:bg-orange-950/40 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+            className="w-full h-8 sm:h-9 rounded-xl border border-dashed border-orange-300 dark:border-orange-800/30 text-orange-600 dark:text-orange-400 bg-orange-50/50 dark:bg-orange-950/20 hover:bg-orange-50 dark:hover:bg-orange-950/40 text-xs sm:text-sm font-medium transition-colors flex items-center justify-center gap-2"
           >
-            <MessageSquarePlus size={16} />
+            <MessageSquarePlus size={14} />
             Registrar Feedback
           </button>
         </div>
@@ -644,94 +650,96 @@ export default function Clientes() {
     {/* Sidebar - Desktop only */}
     {!isMobile && <AppSidebar />}
 
-    <main className={cn("flex-1 p-6 lg:p-8 overflow-auto", isMobile && "pt-20 pb-24")}>
+    <main className={cn("flex-1 p-4 sm:p-6 lg:p-8 overflow-auto", isMobile && "pt-20 pb-28")}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground">CLIENTES</h1>
-          <p className="text-muted-foreground mt-1">Painel CRM - Gerencie sua base de clientes</p>
+          <p className="text-sm text-muted-foreground mt-1 truncate">Painel CRM - Gerencie sua base de clientes</p>
         </div>
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           {user?.id && (
-            <Button onClick={handleOpenTransmissao} disabled={isCarregandoTransmissao} className="h-11 px-5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white transition-colors shadow-lg shadow-orange-500/20">
+            <Button onClick={handleOpenTransmissao} disabled={isCarregandoTransmissao} className="h-10 sm:h-11 px-3 sm:px-5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white transition-colors shadow-lg shadow-orange-500/20">
               {isCarregandoTransmissao ? (
-                 <Loader2 size={18} className="mr-2 animate-spin" />
+                 <Loader2 size={16} className="sm:mr-2 animate-spin" />
               ) : (
-                 <Send size={18} className="mr-2" />
+                 <Send size={16} className="sm:mr-2" />
               )}
               <span className="hidden sm:inline">Transmitir Catálogo</span>
             </Button>
           )}
-          <Button onClick={() => setClearDataModalOpen(true)} variant="outline" className="h-11 px-5 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 transition-colors">
-            <AlertTriangle size={18} className="mr-2" />
-            <span className="hidden sm:inline">Limpar Dados</span>
-          </Button>
-          <Button onClick={handleExportCSV} className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg">
-            <Download size={18} className="mr-2" />
-            <span className="hidden sm:inline">Exportar</span>
-          </Button>
-          <Button onClick={() => setImportModalOpen(true)} className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg">
-            <FileSpreadsheet size={18} className="mr-2" />
-            <span className="hidden sm:inline">Importar</span>
-          </Button>
-          <Button onClick={handleOpenNew} className="h-11 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg">
-            <Plus size={18} className="mr-2" />
-            <span className="hidden sm:inline">Novo Cliente</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setClearDataModalOpen(true)} variant="outline" size="icon" className="h-10 w-10 sm:h-11 sm:w-auto sm:px-4 rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors" title="Limpar Dados">
+              <AlertTriangle size={18} />
+              <span className="hidden sm:inline ml-2">Limpar</span>
+            </Button>
+            <Button onClick={handleExportCSV} variant="outline" size="icon" className="h-10 w-10 sm:h-11 sm:w-auto sm:px-4 rounded-xl border-border bg-background hover:bg-muted/50 text-foreground transition-colors" title="Exportar">
+              <Download size={18} />
+              <span className="hidden sm:inline ml-2">Exportar</span>
+            </Button>
+            <Button onClick={() => setImportModalOpen(true)} className="h-10 px-4 sm:h-11 sm:px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg">
+              <FileSpreadsheet size={18} className="sm:mr-2" />
+              <span className="hidden sm:inline">Importar</span>
+            </Button>
+            <Button onClick={handleOpenNew} className="h-10 px-4 sm:h-11 sm:px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg">
+              <Plus size={18} className="sm:mr-2" />
+              <span className="hidden sm:inline">Novo</span>
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Dashboard de Métricas CRM */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <Card className="p-4 neu-card rounded-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Users className="h-6 w-6 text-primary" />
+        <Card className="p-3 sm:p-4 neu-card rounded-xl">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Users className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total de Clientes</p>
-              <p className="text-2xl font-bold text-foreground">{crmMetrics.totalClientes.toLocaleString()}</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4 neu-card rounded-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-              <Receipt className="h-6 w-6 text-emerald-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Ticket Médio</p>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(crmMetrics.ticketMedio)}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-sm text-muted-foreground uppercase tracking-wider font-semibold">Total Clientes</p>
+              <p className="text-lg sm:text-2xl font-bold text-foreground truncate">{crmMetrics.totalClientes.toLocaleString()}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4 neu-card rounded-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-indigo-500" />
+        <Card className="p-3 sm:p-4 neu-card rounded-xl">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <Receipt className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-500" />
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">LTV Médio</p>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(crmMetrics.ltvMedio)}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Valor médio gerado por cliente ao longo do tempo
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-sm text-muted-foreground uppercase tracking-wider font-semibold">Ticket Médio</p>
+              <p className="text-lg sm:text-2xl font-bold text-foreground truncate">{formatCurrency(crmMetrics.ticketMedio)}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-3 sm:p-4 neu-card rounded-xl">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-sm text-muted-foreground uppercase tracking-wider font-semibold">LTV Médio</p>
+              <p className="text-lg sm:text-2xl font-bold text-foreground truncate">{formatCurrency(crmMetrics.ltvMedio)}</p>
+              <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5 leading-tight hidden xs:block">
+                Valor médio acumulado
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4 neu-card rounded-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-teal-500/10 flex items-center justify-center">
-              <RefreshCw className="h-6 w-6 text-teal-500" />
+        <Card className="p-3 sm:p-4 neu-card rounded-xl">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-teal-500/10 flex items-center justify-center flex-shrink-0">
+              <RefreshCw className="h-5 w-5 sm:h-6 sm:w-6 text-teal-500" />
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Taxa de Retenção</p>
-              <p className="text-2xl font-bold text-foreground">{crmMetrics.taxaRetencao.toFixed(1)}%</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Clientes que compraram mais de uma vez
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-sm text-muted-foreground uppercase tracking-wider font-semibold">Taxa Retenção</p>
+              <p className="text-lg sm:text-2xl font-bold text-foreground truncate">{crmMetrics.taxaRetencao.toFixed(1)}%</p>
+              <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5 leading-tight hidden xs:block">
+                Recompras
               </p>
             </div>
           </div>
@@ -761,9 +769,10 @@ export default function Clientes() {
           </SelectContent>
         </Select>
 
-        <div className="flex gap-2 flex-wrap">
-          {(['todos', 'vip', 'frequente', 'risco', 'pendente', 'sem_compras'] as FiltroStatus[]).map(filtro => <Button key={filtro} size="sm" variant={filtroStatus === filtro ? 'default' : 'outline'} onClick={() => handleFiltroChange(filtro)} className={cn("rounded-xl h-10 px-4", filtroStatus === filtro && "bg-primary text-primary-foreground", filtro === 'pendente' && filtroStatus !== filtro && "border-yellow-400 text-yellow-700")}>
+        <div className="flex gap-2 pb-2 overflow-x-auto no-scrollbar scroll-smooth">
+          {(['todos', 'novos', 'vip', 'frequente', 'risco', 'pendente', 'sem_compras'] as FiltroStatus[]).map(filtro => <Button key={filtro} size="sm" variant={filtroStatus === filtro ? 'default' : 'outline'} onClick={() => handleFiltroChange(filtro)} className={cn("rounded-xl h-9 px-3 whitespace-nowrap text-xs sm:text-sm flex-shrink-0 transition-all", filtroStatus === filtro ? "bg-primary text-primary-foreground shadow-md" : "border-border hover:bg-muted/50", (filtro === 'pendente' || filtro === 'novos') && filtroStatus !== filtro && "border-yellow-400/50 text-yellow-700 bg-yellow-50/30")}>
             {filtro === 'todos' && 'Todos'}
+            {filtro === 'novos' && '🎈 Novos'}
             {filtro === 'vip' && '⭐ VIP'}
             {filtro === 'frequente' && '🔵 Frequentes'}
             {filtro === 'risco' && '⚠️ Risco'}
@@ -779,17 +788,19 @@ export default function Clientes() {
           {totalCount > 0 ? <>Mostrando <span className="font-medium text-foreground">{fromItem}-{toItem}</span> de <span className="font-medium text-foreground">{totalCount.toLocaleString()}</span> clientes</> : 'Nenhum cliente encontrado'}
         </span>
 
-        {totalPages > 1 && <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={currentPage === 0 || isLoading} className="h-9 px-3 rounded-xl">
-            <ChevronLeft size={16} className="mr-1" />
-            Anterior
+        {totalPages > 1 && <div className="flex items-center gap-1 sm:gap-2">
+          <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={currentPage === 0 || isLoading} className="h-8 sm:h-9 px-2 sm:px-3 rounded-xl border-border bg-background">
+            <ChevronLeft size={16} />
+            <span className="hidden xs:inline ml-1">Anterior</span>
           </Button>
-          <span className="text-sm text-muted-foreground px-2">
-            {currentPage + 1} / {totalPages}
-          </span>
-          <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={currentPage >= totalPages - 1 || isLoading} className="h-9 px-3 rounded-xl">
-            Próxima
-            <ChevronRight size={16} className="ml-1" />
+          <div className="flex items-center justify-center px-1 min-w-[60px] sm:min-w-[80px]">
+            <span className="text-[11px] sm:text-sm font-medium text-foreground">
+              {currentPage + 1} <span className="text-muted-foreground font-normal mx-0.5">/</span> {totalPages}
+            </span>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={currentPage >= totalPages - 1 || isLoading} className="h-8 sm:h-9 px-2 sm:px-3 rounded-xl border-border bg-background">
+            <span className="hidden xs:inline mr-1">Próxima</span>
+            <ChevronRight size={16} />
           </Button>
         </div>}
       </div>

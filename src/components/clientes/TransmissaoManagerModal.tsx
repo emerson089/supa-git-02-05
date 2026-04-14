@@ -21,9 +21,13 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCatalogos, Catalogo } from '@/hooks/useCatalogos';
+import { useClienteContatos } from '@/hooks/useClienteContatos';
 
 const SAUDACOES = [
-  'Olá', 'Oii', 'Oie', 'Opa', 'Olaa', 'Oiii', 'E aí', 'Fala', 'Oi'
+  'Olá', 'Oii', 'Oie', 'Opa', 'Olaa', 'Oiii', 'E aí', 'Fala', 'Oi', 'Tudo bem?', 
+  'Bom dia', 'Boa tarde', 'Boa noite', 'Oiie', 'Opaa', 'Olá, tudo bem?', 'Oi, tudo bom?',
+  'Hey', 'Salve', 'Opa! Tudo certo?', 'Tudo certo por aí?', 'Oi como vai?', 'Passando por aqui para deixar...',
+  'Oi, passando para te mandar...', 'Oi! Tudo tranquilo?', 'E aí, beleza?'
 ];
 
 type Velocidade = 'ultra_seguro' | 'normal' | 'rapido';
@@ -57,12 +61,14 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 }) => {
   const { user } = useAuth();
   const { catalogos, loading: loadingCatalogos } = useCatalogos();
+  const { marcarContato, getContato } = useClienteContatos();
   const [selectedCatalogoId, setSelectedCatalogoId] = useState<string>('');
   const [velocidade, setVelocidade] = useState<Velocidade>('ultra_seguro');
   const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sucessos, setSucessos] = useState(0);
   const [falhas, setFalhas] = useState(0);
+  const [jaEnviados, setJaEnviados] = useState(0);
   const [logs, setLogs] = useState<{ id: string; msg: string; type: 'success' | 'error' }[]>([]);
   const [countdown, setCountdown] = useState(0);
   const [hasPersistedData, setHasPersistedData] = useState(false);
@@ -102,8 +108,12 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   // Auto-select active catalog
   useEffect(() => {
     if (catalogos.length > 0 && !selectedCatalogoId) {
-      const ativo = catalogos.find((c) => c.ativo);
-      setSelectedCatalogoId(ativo?.id || catalogos[0].id);
+      if (catalogos.filter(c => c.ativo).length > 1) {
+        setSelectedCatalogoId('all_active');
+      } else {
+        const ativo = catalogos.find((c) => c.ativo);
+        setSelectedCatalogoId(ativo?.id || catalogos[0].id);
+      }
     }
   }, [catalogos, selectedCatalogoId]);
 
@@ -150,38 +160,65 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
     try {
       if (!user?.id) throw new Error("Usuário não autenticado");
-      if (!selectedCatalogo) throw new Error("Nenhum catálogo selecionado");
+      const catalogsToSend = selectedCatalogoId === 'all_active' 
+        ? catalogos.filter(c => c.ativo)
+        : catalogos.filter(c => c.id === selectedCatalogoId);
 
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('lotes')
-        .createSignedUrl(selectedCatalogo.file_path, 604800);
+      if (catalogsToSend.length === 0) throw new Error("Nenhum catálogo disponível para envio.");
 
-      if (signedError || !signedData?.signedUrl) {
-        throw new Error("Catálogo não encontrado no storage.");
+      for (const cat of catalogsToSend) {
+        const { data: signedData, error: signedError } = await supabase.storage
+          .from('lotes')
+          .createSignedUrl(cat.file_path, 604800);
+
+        if (signedError || !signedData?.signedUrl) {
+          console.error(`Catálogo ${cat.nome} não encontrado.`);
+          continue;
+        }
+
+        const isFirst = catalogsToSend.indexOf(cat) === 0;
+        const hasNameTag = cat.mensagem?.includes('{nome}');
+        const saudacaoAleatoria = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
+        
+        let caption = '';
+        if (isFirst) {
+          const baseCaption = cat.mensagem
+            ? cat.mensagem.replace(/\{nome\}/g, cliente.nome.split(' ')[0])
+            : `Segue nosso catálogo atualizado!`;
+
+          caption = hasNameTag 
+            ? baseCaption 
+            : `${saudacaoAleatoria} ${cliente.nome.split(' ')[0]}! ${baseCaption}`;
+        } else {
+          // No segundo catálogo em diante, não adicionamos saudação automática
+          // Enviamos apenas a mensagem se ela existir, senão vai vazio
+          caption = cat.mensagem
+            ? cat.mensagem.replace(/\{nome\}/g, cliente.nome.split(' ')[0])
+            : '';
+        }
+
+        const fileName = `${cat.nome.replace(/[^a-zA-Z0-9 ]/g, '')}.pdf`;
+
+        const { error } = await supabase.functions.invoke('send-whatsapp', {
+          body: {
+            type: 'document',
+            phone: phoneResult.phone,
+            documentUrl: signedData.signedUrl,
+            fileName,
+            caption,
+          },
+        });
+
+        if (error) throw error;
+
+        // Se estiver enviando mais de um, pequeno delay extra
+        if (catalogsToSend.length > 1 && catalogsToSend.indexOf(cat) < catalogsToSend.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
       }
 
-      const saudacaoAleatoria = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
-      
-      const baseCaption = selectedCatalogo.mensagem
-        ? selectedCatalogo.mensagem.replace(/\{nome\}/g, cliente.nome.split(' ')[0])
-        : `Segue nosso catálogo atualizado!`;
-
-      // Se a mensagem original já começa com saudação ou tem {nome}, tentamos ser inteligentes
-      const caption = `${saudacaoAleatoria} ${cliente.nome.split(' ')[0]}! ${baseCaption}`;
-
-      const fileName = `${selectedCatalogo.nome.replace(/[^a-zA-Z0-9 ]/g, '')}.pdf`;
-
-      const { error } = await supabase.functions.invoke('send-whatsapp', {
-        body: {
-          type: 'document',
-          phone: phoneResult.phone,
-          documentUrl: signedData.signedUrl,
-          fileName,
-          caption,
-        },
-      });
-
-      if (error) throw error;
+      // Registrar sucesso no histórico
+      marcarContato(cliente.id, 'whatsapp');
 
       logMessage(`Enviado para ${cliente.nome.split(' ')[0]}`, 'success');
       setSucessos((prev) => prev + 1);
@@ -217,6 +254,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     setCurrentIndex(nextIndex);
     if (nextIndex >= total) {
       setStatus('completed');
+      localStorage.removeItem(STORAGE_KEY);
       toast.success('Transmissão finalizada!');
       return;
     }
@@ -240,7 +278,10 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
   const handleStart = () => {
     if (total === 0) { toast.error('Nenhum cliente na lista.'); return; }
-    if (!selectedCatalogo) { toast.error('Selecione um catálogo antes de iniciar.'); return; }
+    if (!selectedCatalogo && selectedCatalogoId !== 'all_active') { 
+      toast.error('Selecione um catálogo antes de iniciar.'); 
+      return; 
+    }
 
     if (status === 'idle') {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -278,6 +319,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     setCurrentIndex(0);
     setSucessos(0);
     setFalhas(0);
+    setJaEnviados(0);
     setLogs([]);
     setCountdown(0);
     localStorage.removeItem(STORAGE_KEY);
@@ -320,6 +362,11 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
+                    {catalogos.filter(c => c.ativo).length > 1 && (
+                      <SelectItem value="all_active" className="font-semibold text-primary">
+                        🚀 Todos os Catálogos Ativos
+                      </SelectItem>
+                    )}
                     {catalogos.map((cat) => (
                       <SelectItem key={cat.id} value={cat.id}>
                         {cat.nome} {cat.ativo ? '(Ativo)' : ''}
@@ -378,7 +425,11 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                 <CheckCircle2 size={16} className="text-emerald-500" />
                 <span className="font-medium text-emerald-700 dark:text-emerald-400">{sucessos} Entregues</span>
               </div>
-              <div className="flex items-center gap-2 text-sm bg-destructive/5 px-3 py-2 rounded-lg border border-destructive/10">
+              <div className="flex items-center gap-2 text-sm bg-blue-50 dark:bg-blue-950/20 px-3 py-2 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                <CheckCircle2 size={16} className="text-blue-500" />
+                <span className="font-medium text-blue-700 dark:text-blue-400">{jaEnviados} Já Enviados</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm bg-destructive/5 px-3 py-2 rounded-lg border border-destructive/10 col-span-2">
                 <AlertTriangle size={16} className="text-destructive" />
                 <span className="font-medium text-destructive">{falhas} Falhas</span>
               </div>

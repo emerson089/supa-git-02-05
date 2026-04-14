@@ -16,7 +16,6 @@ import PedidosCriados from "./pages/PedidosCriados";
 import Clientes from "./pages/Clientes";
 import Estoque from "./pages/Estoque";
 import Feira from "./pages/Feira";
-import Transferencias from "./pages/Transferencias";
 import Auth from "./pages/Auth";
 import AlterarSenha from "./pages/AlterarSenha";
 import ConfigUsuarios from "./pages/ConfigUsuarios";
@@ -24,6 +23,7 @@ import ConfigTiposAjuste from "./pages/ConfigTiposAjuste";
 import ConfigExcursoes from "./pages/ConfigExcursoes";
 import ConfigCustosPadrao from "./pages/ConfigCustosPadrao";
 import ConfigCatalogo from "./pages/ConfigCatalogo";
+import ConfigNotificacoes from "./pages/ConfigNotificacoes";
 import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 import PecasEmConserto from "./pages/PecasEmConserto";
@@ -128,6 +128,14 @@ function App() {
                 }
               />
               <Route
+                path="/configuracoes/notificacoes"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                    <ConfigNotificacoes />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/dashboard"
                 element={
                   <ProtectedRoute allowedRoles={['admin', 'gerente']}>
@@ -175,14 +183,6 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <Feira />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/transferencias"
-                  element={
-                    <ProtectedRoute allowedRoles={['admin', 'gerente', 'vendedor']}>
-                      <Transferencias />
                     </ProtectedRoute>
                   }
                 />

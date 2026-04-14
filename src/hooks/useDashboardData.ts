@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchAllRows } from "@/lib/supabase-utils";
+import { parseProductName } from "@/utils/productNameUtils";
 import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, startOfYear, getWeek, endOfMonth, subYears, getMonth, getYear, subMonths, getDate, getDaysInMonth, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -434,7 +435,14 @@ async function fetchDashboardData(
     fetchAllRows<any>(() =>
       supabase
         .from("pedido_itens")
-        .select("pedido_id, produto_id, produto_nome, quantidade, pedidos!inner(user_id, created_at, status_pagamento, status_pedido)")
+        .select(`
+          pedido_id, 
+          produto_id, 
+          produto_nome, 
+          quantidade, 
+          pedidos!inner(user_id, created_at, status_pagamento, status_pedido),
+          estoque_itens(nome)
+        `)
         .eq("pedidos.user_id", userId)
         .in("pedidos.status_pagamento", ["PAGO", "CONCLUIDO", "PEND. ENTREGA"])
         .gte("pedidos.created_at", startDateTopModelos)
@@ -640,18 +648,35 @@ async function fetchDashboardData(
     })
     : pedidoItensData;
 
-  // Agrupa por produto_id quando disponível (nome canônico do estoque),
-  // com fallback para produto_nome para itens sem referência de estoque.
-  // Isso evita duplicatas causadas por nomes levemente diferentes (ex: hífens, espaços).
   const modelosMap: Record<string, { quantidade: number; nome: string }> = {};
   pedidoItensFiltrados.forEach((item: any) => {
-    const chave = item.produto_id ?? `nome:${(item.produto_nome || "Sem nome").toLowerCase().trim()}`;
-    const nome = item.produto_nome || "Sem nome";
+    const rawNome = (item.produto_nome || "Sem nome").trim();
+    const estoqueNome = item.estoque_itens?.nome?.trim();
+
+    // Normalizar em dash para hífen antes de parsear (ex: "Jeans — 34" → "Jeans - 34")
+    const normalizedNome = rawNome.replace(/\s*—\s*/g, ' - ');
+
+    // Extrair refBase (referência sem tamanho) para agrupamento
+    const infoRef = parseProductName(normalizedNome, normalizedNome);
+    const chave = (infoRef.refBase || normalizedNome).toLowerCase().trim();
+
+    // Montar nome de exibição
+    let displayNome: string;
+    if (estoqueNome && estoqueNome !== rawNome) {
+      // Tem nome amigável do estoque: ex "Calça Jeans Wide Leg 616"
+      const infoDisplay = parseProductName(estoqueNome, normalizedNome);
+      displayNome = infoDisplay.nomeExibicao || infoRef.refBase || rawNome;
+    } else {
+      // Sem nome amigável: usa a referência base limpa, ex: "SS2603-616"
+      displayNome = infoRef.refBase || normalizedNome;
+    }
+
     if (!modelosMap[chave]) {
-      modelosMap[chave] = { quantidade: 0, nome };
+      modelosMap[chave] = { quantidade: 0, nome: displayNome };
     }
     modelosMap[chave].quantidade += item.quantidade || 0;
   });
+
   const topModelos = Object.values(modelosMap)
     .sort((a, b) => b.quantidade - a.quantidade)
     .slice(0, 5)

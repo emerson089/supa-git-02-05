@@ -136,7 +136,7 @@ export function MobileModeloPadronizadoCard({
                 {/* Status indicator */}
                 <div 
                     className={cn(
-                        "absolute top-2 right-2 w-3 h-3 rounded-full z-10 shadow-sm",
+                        "absolute top-2 left-2 w-2.5 h-2.5 rounded-full z-20 shadow-sm border border-white dark:border-gray-900",
                         statusColor
                     )}
                     title={totalPecas === 0 ? 'Esgotado' : 'Disponível'}
@@ -162,19 +162,13 @@ export function MobileModeloPadronizadoCard({
                     {/* Conteúdo principal */}
                     <div className="flex-1 min-w-0 pr-6">
                         <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1 space-y-1">
-                                <h3 className="font-medium text-sm line-clamp-2 leading-tight">
-                                    {meta.referencia}
+                            <div className="min-w-0 flex-1 space-y-0.5">
+                                <h3 className="font-semibold text-sm line-clamp-2 leading-tight">
+                                    {nome.split('—')[0].trim()}
                                 </h3>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                    <Badge className="shrink-0 bg-purple-100 text-purple-700 hover:bg-purple-100/80 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded-md gap-1 px-1.5 py-0">
-                                        <Layers className="h-2 w-2" />
-                                        Modelo Pad.
-                                    </Badge>
-                                    <span className="text-[10px] text-muted-foreground/80 font-medium truncate max-w-[120px]">
-                                        {nome.split('—')[0].trim()}
-                                    </span>
-                                </div>
+                                <span className="text-[11px] text-muted-foreground font-medium block">
+                                    {meta.referencia}
+                                </span>
                             </div>
                         </div>
 

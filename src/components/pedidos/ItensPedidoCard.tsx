@@ -171,18 +171,18 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
 
   return (
     <>
-      <div className="neu-card p-7">
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/30">
+      <div className="neu-card p-4 sm:p-7">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-border/30">
           <h2 className="text-lg font-bold text-foreground">Itens do Pedido</h2>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 sm:flex gap-2">
             {/* Botão Grade */}
             <Button
               type="button"
               variant="outline"
               onClick={() => setShowAddGrade(true)}
-              className="h-10 rounded-xl border-indigo-200 dark:border-indigo-800 bg-background hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium"
+              className="h-11 sm:h-10 rounded-xl border-indigo-200 dark:border-indigo-800 bg-background hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium px-3 sm:px-4 text-xs sm:text-sm"
             >
-              <Package2 size={15} className="mr-2" />
+              <Package2 size={15} className="mr-1.5 sm:mr-2" />
               Por Grade
             </Button>
             {/* Botão Avulso */}
@@ -190,9 +190,9 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
               type="button"
               variant="outline"
               onClick={onAddItem}
-              className="h-10 rounded-xl border-border bg-background hover:bg-muted/50 text-foreground font-medium"
+              className="h-11 sm:h-10 rounded-xl border-border bg-background hover:bg-muted/50 text-foreground font-medium px-3 sm:px-4 text-xs sm:text-sm"
             >
-              <Plus size={16} className="mr-2" />
+              <Plus size={16} className="mr-1.5 sm:mr-2" />
               Avulso
             </Button>
           </div>

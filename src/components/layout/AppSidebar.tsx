@@ -2,7 +2,7 @@ import {
   Package, LayoutDashboard, Warehouse, Users,
   ShoppingCart, Settings, HelpCircle, LogOut,
   ChevronDown, ChevronRight, List, ArrowLeftRight, 
-  Store, Factory, UserPlus, Settings2, Bus, DollarSign, Wrench, FileText
+  Store, Factory, UserPlus, Settings2, Bus, DollarSign, Wrench, FileText, MessageSquare
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/contexts/RoleContext';
@@ -44,12 +44,6 @@ const mainNavGroups: NavItem[] = [
     icon: <Warehouse size={18} />,
     path: '/estoque',
     roles: ['admin', 'gerente']
-  },
-  {
-    label: 'Transferências',
-    icon: <ArrowLeftRight size={18} />,
-    path: '/transferencias',
-    roles: ['admin', 'gerente', 'vendedor']
   },
   {
     label: 'Feira',
@@ -114,6 +108,12 @@ const bottomNavGroups: NavItem[] = [
     label: 'Catálogo CRM',
     icon: <FileText size={18} />,
     path: '/configuracoes/catalogo',
+    roles: ['admin', 'gerente']
+  },
+  {
+    label: 'Notificações',
+    icon: <MessageSquare size={18} />,
+    path: '/configuracoes/notificacoes',
     roles: ['admin', 'gerente']
   },
   {
