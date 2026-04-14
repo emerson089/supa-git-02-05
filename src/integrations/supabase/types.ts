@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      catalogo_envios: {
+        Row: {
+          catalogo_id: string
+          cliente_id: string
+          enviado_em: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          catalogo_id: string
+          cliente_id: string
+          enviado_em?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          catalogo_id?: string
+          cliente_id?: string
+          enviado_em?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       catalogos: {
         Row: {
           ativo: boolean
@@ -529,10 +553,8 @@ export type Database = {
       excursoes: {
         Row: {
           ativo: boolean
-          contato: string | null
           created_at: string | null
           id: string
-          localizacao: string | null
           nome: string
           taxa: number
           updated_at: string | null
@@ -540,10 +562,8 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
-          contato?: string | null
           created_at?: string | null
           id?: string
-          localizacao?: string | null
           nome: string
           taxa?: number
           updated_at?: string | null
@@ -551,10 +571,8 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
-          contato?: string | null
           created_at?: string | null
           id?: string
-          localizacao?: string | null
           nome?: string
           taxa?: number
           updated_at?: string | null
