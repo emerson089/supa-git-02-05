@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Play, Pause, Loader2, CheckCircle2, AlertTriangle, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,14 +20,19 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCatalogos, Catalogo } from '@/hooks/useCatalogos';
+import { useCatalogos } from '@/hooks/useCatalogos';
 import { useClienteContatos } from '@/hooks/useClienteContatos';
 
 const SAUDACOES = [
-  'Olá', 'Oii', 'Oie', 'Opa', 'Olaa', 'Oiii', 'E aí', 'Fala', 'Oi', 'Tudo bem?', 
-  'Bom dia', 'Boa tarde', 'Boa noite', 'Oiie', 'Opaa', 'Olá, tudo bem?', 'Oi, tudo bom?',
-  'Hey', 'Salve', 'Opa! Tudo certo?', 'Tudo certo por aí?', 'Oi como vai?', 'Passando por aqui para deixar...',
-  'Oi, passando para te mandar...', 'Oi! Tudo tranquilo?', 'E aí, beleza?'
+  'Olá', 'Oii', 'Oie', 'Opa', 'Olaa', 'Oiii', 'E aí', 'Fala', 'Oi',
+  'Bom dia', 'Boa tarde', 'Boa noite', 'Oiie', 'Opaa', 'Hey', 'Salve',
+  'Oi, passando para te mandar...',
+];
+
+const SUFIXOS = [
+  ', tudo bem?', ', tudo certo?', ', como vai?',
+  ', tudo bom?', '! Tudo tranquilo?', '! Como está?',
+  ', beleza?', '! Tudo certo por aí?',
 ];
 
 type Velocidade = 'ultra_seguro' | 'normal' | 'rapido';
@@ -53,6 +58,12 @@ const normalizePhoneE164 = (raw: string): { valid: boolean; phone: string } => {
   return { valid: true, phone: digits };
 };
 
+const gerarSaudacao = (nome: string): string => {
+  const saudacao = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
+  const sufixo = SUFIXOS[Math.floor(Math.random() * SUFIXOS.length)];
+  return `${saudacao} ${nome}${sufixo}`;
+};
+
 export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = ({
   open,
   onOpenChange,
@@ -61,7 +72,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 }) => {
   const { user } = useAuth();
   const { catalogos, loading: loadingCatalogos } = useCatalogos();
-  const { marcarContato, getContato } = useClienteContatos();
+  const { marcarContato } = useClienteContatos();
   const [selectedCatalogoId, setSelectedCatalogoId] = useState<string>('');
   const [velocidade, setVelocidade] = useState<Velocidade>('ultra_seguro');
   const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
@@ -72,9 +83,79 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const [logs, setLogs] = useState<{ id: string; msg: string; type: 'success' | 'error' }[]>([]);
   const [countdown, setCountdown] = useState(0);
   const [hasPersistedData, setHasPersistedData] = useState(false);
+  const [loadingEnvios, setLoadingEnvios] = useState(false);
+  const [enviadosIds, setEnviadosIds] = useState<Set<string>>(new Set());
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const STORAGE_KEY = `transmissao_progresso_${filtroAtual}`;
+
+  // Filtrar clientes que já receberam o catálogo selecionado
+  const clientesFiltrados = useMemo(() => {
+    if (enviadosIds.size === 0) return clientes;
+    return clientes.filter(c => !enviadosIds.has(c.id));
+  }, [clientes, enviadosIds]);
+
+  const totalOriginal = clientes.length;
+  const total = clientesFiltrados.length;
+
+  // Buscar envios anteriores ao trocar catálogo
+  useEffect(() => {
+    if (!open || !user?.id || !selectedCatalogoId) {
+      setEnviadosIds(new Set());
+      setJaEnviados(0);
+      return;
+    }
+
+    const fetchEnvios = async () => {
+      setLoadingEnvios(true);
+      try {
+        let catalogoIds: string[] = [];
+        if (selectedCatalogoId === 'all_active') {
+          catalogoIds = catalogos.filter(c => c.ativo).map(c => c.id);
+        } else {
+          catalogoIds = [selectedCatalogoId];
+        }
+
+        if (catalogoIds.length === 0) {
+          setEnviadosIds(new Set());
+          setJaEnviados(0);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('catalogo_envios')
+          .select('cliente_id, catalogo_id')
+          .eq('user_id', user.id)
+          .in('catalogo_id', catalogoIds);
+
+        if (error) throw error;
+
+        if (selectedCatalogoId === 'all_active' && catalogoIds.length > 1) {
+          // Para "todos ativos", filtrar clientes que já receberam TODOS
+          const countMap = new Map<string, number>();
+          (data || []).forEach(row => {
+            countMap.set(row.cliente_id, (countMap.get(row.cliente_id) || 0) + 1);
+          });
+          const ids = new Set<string>();
+          countMap.forEach((count, clienteId) => {
+            if (count >= catalogoIds.length) ids.add(clienteId);
+          });
+          setEnviadosIds(ids);
+          setJaEnviados(ids.size);
+        } else {
+          const ids = new Set((data || []).map(r => r.cliente_id));
+          setEnviadosIds(ids);
+          setJaEnviados(ids.size);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar envios anteriores:', err);
+      } finally {
+        setLoadingEnvios(false);
+      }
+    };
+
+    fetchEnvios();
+  }, [open, user?.id, selectedCatalogoId, catalogos]);
 
   // Carregar progresso salvo
   useEffect(() => {
@@ -83,7 +164,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
       if (saved) {
         try {
           const data = JSON.parse(saved);
-          if (data.currentIndex > 0 && data.currentIndex < clientes.length) {
+          if (data.currentIndex > 0 && data.currentIndex < total) {
             setHasPersistedData(true);
           }
         } catch (e) {
@@ -91,7 +172,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
         }
       }
     }
-  }, [open, status, clientes.length]);
+  }, [open, status, total]);
 
   // Bloqueio de fechamento de aba
   useEffect(() => {
@@ -127,7 +208,6 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     return map[filtroAtual] || filtroAtual;
   };
 
-  const total = clientes.length;
   const progressPercent = total === 0 ? 0 : Math.round((currentIndex / total) * 100);
 
   const handlePause = () => {
@@ -139,6 +219,19 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     setLogs((prev) => [{ id: Math.random().toString(), msg, type }, ...prev].slice(0, 50));
   };
 
+  const registrarEnvio = async (clienteId: string, catalogoId: string) => {
+    if (!user?.id) return;
+    try {
+      await supabase.from('catalogo_envios').insert({
+        user_id: user.id,
+        cliente_id: clienteId,
+        catalogo_id: catalogoId,
+      });
+    } catch (err) {
+      console.error('Erro ao registrar envio:', err);
+    }
+  };
+
   const processNext = async (index: number) => {
     if (status === 'paused' || status === 'idle') return;
     if (index >= total) {
@@ -148,7 +241,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
       return;
     }
 
-    const cliente = clientes[index];
+    const cliente = clientesFiltrados[index];
     const phoneResult = normalizePhoneE164(cliente.telefone);
 
     if (!phoneResult.valid) {
@@ -160,11 +253,13 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
     try {
       if (!user?.id) throw new Error("Usuário não autenticado");
-      const catalogsToSend = selectedCatalogoId === 'all_active' 
+      const catalogsToSend = selectedCatalogoId === 'all_active'
         ? catalogos.filter(c => c.ativo)
         : catalogos.filter(c => c.id === selectedCatalogoId);
 
       if (catalogsToSend.length === 0) throw new Error("Nenhum catálogo disponível para envio.");
+
+      const primeiroNome = cliente.nome.split(' ')[0];
 
       for (const cat of catalogsToSend) {
         const { data: signedData, error: signedError } = await supabase.storage
@@ -178,22 +273,20 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
         const isFirst = catalogsToSend.indexOf(cat) === 0;
         const hasNameTag = cat.mensagem?.includes('{nome}');
-        const saudacaoAleatoria = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
-        
+
         let caption = '';
         if (isFirst) {
+          const saudacaoPersonalizada = gerarSaudacao(primeiroNome);
           const baseCaption = cat.mensagem
-            ? cat.mensagem.replace(/\{nome\}/g, cliente.nome.split(' ')[0])
+            ? cat.mensagem.replace(/\{nome\}/g, primeiroNome)
             : `Segue nosso catálogo atualizado!`;
 
-          caption = hasNameTag 
-            ? baseCaption 
-            : `${saudacaoAleatoria} ${cliente.nome.split(' ')[0]}! ${baseCaption}`;
+          caption = hasNameTag
+            ? baseCaption
+            : `${saudacaoPersonalizada} ${baseCaption}`;
         } else {
-          // No segundo catálogo em diante, não adicionamos saudação automática
-          // Enviamos apenas a mensagem se ela existir, senão vai vazio
           caption = cat.mensagem
-            ? cat.mensagem.replace(/\{nome\}/g, cliente.nome.split(' ')[0])
+            ? cat.mensagem.replace(/\{nome\}/g, primeiroNome)
             : '';
         }
 
@@ -211,19 +304,18 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
         if (error) throw error;
 
-        // Se estiver enviando mais de um, pequeno delay extra
+        // Registrar envio no banco
+        await registrarEnvio(cliente.id, cat.id);
+
         if (catalogsToSend.length > 1 && catalogsToSend.indexOf(cat) < catalogsToSend.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
 
-      // Registrar sucesso no histórico
       marcarContato(cliente.id, 'whatsapp');
-
       logMessage(`Enviado para ${cliente.nome.split(' ')[0]}`, 'success');
       setSucessos((prev) => prev + 1);
-      
-      // Salvar progresso
+
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         currentIndex: index + 1,
         sucessos: sucessos + 1,
@@ -238,11 +330,11 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
       setFalhas((prev) => {
         const next = prev + 1;
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            currentIndex: index + 1,
-            sucessos,
-            falhas: next,
-            selectedCatalogoId
-          }));
+          currentIndex: index + 1,
+          sucessos,
+          falhas: next,
+          selectedCatalogoId
+        }));
         return next;
       });
     }
@@ -277,10 +369,10 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   }, [countdown, status, currentIndex]);
 
   const handleStart = () => {
-    if (total === 0) { toast.error('Nenhum cliente na lista.'); return; }
-    if (!selectedCatalogo && selectedCatalogoId !== 'all_active') { 
-      toast.error('Selecione um catálogo antes de iniciar.'); 
-      return; 
+    if (total === 0) { toast.error('Nenhum cliente pendente na lista.'); return; }
+    if (!selectedCatalogo && selectedCatalogoId !== 'all_active') {
+      toast.error('Selecione um catálogo antes de iniciar.');
+      return;
     }
 
     if (status === 'idle') {
@@ -288,14 +380,14 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
       if (saved) {
         const data = JSON.parse(saved);
         if (data.currentIndex > 0 && data.currentIndex < total) {
-            setCurrentIndex(data.currentIndex);
-            setSucessos(data.sucessos);
-            setFalhas(data.falhas);
-            if (data.selectedCatalogoId) setSelectedCatalogoId(data.selectedCatalogoId);
-            setHasPersistedData(false);
-            setStatus('running');
-            processNext(data.currentIndex);
-            return;
+          setCurrentIndex(data.currentIndex);
+          setSucessos(data.sucessos);
+          setFalhas(data.falhas);
+          if (data.selectedCatalogoId) setSelectedCatalogoId(data.selectedCatalogoId);
+          setHasPersistedData(false);
+          setStatus('running');
+          processNext(data.currentIndex);
+          return;
         }
       }
 
@@ -319,7 +411,6 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     setCurrentIndex(0);
     setSucessos(0);
     setFalhas(0);
-    setJaEnviados(0);
     setLogs([]);
     setCountdown(0);
     localStorage.removeItem(STORAGE_KEY);
@@ -346,7 +437,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Catalog Selection Row */}
+          {/* Catalog + Speed Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Catálogo</label>
@@ -379,9 +470,9 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Velocidade</label>
-              <Select 
-                value={velocidade} 
-                onValueChange={(v) => setVelocidade(v as Velocidade)} 
+              <Select
+                value={velocidade}
+                onValueChange={(v) => setVelocidade(v as Velocidade)}
                 disabled={status === 'running'}
               >
                 <SelectTrigger className="w-full h-10 shadow-sm border-border bg-background">
@@ -398,9 +489,26 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
             </div>
           </div>
 
+          {/* Público Alvo com filtro de duplicatas */}
           <div className="flex flex-col items-center justify-center bg-secondary/40 p-4 rounded-xl border border-border">
             <p className="text-sm font-medium text-foreground mb-1">Público Alvo</p>
-            <p className="text-2xl font-bold text-primary">{total}</p>
+            {loadingEnvios ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 size={14} className="animate-spin" /> Verificando envios anteriores...
+              </div>
+            ) : (
+              <>
+                <p className="text-2xl font-bold text-primary">{total}</p>
+                {jaEnviados > 0 && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-muted-foreground">de {totalOriginal} total</span>
+                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 px-2 py-0.5 rounded-full">
+                      {jaEnviados} já receberam
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
             <p className="text-xs text-muted-foreground font-medium bg-background px-2 py-1 rounded-md mt-2 border border-border">
               Filtro: {getFiltroLabel()}
             </p>
@@ -455,18 +563,18 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
             {(status === 'idle' || status === 'paused') && !hasPersistedData && (
               <div className="flex gap-3">
-                <Button onClick={handleStart} className="flex-1 h-12 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold" disabled={catalogos.length === 0}>
+                <Button onClick={handleStart} className="flex-1 h-12 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold" disabled={catalogos.length === 0 || loadingEnvios || total === 0}>
                   <Play className="mr-2 h-5 w-5 fill-current" />
-                  {status === 'paused' ? 'Retomar Envio' : 'Iniciar Transmissão'}
+                  {status === 'paused' ? 'Retomar Envio' : `Iniciar Transmissão (${total})`}
                 </Button>
                 {status === 'paused' && (
-                    <Button onClick={handleReset} variant="outline" className="h-12 px-4 rounded-xl border-border text-muted-foreground" title="Resetar tudo">
-                        Limpar
-                    </Button>
+                  <Button onClick={handleReset} variant="outline" className="h-12 px-4 rounded-xl border-border text-muted-foreground" title="Resetar tudo">
+                    Limpar
+                  </Button>
                 )}
               </div>
             )}
-            
+
             {status === 'running' && (
               <Button onClick={handlePause} variant="outline" className="w-full h-12 rounded-xl font-semibold border-orange-200 hover:bg-orange-50 text-orange-700">
                 <Pause className="mr-2 h-5 w-5 fill-current" />
