@@ -1,69 +1,72 @@
 
 
-## Plano atualizado: Múltiplos Catálogos + Mensagem Personalizada + Tooltip de formatação WhatsApp
+## Plano: Filtro de duplicatas por catálogo + Randomização de saudações
 
-Este plano incorpora o pedido anterior (múltiplos catálogos com mensagem personalizada) e adiciona o tooltip de formatação no campo de mensagem.
+### Problema atual
 
-### 1. Migração SQL — Tabela `catalogos`
+O sistema registra contatos na tabela `cliente_contatos` com canal genérico "whatsapp", sem vincular ao catálogo específico. Isso impede saber se um cliente já recebeu um determinado catálogo. Além disso, as saudações já existem mas não incluem o sufixo ", tudo bem?" de forma consistente.
+
+### 1. Nova tabela `catalogo_envios` (migração SQL)
+
+Tabela para registrar cada envio bem-sucedido de catálogo por cliente:
 
 ```sql
-CREATE TABLE public.catalogos (
+CREATE TABLE public.catalogo_envios (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL,
-  nome TEXT NOT NULL,
-  file_path TEXT NOT NULL,
-  mensagem TEXT NOT NULL DEFAULT '',
-  ativo BOOLEAN NOT NULL DEFAULT false,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  cliente_id UUID NOT NULL,
+  catalogo_id UUID NOT NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.catalogos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.catalogo_envios ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users manage own catalogos" ON public.catalogos
+CREATE POLICY "Users manage own catalogo_envios" ON public.catalogo_envios
   FOR ALL TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX idx_catalogo_envios_lookup 
+  ON public.catalogo_envios (user_id, catalogo_id, cliente_id);
 ```
 
-### 2. Refatorar `ConfigCatalogo.tsx`
+### 2. Refatorar `TransmissaoManagerModal.tsx`
 
-- Campo "Nome do catálogo" (input)
-- Campo "Mensagem personalizada" (textarea) com placeholder sugerindo `{nome}`
-- **Tooltip de formatação** ao lado do label da mensagem: ícone de info com texto explicando que `*texto*` fica **negrito**, `_texto_` fica _itálico_ e `~texto~` fica ~~riscado~~ no WhatsApp — usando o componente `Tooltip` já existente no projeto
-- Upload com path único `{user_id}/catalogos/{uuid}.pdf`
-- Listagem de todos os catálogos com ações: Ativar, Visualizar (iframe), Excluir
-- Badge "Ativo" no catálogo marcado
-- Migração automática do `oficial.pdf` legado na primeira carga
+- **Ao abrir o modal ou trocar o catálogo selecionado**: consultar `catalogo_envios` filtrando por `catalogo_id` selecionado para obter a lista de `cliente_id` que já receberam
+- Se `all_active` estiver selecionado, buscar envios de todos os catálogos ativos e filtrar clientes que já receberam **todos** eles
+- Criar estado `clientesFiltrados` = clientes originais menos os já enviados
+- O card "Público Alvo" mostrará a contagem filtrada, com indicação de quantos foram removidos (ex: "1000 → 850 pendentes (150 já receberam)")
+- O botão "Iniciar Transmissão" usará `clientesFiltrados` em vez de `clientes`
+- Após cada envio bem-sucedido, inserir registro em `catalogo_envios` (para cada catálogo enviado)
+- Manter o `marcarContato` existente para compatibilidade
 
-### 3. Refatorar `TransmissaoManagerModal.tsx`
+### 3. Randomização de saudações aprimorada
 
-- Buscar catálogos do usuário ao abrir
-- Seletor (dropdown) para escolher qual catálogo enviar
-- Usar `mensagem` do catálogo selecionado como `caption`, substituindo `{nome}` pelo primeiro nome do cliente
-- Gerar `signedUrl` do `file_path` do catálogo escolhido
-
-### 4. Refatorar `WhatsAppCatalogButton.tsx`
-
-- Buscar catálogo ativo (`ativo = true`) do usuário
-- Usar `file_path` e `mensagem` do catálogo ativo (com substituição de `{nome}`)
-
-### Detalhe do tooltip de formatação
-
-No campo "Mensagem personalizada", ao lado do label, haverá um ícone `Info` com tooltip contendo:
+O array `SAUDACOES` será atualizado para conter apenas saudações curtas (sem sufixo). A lógica de composição da mensagem ficará:
 
 ```
-Dicas de formatação WhatsApp:
-• *texto* → negrito
-• _texto_ → itálico
-• ~texto~ → riscado
-• {nome} → nome do cliente
+{saudação} {primeiro_nome}, tudo bem? {mensagem_do_catálogo}
 ```
 
-Usa o componente `Tooltip` de `@/components/ui/tooltip` já existente no projeto, mantendo o padrão visual Delookii.
+Variações do sufixo também serão randomizadas:
+
+```typescript
+const SUFIXOS = [
+  ', tudo bem?', ', tudo certo?', ', como vai?', 
+  ', tudo bom?', '! Tudo tranquilo?', '! Como está?'
+];
+```
+
+Resultado final: `"Oii Maria, tudo certo? Segue nosso catálogo..."` — cada mensagem com início único.
+
+### 4. Exibição no modal
+
+- Novo indicador visual no card de Público Alvo mostrando "X já receberam" em azul e "Y pendentes" em destaque
+- O contador `jaEnviados` que já existe no UI será alimentado com dados reais do banco
+- Loading state enquanto consulta os envios anteriores
 
 ### Arquivos alterados
-- Nova migração SQL
-- `src/pages/ConfigCatalogo.tsx` — reescrita completa
-- `src/components/clientes/TransmissaoManagerModal.tsx` — seletor de catálogo
-- `src/components/clientes/WhatsAppCatalogButton.tsx` — usar catálogo ativo do banco
+- Nova migração SQL (tabela `catalogo_envios`)
+- `src/components/clientes/TransmissaoManagerModal.tsx` — filtro de duplicatas, randomização, inserção de envios
+- Array de saudações e sufixos refinado
 
