@@ -16,7 +16,7 @@ import {
     DialogDescription,
     DialogFooter,
 } from '@/components/ui/dialog';
-import { MoreVertical, Pencil, Trash2, Camera, ShoppingBag, Package, Eye, AlertTriangle, Calendar } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, Camera, ShoppingBag, Package, Eye, AlertTriangle, Calendar, Loader2 } from 'lucide-react';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { LazyImage } from '@/components/ui/lazy-image';
 import { cn } from '@/lib/utils';

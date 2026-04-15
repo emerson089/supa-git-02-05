@@ -309,7 +309,9 @@ const NovoPedido = () => {
 
       // Geração da mensagem de WhatsApp (mesma para cliente e gerente)
       const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
-      const valorFormatado = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const valorFinalPedido = pedidoCriado.valorTotal ?? valorTotal;
+      const pecasFinalPedido = pedidoCriado.totalPecas ?? totalPecas;
+      const valorFormatado = valorFinalPedido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       const mensagem = `Olá, ${clienteNome}! Pedido confirmado! 🎉
 
 💰 Total: ${valorFormatado}
@@ -379,7 +381,7 @@ Qualquer dúvida é só chamar! 😊`;
 
         const dataHora = format(hoje, "dd/MM/yy HH:mm");
         const rangeSemana = `${format(segunda, "dd/MM")} a ${format(sabado, "dd/MM")}`;
-        const msgAdmin = `NOTIFICAÇÃO DE VENDA 🚀\nCliente: ${cliente?.nome || 'Não Informado'}\nData: ${dataHora}\n💰 Valor: ${valorFormatado}\n📦 Peças: ${totalPecas}\n\n---------------------------\n📊 RESUMO DA SEMANA \n(Vendas de ${rangeSemana})\n\n✅ PAGOS:\n• Total de pedidos: ${resumoSemana.pagos.pedidos}\n• Valor total: ${resumoSemana.pagos.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n• Total de peças: ${resumoSemana.pagos.pecas}\n\n⏳ PENDENTES:\n• Total de pedidos: ${resumoSemana.pendentes.pedidos}\n• Valor total: ${resumoSemana.pendentes.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n• Total de peças: ${resumoSemana.pendentes.pecas}\n---------------------------`;
+        const msgAdmin = `NOTIFICAÇÃO DE VENDA 🚀\nCliente: ${cliente?.nome || 'Não Informado'}\nData: ${dataHora}\n💰 Valor: ${valorFormatado}\n📦 Peças: ${pecasFinalPedido}\n\n---------------------------\n📊 RESUMO DA SEMANA \n(Vendas de ${rangeSemana})\n\n✅ PAGOS:\n• Total de pedidos: ${resumoSemana.pagos.pedidos}\n• Valor total: ${resumoSemana.pagos.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n• Total de peças: ${resumoSemana.pagos.pecas}\n\n⏳ PENDENTES:\n• Total de pedidos: ${resumoSemana.pendentes.pedidos}\n• Valor total: ${resumoSemana.pendentes.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n• Total de peças: ${resumoSemana.pendentes.pecas}\n---------------------------`;
         
         console.log('Mensagem Admin Gerada:', msgAdmin);
 

@@ -299,7 +299,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const executeStart = async () => {
     if (isAgendado) {
         try {
-            const { error } = await supabase.from('envios_agendados').insert({
+            const { error } = await supabase.from('catalogo_envios').insert({
                 user_id: user?.id,
                 catalogo_id: selectedCatalogoId === 'all_active' ? null : selectedCatalogoId,
                 config_agendamento: {
