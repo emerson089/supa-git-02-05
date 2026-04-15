@@ -298,26 +298,8 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
   const executeStart = async () => {
     if (isAgendado) {
-        try {
-            const { error } = await supabase.from('catalogo_envios').insert({
-                user_id: user?.id,
-                catalogo_id: selectedCatalogoId === 'all_active' ? null : selectedCatalogoId,
-                config_agendamento: {
-                    data: agendamentoData,
-                    hora_inicio: agendamentoHoraInicio,
-                    hora_fim: agendamentoHoraFim,
-                    horario_comercial: horarioComercial
-                },
-                status: 'Pendente'
-            });
-            if (error) throw error;
-            toast.success('Envio agendado com sucesso!');
-            onOpenChange(false);
-            return;
-        } catch (e) {
-            toast.error('Erro ao agendar envio.');
-            return;
-        }
+        toast.info('Agendamento de envios ainda não está disponível. Envie agora.');
+        return;
     }
 
     setStatus('running');
