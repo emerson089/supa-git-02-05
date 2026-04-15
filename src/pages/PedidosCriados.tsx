@@ -31,7 +31,7 @@ import { StatusMultiSelect } from '@/components/pedidos/StatusMultiSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Search, Plus, Eye, EyeOff, Trash2, ShoppingBag, DollarSign, Package, MapPin, Phone, Bus, MoreHorizontal, ArrowUpDown, FileText, Pencil, Calendar as CalendarIcon, X, Download, Upload, Loader2, RefreshCw } from 'lucide-react';
-import { format, isWithinInterval, startOfDay, endOfDay, parse, subDays, startOfWeek, addDays } from 'date-fns';
+import { format, isWithinInterval, startOfDay, endOfDay, parse, subDays, startOfWeek, addDays, isValid } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { ptBR } from 'date-fns/locale';
@@ -156,16 +156,34 @@ export default function PedidosCriados() {
   // Carregar filtros persistidos uma única vez
   const [persistedFilters] = useState(() => loadPersistedFilters());
 
-  // Date filters - Semana atual (Segunda a Quinta) como default se não houver persistência
+  // Date filters - Semana atual (Segunda a Sábado) como default
   const [startDate, setStartDate] = useState<Date | undefined>(() => {
-    if (persistedFilters.startDate) return new Date(persistedFilters.startDate);
-    // Default: Segunda-feira desta semana
-    return startOfWeek(new Date(), { weekStartsOn: 1 });
+    const defaultStart = startOfWeek(new Date(), {
+      weekStartsOn: 1
+    });
+    if (persistedFilters.startDate) {
+      const persistedDate = new Date(persistedFilters.startDate);
+      // Se a data salva for válida e do futuro ou desta semana, mantemos
+      if (isValid(persistedDate) && persistedDate >= defaultStart) {
+        return persistedDate;
+      }
+    }
+    return defaultStart;
   });
   const [endDate, setEndDate] = useState<Date | undefined>(() => {
-    if (persistedFilters.endDate) return new Date(persistedFilters.endDate);
-    // Default: Sexta-feira desta semana (Segunda + 4 dias)
-    return addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4);
+    const defaultStart = startOfWeek(new Date(), {
+      weekStartsOn: 1
+    });
+    const defaultEnd = addDays(defaultStart, 5);
+    if (persistedFilters.endDate) {
+      const persistedDate = new Date(persistedFilters.endDate);
+      const sDate = persistedFilters.startDate ? new Date(persistedFilters.startDate) : null;
+      // Se a data de fim for válida e a data de início (se existir) também for desta semana, mantemos
+      if (isValid(persistedDate) && (!sDate || (isValid(sDate) && sDate >= defaultStart))) {
+        return persistedDate;
+      }
+    }
+    return defaultEnd;
   });
 
   // App state
@@ -294,8 +312,8 @@ export default function PedidosCriados() {
       return;
     }
     savePersistedFilters({
-      startDate: startDate?.toISOString(),
-      endDate: endDate?.toISOString(),
+      startDate: startDate && isValid(startDate) ? startDate.toISOString() : undefined,
+      endDate: endDate && isValid(endDate) ? endDate.toISOString() : undefined,
       filterStatusPagamento,
       filterStatusPedido,
       filterStatusEntrega,
@@ -628,7 +646,7 @@ Qualquer dúvida é só chamar! 😊`;
   };
 
   // Atalhos rápidos de filtro
-  const applyQuickFilter = (filter: 'hoje' | 'ontem' | '7dias' | 'emAberto' | 'pendPagamento' | 'naoSeparado') => {
+  const applyQuickFilter = (filter: 'hoje' | 'ontem' | '7dias' | 'estaSemana' | 'pendPagamento' | 'naoSeparado') => {
     // Reset all filters first
     setSearchTerm('');
     setFilterStatusPagamento([]);
@@ -649,11 +667,13 @@ Qualquer dúvida é só chamar! 😊`;
         setStartDate(subDays(new Date(), 6));
         setEndDate(new Date());
         break;
-      case 'emAberto':
-        setStartDate(undefined);
-        setEndDate(undefined);
-        // Filtrar por entrega diferente de ENTREGUE
-        setFilterStatusEntrega(['PEND. ENTREGA']);
+      case 'estaSemana':
+        setStartDate(startOfWeek(new Date(), {
+          weekStartsOn: 1
+        }));
+        setEndDate(addDays(startOfWeek(new Date(), {
+          weekStartsOn: 1
+        }), 5));
         break;
       case 'pendPagamento':
         setStartDate(undefined);
@@ -689,6 +709,15 @@ Qualquer dúvida é só chamar! 😊`;
     // Verificar se é "Últimos 7 dias"
     if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(seteDiasAtras, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && noStatusFilters) {
       return '7dias';
+    }
+
+    // Verificar se é "Esta semana" (Segunda a Sábado)
+    const inicioSemana = startOfWeek(hoje, {
+      weekStartsOn: 1
+    });
+    const sabadoSemana = addDays(inicioSemana, 5);
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(inicioSemana, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(sabadoSemana, 'yyyy-MM-dd') && noStatusFilters) {
+      return 'estaSemana';
     }
 
     // Verificar filtros de status
@@ -1131,8 +1160,8 @@ Qualquer dúvida é só chamar! 😊`;
             <Button variant={activeQuickFilter === '7dias' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('7dias')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === '7dias' && "bg-primary text-primary-foreground")}>
               Últimos 7 dias
             </Button>
-            <Button variant={activeQuickFilter === 'emAberto' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('emAberto')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'emAberto' && "bg-primary text-primary-foreground")}>
-              Em aberto
+            <Button variant={activeQuickFilter === 'estaSemana' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('estaSemana')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'estaSemana' && "bg-primary text-primary-foreground")}>
+              Esta semana
             </Button>
             <Button variant={activeQuickFilter === 'pendPagamento' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('pendPagamento')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'pendPagamento' && "bg-primary text-primary-foreground")}>
               Pend. Pagamento

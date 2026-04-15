@@ -49,7 +49,7 @@ interface EstoqueContextType {
     imagemUrl?: string;
     loteProducaoId?: string;
     custoMedio?: number | null;
-    qtdComCusto?: number;
+    quantidadeInicial?: number;
   }) => Promise<ItemEstoque>;
   updateItem: (id: string, data: Partial<{
     nome: string;
@@ -61,6 +61,7 @@ interface EstoqueContextType {
     precoUnitario: number;
     localizacao: string;
     imagemUrl: string;
+    quantidadeInicial: number;
   }>) => Promise<void>;
   removeItem: (id: string) => Promise<void>;
   getItemById: (id: string) => ItemEstoque | undefined;
@@ -112,6 +113,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
     loteProducaoId?: string;
     custoMedio?: number | null;
     qtdComCusto?: number;
+    quantidadeInicial?: number;
   }): Promise<ItemEstoque> => {
     const result = await addItemMutation.mutateAsync({
       nome: data.nome,
@@ -126,6 +128,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
       producaoId: data.loteProducaoId || null,
       custoMedio: data.custoMedio ?? null,
       qtdComCusto: data.qtdComCusto ?? 0,
+      quantidadeInicial: data.quantidadeInicial ?? data.quantidade,
     });
     return { ...result, status: calcularStatus(result) };
   }, [addItemMutation]);
@@ -140,6 +143,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
     precoUnitario: number;
     localizacao: string;
     imagemUrl: string;
+    quantidadeInicial: number;
   }>): Promise<void> => {
     const updates: Partial<ItemEstoque> & { id: string } = { id };
 
@@ -152,6 +156,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
     if (data.precoUnitario !== undefined) updates.precoUnitario = data.precoUnitario;
     if (data.localizacao !== undefined) updates.localizacao = data.localizacao;
     if (data.imagemUrl !== undefined) updates.imagemUrl = data.imagemUrl;
+    if (data.quantidadeInicial !== undefined) updates.quantidadeInicial = data.quantidadeInicial;
 
     await updateItemMutation.mutateAsync(updates);
   }, [updateItemMutation]);
@@ -214,6 +219,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
     await updateItemMutation.mutateAsync({
       id: itemId,
       quantidade: item.quantidade + quantidade,
+      quantidadeInicial: item.quantidadeInicial + quantidade,
     });
 
     await addMovimentacaoMutation.mutateAsync({
@@ -239,6 +245,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
       producaoId: loteProducaoId,
       custoMedio: null,
       qtdComCusto: 0,
+      quantidadeInicial: quantidade,
     });
 
     await addMovimentacaoMutation.mutateAsync({
@@ -271,6 +278,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
       await updateItemMutation.mutateAsync({
         id: produtoExistente.id,
         quantidade: novaQuantidade,
+        quantidadeInicial: produtoExistente.quantidadeInicial + quantidade,
         imagemUrl: imagemUrl || produtoExistente.imagemUrl || undefined,
         precoUnitario: precoVenda !== undefined ? precoVenda : (produtoExistente.precoUnitario || undefined),
       });
@@ -300,6 +308,7 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
       producaoId: loteProducaoId,
       custoMedio: null,
       qtdComCusto: 0,
+      quantidadeInicial: quantidade,
     });
 
     await addMovimentacaoMutation.mutateAsync({

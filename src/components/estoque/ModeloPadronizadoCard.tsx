@@ -88,13 +88,15 @@ export function ModeloPadronizadoCard({
     );
 
     const totalPecas = variacoes.reduce((s, v) => s + v.quantidade, 0);
-    const tamanhosEsgotados = variacoes.filter(v => v.quantidade === 0).map(v => v.tamanho);
+    const totalProduzido = variacoes.reduce((s, v) => s + (v.quantidadeInicial || v.quantidade), 0);
+    const totalVendas = Math.max(0, totalProduzido - totalPecas);
+    const tamanhosEsgotados = variacoes.filter(v => v.quantidade <= 0).map(v => v.tamanho);
 
     // Status geral
     const statusColor =
-        totalPecas === 0
+        totalPecas <= 0
             ? 'bg-red-500'
-            : variacoes.some(v => v.quantidade === 0)
+            : variacoes.some(v => v.quantidade <= 0)
                 ? 'bg-amber-500'
                 : 'bg-emerald-500';
 
@@ -201,6 +203,22 @@ export function ModeloPadronizadoCard({
                             <ShoppingBag size={14} />
                             {vendasSemana} peças
                         </span>
+                    </div>
+
+                    {/* Histórico acumulado e Vendas totais agrupadas */}
+                    <div className="grid grid-cols-2 gap-2 p-2 rounded-xl bg-purple-50/50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-900/20">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-tighter">Volume Total</span>
+                            <span className="text-sm font-bold text-foreground">
+                                {totalProduzido} <span className="text-[10px] font-normal opacity-70">pçs</span>
+                            </span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-tighter">Vendas Totais</span>
+                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                {totalVendas} <span className="text-[10px] font-normal opacity-70">pçs</span>
+                            </span>
+                        </div>
                     </div>
 
                     {/* Ações */}

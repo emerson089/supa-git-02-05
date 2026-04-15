@@ -24,6 +24,7 @@ interface MobileProductCardProps {
     imagemUrl: string | null;
     localizacao?: string | null;
     tipo?: string;
+    quantidadeInicial: number;
   };
   editingPriceId: string | null;
   editingPrice: string;
@@ -231,6 +232,22 @@ export function MobileProductCard({
             )}>
               {vendasSemana} vendidas na semana
             </span>
+          </div>
+
+          {/* Histórico acumulado e Vendas totais mobile */}
+          <div className="mt-2 grid grid-cols-2 gap-2 p-1.5 rounded-lg bg-muted/30 border border-border/20">
+            <div className="flex flex-col">
+              <span className="text-[9px] text-muted-foreground uppercase leading-none font-medium mb-0.5">Total Prod.</span>
+              <span className="text-xs font-bold text-foreground">
+                {item.quantidadeInicial || item.quantidade} <span className="text-[9px] font-normal opacity-70">pçs</span>
+              </span>
+            </div>
+            <div className="flex flex-col border-l border-border/40 pl-2">
+              <span className="text-[9px] text-muted-foreground uppercase leading-none font-medium mb-0.5">Vendas Tot.</span>
+              <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                {Math.max(0, (item.quantidadeInicial || item.quantidade) - item.quantidade)} <span className="text-[9px] font-normal opacity-70">pçs</span>
+              </span>
+            </div>
           </div>
         </div>
       </div>

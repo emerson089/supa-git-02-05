@@ -105,7 +105,7 @@ const bottomNavGroups: NavItem[] = [
     roles: ['admin', 'gerente']
   },
   {
-    label: 'Catálogo CRM',
+    label: 'Envios em Massa',
     icon: <FileText size={18} />,
     path: '/configuracoes/catalogo',
     roles: ['admin', 'gerente']

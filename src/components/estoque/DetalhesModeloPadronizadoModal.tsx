@@ -73,6 +73,7 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
     const [localVariacoes, setLocalVariacoes] = useState<VariacaoModelo[]>([]);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editingQtd, setEditingQtd] = useState('');
+    const [editingQtdIni, setEditingQtdIni] = useState('');
     const [saving, setSaving] = useState(false);
     const [qtdGrade, setQtdGrade] = useState('');
     const [applyingGrade, setApplyingGrade] = useState(false);
@@ -97,30 +98,35 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
     const { meta, nome, precoUnitario } = modelo;
 
     const totalPecas = localVariacoes.reduce((s, v) => s + v.quantidade, 0);
+    const totalProduzido = localVariacoes.reduce((s, v) => s + (v.quantidadeInicial ?? v.quantidade), 0);
 
     const startEdit = (v: VariacaoModelo) => {
         setEditingId(v.id);
         setEditingQtd(String(v.quantidade));
+        setEditingQtdIni(String(v.quantidadeInicial ?? v.quantidade));
     };
 
     const cancelEdit = () => {
         setEditingId(null);
         setEditingQtd('');
+        setEditingQtdIni('');
     };
 
     const saveEdit = async (v: VariacaoModelo) => {
         const novaQtd = parseInt(editingQtd, 10);
+        const novaQtdIni = parseInt(editingQtdIni, 10);
         if (isNaN(novaQtd) || novaQtd < 0) return;
+        if (isNaN(novaQtdIni) || novaQtdIni < 0) return;
 
         const diff = novaQtd - v.quantidade;
-        if (diff === 0) {
+        if (diff === 0 && novaQtdIni === v.quantidadeInicial) {
             setEditingId(null);
             return;
         }
 
         setSaving(true);
         try {
-            await updateItem({ id: v.id, quantidade: novaQtd });
+            await updateItem({ id: v.id, quantidade: novaQtd, quantidadeInicial: novaQtdIni });
             await addMovimentacao({
                 itemId: v.id,
                 tipo: diff > 0 ? 'entrada' : 'saida',
@@ -130,7 +136,7 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
             });
 
             setLocalVariacoes(prev =>
-                prev.map(lv => lv.id === v.id ? { ...lv, quantidade: novaQtd } : lv)
+                prev.map(lv => lv.id === v.id ? { ...lv, quantidade: novaQtd, quantidadeInicial: novaQtdIni } : lv)
             );
             setEditingId(null);
             queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
@@ -243,11 +249,33 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                         </div>
                                     )}
 
-                                    {/* Total */}
-                                    <div className="mt-4 p-3 rounded-xl bg-primary/5 border border-primary/10">
-                                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Total em Estoque</p>
-                                        <p className="text-2xl font-bold text-primary">{totalPecas}</p>
-                                        <p className="text-xs text-muted-foreground">peças em {localVariacoes.length} variação(ões)</p>
+                                    {/* Total e Desempenho */}
+                                    <div className="mt-4 p-4 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 shadow-sm space-y-4">
+                                        <div>
+                                            <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold mb-1 opacity-70">Estoque Atual</p>
+                                            <p className="text-3xl font-black text-primary leading-none tracking-tight">
+                                                {totalPecas} <span className="text-xs font-bold opacity-60 uppercase">pçs</span>
+                                            </p>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-primary/10">
+                                            <div>
+                                                <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-1">Volume Total</p>
+                                                <p className="text-lg font-black text-foreground/80">
+                                                    {totalProduzido}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] text-emerald-600 uppercase tracking-widest font-bold mb-1">Vendas Totais</p>
+                                                <p className="text-lg font-black text-emerald-600">
+                                                    {Math.max(0, totalProduzido - totalPecas)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        
+                                        <p className="text-[10px] text-muted-foreground italic">
+                                            Métricas agregadas de {localVariacoes.length} variação(ões)
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -300,7 +328,8 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                             <thead>
                                                 <tr className="bg-muted/40 border-b border-border">
                                                     <th className="text-left px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Tamanho</th>
-                                                    <th className="text-right px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Quantidade</th>
+                                                    <th className="text-right px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Atual</th>
+                                                    <th className="text-right px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Histórico</th>
                                                     <th className="text-right px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Status</th>
                                                 </tr>
                                             </thead>
@@ -326,19 +355,39 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                                         <td className="px-5 py-4 text-right">
                                                             {editingId === v.id ? (
                                                                 <div className="flex items-center justify-end gap-1">
-                                                                    <Input
-                                                                        type="number"
-                                                                        min={0}
-                                                                        className="w-20 h-7 text-right text-sm px-2"
-                                                                        value={editingQtd}
-                                                                        onChange={e => setEditingQtd(e.target.value)}
-                                                                        onKeyDown={e => {
-                                                                            if (e.key === 'Enter') saveEdit(v);
-                                                                            if (e.key === 'Escape') cancelEdit();
-                                                                        }}
-                                                                        autoFocus
-                                                                        disabled={saving}
-                                                                    />
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <div className="flex items-center gap-1">
+                                                                            <Label className="text-[9px] uppercase opacity-50 w-8">Atu</Label>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                className="w-16 h-7 text-right text-xs px-2 bg-background border-primary/20"
+                                                                                value={editingQtd}
+                                                                                onChange={e => setEditingQtd(e.target.value)}
+                                                                                onKeyDown={e => {
+                                                                                    if (e.key === 'Enter') saveEdit(v);
+                                                                                    if (e.key === 'Escape') cancelEdit();
+                                                                                }}
+                                                                                autoFocus
+                                                                                disabled={saving}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <Label className="text-[9px] uppercase opacity-50 w-8">Tot</Label>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                className="w-16 h-7 text-right text-xs px-2 bg-primary/5 border-primary/20 font-bold"
+                                                                                value={editingQtdIni}
+                                                                                onChange={e => setEditingQtdIni(e.target.value)}
+                                                                                onKeyDown={e => {
+                                                                                    if (e.key === 'Enter') saveEdit(v);
+                                                                                    if (e.key === 'Escape') cancelEdit();
+                                                                                }}
+                                                                                disabled={saving}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
                                                                     <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" onClick={() => saveEdit(v)} disabled={saving}>
                                                                         {saving ? <span className="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin inline-block" /> : <Check className="h-3.5 w-3.5" />}
                                                                     </Button>
@@ -359,6 +408,13 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                                                     </Button>
                                                                 </div>
                                                             )}
+                                                        </td>
+                                                        <td className="px-5 py-4 text-right">
+                                                            <div className="flex items-center justify-end gap-1 group/tot">
+                                                                <span className="text-xs font-medium text-primary bg-primary/5 px-2 py-0.5 rounded-full">
+                                                                    {v.quantidadeInicial || v.quantidade}
+                                                                </span>
+                                                            </div>
                                                         </td>
                                                         <td className="px-5 py-4 text-right">
                                                             <Badge className={cn('text-[10px] border font-bold uppercase', getStockColor(v.quantidade))}>

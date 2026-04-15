@@ -19,6 +19,7 @@ interface ProductCardProps {
     producaoId?: string;
     status?: string;
     tipo: string;
+    quantidadeInicial: number;
   };
   editingPriceId: string | null;
   editingPriceValue: number;
@@ -94,7 +95,7 @@ export function ProductCard({
 
   // Status indicator based on quantity
   const getStockStatus = (quantidade: number) => {
-    if (quantidade === 0) return { color: 'bg-red-500', label: 'Esgotado' };
+    if (quantidade <= 0) return { color: 'bg-red-500', label: 'Esgotado' };
     if (quantidade <= 20) return { color: 'bg-amber-500', label: 'Baixo' };
     return { color: 'bg-emerald-500', label: 'Disponível' };
   };
@@ -223,6 +224,22 @@ export function ProductCard({
             )}>
               <ShoppingBag size={14} />
               {vendasSemana} peças
+            </span>
+          </div>
+        </div>
+
+        {/* Histórico acumulado e Vendas totais */}
+        <div className="mt-3 grid grid-cols-2 gap-2 p-2 rounded-xl bg-muted/30 border border-border/20">
+          <div className="flex flex-col">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-tighter">Volume Total</span>
+            <span className="text-sm font-bold text-foreground">
+              {item.quantidadeInicial || item.quantidade} <span className="text-[10px] font-normal opacity-70">pçs</span>
+            </span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-tighter">Vendas Totais</span>
+            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+              {Math.max(0, (item.quantidadeInicial || item.quantidade) - item.quantidade)} <span className="text-[10px] font-normal opacity-70">pçs</span>
             </span>
           </div>
         </div>

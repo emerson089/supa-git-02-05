@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download, FileText, Image, ChevronDown, RefreshCw, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { Search, Plus, Package, Layers, AlertTriangle, Edit, Trash2, PackageCheck, Pencil, Check, X, Upload, ImagePlus, FileSpreadsheet, DollarSign, PackageX, Download, FileText, Image, ChevronDown, RefreshCw, ChevronLeft, ChevronRight, Sparkles, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { supabase } from '@/integrations/supabase/client';
@@ -119,6 +119,7 @@ export default function Estoque() {
     quantidadeMinima: number | string;
     precoUnitario: number | string;
     localizacao: string;
+    quantidadeInicial: number | string;
   }>({
     nome: '',
     categoria: '',
@@ -126,7 +127,8 @@ export default function Estoque() {
     unidade: 'metros',
     quantidadeMinima: '',
     precoUnitario: '',
-    localizacao: ''
+    localizacao: '',
+    quantidadeInicial: ''
   });
 
   // Modal para Novo Modelo Acabado
@@ -409,7 +411,8 @@ export default function Estoque() {
           unidade: fullItem.unidade,
           quantidadeMinima: fullItem.quantidadeMinima ?? 0,
           precoUnitario: fullItem.precoUnitario ?? 0,
-          localizacao: fullItem.localizacao ?? ''
+          localizacao: fullItem.localizacao ?? '',
+          quantidadeInicial: fullItem.quantidadeInicial ?? fullItem.quantidade
         });
       } else {
         // Use the passed item data (for paginated items)
@@ -421,7 +424,8 @@ export default function Estoque() {
           unidade: item.unidade,
           quantidadeMinima: item.quantidadeMinima ?? 0,
           precoUnitario: item.precoUnitario ?? 0,
-          localizacao: item.localizacao ?? ''
+          localizacao: item.localizacao ?? '',
+          quantidadeInicial: (item as any).quantidadeInicial ?? item.quantidade
         });
       }
     } else {
@@ -433,7 +437,8 @@ export default function Estoque() {
         unidade: 'metros',
         quantidadeMinima: 0,
         precoUnitario: 0,
-        localizacao: ''
+        localizacao: '',
+        quantidadeInicial: 0
       });
     }
     setShowModal(true);
@@ -467,7 +472,8 @@ export default function Estoque() {
       unidade: formData.unidade,
       quantidadeMinima: formData.quantidadeMinima === '' ? 0 : Number(formData.quantidadeMinima),
       precoUnitario: formData.precoUnitario === '' ? 0 : Number(formData.precoUnitario),
-      localizacao: formData.localizacao
+      localizacao: formData.localizacao,
+      quantidadeInicial: formData.quantidadeInicial === '' ? 0 : Number(formData.quantidadeInicial)
     };
     if (editingItem) {
       // Para produtos acabados, atualiza apenas nome, quantidade e localização
@@ -475,7 +481,8 @@ export default function Estoque() {
         updateItem(editingItem.id, {
           nome: dataToSave.nome,
           quantidade: dataToSave.quantidade,
-          localizacao: dataToSave.localizacao
+          localizacao: dataToSave.localizacao,
+          quantidadeInicial: dataToSave.quantidadeInicial
         });
       } else {
         updateItem(editingItem.id, dataToSave);
@@ -671,6 +678,7 @@ export default function Estoque() {
       // Somar à quantidade existente
       updateItem(produtoDuplicado.id, {
         quantidade: produtoDuplicado.quantidade + novoModeloForm.quantidade,
+        quantidadeInicial: (produtoDuplicado.quantidadeInicial || 0) + novoModeloForm.quantidade,
         precoUnitario: novoModeloForm.precoVenda || (produtoDuplicado.precoUnitario ?? 0),
         imagemUrl: novoModeloForm.imagemUrl || produtoDuplicado.imagemUrl || undefined
       });
@@ -686,7 +694,8 @@ export default function Estoque() {
         quantidadeMinima: 0,
         precoUnitario: novoModeloForm.precoVenda,
         localizacao: 'Estoque Produção',
-        imagemUrl: novoModeloForm.imagemUrl
+        imagemUrl: novoModeloForm.imagemUrl,
+        quantidadeInicial: novoModeloForm.quantidade
       });
       toast.success('Modelo adicionado ao estoque!');
     }
@@ -801,6 +810,19 @@ export default function Estoque() {
               </div>
             </div>
           </Card>}
+          <Card className="p-3 bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-blue-500/10">
+                <ShoppingBag className="h-4 w-4 text-blue-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-blue-700/70 dark:text-blue-400 font-medium truncate">Total Vendas</p>
+                <p className="font-bold text-sm sm:text-lg text-blue-600 dark:text-blue-400">
+                  {Math.max(0, (metrics?.totalProduzido || 0) - totalPecas).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </Card>
         </div>
 
         {/* Quick Filters */}
@@ -820,25 +842,8 @@ export default function Estoque() {
 
         <Tabs value={activeTab} onValueChange={v => handleTabChange(v as 'materia_prima' | 'produto_acabado')}>
           {/* Mobile: Scrollable tabs */}
-          {isMobile ? <ScrollArea className="w-full mb-4">
-            <div className="flex gap-2 pb-2">
-              <button onClick={() => handleTabChange('produto_acabado')} className={cn("flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap", "border text-sm font-medium", activeTab === 'produto_acabado' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted")}>
-                <PackageCheck className="h-4 w-4 shrink-0" />
-                <span>Produtos</span>
-                <span className={cn("inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-xs font-semibold", activeTab === 'produto_acabado' ? "bg-emerald-500/20 text-emerald-600" : "bg-muted text-muted-foreground")}>
-                  {produtosAcabados.length}
-                </span>
-              </button>
-            </div>
-            <ScrollBar orientation="horizontal" className="h-2" />
-          </ScrollArea> : (/* Desktop: Original tabs */
-            <div className="flex items-center justify-between mb-6">
-              <TabsList className="shadow-[3px_3px_6px_hsl(var(--muted)/0.3),-3px_-3px_6px_hsl(var(--background))] bg-muted/30">
-                <TabsTrigger value="produto_acabado" className="gap-2 data-[state=active]:shadow-[inset_2px_2px_4px_hsl(var(--muted)/0.4),inset_-2px_-2px_4px_hsl(var(--background))]">
-                  <PackageCheck size={16} />
-                  Produtos Acabados ({produtosAcabados.length})
-                </TabsTrigger>
-              </TabsList>
+
+            <div className="flex items-center justify-end mb-6">
 
               {activeTab === 'produto_acabado' && <div className="flex items-center gap-3">
                 <DropdownMenu>
@@ -873,7 +878,7 @@ export default function Estoque() {
                 <Plus size={18} />
                 Novo Item
               </Button>}
-            </div>)}
+            </div>
 
           <TabsContent value={activeTab} className="mt-0">
             {/* ── Seção Única de Produtos Acabados ────────────────────────── */}
@@ -927,7 +932,8 @@ export default function Estoque() {
                         precoUnitario: item.precoUnitario,
                         imagemUrl: item.imagemUrl,
                         localizacao: item.localizacao,
-                        tipo: item.tipo
+                        tipo: item.tipo,
+                        quantidadeInicial: item.quantidadeInicial
                       }} 
                       editingPriceId={editingPriceId} 
                       editingPrice={editingPriceValue.toString()} 
@@ -1101,14 +1107,31 @@ export default function Estoque() {
             </div>
           </>}
 
-          {/* Campos para produtos acabados */}
           {editingItem?.tipo === 'acabado' && <>
-            <div className="space-y-2">
-              <Label htmlFor="quantidade">Quantidade (peças)</Label>
-              <Input id="quantidade" type="number" value={formData.quantidade} onChange={e => setFormData({
-                ...formData,
-                quantidade: e.target.value === '' ? '' : Number(e.target.value)
-              })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="quantidade">Estoque Atual</Label>
+                <Input id="quantidade" type="number" value={formData.quantidade} onChange={e => setFormData({
+                  ...formData,
+                  quantidade: e.target.value === '' ? '' : Number(e.target.value)
+                })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="quantidadeInicial" className="flex items-center gap-2">
+                  Volume Total
+                  <div className="group relative">
+                    <AlertTriangle size={12} className="text-muted-foreground" />
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-popover text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                      Total de peças já produzidas deste modelo (usado para calcular vendas)
+                    </div>
+                  </div>
+                </Label>
+                <Input id="quantidadeInicial" type="number" value={formData.quantidadeInicial} onChange={e => setFormData({
+                  ...formData,
+                  quantidadeInicial: e.target.value === '' ? '' : Number(e.target.value)
+                })} min={0} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0 text-primary font-bold" />
+              </div>
             </div>
 
             <div className="space-y-2">

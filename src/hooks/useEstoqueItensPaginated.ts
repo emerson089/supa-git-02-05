@@ -18,6 +18,7 @@ export interface ItemEstoquePaginated {
   localizacao: string | null;
   imagemUrl: string | null;
   producaoId: string | null;
+  quantidadeInicial: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -48,6 +49,7 @@ interface DbItem {
   localizacao: string | null;
   imagem_url: string | null;
   producao_id: string | null;
+  quantidade_inicial: number;
   created_at: string;
   updated_at: string;
 }
@@ -64,6 +66,7 @@ const mapDbItemToItem = (dbItem: DbItem): ItemEstoquePaginated => ({
   localizacao: dbItem.localizacao,
   imagemUrl: dbItem.imagem_url,
   producaoId: dbItem.producao_id,
+  quantidadeInicial: Number(dbItem.quantidade_inicial || 0),
   createdAt: dbItem.created_at,
   updatedAt: dbItem.updated_at,
 });
@@ -150,7 +153,7 @@ export function useEstoqueItensPaginated(params: EstoquePaginatedParams) {
         if (!data) return { data: [], totalCount: 0, totalPages: 0 };
         
         // Get quantities from Central if available
-        let items = (data as DbItem[]).map(mapDbItemToItem);
+        let items = (data as any[]).map(mapDbItemToItem);
         
         if (localCentral) {
           const itemIds = items.map(i => i.id);
@@ -185,17 +188,27 @@ export function useEstoqueItensPaginated(params: EstoquePaginatedParams) {
         if (error) throw error;
         if (!data) return { data: [], totalCount: 0, totalPages: 0 };
         
-        let items = (data as DbItem[]).map(mapDbItemToItem);
+        // Para filtros dinâmicos, buscamos também todas as variações para agregar
+        const { data: allVariations } = await supabase
+          .from('estoque_itens')
+          .select('id, quantidade, localizacao')
+          .eq('user_id', user.id)
+          .eq('categoria', 'Variação Padronizada')
+          .eq('tipo', params.tipo);
+
+        let items = (data as any[]).map(mapDbItemToItem);
         
         // Get quantities from Central if available
         if (localCentral) {
-          const itemIds = items.map(i => i.id);
+          const itemIds = [...items.map(i => i.id), ...(allVariations?.map(v => v.id) || [])];
+          
           if (itemIds.length > 0) {
+            // Se houver muitos IDs, o Supabase pode reclamar de query longa. 
+            // Mas aqui buscamos todos os registros de Central de uma vez (limitado ao user_id)
             const { data: estoquePorLocal } = await supabase
               .from('estoque_por_local')
               .select('item_id, quantidade')
-              .eq('local_id', localCentral.id)
-              .in('item_id', itemIds);
+              .eq('local_id', localCentral.id);
             
             const quantidadeMap = new Map<string, number>();
             if (estoquePorLocal) {
@@ -204,16 +217,38 @@ export function useEstoqueItensPaginated(params: EstoquePaginatedParams) {
               });
             }
             
-            items = items.map(item => ({
-              ...item,
-              quantidade: quantidadeMap.has(item.id) ? quantidadeMap.get(item.id)! : item.quantidade,
-            }));
+            // Map de soma para pais
+            const parentSums = new Map<string, number>();
+            
+            // Somar variações
+            allVariations?.forEach(v => {
+              let pId = '';
+              try {
+                const loc = JSON.parse(v.localizacao || '{}');
+                pId = loc.modeloId;
+              } catch(e) {}
+              
+              if (pId) {
+                const vQty = quantidadeMap.get(v.id) ?? Number(v.quantidade);
+                parentSums.set(pId, (parentSums.get(pId) || 0) + vQty);
+              }
+            });
+
+            items = items.map(item => {
+              let qty = item.quantidade;
+              if (item.categoria === 'Modelo Padronizado') {
+                qty = parentSums.get(item.id) ?? 0;
+              } else {
+                qty = quantidadeMap.get(item.id) ?? item.quantidade;
+              }
+              return { ...item, quantidade: qty };
+            });
           }
         }
         
         // Apply quantity filter
         if (params.filtroRapido === 'esgotado') {
-          items = items.filter(item => item.quantidade === 0);
+          items = items.filter(item => item.quantidade <= 0);
         } else if (params.filtroRapido === 'baixo') {
           items = items.filter(item => item.quantidade > 0 && item.quantidade <= 20);
         }
@@ -246,7 +281,7 @@ export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado', search?: s
   return useQuery({
     queryKey: ['estoque-metrics', user?.id, tipo, debouncedSearch],
     queryFn: async () => {
-      if (!user) return { totalPecas: 0, valorTotal: 0, itensAlerta: 0, itensEsgotados: 0, totalItens: 0 };
+      if (!user) return { totalPecas: 0, valorTotal: 0, itensAlerta: 0, itensEsgotados: 0, totalItens: 0, totalProduzido: 0 };
       
       // Buscar local Central
       const { data: localCentral } = await supabase
@@ -256,25 +291,20 @@ export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado', search?: s
         .eq('tipo', 'central')
         .maybeSingle();
       
-      // Buscar campos necessários para métricas (excluir variações padronizadas para não duplicar)
+      // Buscar TODOS os itens para agregação dinâmica
+      // Não filtramos categoria aqui para podermos somar variações aos pais
       let query = supabase
         .from('estoque_itens')
-        .select('id, nome, categoria, quantidade, preco_unitario')
-        .eq('user_id', user.id)
-        .neq('categoria', 'Variação Padronizada');
+        .select('id, nome, categoria, quantidade, preco_unitario, localizacao, quantidade_inicial')
+        .eq('user_id', user.id);
 
       if (tipo) {
         query = query.eq('tipo', tipo);
       }
       
-      // Aplicar filtro de busca
-      if (debouncedSearch) {
-        query = query.or(`nome.ilike.%${debouncedSearch}%,categoria.ilike.%${debouncedSearch}%`);
-      }
-      
       const { data, error } = await query;
       if (error) throw error;
-      if (!data) return { totalPecas: 0, valorTotal: 0, itensAlerta: 0, itensEsgotados: 0, totalItens: 0 };
+      if (!data) return { totalPecas: 0, valorTotal: 0, itensAlerta: 0, itensEsgotados: 0, totalItens: 0, totalProduzido: 0 };
       
       // Get quantities from Central
       let quantidadeMap = new Map<string, number>();
@@ -291,19 +321,75 @@ export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado', search?: s
         }
       }
       
+      // Agregação baseada em cards (Pai ou Manual)
+      const cards = new Map<string, {
+        id: string;
+        nome: string;
+        categoria: string;
+        quantidade: number;
+        preco: number;
+        isPadronizado: boolean;
+        quantidadeInicial: number;
+      }>();
+
+      const items = (data as any[]);
+      const variations = items.filter(i => i.categoria === 'Variação Padronizada');
+      const parentsAndManuals = items.filter(i => i.categoria !== 'Variação Padronizada');
+
+      // 1. Inicializar cards com Pais e Manuais
+      parentsAndManuals.forEach(item => {
+        cards.set(item.id, {
+          id: item.id,
+          nome: item.nome,
+          categoria: item.categoria,
+          quantidade: item.categoria === 'Modelo Padronizado' ? 0 : (quantidadeMap.get(item.id) ?? Number(item.quantidade)),
+          preco: Number(item.preco_unitario) || 0,
+          isPadronizado: item.categoria === 'Modelo Padronizado',
+          quantidadeInicial: Number(item.quantidade_inicial || 0)
+        });
+      });
+
+      // 2. Somar variações aos pais
+      variations.forEach(v => {
+        let parentId = '';
+        try {
+          const loc = JSON.parse(v.localizacao || '{}');
+          parentId = loc.modeloId;
+        } catch (e) {}
+
+        if (parentId && cards.has(parentId)) {
+          const parent = cards.get(parentId)!;
+          const vQty = quantidadeMap.get(v.id) ?? Number(v.quantidade);
+          parent.quantidade += vQty;
+        }
+      });
+
       let totalPecas = 0;
       let valorTotal = 0;
       let itensAlerta = 0;
       let itensEsgotados = 0;
-      
-      data.forEach(item => {
-        const qty = quantidadeMap.has(item.id) ? quantidadeMap.get(item.id)! : Number(item.quantidade);
-        const preco = Number(item.preco_unitario) || 0;
+      let totalProduzido = 0;
+      let filteredCount = 0;
+
+      // 3. Calcular métricas sobre os cards agregados
+      cards.forEach(card => {
+        // Ignorar se não bater no filtro de busca
+        if (debouncedSearch) {
+          const searchLower = debouncedSearch.toLowerCase();
+          const matches = card.nome.toLowerCase().includes(searchLower) || 
+                         card.categoria.toLowerCase().includes(searchLower);
+          if (!matches) return;
+        }
+
+        filteredCount++;
+        const qty = card.quantidade;
+        const preco = card.preco;
         
         totalPecas += qty;
         valorTotal += preco * qty;
+        totalProduzido += card.quantidadeInicial || qty;
         
-        if (qty === 0) {
+        if (qty <= 0) {
           itensEsgotados++;
         } else if (qty <= 20) {
           itensAlerta++;
@@ -315,7 +401,8 @@ export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado', search?: s
         valorTotal,
         itensAlerta,
         itensEsgotados,
-        totalItens: data.length,
+        totalItens: filteredCount,
+        totalProduzido,
       };
     },
     enabled: !!user,

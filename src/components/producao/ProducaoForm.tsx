@@ -189,9 +189,14 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
         const gradeParts = sizeRows
           .filter(r => r.quantidade > 0)
           .map(r => `${r.tamanho}:${r.quantidade}${r.prioridade ? '★' : ''}`);
+        
         const gradePrefix = gradeParts.length > 0 ? `Grade: ${gradeParts.join(', ')}` : '';
+        
+        // Se não houver grade com quantidades, ainda salvamos a lista de tamanhos selecionados
+        const allTamanhos = sizeRows.map(r => r.tamanho).join(', ');
+        const tamanhosPrefix = (gradeParts.length === 0 && allTamanhos) ? `Tamanhos: ${allTamanhos}` : '';
 
-        const prefixParts = [gradePrefix, rolos > 0 ? `Rolos: ${rolos}` : ''].filter(Boolean);
+        const prefixParts = [gradePrefix, tamanhosPrefix, rolos > 0 ? `Rolos: ${rolos}` : ''].filter(Boolean);
         const obsWithMeta = prefixParts.length > 0
           ? (formData.observacoes.trim()
               ? `${prefixParts.join(' | ')} | ${formData.observacoes.trim()}`
@@ -249,9 +254,10 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
       const currentStage = formData.processo_atual;
 
       if (currentStage === 'Corte') {
-        // Corte: parse grade and rolos from lot's observacoes
+        // Corte: parse grade, sizes, and rolos from lot's observacoes
         const obs = formData.observacoes;
         const gradeMatch = obs.match(/Grade:\s*([^|]+)/i);
+        const tamanhosMatch = obs.match(/Tamanhos:\s*([^|]+)/i);
         const rolosMatch = obs.match(/Rolos:\s*(\d+)/i);
         const rolosValue = rolosMatch ? parseInt(rolosMatch[1]) : 0;
 
@@ -272,20 +278,26 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
 
         const obsLivre = obs
           .split('|').map(p => p.trim())
-          .filter(p => !p.match(/^Grade:/i) && !p.match(/^Rolos:/i))
+          .filter(p => !p.match(/^Grade:/i) && !p.match(/^Rolos:/i) && !p.match(/^Tamanhos:/i))
           .join(' | ').trim();
 
+        const modelName = formData.modelo_nome_cache || lote.modelo_nome_cache || '';
+        
         const parts: string[] = [
           `🧵 *Pedido de Corte - Lote ${formData.id_producao}*`,
-          `Modelo: ${formData.modelo_nome_cache}`,
+          `Modelo: ${modelName}`,
         ];
         if (rolosValue > 0) parts.push(`Rolos de tecido: ${rolosValue}`);
 
-        // Extract list of all sizes in the grade
-        const allSizes = gradeMatch[1].split(',').map(item => {
-          const m = item.trim().match(/^([^\s:]+)/);
-          return m ? m[1] : '';
-        }).filter(Boolean).join(', ');
+        let allSizes = '';
+        if (gradeMatch) {
+          allSizes = gradeMatch[1].split(',').map(item => {
+            const m = item.trim().match(/^([^\s:]+)/);
+            return m ? m[1] : '';
+          }).filter(Boolean).join(', ');
+        } else if (tamanhosMatch) {
+          allSizes = tamanhosMatch[1].trim();
+        }
         
         if (allSizes) parts.push(`Tamanhos : ${allSizes}`);
 
@@ -297,15 +309,14 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
         }
         if (obsLivre) { parts.push(''); parts.push(`📝 Obs: ${obsLivre}`); }
 
-        navigator.clipboard.writeText(parts.join('\n'));
-        toast.success('Mensagem copiada para WhatsApp!');
+        copyToClipboard(parts.join('\n'));
         return;
       }
 
-      // Other stages: read from the log entry of entering that stage
+      // Other stages: read metadata from logs, but general info from formData
       const stageLog = logs?.find(l => l.processo_novo === currentStage);
       const d = parseLogObs(stageLog?.observacao);
-      const stageResponsavel = stageLog?.responsavel || '';
+      const currentResponsavel = formData.responsavel || stageLog?.responsavel || '';
 
       const emoji =
         currentStage === 'Lavanderia' ? '🫧' :
@@ -313,9 +324,9 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
 
       const parts: string[] = [
         `${emoji} *${currentStage} - Lote ${formData.id_producao}*`,
-        `Modelo: ${formData.modelo_nome_cache}`,
+        `Modelo: ${formData.modelo_nome_cache || lote.modelo_nome_cache || ''}`,
       ];
-      if (stageResponsavel) parts.push(`👤 Responsável: ${stageResponsavel}`);
+      if (currentResponsavel) parts.push(`👤 Responsável: ${currentResponsavel}`);
       parts.push('');
 
       if (currentStage === 'Costura/Facção') {
@@ -341,15 +352,20 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
         if (d['Tag']               === 'Sim')  parts.push('✅ Tag da peça');
       }
 
-      // Always append the original grade if present
-      const gradeMatch = formData.observacoes.match(/Grade:\s*([^|]+)/i);
-      if (gradeMatch) {
+      // Always append the original grade or sizes if present
+      const obs = formData.observacoes;
+      const gradeMatchEnd = obs.match(/Grade:\s*([^|]+)/i);
+      const tamanhosMatchEnd = obs.match(/Tamanhos:\s*([^|]+)/i);
+      
+      if (gradeMatchEnd) {
         parts.push('');
-        parts.push(`📊 Grade: ${gradeMatch[1].trim()}`);
+        parts.push(`📊 Grade: ${gradeMatchEnd[1].trim()}`);
+      } else if (tamanhosMatchEnd) {
+        parts.push('');
+        parts.push(`📊 Tamanhos: ${tamanhosMatchEnd[1].trim()}`);
       }
 
-      navigator.clipboard.writeText(parts.join('\n'));
-      toast.success('Mensagem copiada para WhatsApp!');
+      copyToClipboard(parts.join('\n'));
       return;
     }
 
@@ -380,8 +396,61 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
       parts.push(`📝 Obs: ${formData.observacoes.trim()}`);
     }
 
-    navigator.clipboard.writeText(parts.join('\n'));
-    toast.success('Mensagem copiada para WhatsApp!');
+    copyToClipboard(parts.join('\n'));
+  };
+
+  /** Ultimate robust clipboard copy helper */
+  const copyToClipboard = async (text: string) => {
+    try {
+      // 1. Try modern API (requires HTTPS/Secure Context)
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(text);
+          toast.success('Copiado com sucesso!');
+          return;
+        } catch (e) {
+          console.warn('Modern Clipboard API failed, trying fallback...', e);
+        }
+      }
+      
+      // 2. Universal Fallback (execCommand) - works on older browsers and non-secure contexts
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      
+      // Position off-screen but keep in DOM for focus/selection
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "-9999px";
+      textArea.style.width = "2em";
+      textArea.style.height = "2em";
+      document.body.appendChild(textArea);
+      
+      textArea.focus();
+      textArea.select();
+      
+      // Extra step for iOS/Safari
+      const range = document.createRange();
+      range.selectNodeContents(textArea);
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      textArea.setSelectionRange(0, 999999);
+      
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        toast.success('Copiado com sucesso!');
+      } else {
+        throw new Error('ExecCommand failed');
+      }
+    } catch (err) {
+      console.error('Clipboard Error:', err);
+      // 3. Final extreme fallback: tell the user what happened
+      toast.error('Não foi possível copiar automaticamente. Tente selecionar o texto manualmente.');
+    }
   };
 
   return (
@@ -698,14 +767,18 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
 
       {/* ── Copiar para WhatsApp ── */}
       {(lote || rolos > 0 || sizeRows.length > 0) && (
-        <button
+        <Button
           type="button"
-          onClick={handleCopiarWhatsApp}
-          className="w-full flex items-center justify-center gap-2 border border-green-500/40 text-green-700 dark:text-green-400 rounded-md px-4 py-2 text-sm hover:bg-green-50 dark:hover:bg-green-950/20 transition-colors"
+          variant="outline"
+          onClick={(e) => {
+            e.preventDefault();
+            handleCopiarWhatsApp();
+          }}
+          className="w-full flex items-center justify-center gap-2 border-green-500/40 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/20 transition-all active:scale-[0.98]"
         >
           <MessageSquare className="h-4 w-4" />
           Copiar para WhatsApp
-        </button>
+        </Button>
       )}
 
       <div className="flex justify-end gap-3 pt-4">

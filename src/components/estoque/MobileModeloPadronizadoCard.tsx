@@ -101,6 +101,8 @@ export function MobileModeloPadronizadoCard({
     );
 
     const totalPecas = variacoes.reduce((s, v) => s + v.quantidade, 0);
+    const totalProduzido = variacoes.reduce((s, v) => s + (v.quantidadeInicial || v.quantidade), 0);
+    const totalVendas = Math.max(0, totalProduzido - totalPecas);
 
     // Status geral
     const statusColor =
@@ -220,6 +222,22 @@ export function MobileModeloPadronizadoCard({
                             )}>
                                 {vendasSemana} vendidas na semana
                             </span>
+                        </div>
+
+                        {/* Histórico acumulado e Vendas totais mobile agrupadas */}
+                        <div className="mt-2 grid grid-cols-2 gap-2 p-1.5 rounded-lg bg-purple-50/50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-900/20">
+                            <div className="flex flex-col">
+                                <span className="text-[9px] text-muted-foreground uppercase leading-none font-medium mb-0.5">Total Prod.</span>
+                                <span className="text-xs font-bold text-foreground">
+                                    {totalProduzido} <span className="text-[9px] font-normal opacity-70">pçs</span>
+                                </span>
+                            </div>
+                            <div className="flex flex-col border-l border-purple-200/40 dark:border-purple-800/40 pl-2">
+                                <span className="text-[9px] text-muted-foreground uppercase leading-none font-medium mb-0.5">Vendas Tot.</span>
+                                <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                                    {totalVendas} <span className="text-[9px] font-normal opacity-70">pçs</span>
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>

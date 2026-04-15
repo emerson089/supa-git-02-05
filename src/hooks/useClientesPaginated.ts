@@ -12,6 +12,10 @@ export interface ClientePaginatedDB {
   excursao: string;
   created_at: string;
   user_id: string;
+  categoria?: string;
+  total_comprado?: number;
+  data_ultima_compra?: string;
+  opt_out?: boolean;
 }
 
 export interface ClientesPaginatedParams {
@@ -59,14 +63,14 @@ export function useClientesPaginated(params: ClientesPaginatedParams) {
       const to = from + pageSize - 1;
 
       // Build base query with count
-      let countQuery = supabase
+      let countQuery = (supabase
         .from('clientes')
-        .select('*', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true }) as any)
         .eq('user_id', user.id);
 
-      let dataQuery = supabase
+      let dataQuery = (supabase
         .from('clientes')
-        .select('id, nome, telefone, cidade, estado, excursao, created_at, user_id')
+        .select('*') as any)
         .eq('user_id', user.id);
 
       // Apply ID filter BEFORE pagination (for CRM filters like Pendentes, VIP, etc.)
@@ -112,7 +116,7 @@ export function useClientesPaginated(params: ClientesPaginatedParams) {
         // Apply pagination locally
         const totalCount = allData.length;
         const totalPages = Math.ceil(totalCount / pageSize);
-        const paginatedData = allData.slice(from, from + pageSize);
+        const paginatedData = allData.slice(from, from + pageSize) as any[];
 
         return {
           data: paginatedData,

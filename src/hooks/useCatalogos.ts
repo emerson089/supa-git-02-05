@@ -3,6 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
+export interface CatalogoArquivo {
+  nome: string;
+  path: string;
+  tipo: string;
+  size: number;
+}
+
 export interface Catalogo {
   id: string;
   user_id: string;
@@ -10,6 +17,8 @@ export interface Catalogo {
   file_path: string;
   mensagem: string;
   ativo: boolean;
+  arquivos?: CatalogoArquivo[];
+  last_edited_at?: string;
   created_at: string;
 }
 
@@ -64,6 +73,35 @@ export const useCatalogos = () => {
       });
 
     if (insertError) throw insertError;
+    await fetchCatalogos();
+  };
+
+  const updateCatalogo = async (id: string, updates: Partial<Catalogo>, file?: File) => {
+    if (!user?.id) throw new Error('Usuário não autenticado');
+
+    let newFilePath = updates.file_path;
+
+    if (file) {
+      const uuid = crypto.randomUUID();
+      newFilePath = `${user.id}/catalogos/${uuid}.${file.name.split('.').pop()}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('lotes')
+        .upload(newFilePath, file, { cacheControl: '3600', upsert: false });
+
+      if (uploadError) throw uploadError;
+    }
+
+    const { error } = await supabase
+      .from('catalogos')
+      .update({
+        ...updates,
+        file_path: newFilePath,
+        last_edited_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (error) throw error;
     await fetchCatalogos();
   };
 
@@ -135,6 +173,7 @@ export const useCatalogos = () => {
     catalogosAtivos,
     loading,
     uploadCatalogo,
+    updateCatalogo,
     ativarCatalogo,
     excluirCatalogo,
     atualizarMensagem,

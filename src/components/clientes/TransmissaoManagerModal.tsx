@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Play, Pause, Loader2, CheckCircle2, AlertTriangle, Send } from 'lucide-react';
+import { 
+  Play, Pause, Loader2, CheckCircle2, AlertTriangle, Send, 
+  Search, Filter, Calendar, Clock, Eye, ShieldCheck, 
+  UserCheck, Smartphone, Info, Eraser, Trash2, ChevronDown, ChevronUp,
+  Mail, FileText
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -7,6 +12,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -22,6 +28,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCatalogos } from '@/hooks/useCatalogos';
 import { useClienteContatos } from '@/hooks/useClienteContatos';
+import { useMassSending } from '@/hooks/useMassSending';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
+import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 const SAUDACOES = [
   'Olá', 'Oii', 'Oie', 'Opa', 'Olaa', 'Oiii', 'E aí', 'Fala', 'Oi',
@@ -35,6 +49,8 @@ const SUFIXOS = [
   ', beleza?', '! Tudo certo por aí?',
 ];
 
+const STORAGE_KEY = 'transmissao_progresso';
+
 type Velocidade = 'ultra_seguro' | 'normal' | 'rapido';
 
 const VELOCIDADES: Record<Velocidade, { min: number; max: number; label: string }> = {
@@ -46,7 +62,7 @@ const VELOCIDADES: Record<Velocidade, { min: number; max: number; label: string 
 interface TransmissaoManagerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  clientes: ClientePaginatedDB[];
+  clientes: any[];
   filtroAtual: string;
 }
 
@@ -73,32 +89,61 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const { user } = useAuth();
   const { catalogos, loading: loadingCatalogos } = useCatalogos();
   const { marcarContato } = useClienteContatos();
+  const { isBlacklisted, saveCampanhaHistorico } = useMassSending();
+  
+  // States fundamentais
   const [selectedCatalogoId, setSelectedCatalogoId] = useState<string>('');
   const [velocidade, setVelocidade] = useState<Velocidade>('ultra_seguro');
-  const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
+  const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'completed' | 'confirming'>('idle');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sucessos, setSucessos] = useState(0);
   const [falhas, setFalhas] = useState(0);
-  const [jaEnviados, setJaEnviados] = useState(0);
   const [logs, setLogs] = useState<{ id: string; msg: string; type: 'success' | 'error' }[]>([]);
   const [countdown, setCountdown] = useState(0);
   const [hasPersistedData, setHasPersistedData] = useState(false);
   const [loadingEnvios, setLoadingEnvios] = useState(false);
   const [enviadosIds, setEnviadosIds] = useState<Set<string>>(new Set());
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [jaEnviados, setJaEnviados] = useState(0);
+  
+  // Segmentação Avançada
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterCidade, setFilterCidade] = useState('');
+  const [filterCategoria, setFilterCategoria] = useState('todos');
+  const [filterValorMin, setFilterValorMin] = useState('');
+  const [filterExcursao, setFilterExcursao] = useState('');
 
-  const STORAGE_KEY = `transmissao_progresso_${filtroAtual}`;
+  // Agendamento
+  const [isAgendado, setIsAgendado] = useState(false);
+  const [agendamentoData, setAgendamentoData] = useState('');
+  const [agendamentoHoraInicio, setAgendamentoHoraInicio] = useState('08:00');
+  const [agendamentoHoraFim, setAgendamentoHoraFim] = useState('18:00');
+  const [horarioComercial, setHorarioComercial] = useState(true);
 
-  // Filtrar clientes que já receberam o catálogo selecionado
-  const clientesFiltrados = useMemo(() => {
-    if (enviadosIds.size === 0) return clientes;
-    return clientes.filter(c => !enviadosIds.has(c.id));
-  }, [clientes, enviadosIds]);
+  // Preview e Segurança
+  const [showPreview, setShowPreview] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
 
-  const totalOriginal = clientes.length;
-  const total = clientesFiltrados.length;
+  // 1. Filtragem dinâmica baseada nos inputs do modal
+  const clientesFiltradosUI = useMemo(() => {
+    return (clientes || []).filter(c => {
+      if (filterCidade && !c.cidade?.toLowerCase().includes(filterCidade.toLowerCase())) return false;
+      if (filterExcursao && !c.excursao?.toLowerCase().includes(filterExcursao.toLowerCase())) return false;
+      if (filterCategoria !== 'todos' && c.categoria !== filterCategoria) return false;
+      if (filterValorMin && Number(c.total_comprado || 0) < Number(filterValorMin)) return false;
+      return true;
+    });
+  }, [clientes, filterCidade, filterCategoria, filterValorMin, filterExcursao]);
 
-  // Buscar envios anteriores ao trocar catálogo
+  // 2. Filtrar clientes que já receberam o catálogo selecionado (HEAD logic)
+  const clientesFinais = useMemo(() => {
+    if (enviadosIds.size === 0) return clientesFiltradosUI;
+    return clientesFiltradosUI.filter(c => !enviadosIds.has(c.id));
+  }, [clientesFiltradosUI, enviadosIds]);
+
+  const totalOriginal = clientesFiltradosUI.length;
+  const total = clientesFinais.length;
+
+  // Buscar envios anteriores ao trocar catálogo (HEAD logic)
   useEffect(() => {
     if (!open || !user?.id || !selectedCatalogoId) {
       setEnviadosIds(new Set());
@@ -131,7 +176,6 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
         if (error) throw error;
 
         if (selectedCatalogoId === 'all_active' && catalogoIds.length > 1) {
-          // Para "todos ativos", filtrar clientes que já receberam TODOS
           const countMap = new Map<string, number>();
           (data || []).forEach(row => {
             countMap.set(row.cliente_id, (countMap.get(row.cliente_id) || 0) + 1);
@@ -157,7 +201,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     fetchEnvios();
   }, [open, user?.id, selectedCatalogoId, catalogos]);
 
-  // Carregar progresso salvo
+  // Carregar progresso salvo (HEAD logic)
   useEffect(() => {
     if (open && status === 'idle') {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -174,18 +218,6 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     }
   }, [open, status, total]);
 
-  // Bloqueio de fechamento de aba
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (status === 'running') {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [status]);
-
   // Auto-select active catalog
   useEffect(() => {
     if (catalogos.length > 0 && !selectedCatalogoId) {
@@ -198,7 +230,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     }
   }, [catalogos, selectedCatalogoId]);
 
-  const selectedCatalogo = catalogos.find((c) => c.id === selectedCatalogoId) || null;
+  const selectedCatalogo = catalogos.find((c) => c.id === selectedCatalogoId) || (selectedCatalogoId === 'all_active' ? catalogos.find(c => c.ativo) : null);
 
   const getFiltroLabel = () => {
     const map: Record<string, string> = {
@@ -210,13 +242,86 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
   const progressPercent = total === 0 ? 0 : Math.round((currentIndex / total) * 100);
 
-  const handlePause = () => {
-    setStatus('paused');
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  // Substituição de Variáveis
+  const formatMessage = (template: string, cliente: ClientePaginatedDB) => {
+    let msg = template || '';
+    const saudacaoAleatoria = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
+    
+    // Fallbacks inteligentes
+    const substitutionMap: Record<string, string> = {
+      '{nome}': cliente.nome?.split(' ')[0] || 'Cliente',
+      '{cidade}': cliente.cidade || 'sua região',
+      '{estado}': cliente.estado || 'seu estado',
+      '{excursao}': cliente.excursao || 'sua excursão',
+      '{valor}': Number(cliente.total_comprado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+    };
+
+    Object.entries(substitutionMap).forEach(([tag, val]) => {
+      msg = msg.split(tag).join(val);
+    });
+
+    if (!msg.includes('{nome}')) {
+      msg = `${saudacaoAleatoria} ${cliente.nome?.split(' ')[0] || 'Cliente'}! ${msg}`;
+    }
+
+    return msg;
   };
 
-  const logMessage = (msg: string, type: 'success' | 'error') => {
-    setLogs((prev) => [{ id: Math.random().toString(), msg, type }, ...prev].slice(0, 50));
+  const handleStart = () => {
+    if (total === 0) { toast.error('Nenhum cliente disponível na lista filtrada.'); return; }
+    if (!selectedCatalogoId) { toast.error('Selecione um catálogo.'); return; }
+    
+    if (isAgendado && !agendamentoData) {
+        toast.error('Selecione uma data para o agendamento.');
+        return;
+    }
+
+    if (hasPersistedData) {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                setCurrentIndex(data.currentIndex);
+                setSucessos(data.sucessos);
+                setFalhas(data.falhas);
+                if (data.selectedCatalogoId) setSelectedCatalogoId(data.selectedCatalogoId);
+                setHasPersistedData(false);
+                setStatus('running');
+                processNext(data.currentIndex);
+                return;
+            } catch (e) {}
+        }
+    }
+
+    setStatus('confirming');
+  };
+
+  const executeStart = async () => {
+    if (isAgendado) {
+        try {
+            const { error } = await supabase.from('envios_agendados').insert({
+                user_id: user?.id,
+                catalogo_id: selectedCatalogoId === 'all_active' ? null : selectedCatalogoId,
+                config_agendamento: {
+                    data: agendamentoData,
+                    hora_inicio: agendamentoHoraInicio,
+                    hora_fim: agendamentoHoraFim,
+                    horario_comercial: horarioComercial
+                },
+                status: 'Pendente'
+            });
+            if (error) throw error;
+            toast.success('Envio agendado com sucesso!');
+            onOpenChange(false);
+            return;
+        } catch (e) {
+            toast.error('Erro ao agendar envio.');
+            return;
+        }
+    }
+
+    setStatus('running');
+    processNext(0);
   };
 
   const registrarEnvio = async (clienteId: string, catalogoId: string) => {
@@ -236,60 +341,60 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     if (status === 'paused' || status === 'idle') return;
     if (index >= total) {
       setStatus('completed');
-      logMessage('Transmissão concluída com sucesso!', 'success');
-      toast.success('Envio em massa finalizado!');
+      logMessage('Transmissão concluída!', 'success');
+      localStorage.removeItem(STORAGE_KEY);
+      
+      // Salvar Histórico
+      await saveCampanhaHistorico({
+        nome_campanha: `Campanha ${new Date().toLocaleDateString('pt-BR')}`,
+        catalogo_id: selectedCatalogoId === 'all_active' ? null : selectedCatalogoId,
+        total_contatos: total,
+        sucessos,
+        falhas,
+        filtros_aplicados: {
+            cidade: filterCidade,
+            categoria: filterCategoria,
+            excursao: filterExcursao,
+            valor_min: filterValorMin
+        },
+        velocidade
+      });
       return;
     }
 
-    const cliente = clientesFiltrados[index];
-    const phoneResult = normalizePhoneE164(cliente.telefone);
+    const cliente = clientesFinais[index];
+    
+    // Verificar Blacklist
+    const blocked = await isBlacklisted(cliente.telefone || '');
+    if (blocked) {
+      logMessage(`PULADO: ${cliente.nome?.split(' ')[0]} está na Blacklist`, 'error');
+      agendarProximo(index + 1);
+      return;
+    }
+
+    const phoneResult = normalizePhoneE164(cliente.telefone || '');
 
     if (!phoneResult.valid) {
-      logMessage(`Telefone inválido: ${cliente.nome.split(' ')[0]}`, 'error');
-      setFalhas((prev) => prev + 1);
+      logMessage(`Telefone inválido: ${cliente.nome?.split(' ')[0]}`, 'error');
+      setFalhas(prev => prev + 1);
       agendarProximo(index + 1);
       return;
     }
 
     try {
       if (!user?.id) throw new Error("Usuário não autenticado");
-      const catalogsToSend = selectedCatalogoId === 'all_active'
+      const catalogsToSend = selectedCatalogoId === 'all_active' 
         ? catalogos.filter(c => c.ativo)
         : catalogos.filter(c => c.id === selectedCatalogoId);
-
-      if (catalogsToSend.length === 0) throw new Error("Nenhum catálogo disponível para envio.");
-
-      const primeiroNome = cliente.nome.split(' ')[0];
 
       for (const cat of catalogsToSend) {
         const { data: signedData, error: signedError } = await supabase.storage
           .from('lotes')
           .createSignedUrl(cat.file_path, 604800);
 
-        if (signedError || !signedData?.signedUrl) {
-          console.error(`Catálogo ${cat.nome} não encontrado.`);
-          continue;
-        }
+        if (signedError || !signedData?.signedUrl) continue;
 
-        const isFirst = catalogsToSend.indexOf(cat) === 0;
-        const hasNameTag = cat.mensagem?.includes('{nome}');
-
-        let caption = '';
-        if (isFirst) {
-          const saudacaoPersonalizada = gerarSaudacao(primeiroNome);
-          const baseCaption = cat.mensagem
-            ? cat.mensagem.replace(/\{nome\}/g, primeiroNome)
-            : `Segue nosso catálogo atualizado!`;
-
-          caption = hasNameTag
-            ? baseCaption
-            : `${saudacaoPersonalizada} ${baseCaption}`;
-        } else {
-          caption = cat.mensagem
-            ? cat.mensagem.replace(/\{nome\}/g, primeiroNome)
-            : '';
-        }
-
+        const caption = formatMessage(cat.mensagem, cliente);
         const fileName = `${cat.nome.replace(/[^a-zA-Z0-9 ]/g, '')}.pdf`;
 
         const { error } = await supabase.functions.invoke('send-whatsapp', {
@@ -304,36 +409,35 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
         if (error) throw error;
 
-        // Registrar envio no banco
+        // Registrar envio no banco (HEAD logic)
         await registrarEnvio(cliente.id, cat.id);
 
         if (catalogsToSend.length > 1 && catalogsToSend.indexOf(cat) < catalogsToSend.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(r => setTimeout(r, 2000));
         }
       }
 
       marcarContato(cliente.id, 'whatsapp');
-      logMessage(`Enviado para ${cliente.nome.split(' ')[0]}`, 'success');
-      setSucessos((prev) => prev + 1);
-
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentIndex: index + 1,
-        sucessos: sucessos + 1,
-        falhas,
-        selectedCatalogoId
-      }));
-
-    } catch (err: any) {
-      console.error(err);
-      const errorMsg = err.details?.error || err.message || "Erro desconhecido";
-      logMessage(`Falha (${cliente.nome.split(' ')[0]}): ${errorMsg}`, 'error');
-      setFalhas((prev) => {
+      logMessage(`Enviado para ${cliente.nome?.split(' ')[0]}`, 'success');
+      setSucessos(prev => {
         const next = prev + 1;
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          currentIndex: index + 1,
-          sucessos,
-          falhas: next,
-          selectedCatalogoId
+            currentIndex: index + 1,
+            sucessos: next,
+            falhas,
+            selectedCatalogoId
+        }));
+        return next;
+      });
+    } catch (err) {
+      logMessage(`Falha ao enviar para ${cliente.nome?.split(' ')[0]}`, 'error');
+      setFalhas(prev => {
+        const next = prev + 1;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            currentIndex: index + 1,
+            sucessos,
+            falhas: next,
+            selectedCatalogoId
         }));
         return next;
       });
@@ -342,71 +446,70 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     agendarProximo(index + 1);
   };
 
-  const agendarProximo = (nextIndex: number) => {
-    setCurrentIndex(nextIndex);
-    if (nextIndex >= total) {
+  const agendarProximo = (next: number) => {
+    setCurrentIndex(next);
+    if (next >= total) {
       setStatus('completed');
       localStorage.removeItem(STORAGE_KEY);
-      toast.success('Transmissão finalizada!');
       return;
     }
     const config = VELOCIDADES[velocidade];
-    const randomSeconds = Math.floor(Math.random() * (config.max - config.min + 1)) + config.min;
-    setCountdown(randomSeconds);
+    const randomWait = Math.floor(Math.random() * (config.max - config.min + 1)) + config.min;
+    setCountdown(randomWait);
   };
 
   useEffect(() => {
-    if (status !== 'running') return;
-    if (currentIndex >= total) return;
+    if (status !== 'running' || countdown <= 0) return;
+    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown, status]);
 
-    if (countdown > 0) {
-      timeoutRef.current = setTimeout(() => setCountdown((prev) => prev - 1), 1000);
-    } else if (countdown === 0) {
-      processNext(currentIndex);
+  useEffect(() => {
+    if (status === 'running' && countdown === 0) processNext(currentIndex);
+  }, [countdown, status]);
+
+  const logMessage = (msg: string, type: 'success' | 'error') => {
+    setLogs(prev => [{ id: Math.random().toString(), msg, type }, ...prev].slice(0, 50));
+  };
+
+  const handleTestSend = async () => {
+    const num = window.prompt('Digite o número de teste (com DDD):');
+    if (!num) return;
+    const phone = normalizePhoneE164(num);
+    if (!phone.valid) { toast.error('Número inválido'); return; }
+    
+    toast.info('Enviando teste...');
+    try {
+        const cat = catalogos.find(c => c.id === selectedCatalogoId) || catalogos.find(c => c.ativo);
+        if (!cat) throw new Error('Selecione um catálogo');
+        
+        const { data: signed } = await supabase.storage.from('lotes').createSignedUrl(cat.file_path, 3600);
+        
+        await supabase.functions.invoke('send-whatsapp', {
+            body: {
+                type: 'document',
+                phone: phone.phone,
+                documentUrl: signed?.signedUrl,
+                fileName: 'teste.pdf',
+                caption: formatMessage(cat.mensagem, clientes[0] || { 
+                    id: 'teste', 
+                    nome: 'Teste', 
+                    telefone: '', 
+                    cidade: '', 
+                    estado: '', 
+                    excursao: '',
+                    user_id: user?.id || '',
+                    created_at: new Date().toISOString()
+                } as ClientePaginatedDB)
+            }
+        });
+        toast.success('Teste enviado com sucesso!');
+    } catch (e) {
+        toast.error('Falha no teste.');
     }
-
-    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
-  }, [countdown, status, currentIndex]);
-
-  const handleStart = () => {
-    if (total === 0) { toast.error('Nenhum cliente pendente na lista.'); return; }
-    if (!selectedCatalogo && selectedCatalogoId !== 'all_active') {
-      toast.error('Selecione um catálogo antes de iniciar.');
-      return;
-    }
-
-    if (status === 'idle') {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const data = JSON.parse(saved);
-        if (data.currentIndex > 0 && data.currentIndex < total) {
-          setCurrentIndex(data.currentIndex);
-          setSucessos(data.sucessos);
-          setFalhas(data.falhas);
-          if (data.selectedCatalogoId) setSelectedCatalogoId(data.selectedCatalogoId);
-          setHasPersistedData(false);
-          setStatus('running');
-          processNext(data.currentIndex);
-          return;
-        }
-      }
-
-      const confirm = window.confirm(`Iniciar envio automático para ${total} clientes? Mantenha esta janela aberta.`);
-      if (!confirm) return;
-    }
-
-    setStatus('running');
-    if (status === 'idle') processNext(0);
   };
 
   const handleReset = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    resetQueue();
-    setHasPersistedData(false);
-    toast.info('Progresso resetado.');
-  };
-
-  const resetQueue = () => {
     setStatus('idle');
     setCurrentIndex(0);
     setSucessos(0);
@@ -418,184 +521,382 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
   return (
     <Dialog open={open} onOpenChange={(val) => {
-      if (!val && status === 'running') {
-        toast.error('Pause a transmissão antes de fechar.');
-        return;
-      }
-      onOpenChange(val);
-      if (!val && (status === 'completed' || status === 'paused')) resetQueue();
+        if (status === 'running') return;
+        onOpenChange(val);
     }}>
-      <DialogContent className="sm:max-w-[500px] gap-0 p-0 overflow-hidden bg-background">
-        <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-6 text-white text-center rounded-t-xl">
-          <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 backdrop-blur-sm">
-            <Send size={24} className="text-white" />
+      <DialogContent className="sm:max-w-[550px] p-0 gap-0 overflow-hidden rounded-3xl bg-background border-none shadow-2xl">
+        <div className="bg-gradient-to-r from-primary to-primary/80 p-6 text-white text-center">
+          <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-3 backdrop-blur-md shadow-inner">
+            <Send size={28} className="text-white drop-shadow-sm" />
           </div>
-          <DialogTitle className="text-xl font-bold text-white mb-1">Transmissão Segura</DialogTitle>
-          <DialogDescription className="text-orange-100 flex items-center justify-center gap-2">
-            Disparo anti-spam do Catálogo PDF
+          <DialogTitle className="text-2xl font-black tracking-tight text-white mb-1">Transmissão Segura</DialogTitle>
+          <DialogDescription className="text-primary-foreground/80 font-medium">
+            Personalização avançada e controle anti-spam
           </DialogDescription>
         </div>
 
-        <div className="p-6 space-y-5">
-          {/* Catalog + Speed Selection */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Catálogo</label>
-              {loadingCatalogos ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground h-10">
-                  <Loader2 size={14} className="animate-spin" /> Carregando...
+        <div className="p-6 h-[70vh] overflow-y-auto space-y-6 custom-scrollbar">
+          {status === 'idle' && (
+            <>
+              {/* Seção 1: Configuração Base */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Catálogo Principal</Label>
+                  <Select value={selectedCatalogoId} onValueChange={setSelectedCatalogoId}>
+                    <SelectTrigger className="h-11 rounded-xl bg-secondary/50 border-none">
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all_active" className="font-bold text-primary">🚀 Todos os Ativos</SelectItem>
+                      {catalogos.map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.nome} {cat.ativo ? '(Ativo)' : ''}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              ) : catalogos.length === 0 ? (
-                <p className="text-xs text-destructive">Nenhum catálogo cadastrado.</p>
-              ) : (
-                <Select value={selectedCatalogoId} onValueChange={setSelectedCatalogoId} disabled={status === 'running'}>
-                  <SelectTrigger className="w-full h-10 shadow-sm border-border bg-background">
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {catalogos.filter(c => c.ativo).length > 1 && (
-                      <SelectItem value="all_active" className="font-semibold text-primary">
-                        🚀 Todos os Catálogos Ativos
-                      </SelectItem>
-                    )}
-                    {catalogos.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.nome} {cat.ativo ? '(Ativo)' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Velocidade</label>
-              <Select
-                value={velocidade}
-                onValueChange={(v) => setVelocidade(v as Velocidade)}
-                disabled={status === 'running'}
-              >
-                <SelectTrigger className="w-full h-10 shadow-sm border-border bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(VELOCIDADES).map(([key, config]) => (
-                    <SelectItem key={key} value={key}>
-                      {config.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Público Alvo com filtro de duplicatas */}
-          <div className="flex flex-col items-center justify-center bg-secondary/40 p-4 rounded-xl border border-border">
-            <p className="text-sm font-medium text-foreground mb-1">Público Alvo</p>
-            {loadingEnvios ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 size={14} className="animate-spin" /> Verificando envios anteriores...
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Velocidade de Envio</Label>
+                  <Select value={velocidade} onValueChange={v => setVelocidade(v as Velocidade)}>
+                    <SelectTrigger className="h-11 rounded-xl bg-secondary/50 border-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(VELOCIDADES).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            ) : (
-              <>
-                <p className="text-2xl font-bold text-primary">{total}</p>
-                {jaEnviados > 0 && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-muted-foreground">de {totalOriginal} total</span>
-                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 px-2 py-0.5 rounded-full">
-                      {jaEnviados} já receberam
-                    </span>
+
+              {/* Seção 2: Segmentação Avançada */}
+              <Card className="p-4 border-none bg-secondary/30 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Filter size={16} className="text-primary" />
+                    <h4 className="font-bold text-sm">Segmentação do Público</h4>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg" onClick={() => setShowFilters(!showFilters)}>
+                    {showFilters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </Button>
+                </div>
+
+                {showFilters && (
+                  <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Categoria</Label>
+                      <Select value={filterCategoria} onValueChange={setFilterCategoria}>
+                        <SelectTrigger className="h-9 text-xs rounded-lg">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos</SelectItem>
+                          <SelectItem value="VIP">💎 VIP</SelectItem>
+                          <SelectItem value="Novo">✨ Novos</SelectItem>
+                          <SelectItem value="Frequente">🔥 Frequentes</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Cidade/Estado</Label>
+                      <Input value={filterCidade} onChange={e => setFilterCidade(e.target.value)} placeholder="Ex: Goiânia" className="h-9 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                        <Label className="text-[10px]">Excursão</Label>
+                        <Input value={filterExcursao} onChange={e => setFilterExcursao(e.target.value)} placeholder="Nome do ônibus" className="h-9 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                        <Label className="text-[10px]">Valor Mínimo (R$)</Label>
+                        <Input type="number" value={filterValorMin} onChange={e => setFilterValorMin(e.target.value)} placeholder="0,00" className="h-9 text-xs" />
+                    </div>
                   </div>
                 )}
-              </>
-            )}
-            <p className="text-xs text-muted-foreground font-medium bg-background px-2 py-1 rounded-md mt-2 border border-border">
-              Filtro: {getFiltroLabel()}
-            </p>
-          </div>
 
-          <div className="space-y-3">
-            <div className="flex justify-between items-end">
-              <div>
-                <p className="font-semibold text-lg">{progressPercent}% Concluído</p>
-                <p className="text-sm text-muted-foreground">{currentIndex} de {total}</p>
-              </div>
-              {status === 'running' && countdown > 0 && (
-                <div className="flex items-center gap-1.5 text-xs font-medium text-orange-600 bg-orange-100 dark:bg-orange-950/40 px-2 py-1 rounded-md animate-pulse">
-                  <Loader2 size={12} className="animate-spin" />
-                  Próximo em {countdown}s
+                <div className="flex flex-col gap-3 pt-2 border-t border-border/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                        {total}
+                      </div>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Contatos Filtrados</span>
+                    </div>
+                    <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold text-destructive rounded-lg" onClick={() => {
+                        setFilterCidade(''); setFilterCategoria('todos'); setFilterValorMin(''); setFilterExcursao('');
+                    }}>
+                        <Eraser size={12} className="mr-1" /> Limpar Filtros
+                    </Button>
+                  </div>
+
+                  {loadingEnvios ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
+                        <Loader2 size={12} className="animate-spin" /> Verificando envios anteriores...
+                    </div>
+                  ) : jaEnviados > 0 && (
+                    <div className="flex items-center gap-2 text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-md w-fit">
+                        <ShieldCheck size={12} /> {jaEnviados} CONTATOS JÁ RECEBERAM ESTE CATÁLOGO
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest bg-background/50 px-2 py-1 rounded-md w-fit">
+                    Filtro: {getFiltroLabel()}
+                  </p>
                 </div>
-              )}
-            </div>
-            <Progress value={progressPercent} className="h-3" />
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              <div className="flex items-center gap-2 text-sm bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2 rounded-lg border border-emerald-100 dark:border-emerald-900/30">
-                <CheckCircle2 size={16} className="text-emerald-500" />
-                <span className="font-medium text-emerald-700 dark:text-emerald-400">{sucessos} Entregues</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm bg-blue-50 dark:bg-blue-950/20 px-3 py-2 rounded-lg border border-blue-100 dark:border-blue-900/30">
-                <CheckCircle2 size={16} className="text-blue-500" />
-                <span className="font-medium text-blue-700 dark:text-blue-400">{jaEnviados} Já Enviados</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm bg-destructive/5 px-3 py-2 rounded-lg border border-destructive/10 col-span-2">
-                <AlertTriangle size={16} className="text-destructive" />
-                <span className="font-medium text-destructive">{falhas} Falhas</span>
-              </div>
-            </div>
-          </div>
+              </Card>
 
-          <div className="flex flex-col gap-3 pt-2">
-            {hasPersistedData && status === 'idle' && (
-              <div className="bg-orange-50 dark:bg-orange-950/20 p-3 rounded-lg border border-orange-100 dark:border-orange-900/30 mb-2">
-                <p className="text-xs text-orange-800 dark:text-orange-300 font-medium mb-2 flex items-center gap-1.5">
-                  <AlertTriangle size={14} /> Existe um envio anterior não finalizado.
-                </p>
-                <div className="flex gap-2">
-                  <Button onClick={handleStart} className="flex-1 h-9 bg-orange-600 hover:bg-orange-700 text-white text-xs">
-                    Retomar de onde parei
-                  </Button>
-                  <Button onClick={handleReset} variant="outline" className="h-9 text-xs border-orange-200">
-                    Recomeçar do zero
-                  </Button>
+              {/* Seção 3: Agendamento */}
+              <Card className="p-4 border-none bg-orange-50 dark:bg-orange-950/20 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={16} className="text-orange-600" />
+                    <h4 className="font-bold text-sm text-orange-900 dark:text-orange-300">Agendar para Depois?</h4>
+                  </div>
+                  <Switch checked={isAgendado} onCheckedChange={setIsAgendado} />
                 </div>
-              </div>
-            )}
 
-            {(status === 'idle' || status === 'paused') && !hasPersistedData && (
-              <div className="flex gap-3">
-                <Button onClick={handleStart} className="flex-1 h-12 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold" disabled={catalogos.length === 0 || loadingEnvios || total === 0}>
-                  <Play className="mr-2 h-5 w-5 fill-current" />
-                  {status === 'paused' ? 'Retomar Envio' : `Iniciar Transmissão (${total})`}
-                </Button>
-                {status === 'paused' && (
-                  <Button onClick={handleReset} variant="outline" className="h-12 px-4 rounded-xl border-border text-muted-foreground" title="Resetar tudo">
-                    Limpar
-                  </Button>
+                {isAgendado && (
+                  <div className="grid grid-cols-2 gap-3 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="space-y-1">
+                        <Label className="text-[10px]">Data do Envio</Label>
+                        <Input type="date" value={agendamentoData} onChange={e => setAgendamentoData(e.target.value)} className="h-9 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                        <Label className="text-[10px]">Janela de Horário</Label>
+                        <div className="flex items-center gap-2">
+                          <Input type="time" value={agendamentoHoraInicio} onChange={e => setAgendamentoHoraInicio(e.target.value)} className="h-9 text-xs" />
+                          <Input type="time" value={agendamentoHoraFim} onChange={e => setAgendamentoHoraFim(e.target.value)} className="h-9 text-xs" />
+                        </div>
+                    </div>
+                    <div className="col-span-2 flex items-center gap-2 mt-1">
+                      <Checkbox id="comercial" checked={horarioComercial} onCheckedChange={(v) => setHorarioComercial(!!v)} />
+                      <Label htmlFor="comercial" className="text-xs text-muted-foreground">Pausar fora do horário comercial (08h - 18h)</Label>
+                    </div>
+                  </div>
                 )}
+              </Card>
+
+              {/* Seção 4: Preview Mockup */}
+              <div className="flex justify-center py-2">
+                <Button variant="outline" size="sm" className="rounded-xl border-primary/20 bg-primary/5 text-primary font-bold gap-2 h-10 px-6" onClick={() => setShowPreview(true)}>
+                    <Smartphone size={16} /> Ver Prévia no Celular
+                </Button>
               </div>
-            )}
 
-            {status === 'running' && (
-              <Button onClick={handlePause} variant="outline" className="w-full h-12 rounded-xl font-semibold border-orange-200 hover:bg-orange-50 text-orange-700">
-                <Pause className="mr-2 h-5 w-5 fill-current" />
-                Pausar Envio
-              </Button>
-            )}
-          </div>
+              {hasPersistedData && (
+                 <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
+                    <div className="flex items-center gap-3 text-blue-800">
+                        <Info size={20} />
+                        <div>
+                            <p className="text-xs font-bold leading-none">Progresso Salvo!</p>
+                            <p className="text-[10px] opacity-70">Existe uma transmissão em andamento.</p>
+                        </div>
+                    </div>
+                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700 h-8 rounded-lg" onClick={handleStart}>Retomar</Button>
+                 </div>
+              )}
+            </>
+          )}
 
-          <div className="bg-secondary/50 p-4 rounded-xl text-xs space-y-1 h-32 overflow-y-auto font-mono">
-            {logs.length === 0 ? (
-              <p className="text-muted-foreground opacity-50 text-center mt-6">Os registros aparecerão aqui.</p>
-            ) : (
-              logs.map((log) => (
-                <div key={log.id} className={`flex items-start gap-2 ${log.type === 'error' ? 'text-destructive' : 'text-foreground'}`}>
-                  <span>{log.type === 'success' ? '✓' : '⚠️'}</span>
-                  <span>{log.msg}</span>
+          {status !== 'idle' && status !== 'confirming' && (
+            <div className="space-y-6">
+                <div className="text-center space-y-2">
+                    <div className="text-5xl font-black text-primary tracking-tighter">
+                        {progressPercent}%
+                    </div>
+                    <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+                        Processando: {currentIndex} de {total}
+                    </p>
                 </div>
-              ))
-            )}
-          </div>
+
+                <Progress value={progressPercent} className="h-3 bg-secondary rounded-full overflow-hidden" />
+
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 flex items-center gap-3">
+                        <CheckCircle2 size={24} className="text-emerald-500 shrink-0" />
+                        <div>
+                            <p className="text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-400">Entregues</p>
+                            <p className="text-xl font-black text-emerald-600">{sucessos}</p>
+                        </div>
+                    </div>
+                    <div className="p-4 bg-rose-50 dark:bg-rose-950/20 rounded-2xl border border-rose-100 dark:border-rose-900/30 flex items-center gap-3">
+                        <AlertTriangle size={24} className="text-rose-500 shrink-0" />
+                        <div>
+                            <p className="text-[10px] font-bold uppercase text-rose-800 dark:text-rose-400">Falhas</p>
+                            <p className="text-xl font-black text-rose-600">{falhas}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {status === 'running' && countdown > 0 && (
+                    <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-primary">
+                            <Clock size={20} className="animate-spin" />
+                            <span className="font-bold text-sm tracking-tight uppercase">Aguardando {countdown}s para o próximo...</span>
+                        </div>
+                        <Button variant="ghost" size="sm" className="h-8 rounded-lg" onClick={() => setCountdown(0)}>Pular</Button>
+                    </div>
+                )}
+
+                <div className="bg-secondary/40 p-4 rounded-2xl h-40 overflow-y-auto space-y-2 font-mono text-[11px] border border-border/50">
+                    {logs.map(log => (
+                        <div key={log.id} className={cn("flex gap-2", log.type === 'error' ? "text-rose-600" : "text-emerald-600")}>
+                            <span>{log.type === 'success' ? '✓' : '⚠️'}</span>
+                            <span className="flex-1 opacity-80">{log.msg}</span>
+                        </div>
+                    ))}
+                    {logs.length === 0 && <p className="text-center text-muted-foreground opacity-30 mt-14 italic">Iniciando motor de envio...</p>}
+                </div>
+            </div>
+          )}
         </div>
+
+        <DialogFooter className="p-6 bg-secondary/20 border-t border-border flex flex-col sm:flex-row gap-3">
+          {status === 'idle' && (
+            <>
+              <Button variant="outline" className="h-12 rounded-2xl flex-1 border-border font-bold text-muted-foreground" onClick={handleTestSend}>
+                <Smartphone size={18} className="mr-2" /> Teste Piloto
+              </Button>
+              <Button onClick={handleStart} className="h-12 rounded-2xl flex-[2] bg-primary hover:bg-primary/90 text-white font-black shadow-xl shadow-primary/20">
+                <Play size={18} className="mr-2 fill-current" />
+                {isAgendado ? 'Agendar Disparo' : 'Iniciar Agora'}
+              </Button>
+            </>
+          )}
+
+          {status === 'running' && (
+            <Button onClick={() => setStatus('paused')} variant="outline" className="w-full h-12 rounded-2xl font-black border-orange-200 text-orange-600 hover:bg-orange-50">
+                <Pause size={18} className="mr-2 fill-current" /> Pausar Transmissão
+            </Button>
+          )}
+
+          {status === 'paused' && (
+            <div className="flex gap-3 w-full">
+                <Button onClick={() => setStatus('running')} className="flex-[2] h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black">
+                    <Play size={18} className="mr-2 fill-current" /> Retomar Envios
+                </Button>
+                <Button onClick={handleReset} variant="ghost" className="flex-1 h-12 rounded-2xl font-bold bg-secondary">
+                    Resetar
+                </Button>
+            </div>
+          )}
+
+          {status === 'completed' && (
+            <Button onClick={() => onOpenChange(false)} className="w-full h-12 rounded-2xl bg-primary text-white font-black">
+                Concluído • Fechar Janela
+            </Button>
+          )}
+        </DialogFooter>
+
+        {/* Modal de Preview (Mockup Celular) */}
+        {showPreview && selectedCatalogo && (
+            <Dialog open={showPreview} onOpenChange={setShowPreview}>
+                <DialogContent className="sm:max-w-[400px] p-0 bg-transparent border-none shadow-none">
+                    <div className="w-[320px] h-[640px] bg-[#1a1a1a] rounded-[3rem] p-4 mx-auto border-[8px] border-[#2a2a2a] relative shadow-2xl overflow-hidden">
+                        {/* Status bar */}
+                        <div className="absolute top-0 inset-x-0 h-6 bg-transparent flex justify-between items-center px-10 pt-2 z-20">
+                            <span className="text-[10px] text-white">10:07</span>
+                            <div className="flex gap-1">
+                                <span className="text-[10px] text-white">WiFi</span>
+                                <span className="text-[10px] text-white">88%</span>
+                            </div>
+                        </div>
+                        
+                        {/* WhatsApp Header */}
+                        <div className="bg-[#075e54] h-16 pt-6 px-3 flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-slate-400" />
+                            <div className="text-white">
+                                <p className="text-xs font-bold leading-none">{clientesFinais[0]?.nome || 'Cliente Exemplo'}</p>
+                                <p className="text-[8px] opacity-70">online agora</p>
+                            </div>
+                        </div>
+
+                        {/* Chat Body */}
+                        <div className="bg-[#e5ddd5] dark:bg-stone-900 h-full p-3 space-y-4 pt-4 overflow-y-auto">
+                            <div className="max-w-[85%] bg-white dark:bg-slate-800 rounded-lg p-2 rounded-tl-none shadow-sm relative">
+                                <div className="bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded-md mb-2 flex items-center gap-2 border border-emerald-100 dark:border-emerald-900/30">
+                                    <FileText size={16} className="text-primary" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-bold truncate">{selectedCatalogo.nome}.pdf</p>
+                                        <p className="text-[8px] text-muted-foreground">Catálogo • PDF</p>
+                                    </div>
+                                </div>
+                                <p className="text-[11px] whitespace-pre-wrap leading-relaxed">
+                                    {formatMessage(selectedCatalogo.mensagem, clientesFinais[0] || { 
+                                        id: 'preview',
+                                        nome: 'Cliente Exemplo', 
+                                        telefone: '', 
+                                        cidade: 'Sua Cidade',
+                                        estado: 'Seu Estado',
+                                        excursao: 'Sua Excursão',
+                                        user_id: user?.id || '',
+                                        created_at: new Date().toISOString(),
+                                        total_comprado: 1000 
+                                    } as ClientePaginatedDB)}
+                                </p>
+                                <span className="text-[8px] text-muted-foreground absolute bottom-1 right-2">10:07 ✔✔</span>
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        )}
+
+        {/* Modal de Confirmação de Segurança */}
+        {status === 'confirming' && (
+            <Dialog open={true} onOpenChange={() => setStatus('idle')}>
+                <DialogContent className="sm:max-w-[400px] p-6 rounded-3xl animate-in zoom-in-95 duration-200">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-black text-center">🔐 Segurança do Disparo</DialogTitle>
+                        <DialogDescription className="text-center pt-2">
+                            Confirme os dados da campanha abaixo
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="bg-secondary/50 p-4 rounded-2xl space-y-2">
+                             <div className="flex justify-between text-xs">
+                                <span className="text-muted-foreground font-medium uppercase tracking-widest text-[10px]">Público Alvo</span>
+                                <span className="font-bold">{total} contatos</span>
+                             </div>
+                             <div className="flex justify-between text-xs">
+                                <span className="text-muted-foreground font-medium uppercase tracking-widest text-[10px]">Catálogo</span>
+                                <span className="font-bold truncate max-w-[150px]">{selectedCatalogo?.nome || 'Múltiplos'}</span>
+                             </div>
+                             <div className="flex justify-between text-xs">
+                                <span className="text-muted-foreground font-medium uppercase tracking-widest text-[10px]">Velocidade</span>
+                                <span className="font-bold capitalize">{velocidade.replace('_', ' ')}</span>
+                             </div>
+                             {isAgendado && (
+                                <div className="flex justify-between text-xs text-orange-600 font-bold">
+                                    <span className="uppercase tracking-widest text-[10px]">Agendado para</span>
+                                    <span>{agendamentoData} {agendamentoHoraInicio}</span>
+                                </div>
+                             )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Digite CONFIRMAR para liberar:</Label>
+                            <Input 
+                                value={confirmText} 
+                                onChange={e => setConfirmText(e.target.value)} 
+                                placeholder="DIGITE AQUI"
+                                className="h-12 rounded-xl text-center font-black tracking-widest uppercase border-primary/20 bg-primary/5 focus:bg-background transition-all"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <Button variant="ghost" className="flex-1 rounded-xl h-12 font-bold" onClick={() => setStatus('idle')}>Cancelar</Button>
+                        <Button 
+                            className="flex-2 rounded-xl h-12 bg-primary font-black shadow-lg shadow-primary/20" 
+                            disabled={confirmText.toUpperCase() !== 'CONFIRMAR'}
+                            onClick={executeStart}
+                        >
+                            {isAgendado ? 'AGENDAR AGORA' : 'INICIAR DISPARO'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        )}
       </DialogContent>
     </Dialog>
   );

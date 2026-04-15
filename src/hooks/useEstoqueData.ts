@@ -19,7 +19,8 @@ export interface ItemEstoque {
   producaoId: string | null;
   createdAt: string;
   updatedAt: string;
-  // Novos campos para custo médio ponderado
+  // Novos campos para histórico e desempenho
+  quantidadeInicial: number;
   custoMedio: number | null;
   qtdComCusto: number;
 }
@@ -54,7 +55,8 @@ interface DbItem {
   producao_id: string | null;
   created_at: string;
   updated_at: string;
-  // Novos campos para custo médio ponderado
+  // Novos campos para histórico e desempenho
+  quantidade_inicial: number;
   custo_medio: number | null;
   qtd_com_custo: number | null;
 }
@@ -87,7 +89,8 @@ const mapDbItemToItem = (dbItem: DbItem): ItemEstoque => ({
   producaoId: dbItem.producao_id,
   createdAt: dbItem.created_at,
   updatedAt: dbItem.updated_at,
-  // Novos campos para custo médio ponderado
+  // Novos campos para histórico e desempenho
+  quantidadeInicial: Number(dbItem.quantidade_inicial || 0),
   custoMedio: dbItem.custo_medio != null ? Number(dbItem.custo_medio) : null,
   qtdComCusto: dbItem.qtd_com_custo != null ? Number(dbItem.qtd_com_custo) : 0,
 });
@@ -147,15 +150,15 @@ export function useEstoqueItens() {
         }
 
         // Mapear itens usando quantidade do Central quando disponível
-        return (itens as DbItem[]).map(dbItem => ({
-          ...mapDbItemToItem(dbItem),
+        return (itens as any[]).map(dbItem => ({
+          ...mapDbItemToItem(dbItem as DbItem),
           quantidade: quantidadeCentralMap.has(dbItem.id) 
             ? quantidadeCentralMap.get(dbItem.id)! 
             : Number(dbItem.quantidade),
         }));
       }
 
-      return (itens as DbItem[]).map(mapDbItemToItem);
+      return (itens as any[]).map(item => mapDbItemToItem(item as DbItem));
     },
     enabled: !!user,
     staleTime: 30000, // 30 segundos - Realtime cuida das atualizações críticas
@@ -204,12 +207,13 @@ export function useAddItem() {
           localizacao: item.localizacao,
           imagem_url: item.imagemUrl,
           producao_id: item.producaoId,
+          quantidade_inicial: item.quantidadeInicial || item.quantidade,
         })
         .select()
         .single();
       
       if (error) throw error;
-      return mapDbItemToItem(data as DbItem);
+      return mapDbItemToItem(data as any as DbItem);
     },
     onSuccess: (newItem) => {
       // Optimistic: adiciona imediatamente ao cache
@@ -240,6 +244,7 @@ export function useUpdateItem() {
       if (updates.localizacao !== undefined) dbUpdates.localizacao = updates.localizacao;
       if (updates.imagemUrl !== undefined) dbUpdates.imagem_url = updates.imagemUrl;
       if (updates.producaoId !== undefined) dbUpdates.producao_id = updates.producaoId;
+      if (updates.quantidadeInicial !== undefined) dbUpdates.quantidade_inicial = updates.quantidadeInicial;
       
       const { error } = await supabase
         .from('estoque_itens')

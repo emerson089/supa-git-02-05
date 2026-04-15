@@ -20,7 +20,6 @@ import { useClientesCRMBatch, useClientesCRMFilter, getClienteStatusFromStats, h
 import { ImportCSVModal } from '@/components/clientes/ImportCSVModal';
 import { ClearDataModal } from '@/components/clientes/ClearDataModal';
 import { WhatsAppButton } from '@/components/clientes/WhatsAppButton';
-import { TransmissaoManagerModal } from '@/components/clientes/TransmissaoManagerModal';
 import { ClienteGridSkeleton } from '@/components/clientes/ClienteCardSkeleton';
 import { ClienteSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
@@ -417,16 +416,11 @@ export default function Clientes() {
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
-  const [transmissaoModalOpen, setTransmissaoModalOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<ClientePaginatedDB | null>(null);
   const [formData, setFormData] = useState(emptyCliente);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clienteToDelete, setClienteToDelete] = useState<ClientePaginatedDB | null>(null);
   const [excursaoPopoverOpen, setExcursaoPopoverOpen] = useState(false);
-  
-  // Transmissao all clients state
-  const [clientesTransmissao, setClientesTransmissao] = useState<ClientePaginatedDB[]>([]);
-  const [isCarregandoTransmissao, setIsCarregandoTransmissao] = useState(false);
 
   const { data: excursoesAtivas } = useExcursoesAtivas();
 
@@ -604,38 +598,6 @@ export default function Clientes() {
     }
   };
 
-  const handleOpenTransmissao = async () => {
-    if (!user?.id) {
-       toast.error("Você precisa estar logado.");
-       return;
-    }
-  
-    setIsCarregandoTransmissao(true);
-    try {
-      let query = supabase.from('clientes').select('id, nome, telefone, cidade, estado, excursao, created_at, user_id').eq('user_id', user.id);
-      
-      // If a filter is active, we restrict by those precise IDs
-      if (filtroStatus !== 'todos') {
-        if (!crmFilterIds || crmFilterIds.length === 0) {
-          toast.error("Nenhum cliente neste filtro atende aos critérios.");
-          setIsCarregandoTransmissao(false);
-          return;
-        }
-        query = query.in('id', crmFilterIds);
-      }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      setClientesTransmissao(data || []);
-      setTransmissaoModalOpen(true);
-    } catch (e) {
-      console.error("Erro carregr fila transmissao:", e);
-      toast.error("Falha ao preparar lista de clientes.");
-    } finally {
-      setIsCarregandoTransmissao(false);
-    }
-  };
 
   // Pagination info
   const totalCount = paginatedData?.count || 0;
@@ -658,16 +620,6 @@ export default function Clientes() {
           <p className="text-sm text-muted-foreground mt-1 truncate">Painel CRM - Gerencie sua base de clientes</p>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
-          {user?.id && (
-            <Button onClick={handleOpenTransmissao} disabled={isCarregandoTransmissao} className="h-10 sm:h-11 px-3 sm:px-5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white transition-colors shadow-lg shadow-orange-500/20">
-              {isCarregandoTransmissao ? (
-                 <Loader2 size={16} className="sm:mr-2 animate-spin" />
-              ) : (
-                 <Send size={16} className="sm:mr-2" />
-              )}
-              <span className="hidden sm:inline">Transmitir Catálogo</span>
-            </Button>
-          )}
           <div className="flex items-center gap-2">
             <Button onClick={() => setClearDataModalOpen(true)} variant="outline" size="icon" className="h-10 w-10 sm:h-11 sm:w-auto sm:px-4 rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors" title="Limpar Dados">
               <AlertTriangle size={18} />
@@ -979,13 +931,6 @@ export default function Clientes() {
       </AlertDialogContent>
     </AlertDialog>
 
-    {/* Modal de Transmissão */}
-    <TransmissaoManagerModal 
-      open={transmissaoModalOpen} 
-      onOpenChange={setTransmissaoModalOpen}
-      clientes={clientesTransmissao}
-      filtroAtual={filtroStatus}
-    />
 
     {/* Bottom Navigation */}
     <BottomNavigation />
