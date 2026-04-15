@@ -676,6 +676,9 @@ async function fetchDashboardData(
 
     if (!modelosMap[chave]) {
       modelosMap[chave] = { quantidade: 0, nome: displayNome, imagemUrl };
+    } else if (!modelosMap[chave].imagemUrl && imagemUrl) {
+      // Se já existe mas não tem imagem, e agora encontramos uma imagem, atualiza
+      modelosMap[chave].imagemUrl = imagemUrl;
     }
     modelosMap[chave].quantidade += item.quantidade || 0;
   });

@@ -406,11 +406,11 @@ export default function Feira() {
     // Agrupar por modelo para inicializar state por grupo
     const grupos = groupItensByModel(carga.itens, {
       getItemId: (i) => i.itemId,
-      getItemNome: (i) => (i as any).produtoNome || '',
+      getItemNome: (i) => (i as any).produtoNome || (i as any).item?.nome || '',
       getItemPreco: () => 0,
       getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
-      getItemImagem: (i) => (i as any).produtoImagem,
-      getItemReferencia: (i) => (i as any).produtoNome || '',
+      getItemImagem: (i) => (i as any).produtoImagem || (i as any).item?.imagem_url || null,
+      getItemReferencia: (i) => (i as any).produtoNome || (i as any).item?.nome || '',
     });
 
     const valoresSalvos = retornosSalvos[carga.id];
@@ -823,6 +823,8 @@ export default function Feira() {
           itemId: i.itemId,
           quantidadeEnviada: i.quantidadeEnviada,
           quantidadeRetornada: i.quantidadeRetornada,
+          produtoNome: i.produtoNome, // Preservar para agrupamento
+          produtoImagem: i.produtoImagem, // Preservar para agrupamento
           item: {
             id: i.itemId,
             nome: i.produtoNome || '',
