@@ -11,6 +11,7 @@ export interface ItemPedido {
   produtoNome?: string;
   quantidade: number;
   valorUnitario: number;
+  valorOriginal?: number;
   quantidadeDisponivel?: number;
   // Campos opcionales para itens de grade
   tipo?: 'avulso' | 'grade';
@@ -111,6 +112,7 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
       produtoId,
       produtoNome: produto?.nome || '',
       valorUnitario: produto?.preco || 0,
+      valorOriginal: produto?.preco || 0,
       quantidadeDisponivel: produto?.quantidadeDisponivel || 0,
     });
     setIsOpen(false);

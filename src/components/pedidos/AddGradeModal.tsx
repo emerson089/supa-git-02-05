@@ -135,6 +135,7 @@ export function AddGradeModal({ open, onClose, onAdd, existingItems = [] }: AddG
                 produtoNome: `${modeloSelecionado.meta.referencia}-${a.tamanho}`,
                 quantidade: a.necessario,
                 valorUnitario: modeloSelecionado.precoUnitario ?? 0,
+                valorOriginal: modeloSelecionado.precoUnitario ?? 0,
                 quantidadeDisponivel: a.disponivel,
                 gradeId: gradeSelecionada.id,
                 gradeNome: gradeSelecionada.nome,

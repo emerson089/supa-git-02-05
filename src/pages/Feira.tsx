@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
@@ -480,6 +481,43 @@ export default function Feira() {
         return novo;
       });
       toast.success('Retorno registrado com sucesso!');
+      
+      // Notificar WhatsApp automaticamente
+      const totalEnviado = cargaSelecionada.itens.reduce((sum, i) => sum + i.quantidadeEnviada, 0);
+      const totalRetornado = itensDistribuidos.reduce((sum, i) => sum + i.quantidadeRetornada, 0);
+      const totalVendido = totalEnviado - totalRetornado;
+      
+      const valorTotalVendido = cargaSelecionada.itens.reduce((sum, i) => {
+        const ret = itensDistribuidos.find(id => id.itemId === i.itemId)?.quantidadeRetornada || 0;
+        const vend = i.quantidadeEnviada - ret;
+        const preco = i.precoUnitario || (i as any).produtoPreco || 0;
+        return sum + (vend * preco);
+      }, 0);
+
+      const metadata = user?.user_metadata || {};
+      const adminNumbers = (metadata.notification_numbers || []) as string[];
+      const notifyOnOrderGlobal = metadata.notify_on_order !== false;
+
+      if (notifyOnOrderGlobal && adminNumbers.length > 0) {
+        const titulo = (cargaSelecionada as any).observacoes || 'Carga Sem Título';
+        const valorFormatado = valorTotalVendido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const dataHora = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
+        
+        const mensagem = `🚀 RESUMO DE CARGA: ${titulo}\n\n📦 Enviado : ${totalEnviado}\n🔄 Retorno : ${totalRetornado}\n✅ Vendido : ${totalVendido}\n💰 Valor total : ${valorFormatado}\n\n---------------------------\n📅 Finalizado em: ${dataHora}`;
+
+        adminNumbers.forEach(async (adminPhone) => {
+          try {
+            await supabase.functions.invoke('send-whatsapp', {
+              body: { phone: adminPhone, message: mensagem },
+            });
+          } catch (err) {
+            console.error('Erro ao notificar administrador:', adminPhone, err);
+          }
+        });
+        
+        toast.success('Gerência notificada via WhatsApp!');
+      }
+
       setShowRetorno(false);
       setCargaSelecionada(null);
       setItensRetorno([]);

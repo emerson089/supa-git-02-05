@@ -145,6 +145,15 @@ const NovoPedido = () => {
   const valorItens = items.reduce((sum, item) => sum + item.quantidade * item.valorUnitario, 0);
   const totalPecas = items.reduce((sum, item) => sum + item.quantidade, 0);
   const valorTotal = valorItens + taxaExcursao - desconto;
+  
+  // Calcular desconto negociado (diferença entre preço original e unitário)
+  const descontoNegociado = useMemo(() => {
+    return items.reduce((sum, item) => {
+      const original = item.valorOriginal ?? item.valorUnitario;
+      const diff = Math.max(0, original - item.valorUnitario);
+      return sum + (diff * item.quantidade);
+    }, 0);
+  }, [items]);
 
   // Verificar se há estoque insuficiente em algum item
   // Agrega por produtoId para detectar quando múltiplas linhas do mesmo produto somam mais do que o disponível
@@ -168,6 +177,12 @@ const NovoPedido = () => {
     items.forEach(item => {
       if (!item.produtoId) return;
       
+      // Se tiver modeloId (itens de grade), usamos ele como chave única
+      if (item.modeloId) {
+        groups.add(item.modeloId);
+        return;
+      }
+      
       const produto = getItemById(item.produtoId);
       let refTecnica = '';
       if (produto?.localizacao) {
@@ -179,7 +194,7 @@ const NovoPedido = () => {
 
       const info = parseProductName(item.produtoNome || "", refTecnica);
       
-      // Chave de agrupamento: RefBase + Valor + NomeBase (vinda do parseProductName)
+      // Chave de agrupamento para itens avulsos: RefBase + Valor + NomeBase
       const key = `${info.refBase}|${item.valorUnitario}|${info.nomeBase}`;
       groups.add(key);
     });
@@ -518,6 +533,7 @@ Qualquer dúvida é só chamar! 😊`;
             nomeExcursao={excursao} 
             valorTotal={valorTotal} 
             desconto={desconto}
+            descontoItens={descontoNegociado}
             onDescontoChange={setDesconto}
             quantidadeModelos={quantidadeModelos} 
             onLimpar={handleLimpar} 

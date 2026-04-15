@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
-import { Trash2, Package2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, Package2, ChevronDown, ChevronUp, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { ItemPedido } from './ItemPedidoRow';
 import { TAMANHOS_LETRAS, TAMANHOS_NUMERICOS } from '@/hooks/useModelosPadronizados';
 import { cn } from '@/lib/utils';
@@ -25,6 +26,8 @@ export function GradeCompactCard({ itens, onUpdate, onRemoveGrupo }: GradeCompac
     const qtdGradesOriginal = primeiroItem.quantidadeGrades ?? 1;
     const gradeTotalPecas = primeiroItem.gradeTotalPecas ?? itens.reduce((s, i) => s + i.quantidade, 0);
     const valorUnitario = primeiroItem.valorUnitario;
+    const valorOriginal = primeiroItem.valorOriginal ?? valorUnitario;
+    const temDesconto = valorUnitario < valorOriginal;
 
     // Ordenar itens pela sequência canônica de tamanhos
     const itensSorted = [...itens].sort(
@@ -55,6 +58,13 @@ export function GradeCompactCard({ itens, onUpdate, onRemoveGrupo }: GradeCompac
             onUpdate({ ...item, quantidade: qtdPorGrade * novoN, quantidadeGrades: novoN });
         });
     }, [itensSorted, qtdGrades, onUpdate]);
+
+    // Atualizar valor unitário de todos os itens da grade
+    const handlePriceChange = useCallback((novoPreco: number) => {
+        itens.forEach(item => {
+            onUpdate({ ...item, valorUnitario: Math.max(0, novoPreco) });
+        });
+    }, [itens, onUpdate]);
 
     return (
         <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/30 dark:bg-indigo-950/10 overflow-hidden">
@@ -175,9 +185,35 @@ export function GradeCompactCard({ itens, onUpdate, onRemoveGrupo }: GradeCompac
                         </span>
                     </div>
 
-                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 text-[10px] font-bold">
-                        R$ {subtotal.toFixed(2)}
-                    </Badge>
+                    <div className="flex items-center gap-4">
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter mb-0.5">Valor Unit (R$)</span>
+                            <div className="relative">
+                                <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={valorUnitario || ''}
+                                    onChange={e => handlePriceChange(parseFloat(e.target.value) || 0)}
+                                    className={cn(
+                                        "h-8 w-20 text-right pr-2 text-xs font-bold rounded-lg border-0 bg-white/50 dark:bg-black/20 shadow-inner",
+                                        temDesconto ? "text-indigo-600 dark:text-indigo-400" : "text-foreground"
+                                    )}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter mb-0.5">Total Grade</span>
+                            <Badge className={cn(
+                                "text-[10px] font-bold py-1 px-2 border-0 shadow-sm",
+                                temDesconto 
+                                    ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                            )}>
+                                R$ {subtotal.toFixed(2)}
+                            </Badge>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Detalhes expandidos: estoque por tamanho */}

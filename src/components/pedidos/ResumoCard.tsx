@@ -11,6 +11,7 @@ interface ResumoCardProps {
   nomeExcursao?: string;
   valorTotal: number;
   desconto: number;
+  descontoItens?: number;
   onDescontoChange: (value: number) => void;
   quantidadeModelos: number;
   onLimpar: () => void;
@@ -28,6 +29,7 @@ export function ResumoCard({
   nomeExcursao,
   valorTotal,
   desconto,
+  descontoItens = 0,
   onDescontoChange,
   quantidadeModelos,
   onLimpar,
@@ -41,15 +43,16 @@ export function ResumoCard({
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  const valorSemDesconto = valorItens + taxaExcursao;
-  const temDesconto = desconto > 0;
+  const descontoTotal = desconto + descontoItens;
+  const valorSemDesconto = valorItens + descontoItens + taxaExcursao;
+  const temDesconto = descontoTotal > 0;
 
   return (
     <div className="neu-card p-4 sm:p-7">
       {/* Linha auxiliar: Subtotal e Taxa Excursão */}
       {(taxaExcursao > 0 || valorItens > 0) && (
         <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-muted-foreground">
-          <span>Subtotal: <strong className="text-foreground">{formatCurrency(valorItens)}</strong></span>
+          <span>Subtotal: <strong className="text-foreground">{formatCurrency(valorItens + descontoItens)}</strong></span>
           {taxaExcursao > 0 && (
             <span>Taxa Excursão{nomeExcursao ? ` (${nomeExcursao})` : ''}: <strong className="text-amber-600">+ {formatCurrency(taxaExcursao)}</strong></span>
           )}
@@ -89,8 +92,8 @@ export function ResumoCard({
             <span className="text-lg font-semibold text-rose-600">-</span>
             <input
               type="number"
-              value={desconto || ''}
-              onChange={(e) => onDescontoChange(Number(e.target.value) || 0)}
+              value={(descontoTotal || 0).toFixed(2)}
+              onChange={(e) => onDescontoChange(Math.max(0, Number(e.target.value) - descontoItens))}
               placeholder="R$ 0,00"
               className="w-24 bg-transparent border-b border-border focus:border-rose-500 outline-none text-xl font-semibold text-rose-600 placeholder:text-rose-300"
             />
@@ -111,7 +114,7 @@ export function ResumoCard({
                 {formatCurrency(valorTotal)}
               </p>
               <Badge className="w-fit bg-rose-100 text-rose-700 border-rose-200 text-xs font-medium">
-                - {formatCurrency(desconto)} de desconto
+                - {formatCurrency(descontoTotal)} de desconto
               </Badge>
             </div>
           ) : (

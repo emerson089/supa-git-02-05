@@ -32,15 +32,17 @@ const ConfigNotificacoes = () => {
   const [newNumber, setNewNumber] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (user && !hasLoaded) {
       const metadata = user.user_metadata || {};
       setNumbers(metadata.notification_numbers || []);
       setNotifyOnOrder(metadata.notify_on_order !== false);
       setLoading(false);
+      setHasLoaded(true);
     }
-  }, [user]);
+  }, [user, hasLoaded]);
 
   const handleAddNumber = () => {
     // Basic normalization
