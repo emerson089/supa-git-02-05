@@ -330,6 +330,7 @@ export type Database = {
           producao_id: string | null
           qtd_com_custo: number | null
           quantidade: number
+          quantidade_inicial: number | null
           quantidade_minima: number
           tipo: string
           unidade: string
@@ -348,6 +349,7 @@ export type Database = {
           producao_id?: string | null
           qtd_com_custo?: number | null
           quantidade?: number
+          quantidade_inicial?: number | null
           quantidade_minima?: number
           tipo: string
           unidade: string
@@ -366,6 +368,7 @@ export type Database = {
           producao_id?: string | null
           qtd_com_custo?: number | null
           quantidade?: number
+          quantidade_inicial?: number | null
           quantidade_minima?: number
           tipo?: string
           unidade?: string
