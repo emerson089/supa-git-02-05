@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,11 +9,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Pencil, Trash2, DollarSign, Camera, ShoppingBag, Package } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, DollarSign, Camera, ShoppingBag, Package, Calendar } from 'lucide-react';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { LazyImage } from '@/components/ui/lazy-image';
-import { useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { parseProductName } from '@/utils/productNameUtils';
 
 interface MobileProductCardProps {
   item: {
@@ -38,50 +39,51 @@ interface MobileProductCardProps {
   vendasSemana?: number;
 }
 
-function ProductImage({ 
+function HeroImage({ 
   imagemUrl, 
   nome, 
-  onImageClick 
+  onImageClick,
+  statusColor
 }: { 
   imagemUrl: string | null; 
   nome: string;
   onImageClick?: () => void;
+  statusColor: string;
 }) {
   const { signedUrl, loading } = useSignedUrl(imagemUrl);
 
-  if (loading) {
-    return (
-      <div className="w-14 h-14 rounded-lg bg-muted animate-pulse flex items-center justify-center">
-        <Package className="h-5 w-5 text-muted-foreground/50" />
-      </div>
-    );
-  }
-
-  if (!signedUrl) {
-    return (
-      <div 
-        className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center cursor-pointer hover:bg-muted/80 transition-colors"
-        onClick={onImageClick}
-      >
-        <Camera className="h-5 w-5 text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
     <div 
-      className="w-14 h-14 rounded-lg overflow-hidden bg-muted cursor-pointer relative group"
+      className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden bg-muted cursor-pointer group shadow-sm"
       onClick={onImageClick}
     >
-      <LazyImage
-        src={signedUrl}
-        alt={nome}
-        className="w-full h-full object-cover object-center block"
-        containerClassName="w-full h-full"
-        showPlaceholderIcon={false}
-      />
-      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-        <Camera className="h-4 w-4 text-white" />
+      {loading ? (
+        <div className="w-full h-full flex items-center justify-center animate-pulse">
+          <Package className="h-8 w-8 text-muted-foreground/30" />
+        </div>
+      ) : signedUrl ? (
+        <LazyImage
+          src={signedUrl}
+          alt={nome}
+          className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+          containerClassName="w-full h-full"
+          showPlaceholderIcon={false}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center hover:bg-muted/80 transition-colors">
+          <Camera className="h-8 w-8 text-muted-foreground/40" />
+        </div>
+      )}
+      
+      {/* Status Dot Overlay */}
+      <div className={cn(
+        "absolute top-3 right-3 w-3 h-3 rounded-full border-2 border-white shadow-md z-10",
+        statusColor
+      )} />
+
+      {/* Camera Overlay on Hover */}
+      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <Camera className="h-6 w-6 text-white drop-shadow-md" />
       </div>
     </div>
   );
@@ -115,7 +117,6 @@ export function MobileProductCard({
     e.target.value = '';
   };
 
-  // Status indicator based on quantity
   const getStockStatus = (quantidade: number) => {
     if (quantidade === 0) return { color: 'bg-red-500', label: 'Esgotado' };
     if (quantidade <= 20) return { color: 'bg-amber-500', label: 'Baixo' };
@@ -125,16 +126,7 @@ export function MobileProductCard({
   const stockStatus = getStockStatus(item.quantidade);
 
   return (
-    <Card className="p-3 relative">
-      {/* Stock status indicator */}
-      <div 
-        className={cn(
-          "absolute top-2 left-2 w-2.5 h-2.5 rounded-full z-20 shadow-sm border border-white dark:border-gray-900",
-          stockStatus.color
-        )}
-        title={stockStatus.label}
-      />
-      
+    <Card className="p-3 bg-white dark:bg-card border border-gray-100 dark:border-gray-800 shadow-xl shadow-gray-200/20 dark:shadow-none rounded-[2rem] flex flex-col gap-4 overflow-hidden">
       <input
         type="file"
         ref={fileInputRef}
@@ -143,112 +135,118 @@ export function MobileProductCard({
         onChange={handleFileChange}
       />
       
-      <div className="flex gap-3">
-        {/* Imagem compacta */}
-        <div className="shrink-0">
-          <ProductImage 
-            imagemUrl={item.imagemUrl} 
-            nome={item.nome}
-            onImageClick={handleImageClick}
-          />
+      {/* Top Section: Large Image */}
+      <HeroImage 
+        imagemUrl={item.imagemUrl} 
+        nome={item.nome}
+        onImageClick={handleImageClick}
+        statusColor={stockStatus.color}
+      />
+
+      {/* Content Section */}
+      <div className="px-1 space-y-4">
+        {/* Title & Category */}
+        <div className="space-y-1">
+          <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 tracking-tight leading-none uppercase">
+            {parseProductName(item.nome, item.id).nomeExibicao}
+          </h3>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            {item.categoria}
+          </span>
         </div>
 
-        {/* Conteúdo principal */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <h3 className="font-medium text-sm line-clamp-2 leading-tight">
-                {item.nome}
-              </h3>
-              <Badge variant="secondary" className="mt-1 text-xs">
-                {item.categoria}
-              </Badge>
+        {/* Stats Row 1: Quantity and Price */}
+        <div className="grid grid-cols-2 gap-4 border-t border-gray-100 dark:border-gray-800 pt-4">
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantidade</p>
+            <div className="flex items-baseline gap-1">
+              <span className="text-xl font-black text-slate-800 dark:text-white">{item.quantidade}</span>
+              <span className="text-xs font-medium text-slate-400">peças</span>
             </div>
-
-            {/* Menu de ações */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onEdit(item)}>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Editar
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onEditPrice(item.id, item.precoUnitario)}>
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Alterar Preço
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => onDelete(item)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Excluir
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
-
-          {/* Informações de quantidade e preço */}
-          <div className="flex items-center gap-3 mt-2">
-            <div className="flex items-center gap-1">
-              <Package className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="font-semibold text-sm">{item.quantidade}</span>
-              <span className="text-xs text-muted-foreground">pçs</span>
-            </div>
-
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Preço de Venda</p>
             {isEditingPrice ? (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 mt-1">
                 <Input
                   type="number"
                   value={editingPrice}
                   onChange={(e) => onPriceChange(e.target.value)}
-                  className="h-7 w-20 text-sm"
+                  className="h-8 w-20 text-sm font-bold"
                   autoFocus
                 />
-                <Button size="sm" className="h-7 px-2" onClick={() => onSavePrice(item.id)}>
+                <Button size="sm" className="h-8 px-2 bg-emerald-600" onClick={() => onSavePrice(item.id)}>
                   OK
-                </Button>
-                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={onCancelEditPrice}>
-                  ✕
                 </Button>
               </div>
             ) : (
-              <span className="font-bold text-base text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-md">
+              <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">
                 R$ {item.precoUnitario.toFixed(2)}
-              </span>
+              </p>
             )}
           </div>
+        </div>
 
-          {/* Vendidas na semana */}
-          <div className="flex items-center gap-1 mt-1.5">
-            <ShoppingBag className="h-3 w-3 text-muted-foreground" />
-            <span className={cn(
-              "text-xs",
-              vendasSemana > 0 ? "text-blue-600 dark:text-blue-400 font-medium" : "text-muted-foreground"
-            )}>
-              {vendasSemana} vendidas na semana
-            </span>
+        {/* Stats Row 2: Vendas Semana */}
+        <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-800 pt-4">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vendas na Semana</p>
+          <div className="flex items-center gap-1.5 text-blue-600 font-bold bg-blue-50/80 dark:bg-blue-900/20 px-3 py-1.5 rounded-xl">
+            <Calendar className="h-3.5 w-3.5" />
+            <span className="text-sm">{vendasSemana} peças</span>
           </div>
+        </div>
 
-          {/* Histórico acumulado e Vendas totais mobile */}
-          <div className="mt-2 grid grid-cols-2 gap-2 p-1.5 rounded-lg bg-muted/30 border border-border/20">
-            <div className="flex flex-col">
-              <span className="text-[9px] text-muted-foreground uppercase leading-none font-medium mb-0.5">Total Prod.</span>
-              <span className="text-xs font-bold text-foreground">
-                {item.quantidadeInicial || item.quantidade} <span className="text-[9px] font-normal opacity-70">pçs</span>
+        {/* Summary Bottom Card */}
+        <div className="grid grid-cols-2 gap-0 py-4 px-1 rounded-3xl bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800/50">
+          <div className="flex flex-col items-center justify-center border-r border-slate-200/50 dark:border-slate-800/50">
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Total</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-base font-black text-slate-700 dark:text-slate-200">
+                {item.quantidadeInicial || item.quantidade}
               </span>
-            </div>
-            <div className="flex flex-col border-l border-border/40 pl-2">
-              <span className="text-[9px] text-muted-foreground uppercase leading-none font-medium mb-0.5">Vendas Tot.</span>
-              <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
-                {Math.max(0, (item.quantidadeInicial || item.quantidade) - item.quantidade)} <span className="text-[9px] font-normal opacity-70">pçs</span>
-              </span>
+              <span className="text-[10px] text-slate-400">pçs</span>
             </div>
           </div>
+          <div className="flex flex-col items-center justify-center">
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Vendas Totais</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-base font-black text-blue-600 dark:text-blue-400">
+                {Math.max(0, (item.quantidadeInicial || item.quantidade) - item.quantidade)}
+              </span>
+              <span className="text-[10px] text-slate-400">pçs</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Buttons Row */}
+        <div className="flex gap-2 pt-2 pb-1">
+            <Button 
+              variant="outline" 
+              className="flex-1 h-12 rounded-2xl border-slate-200 bg-slate-50/30 text-slate-700 font-bold hover:bg-slate-100 transition-all gap-2"
+              onClick={() => onEdit(item)}
+            >
+              <Pencil className="h-4 w-4" />
+              Editar
+            </Button>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className={cn(
+                "h-12 w-12 rounded-2xl bg-slate-50 border-slate-200 text-slate-600 hover:text-emerald-600 transition-all shrink-0",
+                isEditingPrice && "bg-emerald-50 text-emerald-600 border-emerald-200"
+              )}
+              onClick={() => isEditingPrice ? onCancelEditPrice() : onEditPrice(item.id, item.precoUnitario)}
+            >
+              <DollarSign className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="h-12 w-12 rounded-2xl bg-slate-50 border-slate-200 text-slate-600 hover:text-red-600 transition-all shrink-0"
+              onClick={() => onDelete(item)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
         </div>
       </div>
     </Card>

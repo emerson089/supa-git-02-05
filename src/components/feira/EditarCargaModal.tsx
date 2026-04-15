@@ -35,7 +35,7 @@ interface EditarCargaModalProps {
   produtos: Produto[];
   getDisponivelCentral: (itemId: string) => number;
   onClose: () => void;
-  onSalvar: (transferenciaId: string, itens: ItemEdicao[]) => void;
+  onSalvar: (transferenciaId: string, itens: ItemEdicao[], observacoes: string) => void;
   isPending: boolean;
   formatCurrency: (value: number) => string;
 }
@@ -51,11 +51,30 @@ export function EditarCargaModal({
 }: EditarCargaModalProps) {
   const [itensEdicao, setItensEdicao] = useState<ItemEdicao[]>([]);
   const [buscaProduto, setBuscaProduto] = useState('');
+  const [observacoes, setObservacoes] = useState('');
   const [addGradeOpen, setAddGradeOpen] = useState(false);
+  
+  // STORAGE KEY
+  const STORAGE_KEY = carga ? `df_edit_carga_${carga.id}` : null;
 
   // Inicializar itens quando a carga muda
   useEffect(() => {
-    if (carga) {
+    if (carga && STORAGE_KEY) {
+      // Tentar carregar rascunho do localStorage
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const data = JSON.parse(saved);
+          setItensEdicao(data.itens || []);
+          setObservacoes(data.observacoes || '');
+          setBuscaProduto('');
+          return; // Sai do efeito, já carregou do cache
+        } catch (e) {
+          console.error('Erro ao carregar rascunho de carga:', e);
+        }
+      }
+
+      // Se não houver rascunho, carrega original
       setItensEdicao(
         carga.itens.map((item) => ({
           itemId: item.itemId,
@@ -68,9 +87,25 @@ export function EditarCargaModal({
           isNovo: false,
         }))
       );
+      setObservacoes(carga.observacoes || '');
       setBuscaProduto('');
     }
-  }, [carga, getDisponivelCentral]);
+  }, [carga, getDisponivelCentral, STORAGE_KEY]);
+
+  // Salvar rascunho no localStorage
+  useEffect(() => {
+    if (STORAGE_KEY && (itensEdicao.length > 0 || observacoes)) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        itens: itensEdicao,
+        observacoes
+      }));
+    }
+  }, [itensEdicao, observacoes, STORAGE_KEY]);
+
+  // Funçao para limpar rascunho local
+  const clearDraft = () => {
+    if (STORAGE_KEY) localStorage.removeItem(STORAGE_KEY);
+  };
 
   // Agrupar itens para exibição (fonte de verdade continua sendo itensEdicao)
   const gruposExibicao = useMemo(() =>
@@ -180,7 +215,8 @@ export function EditarCargaModal({
       return;
     }
 
-    onSalvar(carga.id, itensEdicao);
+    clearDraft();
+    onSalvar(carga.id, itensEdicao, observacoes);
   };
 
   const totalPecas = itensEdicao.reduce((sum, i) => sum + i.quantidade, 0);
@@ -192,8 +228,9 @@ export function EditarCargaModal({
     if (temNovos) return true;
     const idsAtuais = new Set(itensEdicao.map((i) => i.itemId));
     if (carga.itens.some((i) => !idsAtuais.has(i.itemId))) return true;
+    if (observacoes.trim() !== (carga.observacoes || '').trim()) return true;
     return itensEdicao.some((i) => i.quantidade !== i.quantidadeOriginal);
-  }, [carga, itensEdicao]);
+  }, [carga, itensEdicao, observacoes]);
 
   if (!carga) return null;
 
@@ -212,6 +249,23 @@ export function EditarCargaModal({
           </DialogHeader>
 
           <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            {/* Campo de Nome da Carga */}
+            <div className="px-4 py-3 border-b bg-primary/5 flex flex-col gap-1.5">
+              <label htmlFor="carga-nome" className="text-[10px] uppercase font-bold text-primary tracking-wider">
+                Nome / Título da Carga
+              </label>
+              <div className="relative">
+                <Pencil className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary opacity-50" />
+                <Input
+                  id="carga-nome"
+                  placeholder="Ex: Carga 001, Feira de Quarta..."
+                  value={observacoes}
+                  onChange={(e) => setObservacoes(e.target.value)}
+                  className="pl-9 bg-background h-9 text-sm font-semibold border-primary/20 focus-visible:ring-primary/30"
+                />
+              </div>
+            </div>
+
             {/* Barra de ações: busca + adicionar por grade */}
             <div className="px-4 py-3 border-b bg-muted/30 flex gap-2 items-center">
               <div className="relative flex-1">
@@ -311,7 +365,7 @@ export function EditarCargaModal({
                   Itens na Carga ({gruposExibicao.length} modelo{gruposExibicao.length !== 1 ? 's' : ''})
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {totalPecas} pç • {formatCurrency(valorTotal)}
+                  {gruposExibicao.length} mod • {totalPecas} pç • {formatCurrency(valorTotal)}
                 </span>
               </div>
               <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y">
@@ -338,19 +392,22 @@ export function EditarCargaModal({
 
                             {/* Nome + chips de tamanho */}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{grupo.nomeBase}</p>
+                              <p className="text-sm font-medium truncate">{grupo.nomeExibicao}</p>
                               <div className="flex flex-wrap gap-1.5 mt-1.5">
                                 {(grupo.itens as ItemEdicao[]).map(item => {
-                                  const tam = parseProductName(item.nome, item.nome).tamanho
-                                    || item.nome.split('-').pop()?.trim()
+                                  const info = parseProductName(item.nome, item.nome);
+                                  const tam = info.tamanho
+                                    || item.nome.split(/[-–—]/).pop()?.trim()
                                     || '?';
                                   return (
                                     <div
                                       key={item.itemId}
                                       className="flex items-center gap-0.5 bg-muted rounded px-1.5 py-0.5"
                                     >
-                                      <span className="text-[10px] font-mono font-bold text-foreground">{tam}</span>
-                                      <span className="text-[10px] text-muted-foreground">:</span>
+                                      <span className="text-[10px] font-mono font-bold text-muted-foreground">TAM</span>
+                                      <span className="text-[10px] font-mono font-bold text-primary">{tam}</span>
+                                      <span className="text-[10px] text-muted-foreground mx-0.5">•</span>
+                                      <span className="text-[10px] font-mono font-bold text-muted-foreground italic">QTD</span>
                                       <Input
                                         type="text"
                                         inputMode="numeric"

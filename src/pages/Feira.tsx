@@ -573,10 +573,11 @@ export default function Feira() {
   };
 
   // Handler para salvar correção de retorno
-  const handleSalvarEdicaoCarga = (transferenciaId: string, itens: any[]) => {
+  const handleSalvarEdicaoCarga = (transferenciaId: string, itens: any[], observacoes: string) => {
     editarCarga.mutate({
       transferenciaId,
-      itens
+      itens,
+      observacoes
     }, {
       onSuccess: () => {
         toast.success('Carga atualizada com sucesso!');
@@ -707,7 +708,10 @@ export default function Feira() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-muted-foreground truncate">Carga</p>
-                    <p className={cn("font-bold text-blue-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalCarga}</p>
+                    <div className="flex items-baseline gap-1.5 flex-wrap">
+                      <p className={cn("font-bold text-blue-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalCarga} pç</p>
+                      <p className="text-xs font-medium text-blue-600/60">{resumo.totalModelos} mod</p>
+                    </div>
                   </div>
                 </div>
               </CardContent>

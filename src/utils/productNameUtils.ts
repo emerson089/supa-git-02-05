@@ -14,12 +14,13 @@ export interface ProductInfo {
  * Analisa o nome e a referência de um produto para extrair informações padronizadas
  */
 export const parseProductName = (nome: string, referencia: string): ProductInfo => {
-  const currentRef = (referencia || "").toUpperCase();
-  const currentName = nome || "";
+  const currentRef = (referencia || "").toUpperCase().trim();
+  const currentName = (nome || "").trim();
 
   // 1. Extrair a referência base e o tamanho (ex: SH2603-0042-M -> SH2603-0042 e M)
-  const sizeMatch = currentRef.match(/^(.+)-(P|M|G|GG|G1|G2|G3|XGG|PEÇAS|\d{2})$/i);
-  const refBase = sizeMatch ? sizeMatch[1] : currentRef;
+  // Suporta hífens (-), meia-risca (–) e travessão (—)
+  const sizeMatch = currentRef.match(/^(.+)[-–—](P|M|G|GG|G1|G2|G3|XGG|PEÇAS|\d{2})$/i);
+  const refBase = (sizeMatch ? sizeMatch[1] : currentRef).trim();
   const tamanho = sizeMatch ? sizeMatch[2].toUpperCase() : null;
 
   // 2. Tentar extrair os últimos 3 números da referência oficial
@@ -59,7 +60,7 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
 
   // 5. Gerar nome de exibição padronizado: "Nome XXX"
   const numDisplay = numeros ? numeros.slice(-3).padStart(3, '0') : '';
-  const nomeExibicao = numDisplay ? `${nomeBase} ${numDisplay}` : nomeBase;
+  const nomeExibicao = numDisplay ? `${nomeBase} - ${numDisplay}` : nomeBase;
 
   return {
     nomeBase,

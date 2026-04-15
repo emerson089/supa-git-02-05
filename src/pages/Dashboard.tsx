@@ -985,14 +985,14 @@ export default function Dashboard() {
         {/* Top 5 Modelos */}
         <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Top 5 Modelos</CardTitle>
+            <CardTitle className="text-base font-semibold">Top 10 Modelos</CardTitle>
             <p className="text-sm text-muted-foreground">
               Mais vendidos nesta semana (atualizado automaticamente)
             </p>
           </CardHeader>
           <CardContent>
             {loading ? <div className="space-y-4">
-              {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-8 w-full" />)}
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => <Skeleton key={i} className="h-8 w-full" />)}
             </div> : data.topModelos.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">
               Nenhuma venda no período
             </p> : <div className="space-y-4">
@@ -1000,7 +1000,7 @@ export default function Dashboard() {
               {data.topModelosCoverage.coverage < 0.6 && data.topModelosCoverage.totalPedidos > 0 && <div className="flex items-start gap-2 p-2 rounded-md bg-amber-100/50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-xs">
                 <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
                 <span>
-                  Top 5 baseado apenas em {Math.round(data.topModelosCoverage.coverage * 100)}% dos pedidos
+                  Top 10 baseado apenas em {Math.round(data.topModelosCoverage.coverage * 100)}% dos pedidos
                   ({data.topModelosCoverage.pedidosComItens} de {data.topModelosCoverage.totalPedidos} têm itens detalhados)
                 </span>
               </div>}
@@ -1020,11 +1020,14 @@ export default function Dashboard() {
                       >
                         <div className="flex items-center justify-between text-sm">
                           <span className="flex items-center gap-2 min-w-0">
-                            <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-medium flex-shrink-0">
+                            <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-bold flex-shrink-0">
                               {index + 1}
                             </span>
+                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted border border-border/50 flex-shrink-0">
+                              <LotImage src={modelo.imagemUrl} alt={modelo.nome} className="w-full h-full object-cover" />
+                            </div>
                             <span
-                              className="flex-1 leading-tight line-clamp-2 break-words min-w-0"
+                              className="flex-1 leading-tight line-clamp-2 break-words text-sm font-semibold text-slate-700"
                               title={modelo.nome}
                               aria-label={modelo.nome}
                             >

@@ -1,4 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
+import { startOfWeek, endOfWeek, addDays, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
@@ -344,9 +346,43 @@ Qualquer dúvida é só chamar! 😊`;
       const notifyOnOrderGlobal = metadata.notify_on_order !== false;
 
       if (notifyOnOrderGlobal && adminNumbers.length > 0) {
-        const dataHora = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-        const msgAdmin = `NOTIFICAÇÃO DE VENDA\nCliente: ${cliente?.nome || 'Não Informado'}\nData: ${dataHora}\n💰 Total: ${valorFormatado}\nQuantidade de pecas : ${totalPecas}`;
+        // Busca dados da semana para o resumo gerencial
+        const hoje = new Date();
+        const segunda = startOfWeek(hoje, { weekStartsOn: 1 });
+        const sabado = addDays(segunda, 5);
+        const { data: pedidosSemana } = await supabase
+          .from('pedidos')
+          .select('valor_total, total_pecas, status_pagamento')
+          .eq('user_id', user?.id)
+          .gte('created_at', segunda.toISOString())
+          .lte('created_at', hoje.toISOString());
+
+        const resumoSemana = (pedidosSemana || []).reduce((acc, p) => {
+          const status = (p.status_pagamento || '').toUpperCase();
+          const isPago = status === 'PAGO' || status === 'CONCLUIDO';
+          const isPendente = ['PENDENTE', 'INCOMPLETO', 'PEND. ENTREGA'].includes(status);
+          
+          if (isPago) {
+            acc.pagos.pedidos += 1;
+            acc.pagos.valor += p.valor_total || 0;
+            acc.pagos.pecas += p.total_pecas || 0;
+          } else if (isPendente) {
+            acc.pendentes.pedidos += 1;
+            acc.pendentes.valor += p.valor_total || 0;
+            acc.pendentes.pecas += p.total_pecas || 0;
+          }
+          return acc;
+        }, {
+          pagos: { pedidos: 0, valor: 0, pecas: 0 },
+          pendentes: { pedidos: 0, valor: 0, pecas: 0 }
+        });
+
+        const dataHora = format(hoje, "dd/MM/yy HH:mm");
+        const rangeSemana = `${format(segunda, "dd/MM")} a ${format(sabado, "dd/MM")}`;
+        const msgAdmin = `NOTIFICAÇÃO DE VENDA 🚀\nCliente: ${cliente?.nome || 'Não Informado'}\nData: ${dataHora}\n💰 Valor: ${valorFormatado}\n📦 Peças: ${totalPecas}\n\n---------------------------\n📊 RESUMO DA SEMANA \n(Vendas de ${rangeSemana})\n\n✅ PAGOS:\n• Total de pedidos: ${resumoSemana.pagos.pedidos}\n• Valor total: ${resumoSemana.pagos.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n• Total de peças: ${resumoSemana.pagos.pecas}\n\n⏳ PENDENTES:\n• Total de pedidos: ${resumoSemana.pendentes.pedidos}\n• Valor total: ${resumoSemana.pendentes.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n• Total de peças: ${resumoSemana.pendentes.pecas}\n---------------------------`;
         
+        console.log('Mensagem Admin Gerada:', msgAdmin);
+
         // Enviar para cada número da lista (em paralelo mas silenciosamente para não poluir UI)
         adminNumbers.forEach(async (adminPhone) => {
           try {

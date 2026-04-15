@@ -51,34 +51,78 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
     const [tamanhosSelecionados, setTamanhosSelecionados] = useState<Set<Tamanho>>(new Set());
     const [estoqueInicial, setEstoqueInicial] = useState<Record<string, number | ''>>({});
     const [grades, setGrades] = useState<GradeAtacado[]>([]);
+    
+    // STORAGE KEY
+    const STORAGE_KEY = 'df_novo_modelo_form';
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Gerar referência ao abrir modal ou mudar tipo
+    // Gerar referência ao abrir modal ou mudar tipo (APENAS se estiver vazio)
     useEffect(() => {
-        if (open && tipo) {
+        if (open && tipo && !referencia) {
             gerarRef(tipo);
-        } else if (open && !tipo) {
-            setReferencia('');
         }
-    }, [open, tipo]);
+    }, [open, tipo, referencia]);
 
-    // Reset ao fechar
+    // Carregar dados salvos ao montar o componente
     useEffect(() => {
-        if (!open) {
-            setNome('');
-            setComposicao('');
-            setColecao('');
-            setPrecoVenda('');
-            setCustoProducao('');
-            setImagemUrl('');
-            setImagemPreview('');
-            setTamanhosSelecionados(new Set());
-            setEstoqueInicial({});
-            setGrades([]);
-            setTipo('');
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                if (data.nome) setNome(data.nome);
+                if (data.tipo) setTipo(data.tipo);
+                if (data.composicao) setComposicao(data.composicao);
+                if (data.colecao) setColecao(data.colecao);
+                if (data.precoVenda) setPrecoVenda(data.precoVenda);
+                if (data.custoProducao) setCustoProducao(data.custoProducao);
+                if (data.referencia) setReferencia(data.referencia);
+                if (data.tamanhosSelecionados) setTamanhosSelecionados(new Set(data.tamanhosSelecionados));
+                if (data.estoqueInicial) setEstoqueInicial(data.estoqueInicial);
+                if (data.grades) setGrades(data.grades);
+                // Imagem preview não persistimos para evitar problemas de URL, mas imagemUrl sim
+                if (data.imagemUrl) setImagemUrl(data.imagemUrl);
+            } catch (e) {
+                console.error('Erro ao carregar form salvo:', e);
+            }
         }
-    }, [open]);
+    }, []);
+
+    // Salvar dados no localStorage sempre que mudar
+    useEffect(() => {
+        const formData = {
+            nome,
+            tipo,
+            composicao,
+            colecao,
+            precoVenda,
+            custoProducao,
+            referencia,
+            tamanhosSelecionados: Array.from(tamanhosSelecionados),
+            estoqueInicial,
+            grades,
+            imagemUrl
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(formData));
+    }, [nome, tipo, composicao, colecao, precoVenda, custoProducao, referencia, tamanhosSelecionados, estoqueInicial, grades, imagemUrl]);
+
+    // Função para limpar o formulário
+    const handleClearForm = () => {
+        setNome('');
+        setTipo('');
+        setComposicao('');
+        setColecao('');
+        setPrecoVenda('');
+        setCustoProducao('');
+        setReferencia('');
+        setImagemUrl('');
+        setImagemPreview('');
+        setTamanhosSelecionados(new Set());
+        setEstoqueInicial({});
+        setGrades([]);
+        localStorage.removeItem(STORAGE_KEY);
+        toast.info('Formulário limpo');
+    };
 
     const gerarRef = async (t: TipoGarment | '') => {
         if (!t) return;
@@ -166,6 +210,9 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
                 grades,
             });
             toast.success(`Modelo "${nome}" criado com ${tamanhosSelecionados.size} variação(ões)!`);
+            localStorage.removeItem(STORAGE_KEY);
+            // Limpa estados após sucesso
+            handleClearForm();
             onClose();
         } catch (err: any) {
             toast.error(err.message || 'Erro ao criar modelo');
@@ -478,8 +525,11 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
                 </ScrollArea>
 
                 <DialogFooter className="px-6 py-4 border-t border-border bg-muted/20">
+                    <Button variant="ghost" onClick={handleClearForm} disabled={saving} className="mr-auto text-muted-foreground hover:text-destructive">
+                        Limpar Tudo
+                    </Button>
                     <Button variant="outline" onClick={onClose} disabled={saving}>
-                        Cancelar
+                        Fechar
                     </Button>
                     <Button
                         onClick={handleSave}

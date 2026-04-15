@@ -58,6 +58,7 @@ export interface EstoqueBaixoItem {
 export interface TopModelo {
   nome: string;
   quantidade: number;
+  imagemUrl: string | null;
 }
 
 export interface StatusPedido {
@@ -441,7 +442,7 @@ async function fetchDashboardData(
           produto_nome, 
           quantidade, 
           pedidos!inner(user_id, created_at, status_pagamento, status_pedido),
-          estoque_itens(nome)
+          estoque_itens(nome, imagem_url)
         `)
         .eq("pedidos.user_id", userId)
         .in("pedidos.status_pagamento", ["PAGO", "CONCLUIDO", "PEND. ENTREGA"])
@@ -648,10 +649,12 @@ async function fetchDashboardData(
     })
     : pedidoItensData;
 
-  const modelosMap: Record<string, { quantidade: number; nome: string }> = {};
+  const modelosMap: Record<string, { quantidade: number; nome: string; imagemUrl: string | null }> = {};
   pedidoItensFiltrados.forEach((item: any) => {
     const rawNome = (item.produto_nome || "Sem nome").trim();
-    const estoqueNome = item.estoque_itens?.nome?.trim();
+    const estoqueItem = item.estoque_itens;
+    const estoqueNome = estoqueItem?.nome?.trim();
+    const imagemUrl = estoqueItem?.imagem_url || null;
 
     // Normalizar em dash para hífen antes de parsear (ex: "Jeans — 34" → "Jeans - 34")
     const normalizedNome = rawNome.replace(/\s*—\s*/g, ' - ');
@@ -672,15 +675,15 @@ async function fetchDashboardData(
     }
 
     if (!modelosMap[chave]) {
-      modelosMap[chave] = { quantidade: 0, nome: displayNome };
+      modelosMap[chave] = { quantidade: 0, nome: displayNome, imagemUrl };
     }
     modelosMap[chave].quantidade += item.quantidade || 0;
   });
 
   const topModelos = Object.values(modelosMap)
     .sort((a, b) => b.quantidade - a.quantidade)
-    .slice(0, 5)
-    .map(({ nome, quantidade }) => ({ nome, quantidade }));
+    .slice(0, 10)
+    .map(({ nome, quantidade, imagemUrl }) => ({ nome, quantidade, imagemUrl }));
 
   const pedidoIdsComItens = new Set(pedidoItensFiltrados.map((item: any) => item.pedido_id));
 

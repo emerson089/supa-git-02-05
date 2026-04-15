@@ -701,9 +701,11 @@ export function useEditarCargaFeira() {
     mutationFn: async ({
       transferenciaId,
       itens,
+      observacoes,
     }: {
       transferenciaId: string;
       itens: ItemEdicao[];
+      observacoes?: string;
     }) => {
       if (!user) throw new Error('Usuário não autenticado');
 
@@ -927,6 +929,16 @@ export function useEditarCargaFeira() {
 
       // Sincronizar estoque_itens para todos os itens afetados
       await Promise.all(todosItemIds.map(id => sincronizarEstoqueTotal(id, user.id)));
+
+      // Atualizar observações se fornecidas
+      if (observacoes !== undefined) {
+        const { error: obsError } = await supabase
+          .from('transferencias')
+          .update({ observacoes })
+          .eq('id', transferenciaId);
+        
+        if (obsError) throw obsError;
+      }
 
       return { success: true };
     },

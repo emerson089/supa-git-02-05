@@ -21,6 +21,7 @@ export interface ResumoFeiraPeriodo {
   cargasAtivas: number;
   cargasConcluidas: number;
   taxaVenda: number; // % de peças vendidas (0-100)
+  totalModelos: number; // Quantidade de modelos únicos no período
 }
 
 export interface TransferenciaItemComProduto {
@@ -241,6 +242,7 @@ export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
         cargasAtivas: 0,
         cargasConcluidas: 0,
         taxaVenda: 0,
+        totalModelos: 0,
       };
     }
 
@@ -260,6 +262,14 @@ export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
       valorVendido += totais.valor;
     });
 
+    // Calcular total de modelos únicos em todas as cargas do período
+    const todosItens = cargas.flatMap(c => c.itens);
+    const modelosUnicos = new Set(todosItens.map(i => {
+      // Extrair referência base do itemId ou produtoNome se possível
+      const refMatch = (i.itemId || "").match(/^(.+)-[^-]+$/);
+      return refMatch ? refMatch[1] : (i.produtoNome || i.id);
+    }));
+
     return {
       totalCarga,
       totalRetorno,
@@ -269,6 +279,7 @@ export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
       cargasAtivas,
       cargasConcluidas,
       taxaVenda: totalCarga > 0 ? Math.round((Math.max(0, totalCarga - totalRetorno) / totalCarga) * 100) : 0,
+      totalModelos: modelosUnicos.size,
     };
   };
 

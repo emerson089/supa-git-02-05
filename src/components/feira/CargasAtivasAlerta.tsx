@@ -6,6 +6,7 @@ import { AlertTriangle, Clock, RotateCcw, FileText, Loader2, Pencil, Filter, X, 
 import { TransferenciaComItensHistorico } from '@/hooks/useFeiraHistorico';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { groupItensByModel } from '@/utils/productNameUtils';
 
 interface CargasAtivasAlertaProps {
   cargasAtivas: TransferenciaComItensHistorico[];
@@ -138,6 +139,16 @@ export function CargasAtivasAlerta({
           {cargasFiltradas.map((carga) => {
             const totalPecas = carga.itens.reduce((s, i) => s + i.quantidadeEnviada, 0);
             const valorTotal = carga.itens.reduce((s, i) => s + (i.quantidadeEnviada * (i.precoUnitario || i.produtoPreco || 0)), 0);
+            
+            // Calcular quantidade de modelos únicos
+            const modelosCount = groupItensByModel(carga.itens, {
+              getItemId: (i) => i.itemId,
+              getItemNome: (i) => i.produtoNome || '',
+              getItemPreco: (i) => i.precoUnitario || 0,
+              getItemQtd: (i) => i.quantidadeEnviada,
+              getItemImagem: (i) => i.produtoImagem,
+              getItemReferencia: (i) => i.itemId, // Usar itemId como fallback de ref se necessário
+            }).length;
 
             return (
               <div
@@ -157,7 +168,7 @@ export function CargasAtivasAlerta({
                     </span>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {totalPecas} peças
+                    {modelosCount} mod • {totalPecas} pç
                   </span>
                   <span className="text-sm font-semibold">
                     {formatCurrency(valorTotal)}
