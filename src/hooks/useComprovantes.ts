@@ -48,7 +48,7 @@ export function useComprovantes(filtros: FiltrosComprovante) {
         q = q.lte('created_at', end.toISOString());
       }
       if (filtros.status && filtros.status.length > 0) {
-        q = q.in('status', filtros.status);
+        q = q.in('status', filtros.status as ("confirmado" | "pendente_revisao" | "rejeitado")[]);
       }
       if (filtros.banco) {
         q = q.ilike('banco_origem', `%${filtros.banco}%`);
