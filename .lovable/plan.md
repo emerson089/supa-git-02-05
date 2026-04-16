@@ -1,31 +1,31 @@
 
 
-## Plano: Corrigir valor incorreto na mensagem WhatsApp + Erros de build
+## Plano: Deploy das Edge Functions + Correção de erros de build
 
-### Problema identificado
+### 1. Deploy das Edge Functions
 
-Na `NovoPedido.tsx`, a mensagem WhatsApp (linha 312) usa a variável local `valorTotal` computada no render, mas deveria usar o valor retornado pelo banco de dados após a criação do pedido (`pedidoCriado.valorTotal`). Isso garante que o valor enviado é sempre o mesmo que está salvo no sistema.
+Deployar `webhook-comprovantes` e `discover-group-id` usando a ferramenta de deploy. Também é necessário adicionar as configurações de `verify_jwt = false` no `supabase/config.toml` para ambas, já que são webhooks externos (Z-API) que não enviam JWT.
 
-### Correções
+### 2. Correção de erros de build (obrigatório)
 
-**1. `src/pages/NovoPedido.tsx`** — Usar `pedidoCriado.valorTotal` na construção da mensagem WhatsApp (tanto para cliente quanto para gerência):
+Existem erros de TypeScript que impedem o build. A tabela `comprovantes` não está reconhecida no tipo gerado do banco. Os arquivos afetados:
 
-```typescript
-// Antes (linha 312):
-const valorFormatado = valorTotal.toLocaleString(...)
+- **`src/hooks/useComprovantes.ts`** — Usar cast `as any` no `.from('comprovantes')` para contornar a ausência do tipo gerado
+- **`src/hooks/useSalesTrendChart.ts`** — Mesmo problema com referência a `comprovantes`
 
-// Depois:
-const valorFormatado = pedidoCriado.valorTotal.toLocaleString(...)
+### 3. Configuração no `supabase/config.toml`
+
+Adicionar:
+```toml
+[functions.webhook-comprovantes]
+verify_jwt = false
+
+[functions.discover-group-id]
+verify_jwt = false
 ```
 
-Também usar `pedidoCriado.totalPecas` na mensagem para gerência (linha 382).
-
-**2. `src/components/clientes/TransmissaoManagerModal.tsx`** (linha 302) — Corrigir erro TS2769: tipo `"envios_agendados"` não é assignável. Ajustar a chamada `from()` para o nome de tabela correto (`catalogo_envios`).
-
-**3. `src/components/estoque/MobileModeloPadronizadoCard.tsx`** (linha 315) — Adicionar import do `Loader2` de `lucide-react`.
-
 ### Arquivos alterados
-- `src/pages/NovoPedido.tsx`
-- `src/components/clientes/TransmissaoManagerModal.tsx`
-- `src/components/estoque/MobileModeloPadronizadoCard.tsx`
+- `supabase/config.toml`
+- `src/hooks/useComprovantes.ts`
+- `src/hooks/useSalesTrendChart.ts`
 
