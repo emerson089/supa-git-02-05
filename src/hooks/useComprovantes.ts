@@ -35,7 +35,7 @@ export function useComprovantes(filtros: FiltrosComprovante) {
   const query = useQuery({
     queryKey: ['comprovantes', user?.id, filtros],
     queryFn: async () => {
-      let q = (supabase as any).from('comprovantes').select('*', { count: 'exact' });
+      let q = supabase.from('comprovantes').select('*', { count: 'exact' });
 
       if (filtros.startDate) {
         const start = new Date(filtros.startDate);
@@ -70,7 +70,7 @@ export function useComprovantes(filtros: FiltrosComprovante) {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Comprovante> }) => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('comprovantes')
         .update(updates)
         .eq('id', id)
