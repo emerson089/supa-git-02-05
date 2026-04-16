@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
 
-type Comprovante = Database['public']['Tables']['comprovantes']['Row'];
+export type Comprovante = Database['public']['Tables']['comprovantes']['Row'];
 
 // Comprovante interface is now derived from Database types above
 
