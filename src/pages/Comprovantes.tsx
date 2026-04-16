@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Eye, Filter, RefreshCw, FileText, CheckCircle, AlertTriangle, XCircle, MoreHorizontal } from 'lucide-react';
+import { Search, Eye, Filter, RefreshCw, FileText, CheckCircle, AlertTriangle, XCircle, MoreHorizontal, Trash2 } from 'lucide-react';
 import { format, startOfDay, startOfMonth, endOfMonth, endOfDay } from 'date-fns';
 import { useComprovantes, Comprovante } from '@/hooks/useComprovantes';
 import { ComprovanteModal } from '@/components/comprovantes/ComprovanteModal';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 export default function Comprovantes() {
   const isMobile = useIsMobile();
@@ -23,6 +24,7 @@ export default function Comprovantes() {
   
   const [selectedComprovante, setSelectedComprovante] = useState<Comprovante | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Calcula datas com base no atalho
   const getDates = () => {
@@ -45,7 +47,7 @@ export default function Comprovantes() {
     endDate: end,
   };
 
-  const { data, isLoading, isUpdating, updateComprovante, refetch, isFetching } = useComprovantes(filtros);
+  const { data, isLoading, isUpdating, updateComprovante, refetch, isFetching, deleteComprovante, isDeleting } = useComprovantes(filtros);
   const comprovantes = data?.data || [];
 
   // Hook extra para pegar TODOS do mês (para os cards), se não houver filtros exatos.
@@ -229,9 +231,19 @@ export default function Comprovantes() {
                             {comp.status === 'rejeitado' && <Badge className="bg-red-100 text-red-800 hover:bg-red-200 border-none">Rejeitado</Badge>}
                           </TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => handleOpenModal(comp)}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => handleOpenModal(comp)}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => setDeleteId(comp.id)}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -251,6 +263,33 @@ export default function Comprovantes() {
           onSave={handleSaveModal}
           isSaving={isUpdating}
         />
+
+        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir comprovante?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita. O comprovante será removido permanentemente do sistema.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeleting}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (deleteId) {
+                    deleteComprovante(deleteId);
+                    setDeleteId(null);
+                  }
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? 'Excluindo...' : 'Excluir'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

@@ -90,9 +90,27 @@ export function useComprovantes(filtros: FiltrosComprovante) {
     }
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('comprovantes').delete().eq('id', id);
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comprovantes'] });
+      toast.success('Comprovante excluído com sucesso!');
+    },
+    onError: (error) => {
+      console.error(error);
+      toast.error('Erro ao excluir comprovante.');
+    }
+  });
+
   return {
     ...query,
     updateComprovante: updateMutation.mutate,
-    isUpdating: updateMutation.isPending
+    isUpdating: updateMutation.isPending,
+    deleteComprovante: deleteMutation.mutate,
+    isDeleting: deleteMutation.isPending,
   };
 }
