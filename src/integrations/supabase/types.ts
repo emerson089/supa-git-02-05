@@ -171,6 +171,60 @@ export type Database = {
         }
         Relationships: []
       }
+      comprovantes: {
+        Row: {
+          banco_origem: string | null
+          chave_pix: string | null
+          created_at: string
+          dados_brutos: Json | null
+          data_pagamento: string | null
+          grupo_whatsapp: string | null
+          id: string
+          imagem_url: string
+          nome_pagador: string | null
+          numero_remetente: string | null
+          observacoes: string | null
+          status: Database["public"]["Enums"]["comprovante_status"]
+          tipo_pagamento: string | null
+          updated_at: string
+          valor: number | null
+        }
+        Insert: {
+          banco_origem?: string | null
+          chave_pix?: string | null
+          created_at?: string
+          dados_brutos?: Json | null
+          data_pagamento?: string | null
+          grupo_whatsapp?: string | null
+          id?: string
+          imagem_url: string
+          nome_pagador?: string | null
+          numero_remetente?: string | null
+          observacoes?: string | null
+          status?: Database["public"]["Enums"]["comprovante_status"]
+          tipo_pagamento?: string | null
+          updated_at?: string
+          valor?: number | null
+        }
+        Update: {
+          banco_origem?: string | null
+          chave_pix?: string | null
+          created_at?: string
+          dados_brutos?: Json | null
+          data_pagamento?: string | null
+          grupo_whatsapp?: string | null
+          id?: string
+          imagem_url?: string
+          nome_pagador?: string | null
+          numero_remetente?: string | null
+          observacoes?: string | null
+          status?: Database["public"]["Enums"]["comprovante_status"]
+          tipo_pagamento?: string | null
+          updated_at?: string
+          valor?: number | null
+        }
+        Relationships: []
+      }
       contagem_itens: {
         Row: {
           contagem_id: string
@@ -1442,6 +1496,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "gerente" | "vendedor" | "vendedor_loja"
+      comprovante_status: "confirmado" | "pendente_revisao" | "rejeitado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1570,6 +1625,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "gerente", "vendedor", "vendedor_loja"],
+      comprovante_status: ["confirmado", "pendente_revisao", "rejeitado"],
     },
   },
 } as const
