@@ -47,7 +47,7 @@ export default function Comprovantes() {
     endDate: end,
   };
 
-  const { data, isLoading, isUpdating, updateComprovante, refetch, isFetching } = useComprovantes(filtros);
+  const { data, isLoading, isUpdating, updateComprovante, refetch, isFetching, deleteComprovante, isDeleting } = useComprovantes(filtros);
   const comprovantes = data?.data || [];
 
   // Hook extra para pegar TODOS do mês (para os cards), se não houver filtros exatos.
