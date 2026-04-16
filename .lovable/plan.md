@@ -1,36 +1,43 @@
 
 
-## Plano: Criar tabela comprovantes + atualizar types.ts + remover `as any`
+## Plano: Filtrar grupo + Botão de excluir comprovantes
 
-### Situação atual
-- Os arquivos das Edge Functions (`webhook-comprovantes/index.ts` e `discover-group-id/index.ts`) **já existem** no código-fonte
-- As entradas no `config.toml` **já existem** com `verify_jwt = false`
-- A migration `20260416082420_add_comprovantes.sql` **existe** no código mas **não foi aplicada** — a tabela `comprovantes` não existe no banco de dados
-- O `types.ts` não contém a definição de `comprovantes` (é auto-gerado e não refletiu a tabela porque ela não existe)
-- Os hooks usam `as any` como workaround
+### 1. Configurar filtro do grupo "Feira - Delookii"
 
-### O que será feito
+**ID descoberto:** `120363043122353365-group`
 
-**1. Aplicar a migração SQL para criar a tabela `comprovantes`**
-Executar a migration existente via ferramenta de migração do banco:
-- Criar tipo `comprovante_status` (enum: confirmado, pendente_revisao, rejeitado)
-- Criar tabela `comprovantes` com todas as colunas (valor, data_pagamento, nome_pagador, banco_origem, tipo_pagamento, chave_pix, imagem_url, dados_brutos, status, grupo_whatsapp, numero_remetente, observacoes)
-- Trigger `updated_at`, RLS habilitado, políticas para admin/gerente
-- Índices em `status` e `created_at`
+A lógica de filtro **já existe** em `webhook-comprovantes/index.ts` (linha que checa `WHATSAPP_GROUP_ID`). Basta adicionar o secret com esse valor.
 
-**2. Atualizar `src/integrations/supabase/types.ts`**
-Adicionar a definição da tabela `comprovantes` no objeto `Tables` com Row/Insert/Update types correspondentes. Embora o arquivo seja auto-gerado, a adição manual é necessária para que os tipos reflitam a tabela recém-criada.
+**Ação:** Vou solicitar a adição do secret `WHATSAPP_GROUP_ID` com valor `120363043122353365-group` via tool `add_secret`. Após adicionado, qualquer mensagem fora desse grupo será automaticamente ignorada (já visto nos seus dados que estavam vindo comprovantes de números privados como `557781377537`, grupos `558788528673`, `155572506751145@lid` etc — tudo isso será filtrado).
 
-**3. Remover `as any` dos hooks**
-- `src/hooks/useComprovantes.ts` — usar `supabase.from('comprovantes')` diretamente
-- `src/hooks/useSalesTrendChart.ts` — idem
+**Importante:** Você precisa reapontar o webhook do Z-API **de volta** para `webhook-comprovantes` (saindo do `discover-group-id`):
+```
+https://xoyyhtxakbrlzykthdca.supabase.co/functions/v1/webhook-comprovantes
+```
 
-**4. Redeploy das Edge Functions**
-Fazer deploy de `webhook-comprovantes` e `discover-group-id` para garantir que estejam ativas.
+### 2. Adicionar botão de excluir comprovantes
+
+**`src/hooks/useComprovantes.ts`:** adicionar mutation `deleteComprovante`:
+- `supabase.from('comprovantes').delete().eq('id', id)`
+- Invalida query, exibe toast de sucesso
+- Exporta `deleteComprovante` e `isDeleting`
+
+**`src/pages/Comprovantes.tsx`:** adicionar coluna de ações:
+- Ícone lixeira (vermelho) ao lado do botão de visualizar
+- Ao clicar, abre `AlertDialog` de confirmação ("Tem certeza? Esta ação não pode ser desfeita.")
+- Ao confirmar, chama `deleteComprovante(id)`
+- Funciona tanto na tabela desktop quanto nos cards mobile
+
+**Permissões:** RLS atual permite DELETE apenas para admin (`Admin can manage comprovantes` com `FOR ALL`). Gerentes não podem excluir — comportamento adequado.
 
 ### Arquivos alterados
-- `src/integrations/supabase/types.ts` (adicionar tipos da tabela comprovantes)
-- `src/hooks/useComprovantes.ts` (remover `as any`)
-- `src/hooks/useSalesTrendChart.ts` (remover `as any`)
-- Migração SQL aplicada ao banco de dados
+- `src/hooks/useComprovantes.ts` — adicionar mutation de delete
+- `src/pages/Comprovantes.tsx` — botão lixeira + AlertDialog de confirmação
+
+### Fluxo após implementação
+1. Adiciono o secret `WHATSAPP_GROUP_ID = 120363043122353365-group`
+2. Implemento o botão de excluir
+3. Você reaponta o webhook Z-API para `webhook-comprovantes` (volta da URL de descoberta)
+4. Você pode excluir os comprovantes errados que já entraram (de outros chats)
+5. A partir daí, só comprovantes do grupo "Feira - Delookii" serão processados
 
