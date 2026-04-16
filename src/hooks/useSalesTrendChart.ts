@@ -51,7 +51,7 @@ export function useSalesTrendChart(excluirCancelados: boolean) {
                         .eq("user_id", userId)
                         .gte("created_at", startDate)
                 ),
-                supabase
+                (supabase as any)
                     .from("comprovantes")
                     .select("valor, created_at")
                     .eq("status", "confirmado")
