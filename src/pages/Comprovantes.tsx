@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Eye, Filter, RefreshCw, FileText, CheckCircle, AlertTriangle, XCircle, MoreHorizontal } from 'lucide-react';
+import { Search, Eye, Filter, RefreshCw, FileText, CheckCircle, AlertTriangle, XCircle, MoreHorizontal, Trash2 } from 'lucide-react';
 import { format, startOfDay, startOfMonth, endOfMonth, endOfDay } from 'date-fns';
 import { useComprovantes, Comprovante } from '@/hooks/useComprovantes';
 import { ComprovanteModal } from '@/components/comprovantes/ComprovanteModal';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 export default function Comprovantes() {
   const isMobile = useIsMobile();
