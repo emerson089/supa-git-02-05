@@ -24,6 +24,7 @@ export default function Comprovantes() {
   
   const [selectedComprovante, setSelectedComprovante] = useState<Comprovante | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Calcula datas com base no atalho
   const getDates = () => {
