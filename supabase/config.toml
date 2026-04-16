@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.infinitepay-webhook]
 verify_jwt = false
+
+[functions.webhook-comprovantes]
+verify_jwt = false
+
+[functions.discover-group-id]
+verify_jwt = false
