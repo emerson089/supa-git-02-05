@@ -474,9 +474,7 @@ export default function Feira() {
 
       // Limpar dados salvos desta carga após sucesso
       setRetornosSalvos(prev => {
-        const novo = {
-          ...prev
-        };
+        const novo = { ...prev };
         delete novo[cargaSelecionada.id];
         return novo;
       });
@@ -494,35 +492,45 @@ export default function Feira() {
         return sum + (vend * preco);
       }, 0);
 
-      const metadata = user?.user_metadata || {};
-      const adminNumbers = (metadata.notification_numbers || []) as string[];
-      const notifyOnOrderGlobal = metadata.notify_on_order !== false;
-
-      if (notifyOnOrderGlobal && adminNumbers.length > 0) {
-        const titulo = (cargaSelecionada as any).observacoes || 'Carga Sem Título';
-        const valorFormatado = valorTotalVendido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        const dataHora = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
-        
-        const mensagem = `🚀 RESUMO DE CARGA: ${titulo}\n\n📦 Enviado : ${totalEnviado}\n🔄 Retorno : ${totalRetornado}\n✅ Vendido : ${totalVendido}\n💰 Valor total : ${valorFormatado}\n\n---------------------------\n📅 Finalizado em: ${dataHora}`;
-
-        adminNumbers.forEach(async (adminPhone) => {
-          try {
-            await supabase.functions.invoke('send-whatsapp', {
-              body: { phone: adminPhone, message: mensagem },
-            });
-          } catch (err) {
-            console.error('Erro ao notificar administrador:', adminPhone, err);
-          }
-        });
-        
-        toast.success('Gerência notificada via WhatsApp!');
-      }
+      await handleSendWhatsAppResumo({
+        titulo: (cargaSelecionada as any).observacoes || 'Carga Sem Título',
+        enviado: totalEnviado,
+        retornado: totalRetornado,
+        vendido: totalVendido,
+        valorTotal: valorTotalVendido
+      });
 
       setShowRetorno(false);
       setCargaSelecionada(null);
       setItensRetorno([]);
     } catch (error: any) {
       toast.error(error.message || 'Erro ao registrar retorno');
+    }
+  };
+
+  const handleSendWhatsAppResumo = async (resumo: { titulo: string; enviado: number; retornado: number; vendido: number; valorTotal: number; isCorrecao?: boolean }) => {
+    const metadata = user?.user_metadata || {};
+    const adminNumbers = (metadata.notification_numbers || []) as string[];
+    const notifyOnOrderGlobal = metadata.notify_on_order !== false;
+
+    if (notifyOnOrderGlobal && adminNumbers.length > 0) {
+      const valorFormatado = resumo.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const dataHora = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
+      
+      const tituloPrefix = resumo.isCorrecao ? '📝 CORREÇÃO DE CARGA' : '🚀 RESUMO DE CARGA';
+      const mensagem = `${tituloPrefix}: ${resumo.titulo}\n\n📦 Enviado : ${resumo.enviado}\n🔄 Retorno : ${resumo.retornado}\n✅ Vendido : ${resumo.vendido}\n💰 Valor total : ${valorFormatado}\n\n---------------------------\n📅 ${resumo.isCorrecao ? 'Corrigido em' : 'Finalizado em'}: ${dataHora}`;
+
+      adminNumbers.forEach(async (adminPhone) => {
+        try {
+          await supabase.functions.invoke('send-whatsapp', {
+            body: { phone: adminPhone, message: mensagem },
+          });
+        } catch (err) {
+          console.error('Erro ao notificar administrador:', adminPhone, err);
+        }
+      });
+      
+      toast.success('Gerência notificada via WhatsApp!');
     }
   };
 
@@ -940,20 +948,30 @@ export default function Feira() {
     }} isLoading={false} />
 
     {/* Modal Corrigir Retorno (apenas para concluídas) */}
-    <EditarRetornoCargaModal carga={cargaCorrigirRetorno} onClose={() => setCargaCorrigirRetorno(null)} onConfirm={(transferenciaId, itensCorrigidos, motivo) => {
-      editarRetornoCarga.mutate({
-        transferenciaId,
-        itensCorrigidos,
-        motivo
-      }, {
-        onSuccess: result => {
-          setCargaCorrigirRetorno(null);
-          toast.success(`Retorno corrigido! ${result.itensAjustados} item(s) ajustado(s).`);
-        },
-        onError: (error: any) => {
-          toast.error(error.message || 'Erro ao corrigir retorno');
-        }
-      });
+    <EditarRetornoCargaModal 
+      carga={cargaCorrigirRetorno} 
+      produtos={produtosAcabados}
+      getDisponivelCentral={getDisponivelCentral}
+      onClose={() => setCargaCorrigirRetorno(null)} 
+      onConfirm={(transferenciaId, itensCorrigidos, itensAdicionados, motivo, resumo) => {
+        editarRetornoCarga.mutate({
+          transferenciaId,
+          itensCorrigidos,
+          itensAdicionados,
+          motivo
+        }, {
+          onSuccess: async () => {
+            setCargaCorrigirRetorno(null);
+            toast.success('Retorno corrigido com sucesso!');
+            await handleSendWhatsAppResumo({
+              ...resumo,
+              isCorrecao: true
+            });
+          },
+          onError: (error: any) => {
+            toast.error(error.message || 'Erro ao corrigir retorno');
+          }
+        });
     }} isLoading={editarRetornoCarga.isPending} />
 
     {/* Modal Confirmar Recálculo de Estoque */}

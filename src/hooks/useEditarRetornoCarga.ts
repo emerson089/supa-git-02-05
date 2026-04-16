@@ -10,9 +10,19 @@ interface ItemCorrecao {
   quantidadeRetornadaAnterior: number;
 }
 
+export interface ItemAdicionado {
+  itemId: string;
+  nome: string;
+  precoUnitario: number;
+  quantidadeEnviada: number;
+  quantidadeRetornada: number;
+  imagemUrl?: string | null;
+}
+
 interface EditarRetornoParams {
   transferenciaId: string;
   itensCorrigidos: ItemCorrecao[];
+  itensAdicionados?: ItemAdicionado[];
   motivo: string;
 }
 
@@ -40,11 +50,13 @@ export function useEditarRetornoCarga() {
     mutationFn: async ({
       transferenciaId,
       itensCorrigidos,
+      itensAdicionados = [],
       motivo,
     }: EditarRetornoParams): Promise<EditarRetornoResult> => {
       console.log('[useEditarRetornoCarga] Iniciando correção:', {
         transferenciaId,
         itensCorrigidos: itensCorrigidos.length,
+        itensAdicionados: itensAdicionados.length,
         motivo,
       });
 
@@ -174,8 +186,93 @@ export function useEditarRetornoCarga() {
         deltaTotal += delta;
       }
 
+      // PROCESSAMENTO DE ITENS NOVIDADE (ESQUECIDOS)
+      for (const itemNovo of itensAdicionados) {
+        const { itemId, nome, quantidadeEnviada, quantidadeRetornada, precoUnitario, imagemUrl } = itemNovo;
+
+        if (quantidadeRetornada > quantidadeEnviada) {
+          throw new Error(`Item ${nome}: Retorno (${quantidadeRetornada}) não pode exceder enviado (${quantidadeEnviada})`);
+        }
+        if (quantidadeRetornada < 0 || quantidadeEnviada <= 0) {
+          throw new Error(`Item ${nome}: Quantidades inválidas`);
+        }
+
+        // O delta para a Central é a diferença líquida entre o que voltou e o que saiu
+        // Ex: Saiu 10, Voltou 3 => Delta Central = -7 (vendeu 7)
+        const deltaCentralItem = quantidadeRetornada - quantidadeEnviada;
+
+        const { data: estoqueCentral } = await supabase
+          .from('estoque_por_local')
+          .select('*')
+          .eq('item_id', itemId)
+          .eq('local_id', central.id)
+          .single();
+
+        if (!estoqueCentral) {
+          throw new Error(`Estoque da Central não encontrado para o novo item ${nome}`);
+        }
+
+        const estoqueAntes = Number(estoqueCentral.quantidade) || 0;
+        const estoqueDepois = estoqueAntes + deltaCentralItem;
+
+        if (estoqueDepois < 0) {
+          throw new Error(`Inclusão retroativa inválida para "${nome}": Central ficaria negativa (${estoqueDepois})`);
+        }
+
+        // Adiciona à transferência original retroativamente
+        const { error: insertItemError } = await supabase
+          .from('transferencia_itens')
+          .insert({
+            user_id: user.id,
+            transferencia_id: transferenciaId,
+            item_id: itemId,
+            quantidade_enviada: quantidadeEnviada,
+            quantidade_retornada: quantidadeRetornada,
+            preco_unitario: precoUnitario,
+            nome_produto: nome,
+            imagem_url_produto: imagemUrl || null,
+          });
+
+        if (insertItemError) throw insertItemError;
+
+        // Atualiza estoque Central com o delta (Dedução das vendas diretas)
+        const { error: updateEstoqueError } = await supabase
+          .from('estoque_por_local')
+          .update({
+            quantidade: estoqueDepois,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', estoqueCentral.id);
+
+        if (updateEstoqueError) throw updateEstoqueError;
+
+        // Adiciona movimentação de ajuste retroativo
+        const { error: movError } = await supabase
+          .from('estoque_movimentacoes')
+          .insert({
+            user_id: user.id,
+            item_id: itemId,
+            local_id: central.id,
+            tipo: 'AJUSTE_RETORNO_FEIRA',
+            quantidade: Math.abs(deltaCentralItem),
+            motivo: `Inclusão retroativa - Carga #${transferenciaId.slice(0, 8)} - ${motivo}`,
+            estoque_antes: estoqueAntes,
+            estoque_depois: estoqueDepois,
+            transferencia_id: transferenciaId,
+          });
+
+        if (movError) {
+          console.error('[useEditarRetornoCarga] Erro ao registrar mov. de item esquecido:', movError);
+        }
+
+        await sincronizarEstoqueTotal(itemId, user.id);
+
+        itensAjustados++;
+        deltaTotal += deltaCentralItem;
+      }
+
       if (itensAjustados === 0) {
-        throw new Error('Nenhum item foi alterado');
+        throw new Error('Nenhum item foi alterado ou adicionado');
       }
 
       console.log('[useEditarRetornoCarga] Correção concluída:', {

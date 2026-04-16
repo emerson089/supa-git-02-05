@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LotImage } from '@/components/production/LotImage';
-import { Loader2, AlertTriangle, ArrowRight, Package, Search, X } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowRight, Package, Search, X, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TransferenciaComItensHistorico, calcularTotaisCargaPublic } from '@/hooks/useFeiraHistorico';
 import { format } from 'date-fns';
@@ -31,9 +31,31 @@ interface EditarRetornoCargaModalProps {
       quantidadeEnviadaOriginal: number;
       quantidadeRetornadaAnterior: number;
     }>,
-    motivo: string
+    itensAdicionados: Array<{
+      itemId: string;
+      nome: string;
+      precoUnitario: number;
+      quantidadeEnviada: number;
+      quantidadeRetornada: number;
+      imagemUrl?: string | null;
+    }>,
+    motivo: string,
+    resumo: {
+      titulo: string;
+      enviado: number;
+      retornado: number;
+      vendido: number;
+      valorTotal: number;
+    }
   ) => void;
   isLoading: boolean;
+  produtos: Array<{
+    id: string;
+    nome: string;
+    precoUnitario: number | null;
+    imagemUrl?: string | null;
+  }>;
+  getDisponivelCentral: (itemId: string) => number;
 }
 
 const formatCurrency = (value: number) => {
@@ -48,10 +70,22 @@ export function EditarRetornoCargaModal({
   onClose,
   onConfirm,
   isLoading,
+  produtos,
+  getDisponivelCentral,
 }: EditarRetornoCargaModalProps) {
   const [motivo, setMotivo] = useState('');
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [buscaProduto, setBuscaProduto] = useState('');
+  const [itensNovos, setItensNovos] = useState<Array<{
+    itemId: string;
+    nome: string;
+    precoUnitario: number;
+    quantidadeEnviada: number;
+    quantidadeRetornada: number;
+    imagemUrl?: string | null;
+    disponivelCentral: number;
+  }>>([]);
 
   // Inicializar valores quando modal abre
   useEffect(() => {
@@ -63,6 +97,8 @@ export function EditarRetornoCargaModal({
       setInputValues(initialValues);
       setMotivo('');
       setSearchTerm('');
+      setBuscaProduto('');
+      setItensNovos([]);
     }
   }, [carga]);
 
@@ -98,10 +134,14 @@ export function EditarRetornoCargaModal({
 
     const resumoAntes = calcularTotaisCargaPublic(carga.itens);
     
-    // Calcular resumo depois
-    let retornadoDepois = 0;
-    let vendidoDepois = 0;
-    let valorDepois = 0;
+    // Calcular resumo depois considerando os novos
+    let retornadoDepois = itensNovos.reduce((acc, i) => acc + i.quantidadeRetornada, 0);
+    let vendidoDepois = itensNovos.reduce((acc, i) => acc + (i.quantidadeEnviada - i.quantidadeRetornada), 0);
+    let valorDepois = itensNovos.reduce((acc, i) => acc + ((i.quantidadeEnviada - i.quantidadeRetornada) * i.precoUnitario), 0);
+
+    // Ajuste nos antigos para somar no retornado e vendido total enviado 
+    // Wait, o novo modelo TAMBÉM afeta o enviado total.
+    let enviadoDepois = resumoAntes.enviado + itensNovos.reduce((acc, i) => acc + i.quantidadeEnviada, 0);
 
     itensComDelta.forEach((item) => {
       retornadoDepois += item.novoRetorno;
@@ -110,16 +150,16 @@ export function EditarRetornoCargaModal({
     });
 
     const resumoDepois = {
-      enviado: resumoAntes.enviado,
+      enviado: enviadoDepois,
       retornado: retornadoDepois,
       vendido: vendidoDepois,
       valor: valorDepois,
     };
 
-    const temAlteracoes = itensComDelta.some((item) => item.delta !== 0);
+    const temAlteracoes = itensComDelta.some((item) => item.delta !== 0) || itensNovos.length > 0;
 
     return { itensComDelta, resumoAntes, resumoDepois, temAlteracoes };
-  }, [carga, inputValues]);
+  }, [carga, inputValues, itensNovos]);
 
   // Filtrar itens baseado no termo de busca
   const itensFiltrados = useMemo(() => {
@@ -157,6 +197,57 @@ export function EditarRetornoCargaModal({
     }));
   };
 
+  const produtosDisponiveis = useMemo(() => {
+    if (!buscaProduto.trim()) return [];
+    
+    const idsExistentes = new Set([
+      ...(carga?.itens.map(i => i.itemId) || []),
+      ...itensNovos.map(i => i.itemId)
+    ]);
+    
+    const termo = buscaProduto.toLowerCase().trim();
+    return produtos.filter(p => !idsExistentes.has(p.id) && p.nome.toLowerCase().includes(termo));
+  }, [produtos, buscaProduto, carga, itensNovos]);
+
+  const handleAddItemNovo = (produto: any) => {
+    setItensNovos(prev => [...prev, {
+      itemId: produto.id,
+      nome: produto.nome,
+      precoUnitario: produto.precoUnitario || 0,
+      quantidadeEnviada: 1, // começa com 1
+      quantidadeRetornada: 0,
+      imagemUrl: produto.imagemUrl,
+      disponivelCentral: getDisponivelCentral(produto.id),
+    }]);
+    setBuscaProduto('');
+  };
+
+  const handleUpdateItemNovo = (itemId: string, field: 'enviado' | 'retornado', value: string) => {
+    if (value !== '' && !/^\d+$/.test(value)) return;
+    const numValue = parseInt(value, 10) || 0;
+
+    setItensNovos(prev => prev.map(item => {
+      if (item.itemId !== itemId) return item;
+      
+      let newEnviado = field === 'enviado' ? numValue : item.quantidadeEnviada;
+      let newRetornado = field === 'retornado' ? numValue : item.quantidadeRetornada;
+
+      if (newRetornado > newEnviado) {
+        newRetornado = newEnviado;
+      }
+
+      return {
+        ...item,
+        quantidadeEnviada: newEnviado,
+        quantidadeRetornada: newRetornado
+      };
+    }));
+  };
+
+  const handleRemoveItemNovo = (itemId: string) => {
+    setItensNovos(prev => prev.filter(i => i.itemId !== itemId));
+  };
+
   // Debug: log estado do botão
   console.log('[EditarRetornoCargaModal] Estado do botão:', {
     isLoading,
@@ -185,10 +276,25 @@ export function EditarRetornoCargaModal({
     console.log('[EditarRetornoCargaModal] Chamando onConfirm com:', {
       cargaId: carga.id,
       itensCorrigidos: itensCorrigidos.length,
+      itensAdicionados: itensNovos.length,
       motivo: motivo.trim(),
     });
     
-    onConfirm(carga.id, itensCorrigidos, motivo.trim());
+    onConfirm(
+      carga.id, 
+      itensCorrigidos, 
+      itensNovos.map(({ itemId, nome, quantidadeEnviada, quantidadeRetornada, precoUnitario, imagemUrl }) => ({
+        itemId, nome, quantidadeEnviada, quantidadeRetornada, precoUnitario, imagemUrl
+      })),
+      motivo.trim(),
+      {
+        titulo: carga.observacoes || `Carga #${carga.id.slice(0, 8)}`,
+        enviado: resumoDepois.enviado,
+        retornado: resumoDepois.retornado,
+        vendido: resumoDepois.vendido,
+        valorTotal: resumoDepois.valor
+      }
+    );
   };
 
   if (!carga) return null;
@@ -335,6 +441,117 @@ export function EditarRetornoCargaModal({
               );
             })
             )}
+
+            {/* ITENS NOVOS */}
+            {itensNovos.length > 0 && (
+              <div className="pt-4 mt-4 border-t space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase text-emerald-600 mb-2">
+                  <Plus className="h-4 w-4" />
+                  Modelos Esquecidos (Adicionados)
+                </div>
+                {itensNovos.map((item) => (
+                  <div key={item.itemId} className="flex items-start gap-3 p-3 rounded-lg border border-emerald-200 bg-emerald-50/30 dark:bg-emerald-950/20 dark:border-emerald-900 relative">
+                    <button 
+                      onClick={() => handleRemoveItemNovo(item.itemId)}
+                      className="absolute -top-2 -right-2 bg-background border h-6 w-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-500 hover:border-red-200 transition-colors shadow-sm"
+                    >
+                      <X size={12} />
+                    </button>
+                    <LotImage
+                      src={item.imagemUrl}
+                      alt={item.nome}
+                      containerClassName="w-10 h-10 rounded-md flex-shrink-0"
+                      eager
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{item.nome}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="flex-1 bg-background rounded-md border p-1.5 flex flex-col items-center">
+                          <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Enviado</span>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            value={item.quantidadeEnviada || ''}
+                            onChange={(e) => handleUpdateItemNovo(item.itemId, 'enviado', e.target.value)}
+                            className="h-7 text-center font-bold px-1 border-0 shadow-none focus-visible:ring-1 bg-transparent"
+                            placeholder="0"
+                          />
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <div className="flex-1 bg-background rounded-md border p-1.5 flex flex-col items-center border-emerald-200">
+                          <span className="text-[10px] text-emerald-600 uppercase font-bold tracking-wider">Retorno</span>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            value={item.quantidadeRetornada || ''}
+                            onChange={(e) => handleUpdateItemNovo(item.itemId, 'retornado', e.target.value)}
+                            className="h-7 text-center font-bold px-1 border-0 shadow-none focus-visible:ring-1 bg-transparent text-emerald-700 dark:text-emerald-400"
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1 text-center">
+                        Isso deduzirá {item.quantidadeEnviada - item.quantidadeRetornada} peças do Central retroativamente.
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* SEÇÃO PARA ADICIONAR NOVO PRODUTO */}
+            <div className="pt-4 mt-6 border-t border-dashed">
+              <label className="text-sm font-medium flex items-center gap-2 text-muted-foreground mb-2">
+                <Search className="h-4 w-4" />
+                Buscar modelo não listado...
+              </label>
+              <div className="relative mb-2">
+                <Input
+                  type="text"
+                  placeholder="Digite nome ou referência para adicionar à carga"
+                  value={buscaProduto}
+                  onChange={(e) => setBuscaProduto(e.target.value)}
+                  className="bg-muted/30"
+                />
+                {buscaProduto && (
+                  <button
+                    onClick={() => setBuscaProduto('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {buscaProduto && produtosDisponiveis.length > 0 && (
+                <div className="border rounded-lg bg-card overflow-hidden shadow-sm">
+                  <div className="max-h-[160px] overflow-y-auto divide-y">
+                    {produtosDisponiveis.map(p => {
+                      const disponivel = getDisponivelCentral(p.id);
+                      return (
+                        <div key={p.id} className="flex items-center justify-between p-2 hover:bg-muted/50 cursor-pointer" onClick={() => handleAddItemNovo(p)}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <LotImage src={p.imagemUrl} alt={p.nome} containerClassName="w-8 h-8 rounded shrink-0 bg-muted" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium truncate">{p.nome}</p>
+                              <p className="text-[10px] text-emerald-600">Disp: {disponivel}</p>
+                            </div>
+                          </div>
+                          <Button size="sm" variant="ghost" className="shrink-0 h-6 w-6 p-0 text-emerald-600">
+                            <Plus size={14} />
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {buscaProduto && produtosDisponiveis.length === 0 && (
+                <div className="text-center py-4 text-sm text-muted-foreground border rounded-lg bg-card">
+                  Nenhum modelo encontrado no estoque.
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
