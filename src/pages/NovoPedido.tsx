@@ -244,12 +244,15 @@ const NovoPedido = () => {
       toast.error('Selecione um cliente');
       return;
     }
-    if (items.length === 0) {
-      toast.error('Adicione pelo menos um item ao pedido');
+    const validItems = items.filter(item => item.quantidade > 0);
+
+    if (validItems.length === 0) {
+      toast.error('Adicione pelo menos um item com quantidade ao pedido');
       return;
     }
+
     // Validate each item with Zod schema
-    for (const item of items) {
+    for (const item of validItems) {
       const result = PedidoItemSchema.safeParse({
         produtoId: item.produtoId,
         quantidade: item.quantidade,
@@ -267,12 +270,13 @@ const NovoPedido = () => {
       toast.error('Estoque insuficiente para um ou mais itens');
       return;
     }
+
     setIsLoading(true);
     try {
       const cliente = getClienteById(clienteId);
 
       // Mapear itens para incluir nome do produto
-      const itensFormatados = items.map(item => ({
+      const itensFormatados = validItems.map(item => ({
         id: item.id,
         produtoId: item.produtoId,
         produtoNome: item.produtoNome || 'Produto',
@@ -283,7 +287,7 @@ const NovoPedido = () => {
       // Subtrair do estoque — agrega por produtoId para evitar deduzir parcialmente quando
       // o mesmo produto aparece em múltiplas linhas (ex.: grades adicionadas em momentos distintos)
       const qtdPorProduto: Record<string, number> = {};
-      for (const item of items) {
+      for (const item of validItems) {
         if (!item.produtoId) continue;
         qtdPorProduto[item.produtoId] = (qtdPorProduto[item.produtoId] || 0) + item.quantidade;
       }

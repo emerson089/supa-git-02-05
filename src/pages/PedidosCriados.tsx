@@ -5,12 +5,12 @@ import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { usePedidos, Pedido } from '@/contexts/PedidosContext';
-import { usePedidoById } from '@/hooks/usePedidosData';
+import { Pedido } from '@/contexts/PedidosContext';
 import { generateCargaPDF } from '@/utils/generateCargaPDF';
 import { groupItensByModel, parseProductName } from '@/utils/productNameUtils';
 import { usePedidosPaginated, PedidoPaginatedDB } from '@/hooks/usePedidosPaginated';
 import { usePedidosTotals } from '@/hooks/usePedidosTotals';
+import { useUpdatePedido, useRemovePedido, usePedidoById } from '@/hooks/usePedidosData';
 import { EditPedidoModal } from '@/components/pedidos/EditPedidoModal';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { ImportPedidosCSVModal } from '@/components/pedidos/ImportPedidosCSVModal';
@@ -140,11 +140,9 @@ export default function PedidosCriados() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const {
-    removePedido,
-    updatePedido,
-    getPedidoById
-  } = usePedidos();
+
+  const { mutate: updatePedidoMutate } = useUpdatePedido();
+  const { mutate: removePedidoMutate } = useRemovePedido();
   const {
     itens: estoqueItens,
     getItemById,
@@ -352,6 +350,40 @@ export default function PedidosCriados() {
     return totalEstornado;
   };
 
+  // Helper para converter formato do banco (paginado) para interface interna compatível
+  const mapPedidoPaginatedToPedido = (pd: PedidoPaginatedDB): Pedido => ({
+    id: pd.id,
+    clienteId: pd.cliente_id || '',
+    clienteNome: pd.cliente_nome,
+    cidade: pd.cidade || '',
+    estado: pd.estado || '',
+    telefone: pd.telefone || '',
+    excursao: pd.excursao || '',
+    excursaoId: pd.excursao_id,
+    taxaExcursao: pd.taxa_excursao || 0,
+    status: pd.status || '',
+    statusPagamento: pd.status_pagamento || '',
+    statusPedido: pd.status_pedido || '',
+    statusEntrega: pd.status_entrega || '',
+    formaPagamento: pd.forma_pagamento || '',
+    observacoes: pd.observacoes || '',
+    itens: (pd.pedido_itens || []).map(i => ({
+      id: i.id,
+      produtoId: i.produto_id || '',
+      produtoNome: i.produto_nome,
+      quantidade: i.quantidade,
+      valorUnitario: i.valor_unitario
+    })),
+    totalPecas: pd.total_pecas || 0,
+    valorTotal: pd.valor_total || 0,
+    desconto: pd.desconto || 0,
+    dataCriacao: pd.created_at,
+    dataPagamento: pd.paid_at,
+    estornoRealizado: pd.estorno_realizado || false,
+    notificadoSeparado: pd.notificado_separado || false,
+    notificadoNoCarro: pd.notificado_no_carro || false
+  });
+
   // Função para subtrair estoque ao descancelar pedido
   const subtrairEstoque = async (pedido: Pedido): Promise<{
     sucesso: boolean;
@@ -393,8 +425,7 @@ export default function PedidosCriados() {
   // Handle inline status update with cancellation automation and stock reversal
   const handleStatusUpdate = async (pedidoItem: PedidoPaginatedDB, field: 'statusPagamento' | 'statusPedido' | 'statusEntrega', value: string) => {
     const pedidoId = pedidoItem.id;
-    // Also pull from context to get itens (for stock reversal). Fall back to pedidoItem fields.
-    const pedido = getPedidoById(pedidoId);
+    const pedido = mapPedidoPaginatedToPedido(pedidoItem);
     const updates: Partial<Pedido> = {
       [field]: value
     };
@@ -402,62 +433,49 @@ export default function PedidosCriados() {
     // CASO ESPECIAL: GOLPE CANCELADO selecionado na coluna Pedido - preenche automaticamente os outros
     if (field === 'statusPedido' && value === 'GOLPE CANCELADO') {
       updates.statusPagamento = 'GOLPE CANCELADO';
-      updates.statusEntrega = 'CANCELADO'; // Entrega não tem GOLPE CANCELADO, usa CANCELADO
-
-      if (pedido) {
-        const estavaCancelado = pedido.statusPagamento === 'CANCELADO' || pedido.statusPedido === 'CANCELADO' || pedido.statusPagamento === 'GOLPE CANCELADO' || pedido.statusPedido === 'GOLPE CANCELADO';
-        const jaEstornou = pedido.estornoRealizado === true;
-        if (!estavaCancelado && !jaEstornou) {
-          const pecasEstornadas = estornarEstoque(pedido);
-          updates.estornoRealizado = true;
-          if (pecasEstornadas > 0) {
-            toast.success(`GOLPE CANCELADO aplicado! ${pecasEstornadas} peças retornaram ao estoque.`);
-          } else {
-            toast.success('Status GOLPE CANCELADO aplicado a todos os campos!');
-          }
+      updates.statusEntrega = 'CANCELADO'; 
+      
+      const estavaCancelado = (pedido.statusPagamento === 'CANCELADO' || pedido.statusPedido === 'CANCELADO' || pedido.statusPagamento === 'GOLPE CANCELADO' || pedido.statusPedido === 'GOLPE CANCELADO');
+      const jaEstornou = pedido.estornoRealizado === true;
+      if (!estavaCancelado && !jaEstornou) {
+        const pecasEstornadas = estornarEstoque(pedido);
+        updates.estornoRealizado = true;
+        if (pecasEstornadas > 0) {
+          toast.success(`GOLPE CANCELADO aplicado! ${pecasEstornadas} peças retornaram ao estoque.`);
         } else {
           toast.success('Status GOLPE CANCELADO aplicado a todos os campos!');
         }
       } else {
         toast.success('Status GOLPE CANCELADO aplicado a todos os campos!');
       }
-      updatePedido(pedidoId, updates);
+      updatePedidoMutate({ id: pedidoId, data: updates as any });
       return;
     }
 
-    // Verificar estados — usando pedidoItem (paginated) para dados confiáveis e atuais
+    // Verificar estados
     const estavaCancelado = (pedidoItem.status_pagamento === 'CANCELADO' || pedidoItem.status_pedido === 'CANCELADO' || pedidoItem.status_pagamento === 'GOLPE CANCELADO' || pedidoItem.status_pedido === 'GOLPE CANCELADO');
     const estaCancelando = value === 'CANCELADO' || value === 'GOLPE CANCELADO';
-    const jaEstornou = (pedidoItem.estorno_realizado === true) || (pedido?.estornoRealizado === true);
+    const jaEstornou = (pedidoItem.estorno_realizado === true);
 
     // CASO 1: Descancelando (saindo de cancelado para outro status)
     if (estavaCancelado && !estaCancelando && jaEstornou) {
-      if (!pedido) {
-        toast.error('Não foi possível encontrar os dados completos do pedido.');
-        return;
-      }
       const resultado = await subtrairEstoque(pedido);
       if (!resultado.sucesso) {
         toast.error(resultado.mensagem, {
           description: 'Não é possível reativar este pedido sem estoque suficiente.',
           duration: 6000
         });
-        return; // Impede a mudança de status
+        return; 
       }
       updates.estornoRealizado = false;
-      updatePedido(pedidoId, updates); // ADICIONADO: Persistir a reativação
+      updatePedidoMutate({ id: pedidoId, data: updates as any });
       toast.success(`Pedido reativado! ${pedidoItem.total_pecas} peças subtraídas do estoque.`);
     }
     // CASO 2: Cancelando (indo para cancelado)
     else if (estaCancelando && !estavaCancelado && !jaEstornou) {
-      if (!pedido) {
-        toast.error('Não foi possível encontrar os dados completos do pedido.');
-        return;
-      }
       const pecasEstornadas = estornarEstoque(pedido);
       updates.estornoRealizado = true;
 
-      // Automation: if payment status is set to CANCELADO or GOLPE CANCELADO, auto-cancel others
       if (field === 'statusPagamento') {
         updates.statusPedido = value === 'GOLPE CANCELADO' ? 'GOLPE CANCELADO' : 'CANCELADO';
         updates.statusEntrega = 'CANCELADO';
@@ -468,11 +486,9 @@ export default function PedidosCriados() {
         toast.success('Status atualizado com sucesso!');
       }
       
-      updatePedido(pedidoId, updates); // ADICIONADO: Persistir o cancelamento
+      updatePedidoMutate({ id: pedidoId, data: updates as any });
     } else {
-      // Para outros status (incluindo SEPARADO e NO CARRO), atualiza o banco IMEDIATAMENTE
-      // Isso evita que a interface fique travada esperando o WhatsApp
-      updatePedido(pedidoId, updates);
+      updatePedidoMutate({ id: pedidoId, data: updates as any });
 
       if (field === 'statusPedido' && value === 'SEPARADO') {
         const jaNotificado = pedidoItem.notificado_separado === true;
@@ -494,7 +510,7 @@ Qualquer dúvida é só chamar! 😊`;
                 body: { phone: digits, message: mensagem },
               });
               if (!sendError) {
-                updatePedido(pedidoId, { notificadoSeparado: true });
+                updatePedidoMutate({ id: pedidoId, data: { notificadoSeparado: true } as any });
                 toast.success('Pedido separado e cliente avisado!');
               } else {
                 throw sendError;
@@ -510,7 +526,6 @@ Qualquer dúvida é só chamar! 😊`;
           toast.success('Pedido marcado como SEPARADO!');
         }
       } else if (field === 'statusEntrega' && value === 'NO CARRO') {
-        // Gatilho: NO CARRO - envia apenas uma vez
         const jaNotificadoCarro = pedidoItem.notificado_no_carro === true;
         const telefone = pedidoItem.telefone;
         if (!jaNotificadoCarro && telefone) {
@@ -532,7 +547,7 @@ Qualquer dúvida é só chamar! 😊`;
                 body: { phone: digits, message: mensagem },
               });
               if (!sendError) {
-                updatePedido(pedidoId, { notificadoNoCarro: true });
+                updatePedidoMutate({ id: pedidoId, data: { notificadoNoCarro: true } as any });
                 toast.success('Pedido no carro e cliente avisado!');
               } else {
                 throw sendError;
@@ -554,8 +569,6 @@ Qualquer dúvida é só chamar! 😊`;
   };
 
 
-  // Removed client-side filtering - now handled by server-side pagination
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -566,28 +579,27 @@ Qualquer dúvida é só chamar! 😊`;
     if (!deleteId) return;
 
     try {
-      // Buscar o pedido completo com itens antes de excluir
-      const pedido = getPedidoById(deleteId);
-
-      // Se encontrou o pedido e não foi estornado ainda, devolver ao estoque
+      const pedidoItem = pedidosList.find(p => p.id === deleteId);
+      const pedido = pedidoItem ? mapPedidoPaginatedToPedido(pedidoItem) : null;
+      
       if (pedido && !pedido.estornoRealizado) {
         const pecasDevolvidas = estornarEstoque(pedido);
 
         if (pecasDevolvidas > 0) {
-          // Aguardar um tick para garantir que as atualizações de estoque foram processadas
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
 
-      // Excluir o pedido
-      removePedido(deleteId);
-      setDeleteId(null);
-
-      const mensagem = pedido && !pedido.estornoRealizado && pedido.totalPecas > 0
-        ? `Pedido excluído! ${pedido.totalPecas} peças retornaram ao estoque.`
-        : 'Pedido excluído com sucesso!';
-
-      toast.success(mensagem);
+      removePedidoMutate(deleteId, {
+        onSuccess: () => {
+          toast.success('Pedido excluído com sucesso!');
+          setDeleteId(null);
+        },
+        onError: () => {
+          toast.error('Erro ao excluir pedido');
+          setDeleteId(null);
+        }
+      });
     } catch (error) {
       console.error('Erro ao excluir pedido:', error);
       toast.error('Erro ao excluir pedido');

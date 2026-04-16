@@ -143,31 +143,39 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
       });
   }, [getProdutosAcabados, gradeInfoMap]);
 
-  // Separar itens por grade e avulsos para exibição
-  const itensGrade = items.filter(i => i.tipo === 'grade');
-  const itensAvulsos = items.filter(i => i.tipo !== 'grade');
+  // Agrupar itens para exibição mantendo a ordem de inserção (intercalado)
+  const groupedBlocks = useMemo(() => {
+    const blocks: ({ type: 'grade', gradeId: string, modeloId: string, itens: ItemPedido[] } | { type: 'avulso', item: ItemPedido })[] = [];
+    
+    // Conjunto para rastrear grades que já foram processadas para não repetir blocos de grade
+    // se por algum motivo os itens não estiverem contínuos (embora devam estar)
+    const processedGrades = new Set<string>();
 
-  // Agrupar itens de grade por gradeId+gradeNome para exibição agrupada
-  const gruposGrade = useMemo(() => {
-    const grupos = new Map<string, { gradeNome: string; modeloNome: string; quantidadeGrades: number; totalPecas: number; itens: ItemPedido[] }>();
-    itensGrade.forEach(item => {
-      const key = `${item.gradeId}-${item.modeloId}`;
-      const existing = grupos.get(key);
-      if (existing) {
-        existing.itens.push(item);
-        existing.totalPecas += item.quantidade;
+    items.forEach(item => {
+      if (item.tipo === 'grade' && item.gradeId) {
+        const gradeKey = `${item.gradeId}-${item.modeloId}`;
+        if (processedGrades.has(gradeKey)) return;
+
+        // Se for grade, busca TODOS os itens desta grade no array total
+        const gradeItens = items.filter(i => i.tipo === 'grade' && i.gradeId === item.gradeId && i.modeloId === item.modeloId);
+        blocks.push({
+          type: 'grade',
+          gradeId: item.gradeId,
+          modeloId: item.modeloId!,
+          itens: gradeItens
+        });
+        processedGrades.add(gradeKey);
       } else {
-        grupos.set(key, {
-          gradeNome: item.gradeNome ?? 'Grade',
-          modeloNome: item.modeloNome ?? item.produtoNome ?? '',
-          quantidadeGrades: item.quantidadeGrades ?? 1,
-          totalPecas: item.quantidade,
-          itens: [item],
+        // Se for avulso (ou sem gradeId), adiciona como bloco individual
+        blocks.push({
+          type: 'avulso',
+          item
         });
       }
     });
-    return Array.from(grupos.values());
-  }, [itensGrade]);
+
+    return blocks;
+  }, [items]);
 
   return (
     <>
@@ -208,48 +216,28 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
         ) : (
           <div className="space-y-4">
             {/* ── Seção: Itens por Grade ── */}
-            {gruposGrade.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Package2 className="h-3.5 w-3.5 text-indigo-500" />
-                  <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">
-                    Por Grade
-                  </span>
-                  <Badge variant="secondary" className="text-[9px] h-4 px-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400">
-                    {gruposGrade.length} grade(s)
-                  </Badge>
-                </div>
-
-                {gruposGrade.map((grupo, gi) => (
+            {groupedBlocks.map((block, index) => {
+              if (block.type === 'grade') {
+                return (
                   <GradeCompactCard
-                    key={gi}
-                    itens={grupo.itens}
+                    key={`grade-${block.gradeId}-${block.modeloId}`}
+                    itens={block.itens}
                     onUpdate={onUpdateItem}
                     onRemoveGrupo={handleRemoveGrupo}
                   />
-                ))}
-              </div>
-            )}
+                );
+              }
 
-            {/* Separador entre grade e avulso */}
-            {gruposGrade.length > 0 && itensAvulsos.length > 0 && (
-              <div className="flex items-center gap-3">
-                <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground font-medium">Avulsos</span>
-                <Separator className="flex-1" />
-              </div>
-            )}
-
-            {/* ── Seção: Itens Avulsos ── */}
-            {itensAvulsos.map(item => {
-              // Soma apenas os avulsos do mesmo produto (grade já está em gradeReservado)
-              const avulsoCommitted = itensAvulsos
-                .filter(ci => ci.produtoId === item.produtoId)
+              const { item } = block;
+              // Soma apenas os avulsos do mesmo produto para cálculo de estoque
+              const avulsoCommitted = items
+                .filter(ci => ci.tipo !== 'grade' && ci.produtoId === item.produtoId)
                 .reduce((s, ci) => s + ci.quantidade, 0);
               const produto = item.produtoId ? produtos.find(p => p.id === item.produtoId) : null;
               const availableOverride = produto
                 ? Math.max(0, produto.quantidadeDisponivel - (avulsoCommitted - item.quantidade))
                 : undefined;
+
               return (
                 <ItemPedidoRow
                   key={item.id}

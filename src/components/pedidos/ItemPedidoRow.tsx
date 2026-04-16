@@ -198,9 +198,9 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                             return nomeStr;
                           })() /* Standardized Display */}
                         </span>
-                        {produtoSelecionado?.referencia && (
-                          <span className="text-[10px] text-muted-foreground mt-0.5 truncate w-full text-left">
-                            Ref: {produtoSelecionado.referencia.slice(-3)}
+                        {(produtoSelecionado?.refBase || produtoSelecionado?.referencia) && (
+                          <span className="text-[10px] text-muted-foreground mt-0.5 truncate w-full text-left font-medium">
+                            REF {(produtoSelecionado?.refBase || produtoSelecionado?.referencia || "").slice(-3)}
                           </span>
                         )}
                       </>
@@ -240,8 +240,7 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                         </span>
                         <span className="text-[10px] text-muted-foreground mt-0.5 truncate uppercase tracking-tight">
                           {(() => {
-                            const refToDisplay = produto.refBase || produto.referencia;
-                            const totalModelEstoque = produto.totalModelEstoque ?? produto.quantidadeDisponivel;
+                            const refToDisplay = produto.refBase || produto.referencia || "";
                             const lastThree = refToDisplay ? refToDisplay.slice(-3) : '';
                             const refDisplay = lastThree ? `REF ${lastThree} · ` : '';
                             

@@ -1,43 +1,39 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
     const body = await req.json();
+    const groupHost = body?.phone || "Desconhecido";
+    
+    // Salvando em uma linha de log na tabela de comprovantes para eu conseguir ler daqui
+    await supabase.from('comprovantes').insert({
+      valor: 0,
+      imagem_url: 'LOG_DESCOBERTA',
+      status: 'pendente_revisao',
+      grupo_whatsapp: groupHost,
+      observacoes: `ID_DESCOBERTO: ${groupHost}`,
+      numero_remetente: body?.participantPhone || body?.author || 'system'
+    });
 
-    // Em webhooks da Z-API, o ID do grupo host ou celular costuma vir no 'phone'
-    // E o remetente da mensagem no evento de grupo costuma vir no 'participantPhone'
-    const groupHost = body?.phone || "Private/Desconhecido";
-    const sender = body?.participantPhone || body?.author || "Desconhecido";
+    console.log("ID descoberto e salvo:", groupHost);
 
-    console.log("=== DESCOBERTA DE GRUPO WHATSAPP ===");
-    console.log("ID do Grupo/Conversa (phone):", groupHost);
-    console.log("Remetente (participantPhone):", sender);
-    console.log("Payload Completo recebido:", JSON.stringify(body, null, 2));
-    console.log("====================================");
-
-    return new Response(JSON.stringify({ 
-      ok: true, 
-      message: "Grupo descoberto! Verifique os logs do Supabase.",
-      descobriu_grupo_id: groupHost,
-      remetente: sender
-    }), {
+    return new Response(JSON.stringify({ ok: true, id: groupHost }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error: any) {
-    console.error("Erro interno Webhook (discover-group-id):", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: corsHeaders,
-    });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
 });

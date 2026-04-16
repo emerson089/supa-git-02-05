@@ -200,7 +200,7 @@ export function ClienteInfoCard({
         {/* Row 1: Cliente + Cidade + Estado */}
         <div className="lg:col-span-5 space-y-2">
           <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Nome do Cliente
+            Cliente
           </Label>
           <div className="flex gap-2">
             {/* Combobox com busca em tempo real */}

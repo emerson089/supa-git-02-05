@@ -95,11 +95,8 @@ export function GradeCompactCardEditable({
             <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-100/60 dark:bg-indigo-950/30 border-b border-indigo-200 dark:border-indigo-900/50 gap-3">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                     <Package2 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                    <div className="min-w-0 flex items-start gap-2 flex-wrap pt-0.5">
-                        <span className="text-[10px] font-semibold bg-indigo-600/90 text-white px-1.5 py-0.5 rounded-md leading-none mt-0.5">
-                            GRADE
-                        </span>
-                        <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300 leading-tight break-words flex-1">
+                    <div className="min-w-0 flex-1 flex flex-col pt-0.5">
+                        <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300 leading-tight break-words">
                             {grupo.nomeModelo}
                         </p>
                         <p className="text-[11px] font-mono text-indigo-600/80 dark:text-indigo-400/70 border border-indigo-200 dark:border-indigo-800 px-1.5 rounded bg-white/50 dark:bg-black/20">

@@ -24,7 +24,7 @@ async function processComprovante(imageUrl: string, remetente: string, grupo: st
   );
 
   try {
-    // 1. Fazer o download da imagem da Z-API para poder enviar como Base64 (evita problemas de OpenAI bloqueada na Z-API)
+    // 1. Baixar imagem e converter para base64
     const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) {
       throw new Error(`Falha ao baixar imagem: ${imageResponse.statusText}`);
@@ -33,7 +33,7 @@ async function processComprovante(imageUrl: string, remetente: string, grupo: st
     const arrayBuffer = await imageResponse.arrayBuffer();
     const base64Image = arrayBufferToBase64(arrayBuffer);
     
-    // 2. Chamar OpenAI GPT-4o
+    // 2. Chamar OpenAI GPT-4o Vision
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openAiKey) throw new Error("OPENAI_API_KEY não configurada");
 
@@ -86,11 +86,9 @@ Se não conseguir identificar algum campo, use null.
       throw new Error(`Falha ao fazer parse do JSON retornado pela IA`);
     }
 
-    // 3. Verificação de Duplicidade (pela URL base ou ID da transação)
-    // Extraindo da imagem_url um hash ou usando id_transacao da IA.
+    // 3. Verificação de Duplicidade
     const hasTransacaoId = !!extrato.id_transacao;
     if (hasTransacaoId) {
-      // Checar ultimos 2 dias
       const dozeDiasAtras = new Date();
       dozeDiasAtras.setHours(dozeDiasAtras.getHours() - 48);
 
@@ -104,12 +102,12 @@ Se não conseguir identificar algum campo, use null.
 
       if (duplicate) {
         await enviarMensagemZApi(fullBody.phone, "⚠️ *Este comprovante já foi registrado anteriormente.*");
-        return; // Puxamos o freio, comprovante ignorado
+        return;
       }
     }
 
-    // Verificar via URL duplicada (fallback de segurança)
-    const urlHash = imageUrl.split('?')[0]; // Ignora tokens se existirem
+    // Fallback URL Hash
+    const urlHash = imageUrl.split('?')[0];
     const { data: duplicateUrl } = await supabase
         .from('comprovantes')
         .select('id')
@@ -122,8 +120,7 @@ Se não conseguir identificar algum campo, use null.
       return; 
     }
 
-    // 4. Inserção no Supabase
-    // Regra da quarentena: se o "valor" for nulo ou invalido, marcamos como "pendente_revisao".
+    // 4. Inserção no Supabase com regra de quarentena
     let statusFinal = 'confirmado';
     if (!extrato.valor || typeof extrato.valor !== 'number' || extrato.valor === 0) {
       statusFinal = 'pendente_revisao';
@@ -144,113 +141,75 @@ Se não conseguir identificar algum campo, use null.
       observacoes: extrato.observacoes || null
     });
 
-    if (insertError) {
-      console.error("Insert Error", insertError);
-      throw new Error("Erro ao salvar comprovante no banco");
-    }
+    if (insertError) throw insertError;
 
-    // 5. Calcula Totais e Responde
+    // 5. Responder com resumo e total acumulado
     if (statusFinal === 'pendente_revisao') {
-      await enviarMensagemZApi(fullBody.phone, "⚠️ *Não consegui ler este comprovante com clareza.* Ele foi salvo para revisão manual. Por favor, confira na tela de Comprovantes.");
+      await enviarMensagemZApi(fullBody.phone, "⚠️ *Não consegui ler este comprovante com clareza.* Ele foi salvo para revisão manual. Por favor, confira na aba de Comprovantes.");
     } else {
-      // Calcular Total do dia!
       const startOfDay = new Date();
       startOfDay.setHours(0,0,0,0);
-      const endOfDay = new Date();
-      endOfDay.setHours(23,59,59,999);
-
-      const { data: somaData, error: somaError } = await supabase
+      const { data: somaData } = await supabase
         .from('comprovantes')
         .select('valor')
         .eq('status', 'confirmado')
-        .gte('created_at', startOfDay.toISOString())
-        .lte('created_at', endOfDay.toISOString());
+        .gte('created_at', startOfDay.toISOString());
 
       let totalDia = 0;
-      if (!somaError && somaData) {
+      if (somaData) {
         totalDia = somaData.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
       }
 
       const valFormat = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-      const msg = `✅ *Comprovante registrado!*\n💰 Valor: ${valFormat(extrato.valor)}\n👤 Pagador: ${extrato.nome_pagador || 'Não lido'}\n🏦 Banco: ${extrato.banco_origem || 'Não lido'}\n📅 Data: ${extrato.data_pagamento ? new Date(extrato.data_pagamento).toLocaleDateString('pt-BR') : 'Não lida'}\n\n📊 *Total do dia: ${valFormat(totalDia)}*`;
+      const msg = `✅ *Comprovante registrado!*\n💰 Valor: ${valFormat(extrato.valor)}\n👤 Pagador: ${extrato.nome_pagador || 'Não lido'}\n🏦 Banco: ${extrato.banco_origem || 'Não lido'}\n📅 Data: ${extrato.data_pagamento ? new Date(extrato.data_pagamento).toLocaleDateString('pt-BR') : 'Não lida'}\n\n📊 *Total acumulado hoje: ${valFormat(totalDia)}*`;
       await enviarMensagemZApi(fullBody.phone, msg);
     }
-    
   } catch (err: any) {
-    console.error("Erro processamento comprovante:", err);
-    await enviarMensagemZApi(fullBody.phone, `⚠️ Olá, ocorreu um erro sistêmico ao tentar ler o comprovante: ${err.message}`);
+    console.error("Erro processamento:", err);
+    await enviarMensagemZApi(fullBody.phone, `⚠️ Erro ao processar comprovante: ${err.message}`);
   }
 }
 
 async function enviarMensagemZApi(phoneDestino: string, mensagem: string) {
     const instanceId = Deno.env.get("ZAPI_INSTANCE_ID");
     const zapiToken = Deno.env.get("ZAPI_TOKEN");
-    const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN");
     const baseUrl = Deno.env.get("ZAPI_API_URL") || `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}`;
 
-    if (!instanceId || !zapiToken) return console.log("Missing ZAPI vars to send message");
+    if (!instanceId || !zapiToken) return;
 
-    const zapiUrl = `${baseUrl}/send-text`;
-    
-    await fetch(zapiUrl, {
+    await fetch(`${baseUrl}/send-text`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(clientToken ? { "Client-Token": clientToken } : {})
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone: phoneDestino, message: mensagem }),
-    }).catch(e => console.error("ZAPI Env error", e));
+    }).catch(e => console.error("ZAPI Error", e));
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const body = await req.json();
-
-    // Em webhooks do Z-API a imagem geralmente vem como payload type: 'image'
-    // ou event: 'onMessage' etc.
-    const imageUrl = body?.image?.imageUrl || body?.document?.documentUrl || body?.imageUrl || body?.url;
+    const imageUrl = body?.image?.imageUrl || body?.document?.documentUrl || body?.url;
     
     if (!imageUrl) {
-      return new Response(JSON.stringify({ ok: true, message: "Ignorado - não contém imagem." }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      return new Response(JSON.stringify({ ok: true, message: "Ignorado" }), { status: 200 });
     }
 
-    // Identificação de quem enviou (ajustado para Z-API standard)
     const groupHost = body?.phone || "Private"; 
     const sender = body?.participantPhone || body?.author || "Desconhecido";
 
-    // Validação de segurança: apenas aceitar do grupo autorizado
+    // Filtro de Grupo
     const authorizedGroupId = Deno.env.get("WHATSAPP_GROUP_ID");
     if (authorizedGroupId && groupHost !== authorizedGroupId) {
-      console.log(`Ignorando mensagem de [${groupHost}]. Grupo autorizado é: [${authorizedGroupId}]`);
-      return new Response(JSON.stringify({ ok: true, message: "Ignorado - não é o grupo autorizado." }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200, // respondendo 200 para a zapi não ficar tentando reenviar
-      });
+      return new Response(JSON.stringify({ ok: true, message: "Grupo não autorizado" }), { status: 200 });
     }
 
-    // O processamento pesado roda em background na mesma isolate
-    processComprovante(imageUrl, sender, groupHost, body).catch((err) => {
-      console.error("Erro fatal Background:", err);
-    });
+    // Processamento assíncrono
+    processComprovante(imageUrl, sender, groupHost, body).catch(e => console.error(e));
 
-    // Retorna 200 OK IMEDIATAMENTE!
-    return new Response(JSON.stringify({ ok: true, message: "Webhook Aceito" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders });
   } catch (error: any) {
-    console.error("Erro interno Webhook:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: corsHeaders,
-    });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
   }
 });

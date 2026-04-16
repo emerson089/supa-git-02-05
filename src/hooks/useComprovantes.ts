@@ -2,23 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { Database } from '@/integrations/supabase/types';
 
-export interface Comprovante {
-  id: string;
-  valor: number | null;
-  data_pagamento: string | null;
-  nome_pagador: string | null;
-  banco_origem: string | null;
-  tipo_pagamento: string | null;
-  chave_pix: string | null;
-  imagem_url: string;
-  dados_brutos: any;
-  status: 'confirmado' | 'pendente_revisao' | 'rejeitado';
-  grupo_whatsapp: string | null;
-  numero_remetente: string | null;
-  observacoes: string | null;
-  created_at: string;
-}
+type Comprovante = Database['public']['Tables']['comprovantes']['Row'];
+
+// Comprovante interface is now derived from Database types above
 
 interface FiltrosComprovante {
   startDate?: Date;
@@ -62,7 +50,7 @@ export function useComprovantes(filtros: FiltrosComprovante) {
       const { data, error, count } = await q;
 
       if (error) throw error;
-      return { data: (data as unknown as Comprovante[]) || [], count: count || 0 };
+      return { data: data || [], count: count || 0 };
     },
     enabled: !!user,
     staleTime: 1000 * 60,

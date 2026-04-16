@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Trash2, Package2, ChevronDown, ChevronUp, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,35 +29,84 @@ export function GradeCompactCard({ itens, onUpdate, onRemoveGrupo }: GradeCompac
     const valorOriginal = primeiroItem.valorOriginal ?? valorUnitario;
     const temDesconto = valorUnitario < valorOriginal;
 
-    // Ordenar itens pela sequência canônica de tamanhos
-    const itensSorted = [...itens].sort(
-        (a, b) => ORDEM_TAMANHOS.indexOf(a.produtoNome?.split('-').pop() ?? '') -
-            ORDEM_TAMANHOS.indexOf(b.produtoNome?.split('-').pop() ?? '')
-    );
+    // Agrupar itens por tamanho para exibição agregada
+    const aggregatedItens = useMemo(() => {
+        const groups: Record<string, {
+            tamanho: string;
+            quantidadeTotal: number;
+            itens: ItemPedido[];
+            quantidadeDisponivel?: number;
+        }> = {};
 
-    // Extrair tamanho do nome do produto (ex: "SH2603-0001-46" → "46")
-    const getTamanho = (item: ItemPedido) =>
-        item.produtoNome?.split('-').pop() ?? item.produtoNome ?? '';
+        itens.forEach(item => {
+            const tamanho = item.produtoNome?.split('-').pop() ?? item.produtoNome ?? '';
+            if (!groups[tamanho]) {
+                groups[tamanho] = {
+                    tamanho,
+                    quantidadeTotal: 0,
+                    itens: [],
+                    quantidadeDisponivel: item.quantidadeDisponivel
+                };
+            }
+            groups[tamanho].quantidadeTotal += item.quantidade;
+            groups[tamanho].itens.push(item);
+        });
+
+        // Ordenar os grupos pela sequência canônica de tamanhos
+        return Object.values(groups).sort(
+            (a, b) => ORDEM_TAMANHOS.indexOf(a.tamanho) - ORDEM_TAMANHOS.indexOf(b.tamanho)
+        );
+    }, [itens]);
 
     const totalPecas = itens.reduce((s, i) => s + i.quantidade, 0);
     const subtotal = totalPecas * valorUnitario;
+    
     // Quantas grades the current quantities represent
     const qtdGrades = gradeTotalPecas > 0 ? Math.round(totalPecas / gradeTotalPecas) : qtdGradesOriginal;
 
-    // Atualizar quantidade de um item individualmente
-    const handleQtdChange = useCallback((item: ItemPedido, novaQtd: number) => {
-        onUpdate({ ...item, quantidade: Math.max(0, novaQtd) });
+    // Atualizar quantidade de um tamanho (agregado)
+    const handleAggregatedQtdChange = useCallback((tamanhoGroup: { itens: ItemPedido[], quantidadeTotal: number }, novaQtdTotal: number) => {
+        const diff = novaQtdTotal - tamanhoGroup.quantidadeTotal;
+        if (diff === 0) return;
+
+        // Se só tem um item daquele tamanho, atualiza ele direto
+        if (tamanhoGroup.itens.length === 1) {
+            onUpdate({ ...tamanhoGroup.itens[0], quantidade: novaQtdTotal });
+            return;
+        }
+
+        // Se tem múltiplos itens (ex: 2 grades), distribui a diferença
+        // Para simplificar: tentamos manter a proporção ou apenas atualizamos o primeiro com o resto
+        const baseQtdPerItem = Math.floor(novaQtdTotal / tamanhoGroup.itens.length);
+        const remainder = novaQtdTotal % tamanhoGroup.itens.length;
+
+        tamanhoGroup.itens.forEach((item, index) => {
+            const extra = index < remainder ? 1 : 0;
+            onUpdate({ ...item, quantidade: baseQtdPerItem + extra });
+        });
     }, [onUpdate]);
 
     // Multiplicar todas as quantidades pelo número de grades
     const handleSetGrades = useCallback((novoN: number) => {
         if (novoN < 1 || gradeTotalPecas === 0) return;
-        // Calcular a proporção por tamanho a partir da qtd atual ÷ qtdGrades atual
-        itensSorted.forEach(item => {
-            const qtdPorGrade = Math.round(item.quantidade / qtdGrades);
-            onUpdate({ ...item, quantidade: qtdPorGrade * novoN, quantidadeGrades: novoN });
+        
+        // Identificamos a estrutura de "uma grade" baseada na proporção inicial
+        aggregatedItens.forEach(group => {
+            const qtdPorGradeNoGrupo = Math.round(group.quantidadeTotal / qtdGrades);
+            // Distribui uniformemente entre os itens do grupo
+            const baseQtdPerItem = Math.floor((qtdPorGradeNoGrupo * novoN) / group.itens.length);
+            const remainder = (qtdPorGradeNoGrupo * novoN) % group.itens.length;
+
+            group.itens.forEach((item, index) => {
+                const extra = index < remainder ? 1 : 0;
+                onUpdate({ 
+                    ...item, 
+                    quantidade: baseQtdPerItem + extra,
+                    quantidadeGrades: novoN 
+                });
+            });
         });
-    }, [itensSorted, qtdGrades, onUpdate]);
+    }, [aggregatedItens, qtdGrades, onUpdate, gradeTotalPecas]);
 
     // Atualizar valor unitário de todos os itens da grade
     const handlePriceChange = useCallback((novoPreco: number) => {
@@ -72,12 +121,9 @@ export function GradeCompactCard({ itens, onUpdate, onRemoveGrupo }: GradeCompac
             <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-100/60 dark:bg-indigo-950/30 border-b border-indigo-200 dark:border-indigo-900/50 gap-3">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                     <Package2 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300 leading-tight truncate">
-                            {qtdGrades}× {gradeNome}
-                            {modeloNome && (
-                                <span className="font-normal text-indigo-600/80 dark:text-indigo-400/70"> — {modeloNome}</span>
-                            )}
+                            {modeloNome || gradeNome}
                         </p>
                         <p className="text-[11px] text-indigo-500/80 mt-0.5">
                             {totalPecas} peças ·{' '}
@@ -120,10 +166,10 @@ export function GradeCompactCard({ itens, onUpdate, onRemoveGrupo }: GradeCompac
                     <table className="w-full text-center text-xs">
                         <thead>
                             <tr>
-                                {itensSorted.map(item => (
-                                    <td key={item.id} className="pb-1 px-1.5">
+                                {aggregatedItens.map(group => (
+                                    <td key={group.tamanho} className="pb-1 px-1.5">
                                         <span className="font-mono font-bold text-muted-foreground text-[11px]">
-                                            {getTamanho(item)}
+                                            {group.tamanho}
                                         </span>
                                     </td>
                                 ))}
@@ -131,20 +177,20 @@ export function GradeCompactCard({ itens, onUpdate, onRemoveGrupo }: GradeCompac
                         </thead>
                         <tbody>
                             <tr>
-                                {itensSorted.map(item => (
-                                    <td key={item.id} className="px-1">
+                                {aggregatedItens.map(group => (
+                                    <td key={group.tamanho} className="px-1">
                                         <input
                                             type="number"
                                             min={0}
-                                            value={item.quantidade}
-                                            onChange={e => handleQtdChange(item, parseInt(e.target.value) || 0)}
+                                            value={group.quantidadeTotal}
+                                            onChange={e => handleAggregatedQtdChange(group, parseInt(e.target.value) || 0)}
                                             className={cn(
                                                 'w-12 h-8 text-center text-sm font-bold rounded-lg border',
                                                 'border-indigo-200 dark:border-indigo-800',
                                                 'bg-white dark:bg-indigo-950/40',
                                                 'focus:outline-none focus:ring-2 focus:ring-indigo-400',
                                                 'text-foreground',
-                                                item.quantidadeDisponivel !== undefined && item.quantidade > item.quantidadeDisponivel
+                                                group.quantidadeDisponivel !== undefined && group.quantidadeTotal > group.quantidadeDisponivel
                                                     ? 'ring-1 ring-amber-400 border-amber-300'
                                                     : ''
                                             )}
@@ -221,12 +267,12 @@ export function GradeCompactCard({ itens, onUpdate, onRemoveGrupo }: GradeCompac
                     <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/30 space-y-1">
                         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Disponibilidade em estoque</p>
                         <div className="flex flex-wrap gap-2">
-                            {itensSorted.map(item => {
-                                const disponivel = item.quantidadeDisponivel ?? 0;
-                                const insuf = item.quantidade > disponivel;
+                            {aggregatedItens.map(group => {
+                                const disponivel = group.quantidadeDisponivel ?? 0;
+                                const insuf = group.quantidadeTotal > disponivel;
                                 return (
                                     <div
-                                        key={item.id}
+                                        key={group.tamanho}
                                         className={cn(
                                             'flex flex-col items-center px-2 py-1 rounded-lg border text-[10px]',
                                             insuf
@@ -234,8 +280,8 @@ export function GradeCompactCard({ itens, onUpdate, onRemoveGrupo }: GradeCompac
                                                 : 'border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700'
                                         )}
                                     >
-                                        <span className="font-mono font-bold">{getTamanho(item)}</span>
-                                        <span>{item.quantidade} / {disponivel}</span>
+                                        <span className="font-mono font-bold">{group.tamanho}</span>
+                                        <span>{group.quantidadeTotal} / {disponivel}</span>
                                     </div>
                                 );
                             })}
