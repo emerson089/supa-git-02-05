@@ -231,9 +231,19 @@ export default function Comprovantes() {
                             {comp.status === 'rejeitado' && <Badge className="bg-red-100 text-red-800 hover:bg-red-200 border-none">Rejeitado</Badge>}
                           </TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => handleOpenModal(comp)}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => handleOpenModal(comp)}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => setDeleteId(comp.id)}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
