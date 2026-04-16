@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -16,6 +16,8 @@ import { cn } from '@/lib/utils';
 import { useExcursoes, useAddExcursao, useUpdateExcursao, useDeleteExcursao, useDeleteMultipleExcursoes, Excursao } from '@/hooks/useExcursoes';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ImportExcursoesCSVModal } from '@/components/excursoes/ImportExcursoesCSVModal';
+
+const DRAFT_KEY = 'df_excursao_draft';
 
 const ConfigExcursoes = () => {
   const isMobile = useIsMobile();
@@ -35,12 +37,40 @@ const ConfigExcursoes = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
 
+  // Carregar rascunho ao montar
+  useEffect(() => {
+    try {
+      const draft = localStorage.getItem(DRAFT_KEY);
+      if (draft && !editingExcursao) {
+        setFormData(JSON.parse(draft));
+      }
+    } catch (e) {
+      console.error('Erro ao carregar rascunho de excursão:', e);
+    }
+  }, []);
+
+  // Salvar rascunho ao alterar
+  useEffect(() => {
+    if (!editingExcursao && (formData.nome || formData.taxa || formData.contato || formData.localizacao)) {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+    }
+  }, [formData, editingExcursao]);
+
   const filteredExcursoes = excursoes?.filter((e) =>
     e.nome.toLowerCase().includes(debouncedSearch.toLowerCase())
   );
   const handleOpenNew = () => {
     setEditingExcursao(null);
-    setFormData({ nome: '', taxa: '', contato: '', localizacao: '' });
+    try {
+      const draft = localStorage.getItem(DRAFT_KEY);
+      if (draft) {
+        setFormData(JSON.parse(draft));
+      } else {
+        setFormData({ nome: '', taxa: '', contato: '', localizacao: '' });
+      }
+    } catch (e) {
+      setFormData({ nome: '', taxa: '', contato: '', localizacao: '' });
+    }
     setShowModal(true);
   };
 
@@ -87,6 +117,7 @@ const ConfigExcursoes = () => {
           localizacao: formData.localizacao.trim()
         });
         toast.success('Excursão cadastrada com sucesso!');
+        localStorage.removeItem(DRAFT_KEY);
       }
       setShowModal(false);
     } catch (error) {

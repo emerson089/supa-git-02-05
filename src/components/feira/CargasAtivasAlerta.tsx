@@ -147,7 +147,8 @@ export function CargasAtivasAlerta({
               getItemPreco: (i) => i.precoUnitario || 0,
               getItemQtd: (i) => i.quantidadeEnviada,
               getItemImagem: (i) => i.produtoImagem,
-              getItemReferencia: (i) => i.itemId, // Usar itemId como fallback de ref se necessário
+              getItemReferencia: (i) => i.produtoNome || '',
+              getItemModeloId: (i) => i.modeloId
             }).length;
 
             return (

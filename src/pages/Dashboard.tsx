@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip as TooltipUI, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { KpiCardSkeleton, ChartSkeleton, DonutChartSkeleton, ListItemSkeleton, TopModelosSkeleton, ProducaoKanbanSkeleton } from "@/components/ui/dashboard-skeleton";
-import { Banknote, Package, AlertCircle, Factory, TrendingUp, TrendingDown, Calendar as CalendarIcon, AlertTriangle, ChevronRight, Wrench, Wand2, Target, Pencil, X, Filter, Settings, Bus } from "lucide-react";
+import { Banknote, Package, AlertCircle, Factory, TrendingUp, TrendingDown, Calendar as CalendarIcon, AlertTriangle, ChevronRight, Wrench, Wand2, Target, Pencil, X, Filter, Settings, Bus, Receipt } from "lucide-react";
 import { useInsightsDashboard } from "@/hooks/useInsightsDashboard";
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
 import { useDashboardData, Periodo, DateRange, STATUS_COLORS, MetaYoY, TopModelo, StatusPedido, TopModelosCoverage, PrevisaoMensal, MetaAutomatica, FaturamentoDiaSemana } from "@/hooks/useDashboardData";
@@ -31,6 +31,8 @@ import { ptBR } from "date-fns/locale";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Line, ComposedChart } from "recharts";
 import { useSalesTrendChart, TrendDataPoint } from "@/hooks/useSalesTrendChart";
 import { useTaxasExcursao } from "@/hooks/useTaxasExcursao";
+import { useComprovantes } from "@/hooks/useComprovantes";
+import { startOfDay, endOfDay } from "date-fns";
 
 
 function formatCurrency(value: number) {
@@ -89,6 +91,17 @@ function TrendTooltip({
             </div>
             <span className="text-sm font-bold text-primary">{formatCurrency(data.atual)}</span>
           </div>
+
+          {/* Recebimentos */}
+          {(data.valorComprovantes || 0) > 0 && (
+            <div className="flex justify-between items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                <span className="text-xs font-semibold text-emerald-600">Recebido</span>
+              </div>
+              <span className="text-sm font-bold text-emerald-600">{formatCurrency(data.valorComprovantes || 0)}</span>
+            </div>
+          )}
 
           {/* Anterior */}
           {data.anterior > 0 && (
@@ -245,6 +258,14 @@ export default function Dashboard() {
   } = useSalesTrendChart(excluirCancelados);
 
   const { data: taxasExcursao, loading: taxasLoading } = useTaxasExcursao();
+
+  const { data: comprovantesData, isLoading: loadingComprovantes } = useComprovantes({
+    startDate: startOfDay(new Date()),
+    endDate: endOfDay(new Date()),
+    status: ['confirmado']
+  });
+  const comprovantes = comprovantesData?.data || [];
+  const valorComprovantesHoje = comprovantes.reduce((acc, c) => acc + (c.valor || 0), 0);
 
   // Calcular dateRange efetivo para insights
   const insightsDateRange = (() => {
@@ -480,6 +501,16 @@ export default function Dashboard() {
     bgColor: "bg-violet-100",
     clickable: true,
     onClick: () => navigate("/producao"),
+    showBruto: false
+  }, {
+    title: "Recebimentos Hoje",
+    value: formatCurrency(valorComprovantesHoje),
+    icon: Receipt,
+    variation: { value: comprovantes.length, isPositive: true }, 
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-100",
+    clickable: true,
+    onClick: () => navigate("/comprovantes"),
     showBruto: false
   }];
   const maxModelo = Math.max(...data.topModelos.map(m => m.quantidade), 1);
@@ -951,6 +982,15 @@ export default function Dashboard() {
                         return <circle key={key} cx={cx} cy={cy} r={3} fill="hsl(var(--muted-foreground))" fillOpacity={0.7} stroke="none" />;
                       }}
                       activeDot={{ r: 4, fill: "hsl(var(--muted-foreground))", fillOpacity: 0.9 }}
+                    />
+                    {/* Linha de Comprovantes */}
+                    <Line
+                      type="monotone"
+                      dataKey={(d) => d.isFuture && (d.valorComprovantes || 0) === 0 ? null : d.valorComprovantes}
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4, fill: "#10b981", stroke: "white" }}
                     />
                     <Area
                       type="monotone"

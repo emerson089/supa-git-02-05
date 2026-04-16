@@ -34,6 +34,7 @@ interface ItemCarga {
     precoUnitario: number;
     disponivelCentral: number;
     imagemUrl: string | null;
+    modeloId?: string | null;
 }
 
 interface AddGradeCargaModalProps {
@@ -137,7 +138,8 @@ export function AddGradeCargaModal({ open, onClose, onAdd, getDisponivelCentral 
                 quantidade: a.necessario,
                 precoUnitario: modeloSelecionado.precoUnitario ?? 0,
                 disponivelCentral: a.disponivel,
-                imagemUrl: a.imagemUrl ?? null
+                imagemUrl: a.imagemUrl ?? null,
+                modeloId: modeloSelecionado.id
             }));
 
         onAdd(novosItens);

@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format, startOfDay, endOfDay, subDays, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { sincronizarEstoqueTotal } from './useTransferencias';
+import { parseProductName } from '@/utils/productNameUtils';
 export type PeriodoTipo = 'hoje' | 'ontem' | '7dias' | '30dias' | 'custom';
 
 export interface PeriodoFeira {
@@ -33,6 +34,7 @@ export interface TransferenciaItemComProduto {
   produtoNome: string | null;
   produtoPreco: number | null;
   produtoImagem: string | null;
+  modeloId: string | null;
 }
 
 export interface TransferenciaComItensHistorico {
@@ -144,6 +146,14 @@ function mapDbToTransferenciaHistorico(db: any): TransferenciaComItensHistorico 
       produtoNome: item.estoque_itens?.nome || item.nome_produto || null,
       produtoPreco: item.estoque_itens?.preco_unitario != null ? Number(item.estoque_itens?.preco_unitario) : null,
       produtoImagem: item.estoque_itens?.imagem_url || item.imagem_url_produto || null,
+      modeloId: (() => {
+        try {
+          const loc = JSON.parse(item.estoque_itens?.localizacao || '{}');
+          return loc.modeloId || null;
+        } catch (e) {
+          return null;
+        }
+      })(),
     })),
   };
 }
@@ -169,7 +179,7 @@ export function useCargasPorPeriodo(inicio: Date, fim: Date) {
           local_destino:estoque_locais!local_destino_id(nome),
           transferencia_itens (
             *,
-            estoque_itens (nome, preco_unitario, imagem_url)
+            estoque_itens (nome, preco_unitario, imagem_url, localizacao)
           )
         `)
         .eq('tipo', 'carga_feira')
@@ -211,7 +221,7 @@ export function useTodasCargasAtivas() {
           local_destino:estoque_locais!local_destino_id(nome),
           transferencia_itens (
             *,
-            estoque_itens (nome, preco_unitario, imagem_url)
+            estoque_itens (nome, preco_unitario, imagem_url, localizacao)
           )
         `)
         .eq('tipo', 'carga_feira')
@@ -265,9 +275,9 @@ export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
     // Calcular total de modelos únicos em todas as cargas do período
     const todosItens = cargas.flatMap(c => c.itens);
     const modelosUnicos = new Set(todosItens.map(i => {
-      // Extrair referência base do itemId ou produtoNome se possível
-      const refMatch = (i.itemId || "").match(/^(.+)-[^-]+$/);
-      return refMatch ? refMatch[1] : (i.produtoNome || i.id);
+      if (i.modeloId) return i.modeloId;
+      const info = parseProductName(i.produtoNome || '', '');
+      return info.refBase || i.id;
     }));
 
     return {

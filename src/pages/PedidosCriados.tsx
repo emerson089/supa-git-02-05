@@ -509,8 +509,8 @@ Qualquer dúvida é só chamar! 😊`;
         } else {
           toast.success('Pedido marcado como SEPARADO!');
         }
-      } else if (field === 'statusEntrega' && (value === 'NO CARRO' || value === 'ENTREGA TORITAMA')) {
-        // Gatilho: NO CARRO ou ENTREGA TORITAMA - envia apenas uma vez
+      } else if (field === 'statusEntrega' && value === 'NO CARRO') {
+        // Gatilho: NO CARRO - envia apenas uma vez
         const jaNotificadoCarro = pedidoItem.notificado_no_carro === true;
         const telefone = pedidoItem.telefone;
         if (!jaNotificadoCarro && telefone) {
@@ -533,19 +533,19 @@ Qualquer dúvida é só chamar! 😊`;
               });
               if (!sendError) {
                 updatePedido(pedidoId, { notificadoNoCarro: true });
-                toast.success(`Pedido em ${value} e cliente avisado!`);
+                toast.success('Pedido no carro e cliente avisado!');
               } else {
                 throw sendError;
               }
             } catch (err) {
               console.error('Erro ao enviar WhatsApp:', err);
-              toast.error(`Pedido em ${value}, mas erro ao enviar WhatsApp.`);
+              toast.error('Pedido no carro, mas erro ao enviar WhatsApp.');
             }
           } else {
-            toast.success(`Entrega atualizada para ${value}!`);
+            toast.success('Entrega atualizada para NO CARRO!');
           }
         } else {
-          toast.success(`Entrega atualizada para ${value}!`);
+          toast.success('Entrega atualizada para NO CARRO!');
         }
       } else {
         toast.success('Status atualizado com sucesso!');

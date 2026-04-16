@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Pencil, Search, X, Plus, Trash2, Loader2, Package, Check, Layers } from 'lucide-react';
+import { Pencil, Search, X, Plus, Trash2, Loader2, Package, Check, Layers, AlertTriangle } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { TransferenciaComItensHistorico } from '@/hooks/useFeiraHistorico';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ interface ItemEdicao {
   disponivelCentral: number;
   imagemUrl: string | null;
   isNovo: boolean;
+  modeloId?: string | null;
 }
 
 interface Produto {
@@ -28,6 +29,7 @@ interface Produto {
   nome: string;
   precoUnitario: number | null;
   imagemUrl?: string | null;
+  modeloId?: string | null;
 }
 
 interface EditarCargaModalProps {
@@ -53,6 +55,7 @@ export function EditarCargaModal({
   const [buscaProduto, setBuscaProduto] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [addGradeOpen, setAddGradeOpen] = useState(false);
+  const [showDraftAlert, setShowDraftAlert] = useState(false);
   
   // STORAGE KEY
   const STORAGE_KEY = carga ? `df_edit_carga_${carga.id}` : null;
@@ -60,37 +63,69 @@ export function EditarCargaModal({
   // Inicializar itens quando a carga muda
   useEffect(() => {
     if (carga && STORAGE_KEY) {
-      // Tentar carregar rascunho do localStorage
+      // 1. Sempre carregar os dados oficiais inicialmente
+      const serverItens = carga.itens.map((item) => ({
+        itemId: item.itemId,
+        nome: item.produtoNome || `Item #${item.itemId.slice(0, 8)}`,
+        quantidade: item.quantidadeEnviada,
+        quantidadeOriginal: item.quantidadeEnviada,
+        precoUnitario: item.precoUnitario ?? item.produtoPreco ?? 0,
+        disponivelCentral: getDisponivelCentral(item.itemId) + item.quantidadeEnviada,
+        imagemUrl: item.produtoImagem ?? null,
+        isNovo: false,
+        modeloId: item.modeloId,
+      }));
+
+      setItensEdicao(serverItens);
+      setObservacoes(carga.observacoes || '');
+      setBuscaProduto('');
+
+      // 2. Verificar se existe rascunho divergente
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         try {
           const data = JSON.parse(saved);
-          setItensEdicao(data.itens || []);
-          setObservacoes(data.observacoes || '');
-          setBuscaProduto('');
-          return; // Sai do efeito, já carregou do cache
+          const draftItens = data.itens || [];
+          
+          // Comparação simples: se a quantidade de itens ou a soma de peças for diferente, mostramos o alerta
+          const serverTotal = serverItens.reduce((sum, i) => sum + i.quantidade, 0);
+          const draftTotal = draftItens.reduce((sum, i: any) => sum + i.quantidade, 0);
+          
+          if (serverTotal !== draftTotal || serverItens.length !== draftItens.length) {
+            setShowDraftAlert(true);
+          }
         } catch (e) {
-          console.error('Erro ao carregar rascunho de carga:', e);
+          console.error('Erro ao verificar rascunho:', e);
         }
       }
-
-      // Se não houver rascunho, carrega original
-      setItensEdicao(
-        carga.itens.map((item) => ({
-          itemId: item.itemId,
-          nome: item.produtoNome || `Item #${item.itemId.slice(0, 8)}`,
-          quantidade: item.quantidadeEnviada,
-          quantidadeOriginal: item.quantidadeEnviada,
-          precoUnitario: item.precoUnitario ?? item.produtoPreco ?? 0,
-          disponivelCentral: getDisponivelCentral(item.itemId) + item.quantidadeEnviada,
-          imagemUrl: item.produtoImagem ?? null,
-          isNovo: false,
-        }))
-      );
-      setObservacoes(carga.observacoes || '');
-      setBuscaProduto('');
     }
   }, [carga, getDisponivelCentral, STORAGE_KEY]);
+
+  // Função para recuperar rascunho
+  const handleRecoverDraft = () => {
+    if (!STORAGE_KEY) return;
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        setItensEdicao(data.itens || []);
+        setObservacoes(data.observacoes || '');
+        setShowDraftAlert(false);
+        toast.success('Alterações não salvas foram recuperadas!');
+      } catch (e) {
+        toast.error('Erro ao recuperar rascunho');
+      }
+    }
+  };
+
+  // Função para descartar rascunho
+  const handleDiscardDraft = () => {
+    if (STORAGE_KEY) {
+      localStorage.removeItem(STORAGE_KEY);
+      setShowDraftAlert(false);
+      toast.info('Rascunho descartado');
+    }
+  };
 
   // Salvar rascunho no localStorage
   useEffect(() => {
@@ -116,6 +151,7 @@ export function EditarCargaModal({
       getItemQtd: (i) => i.quantidade,
       getItemImagem: (i) => i.imagemUrl,
       getItemReferencia: (i) => i.nome,
+      getItemModeloId: (i) => i.modeloId,
     }),
     [itensEdicao]
   );
@@ -151,12 +187,13 @@ export function EditarCargaModal({
         disponivelCentral: disponivel,
         imagemUrl: produto.imagemUrl ?? null,
         isNovo: true,
+        modeloId: produto.modeloId,
       },
     ]);
     toast.success(`${produto.nome} adicionado`);
   };
 
-  const handleAddByGrade = (items: { itemId: string; nome: string; quantidade: number; precoUnitario: number; disponivelCentral: number; imagemUrl: string | null }[]) => {
+  const handleAddByGrade = (items: { itemId: string; nome: string; quantidade: number; precoUnitario: number; disponivelCentral: number; imagemUrl: string | null; modeloId?: string | null }[]) => {
     setItensEdicao(prev => {
       const result = [...prev];
       items.forEach(item => {
@@ -175,6 +212,7 @@ export function EditarCargaModal({
             disponivelCentral: item.disponivelCentral,
             imagemUrl: item.imagemUrl,
             isNovo: true,
+            modeloId: item.modeloId,
           });
         }
       });
@@ -243,10 +281,40 @@ export function EditarCargaModal({
               <Pencil className="h-5 w-5 text-primary" />
               Editar Carga
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
+            <DialogDescription>
               Adicione, remova ou altere quantidades dos itens da carga
             </DialogDescription>
           </DialogHeader>
+
+          {showDraftAlert && (
+            <div className="mx-6 mt-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-amber-800 dark:text-amber-400">
+                <AlertTriangle size={18} className="shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold leading-none">Rascunho Detectado</p>
+                  <p className="text-[10px] mt-1 leading-tight opacity-90">Você tem alterações não salvas que divergem dos dados desta carga.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-7 text-[10px] bg-white dark:bg-background border-amber-300 hover:bg-amber-100" 
+                  onClick={handleRecoverDraft}
+                >
+                  Recuperar Alterações
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  className="h-7 text-[10px] text-amber-700 dark:text-amber-500 hover:bg-amber-100" 
+                  onClick={handleDiscardDraft}
+                >
+                  Descartar
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="flex-1 overflow-hidden flex flex-col min-h-0">
             {/* Campo de Nome da Carga */}

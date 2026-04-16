@@ -18,6 +18,7 @@ export interface TrendDataPoint {
     pecasAtual: number;
     pedidosAnterior: number;
     pecasAnterior: number;
+    valorComprovantes?: number;
     isFuture: boolean; // to not draw line for future dates/months
 }
 
@@ -37,26 +38,39 @@ export function useSalesTrendChart(excluirCancelados: boolean) {
     // It might be a lot of data if the user has many years, but for 2 years it's usually fine.
     const startDate = startOfYear(subYears(now, 1)).toISOString();
 
-    const { data: pedidos, isLoading } = useQuery({
+    const { data: records, isLoading } = useQuery({
         queryKey: ["sales-trend-chart", userId, startDate],
         queryFn: async () => {
-            if (!userId) return [];
+            if (!userId) return { pedidos: [], comprovantes: [] };
 
-            const data = await fetchAllRows<any>(() =>
+            const [pedidosData, comprovantesData] = await Promise.all([
+                fetchAllRows<any>(() =>
+                    supabase
+                        .from("pedidos")
+                        .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at")
+                        .eq("user_id", userId)
+                        .gte("created_at", startDate)
+                ),
                 supabase
-                    .from("pedidos")
-                    .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at")
-                    .eq("user_id", userId)
+                    .from("comprovantes")
+                    .select("valor, created_at")
+                    .eq("status", "confirmado")
                     .gte("created_at", startDate)
-            );
+            ]);
 
-            return data || [];
+            return { 
+                pedidos: pedidosData || [],
+                comprovantes: comprovantesData.data || []
+            };
         },
         enabled: !!userId,
     });
 
     const chartData = useMemo(() => {
-        if (!pedidos) return [];
+        if (!records) return [];
+
+        const pedidos = records.pedidos;
+        const comprovantes = records.comprovantes;
 
         const pedidosFiltrados = excluirCancelados
             ? pedidos.filter((p: any) => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
@@ -86,6 +100,7 @@ export function useSalesTrendChart(excluirCancelados: boolean) {
                     pecasAtual: 0,
                     pedidosAnterior: 0,
                     pecasAnterior: 0,
+                    valorComprovantes: 0,
                     isFuture: isAfter(dateThisYear, now),
                 });
             }
@@ -109,6 +124,18 @@ export function useSalesTrendChart(excluirCancelados: boolean) {
                 }
             });
 
+            // Agrupar comprovantes
+            comprovantes.forEach((c: any) => {
+                const d = parseISO(c.created_at);
+                if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                    const day = d.getDate();
+                    const point = result[day - 1];
+                    if (point) {
+                        point.valorComprovantes = (point.valorComprovantes || 0) + (c.valor || 0);
+                    }
+                }
+            });
+
         } else {
             // granularity === "ano"
             const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -126,6 +153,7 @@ export function useSalesTrendChart(excluirCancelados: boolean) {
                     pecasAtual: 0,
                     pedidosAnterior: 0,
                     pecasAnterior: 0,
+                    valorComprovantes: 0,
                     isFuture,
                 });
             }
@@ -146,10 +174,21 @@ export function useSalesTrendChart(excluirCancelados: boolean) {
                     }
                 }
             });
+
+            comprovantes.forEach((c: any) => {
+                const d = parseISO(c.created_at);
+                if (d.getFullYear() === currentYear) {
+                    const month = d.getMonth();
+                    const point = result[month];
+                    if (point) {
+                        point.valorComprovantes = (point.valorComprovantes || 0) + (c.valor || 0);
+                    }
+                }
+            });
         }
 
         return result;
-    }, [pedidos, granularity, excluirCancelados, now]);
+    }, [records, granularity, excluirCancelados, now]);
 
     return {
         granularity,

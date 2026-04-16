@@ -19,7 +19,8 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
 
   // 1. Extrair a referência base e o tamanho (ex: SH2603-0042-M -> SH2603-0042 e M)
   // Suporta hífens (-), meia-risca (–) e travessão (—)
-  const sizeMatch = currentRef.match(/^(.+)[-–—](P|M|G|GG|G1|G2|G3|XGG|PEÇAS|\d{2})$/i);
+  // Expandido para suportar códigos de 2 a 4 dígitos como identificadores/tamanhos (ex: 130, 886, 2604)
+  const sizeMatch = currentRef.match(/^(.+)[-–—](P|M|G|GG|G1|G2|G3|XGG|PEÇAS|\d{2,4})$/i);
   const refBase = (sizeMatch ? sizeMatch[1] : currentRef).trim();
   const tamanho = sizeMatch ? sizeMatch[2].toUpperCase() : null;
 
@@ -83,6 +84,7 @@ export const groupItensByModel = <T extends any>(
     getItemQtd: (item: T) => number;
     getItemImagem?: (item: T) => string | null;
     getItemReferencia?: (item: T) => string;
+    getItemModeloId?: (item: T) => string | null;
   }
 ) => {
   const groups: Record<string, any> = {};
@@ -94,9 +96,10 @@ export const groupItensByModel = <T extends any>(
     const info = parseProductName(config.getItemNome(item), referencia);
     const preco = config.getItemPreco(item);
     const qtd = config.getItemQtd(item);
+    const modeloId = config.getItemModeloId ? config.getItemModeloId(item) : null;
     
-    // Chave de agrupamento: RefBase + Preço
-    const groupKey = `${info.refBase}-${preco}`;
+    // Chave de agrupamento: ModeloId (se houver) OU RefBase + Preço
+    const groupKey = modeloId ? `${modeloId}-${preco}` : `${info.refBase}-${preco}`;
 
     if (!groups[groupKey]) {
       groups[groupKey] = {

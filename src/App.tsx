@@ -27,6 +27,7 @@ import ConfigNotificacoes from "./pages/ConfigNotificacoes";
 import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 import PecasEmConserto from "./pages/PecasEmConserto";
+import Comprovantes from "./pages/Comprovantes";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -140,6 +141,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['admin', 'gerente']}>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/comprovantes"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                    <Comprovantes />
                   </ProtectedRoute>
                 }
               />
