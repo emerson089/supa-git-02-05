@@ -1,41 +1,50 @@
 
-Plano fechado. Captura via legenda, resposta segmentada, cards separados.
+## Corrigir envio de mensagem de resumo no WhatsApp + ajustar formato
 
-## Categorização Jeans/Alfaiataria nos Comprovantes
+### Causa raiz
+A função `enviarMensagemZApi` dentro de `webhook-comprovantes/index.ts` faz POST para `/send-text` da Z-API **sem o header `Client-Token`**. A função `send-whatsapp/index.ts` (que funciona) envia esse header obrigatório:
 
-### 1. Banco de dados
-Migration única:
-- Criar enum `comprovante_categoria` com valores `jeans`, `alfaiataria`, `nao_classificado`
-- Adicionar coluna `categoria comprovante_categoria NOT NULL DEFAULT 'nao_classificado'` em `comprovantes`
-- Index em `(user_id, categoria, created_at)` para performance dos cards
+```ts
+headers: {
+  "Content-Type": "application/json",
+  "Client-Token": clientToken,   // ← faltando no webhook-comprovantes
+}
+```
 
-### 2. Edge Function `webhook-comprovantes`
-- Capturar `body.image.caption` (Z-API envia legenda no `caption` da mensagem de imagem)
-- Função `detectarCategoria(caption)`:
-  - Normaliza (lowercase, sem acento, trim)
-  - `jeans` → contém "jeans" ou começa com "j" sozinho/curto
-  - `alfaiataria` → contém "alfaiataria", "alfaiat", ou começa com "a" sozinho/curto
-  - Caso contrário → `nao_classificado`
-- Salvar `categoria` no insert
-- Verificação de duplicidade mantém comportamento atual
-- Resposta no WhatsApp passa a mostrar **3 totais do dia**: Jeans, Alfaiataria, Geral. Cabeçalho indica a categoria do comprovante atual (ou aviso de "não classificado — corrija na tela" quando aplicável)
+A Z-API rejeita a requisição (geralmente 401), mas como o código usa `.catch(e => console.error(...))` sem await/log estruturado, o erro vira invisível e o webhook responde 200 normalmente. Resultado: comprovante salva, mas resumo nunca chega no grupo.
 
-### 3. Hook `useComprovantes`
-- Adicionar filtro opcional `categoria?: string`
-- Adicionar query separada `useTotaisCategoria(periodo)` que retorna `{ jeans, alfaiataria, naoClassificado }` independente dos filtros de busca (para alimentar os cards)
-- Expor `categoria` no tipo `Comprovante` e no update mutation
+### Mudanças em `supabase/functions/webhook-comprovantes/index.ts`
 
-### 4. UI `/comprovantes`
-- **Cards de resumo (topo)**: substituir os 3 atuais por 4 — `Jeans` (azul), `Alfaiataria` (roxo), `Não Classificado` (âmbar, destaque se >0), `Qtd. Documentos`. Total Validado vira "Total Geral" pequeno abaixo dos cards específicos.
-- **Filtro de categoria**: novo Select ao lado do filtro de status (`Todas / Jeans / Alfaiataria / Não Classificadas`)
-- **Tabela**: nova coluna `Categoria` com badge colorido entre Pagador e Valor
-- **Modal de edição** (`ComprovanteModal`): dropdown `Categoria` no topo, permitindo correção manual
+**1. Corrigir `enviarMensagemZApi`**
+- Ler `ZAPI_CLIENT_TOKEN` do env
+- Adicionar header `Client-Token` na requisição
+- Logar status e corpo de resposta da Z-API quando der erro (para debug futuro)
+- Remover fallback `ZAPI_API_URL` (não é secret cadastrada e confunde) — usar sempre a URL padrão
 
-### 5. Memória do projeto
-Salvar nova memória em `mem://features/comprovantes/categorizacao-jeans-alfaiataria` documentando: enum, captura via caption (J/A), fallback `nao_classificado`, totais segmentados na resposta WhatsApp, cards separados.
+**2. Aplicar o novo formato de mensagem aprovado anteriormente**
+Reescrever o bloco `msg` em `processComprovante` para:
+```
+✅ *Comprovante registrado!*
 
-### Detalhes técnicos
-- Detecção tolerante: aceita "J", "j", "jeans", "JEANS", "Jeans" e qualquer variante com a palavra; idem alfaiataria/A/alf/alfaiat
-- Comprovantes antigos ficam como `nao_classificado` automaticamente (default) → aparecem no card âmbar para o usuário classificar manualmente
-- Cards usam mesma query base com `group by categoria` para 1 round-trip ao DB
-- Cores dos cards seguem padrão atual (Tailwind: blue-600/purple-600/amber-600)
+💰 Valor: R$ 50,00
+👤 Pagador: Daniel Silva Chagas
+🏦 Banco: Nubank
+📅 Data: 17/04/2026
+
+Total jeans : R$ 2.184,00
+Total alfaiataria : R$ 2.015,00
+📊 *Total do dia: R$ 4.199,00*
+```
+- Remove a linha "🏷️ Categoria"
+- Remove bullets `•`, ícones 👖/👔 dos totais e o separador `━━━━━`
+- Troca "Total geral" por "Total do dia"
+- Quando `totalNaoClass > 0`, adiciona linha extra `Total não classificado : {valor}` antes do total do dia
+- Quando o comprovante atual for `nao_classificado`, mantém o aviso compacto no fim da mensagem orientando a corrigir (sem reintroduzir a linha de categoria)
+
+### Sem mudanças
+- Banco de dados: nenhuma alteração
+- Frontend (`/comprovantes`, hook, modal): nenhuma alteração
+- `send-whatsapp/index.ts`: já estava correto, não mexer
+
+### Como validar depois
+Você manda um comprovante novo no grupo com legenda **J** ou **A** → deve chegar a mensagem de resumo no formato novo em segundos.
