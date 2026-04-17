@@ -1,27 +1,41 @@
 
-O usuário quer enviar as últimas atualizações para o GitHub. A sincronização com GitHub no Lovable é **automática e bidirecional** — não é algo que eu execute via código ou comando. Toda alteração feita no Lovable já é enviada automaticamente para o repositório conectado.
+Plano fechado. Captura via legenda, resposta segmentada, cards separados.
 
-Isso é um pedido de orientação, não de implementação. Vou explicar como verificar/conectar.
+## Categorização Jeans/Alfaiataria nos Comprovantes
 
-## Como sincronizar com o GitHub
+### 1. Banco de dados
+Migration única:
+- Criar enum `comprovante_categoria` com valores `jeans`, `alfaiataria`, `nao_classificado`
+- Adicionar coluna `categoria comprovante_categoria NOT NULL DEFAULT 'nao_classificado'` em `comprovantes`
+- Index em `(user_id, categoria, created_at)` para performance dos cards
 
-A sincronização no Lovable é **automática**: toda alteração feita aqui já é enviada para o repositório conectado em tempo real. Não há botão de "push" manual.
+### 2. Edge Function `webhook-comprovantes`
+- Capturar `body.image.caption` (Z-API envia legenda no `caption` da mensagem de imagem)
+- Função `detectarCategoria(caption)`:
+  - Normaliza (lowercase, sem acento, trim)
+  - `jeans` → contém "jeans" ou começa com "j" sozinho/curto
+  - `alfaiataria` → contém "alfaiataria", "alfaiat", ou começa com "a" sozinho/curto
+  - Caso contrário → `nao_classificado`
+- Salvar `categoria` no insert
+- Verificação de duplicidade mantém comportamento atual
+- Resposta no WhatsApp passa a mostrar **3 totais do dia**: Jeans, Alfaiataria, Geral. Cabeçalho indica a categoria do comprovante atual (ou aviso de "não classificado — corrija na tela" quando aplicável)
 
-### Se o GitHub já está conectado
-As últimas alterações (correção do secret `WHATSAPP_GROUP_ID`, mutation de delete em `useComprovantes.ts`, export do tipo `Comprovante`) **já estão no seu repositório**. Para confirmar:
+### 3. Hook `useComprovantes`
+- Adicionar filtro opcional `categoria?: string`
+- Adicionar query separada `useTotaisCategoria(periodo)` que retorna `{ jeans, alfaiataria, naoClassificado }` independente dos filtros de busca (para alimentar os cards)
+- Expor `categoria` no tipo `Comprovante` e no update mutation
 
-1. Abra **Connectors** (menu lateral, nível raiz) → **GitHub**
-2. Clique no link do repositório e verifique os commits recentes na branch `main`
+### 4. UI `/comprovantes`
+- **Cards de resumo (topo)**: substituir os 3 atuais por 4 — `Jeans` (azul), `Alfaiataria` (roxo), `Não Classificado` (âmbar, destaque se >0), `Qtd. Documentos`. Total Validado vira "Total Geral" pequeno abaixo dos cards específicos.
+- **Filtro de categoria**: novo Select ao lado do filtro de status (`Todas / Jeans / Alfaiataria / Não Classificadas`)
+- **Tabela**: nova coluna `Categoria` com badge colorido entre Pagador e Valor
+- **Modal de edição** (`ComprovanteModal`): dropdown `Categoria` no topo, permitindo correção manual
 
-### Se ainda não está conectado
-1. **Connectors** → **GitHub** → **Connect project**
-2. Autorize o Lovable GitHub App
-3. Escolha a conta/organização
-4. Clique em **Create Repository** — o Lovable cria o repo e envia todo o código atual
+### 5. Memória do projeto
+Salvar nova memória em `mem://features/comprovantes/categorizacao-jeans-alfaiataria` documentando: enum, captura via caption (J/A), fallback `nao_classificado`, totais segmentados na resposta WhatsApp, cards separados.
 
-### Observações
-- Secrets (como `WHATSAPP_GROUP_ID`) **não vão para o GitHub** — ficam apenas no Lovable Cloud, por segurança.
-- Edge Functions (`webhook-comprovantes`, etc.) são versionadas no repo normalmente.
-- Mudanças de frontend exigem clicar em **Publish → Update** para irem ao ar no domínio público; as de backend (edge functions) já sobem automaticamente.
-
-Não há nada para eu codar aqui — me diga se o GitHub ainda não está conectado e eu te guio passo a passo, ou se prefere outro ajuste.
+### Detalhes técnicos
+- Detecção tolerante: aceita "J", "j", "jeans", "JEANS", "Jeans" e qualquer variante com a palavra; idem alfaiataria/A/alf/alfaiat
+- Comprovantes antigos ficam como `nao_classificado` automaticamente (default) → aparecem no card âmbar para o usuário classificar manualmente
+- Cards usam mesma query base com `group by categoria` para 1 round-trip ao DB
+- Cores dos cards seguem padrão atual (Tailwind: blue-600/purple-600/amber-600)
