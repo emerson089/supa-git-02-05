@@ -1,43 +1,50 @@
 
+## Corrigir envio de mensagem de resumo no WhatsApp + ajustar formato
 
-## Plano: Filtrar grupo + Botão de excluir comprovantes
+### Causa raiz
+A função `enviarMensagemZApi` dentro de `webhook-comprovantes/index.ts` faz POST para `/send-text` da Z-API **sem o header `Client-Token`**. A função `send-whatsapp/index.ts` (que funciona) envia esse header obrigatório:
 
-### 1. Configurar filtro do grupo "Feira - Delookii"
-
-**ID descoberto:** `120363043122353365-group`
-
-A lógica de filtro **já existe** em `webhook-comprovantes/index.ts` (linha que checa `WHATSAPP_GROUP_ID`). Basta adicionar o secret com esse valor.
-
-**Ação:** Vou solicitar a adição do secret `WHATSAPP_GROUP_ID` com valor `120363043122353365-group` via tool `add_secret`. Após adicionado, qualquer mensagem fora desse grupo será automaticamente ignorada (já visto nos seus dados que estavam vindo comprovantes de números privados como `557781377537`, grupos `558788528673`, `155572506751145@lid` etc — tudo isso será filtrado).
-
-**Importante:** Você precisa reapontar o webhook do Z-API **de volta** para `webhook-comprovantes` (saindo do `discover-group-id`):
-```
-https://xoyyhtxakbrlzykthdca.supabase.co/functions/v1/webhook-comprovantes
+```ts
+headers: {
+  "Content-Type": "application/json",
+  "Client-Token": clientToken,   // ← faltando no webhook-comprovantes
+}
 ```
 
-### 2. Adicionar botão de excluir comprovantes
+A Z-API rejeita a requisição (geralmente 401), mas como o código usa `.catch(e => console.error(...))` sem await/log estruturado, o erro vira invisível e o webhook responde 200 normalmente. Resultado: comprovante salva, mas resumo nunca chega no grupo.
 
-**`src/hooks/useComprovantes.ts`:** adicionar mutation `deleteComprovante`:
-- `supabase.from('comprovantes').delete().eq('id', id)`
-- Invalida query, exibe toast de sucesso
-- Exporta `deleteComprovante` e `isDeleting`
+### Mudanças em `supabase/functions/webhook-comprovantes/index.ts`
 
-**`src/pages/Comprovantes.tsx`:** adicionar coluna de ações:
-- Ícone lixeira (vermelho) ao lado do botão de visualizar
-- Ao clicar, abre `AlertDialog` de confirmação ("Tem certeza? Esta ação não pode ser desfeita.")
-- Ao confirmar, chama `deleteComprovante(id)`
-- Funciona tanto na tabela desktop quanto nos cards mobile
+**1. Corrigir `enviarMensagemZApi`**
+- Ler `ZAPI_CLIENT_TOKEN` do env
+- Adicionar header `Client-Token` na requisição
+- Logar status e corpo de resposta da Z-API quando der erro (para debug futuro)
+- Remover fallback `ZAPI_API_URL` (não é secret cadastrada e confunde) — usar sempre a URL padrão
 
-**Permissões:** RLS atual permite DELETE apenas para admin (`Admin can manage comprovantes` com `FOR ALL`). Gerentes não podem excluir — comportamento adequado.
+**2. Aplicar o novo formato de mensagem aprovado anteriormente**
+Reescrever o bloco `msg` em `processComprovante` para:
+```
+✅ *Comprovante registrado!*
 
-### Arquivos alterados
-- `src/hooks/useComprovantes.ts` — adicionar mutation de delete
-- `src/pages/Comprovantes.tsx` — botão lixeira + AlertDialog de confirmação
+💰 Valor: R$ 50,00
+👤 Pagador: Daniel Silva Chagas
+🏦 Banco: Nubank
+📅 Data: 17/04/2026
 
-### Fluxo após implementação
-1. Adiciono o secret `WHATSAPP_GROUP_ID = 120363043122353365-group`
-2. Implemento o botão de excluir
-3. Você reaponta o webhook Z-API para `webhook-comprovantes` (volta da URL de descoberta)
-4. Você pode excluir os comprovantes errados que já entraram (de outros chats)
-5. A partir daí, só comprovantes do grupo "Feira - Delookii" serão processados
+Total jeans : R$ 2.184,00
+Total alfaiataria : R$ 2.015,00
+📊 *Total do dia: R$ 4.199,00*
+```
+- Remove a linha "🏷️ Categoria"
+- Remove bullets `•`, ícones 👖/👔 dos totais e o separador `━━━━━`
+- Troca "Total geral" por "Total do dia"
+- Quando `totalNaoClass > 0`, adiciona linha extra `Total não classificado : {valor}` antes do total do dia
+- Quando o comprovante atual for `nao_classificado`, mantém o aviso compacto no fim da mensagem orientando a corrigir (sem reintroduzir a linha de categoria)
 
+### Sem mudanças
+- Banco de dados: nenhuma alteração
+- Frontend (`/comprovantes`, hook, modal): nenhuma alteração
+- `send-whatsapp/index.ts`: já estava correto, não mexer
+
+### Como validar depois
+Você manda um comprovante novo no grupo com legenda **J** ou **A** → deve chegar a mensagem de resumo no formato novo em segundos.

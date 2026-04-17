@@ -8,18 +8,33 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Eye, Filter, RefreshCw, FileText, CheckCircle, AlertTriangle, XCircle, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Search, Eye, Filter, RefreshCw, FileText, AlertTriangle, Trash2, Shirt, Scissors, HelpCircle } from 'lucide-react';
 import { format, startOfDay, startOfMonth, endOfMonth, endOfDay } from 'date-fns';
-import { useComprovantes, Comprovante } from '@/hooks/useComprovantes';
+import { useComprovantes, useTotaisCategoria, Comprovante, ComprovanteCategoria } from '@/hooks/useComprovantes';
 import { ComprovanteModal } from '@/components/comprovantes/ComprovanteModal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
+
+const valFormat = (v: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+function CategoriaBadge({ categoria }: { categoria: ComprovanteCategoria }) {
+  if (categoria === 'jeans') {
+    return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none">👖 Jeans</Badge>;
+  }
+  if (categoria === 'alfaiataria') {
+    return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-200 border-none">👔 Alfaiataria</Badge>;
+  }
+  return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none">❓ Não classificado</Badge>;
+}
 
 export default function Comprovantes() {
   const isMobile = useIsMobile();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoriaFilter, setCategoriaFilter] = useState<ComprovanteCategoria | 'all'>('all');
   const [periodoFilter, setPeriodoFilter] = useState<string>('hoje');
   
   const [selectedComprovante, setSelectedComprovante] = useState<Comprovante | null>(null);
@@ -43,6 +58,7 @@ export default function Comprovantes() {
   const filtros = {
     searchTerm,
     status: statusFilter !== 'all' ? [statusFilter] : undefined,
+    categoria: categoriaFilter,
     startDate: start,
     endDate: end,
   };
@@ -50,14 +66,10 @@ export default function Comprovantes() {
   const { data, isLoading, isUpdating, updateComprovante, refetch, isFetching, deleteComprovante, isDeleting } = useComprovantes(filtros);
   const comprovantes = data?.data || [];
 
-  // Hook extra para pegar TODOS do mês (para os cards), se não houver filtros exatos.
-  // Como simplificação, usaremos dados estáticos na view atual ou somamos só o que já tá na tela, 
-  // mas idealmente os cards precisam de totais independentes dos filtros de busca. 
-  // Aqui somaremos o conteúdo visível ou todos se não houver busca textual.
-  const valFormat = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+  // Totais por categoria do período (independente dos filtros de status/busca/categoria)
+  const { data: totais } = useTotaisCategoria({ startDate: start, endDate: end });
+  const tot = totais ?? { jeans: 0, alfaiataria: 0, naoClassificado: 0, total: 0, qtdJeans: 0, qtdAlfaiataria: 0, qtdNaoClassificado: 0 };
 
-  const totaisRecebidos = comprovantes.filter(c => c.status === 'confirmado').reduce((acc, curr) => acc + (curr.valor || 0), 0);
-  const totaisAguardando = comprovantes.filter(c => c.status === 'pendente_revisao').reduce((acc, curr) => acc + (curr.valor || 0), 0);
   const quantidade = data?.count || 0;
 
   const handleOpenModal = (c: Comprovante) => {
@@ -84,7 +96,7 @@ export default function Comprovantes() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Comprovantes</h1>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Leitura automática de recibos integrados via Z-API</p>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Leitura automática de recibos integrados via Z-API · use legenda <strong>J</strong> (Jeans) ou <strong>A</strong> (Alfaiataria) ao enviar a foto</p>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
@@ -93,45 +105,71 @@ export default function Comprovantes() {
               </div>
             </div>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm col-span-1">
+            {/* Summary Cards — separados por categoria */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Jeans */}
+              <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Total Validado</p>
-                    <h3 className="text-2xl font-bold mt-1 text-emerald-600 dark:text-emerald-400">{valFormat(totaisRecebidos)}</h3>
+                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Jeans</p>
+                    <h3 className="text-2xl font-bold mt-1 text-blue-600 dark:text-blue-400">{valFormat(tot.jeans)}</h3>
                   </div>
-                  <div className="p-3 bg-emerald-100 dark:bg-emerald-950/50 rounded-lg">
-                    <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  <div className="p-3 bg-blue-100 dark:bg-blue-950/50 rounded-lg">
+                    <Shirt className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </div>
                 </div>
-                <p className="text-xs text-zinc-500 mt-3">{periodoFilter.toUpperCase()}</p>
+                <p className="text-xs text-zinc-500 mt-3">{tot.qtdJeans} comprovante(s)</p>
               </div>
 
-              <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm col-span-1">
+              {/* Alfaiataria */}
+              <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Aguardando Revisão</p>
-                    <h3 className="text-2xl font-bold mt-1 text-amber-600 dark:text-amber-400">{valFormat(totaisAguardando)}</h3>
+                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Alfaiataria</p>
+                    <h3 className="text-2xl font-bold mt-1 text-purple-600 dark:text-purple-400">{valFormat(tot.alfaiataria)}</h3>
+                  </div>
+                  <div className="p-3 bg-purple-100 dark:bg-purple-950/50 rounded-lg">
+                    <Scissors className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                </div>
+                <p className="text-xs text-zinc-500 mt-3">{tot.qtdAlfaiataria} comprovante(s)</p>
+              </div>
+
+              {/* Não Classificado */}
+              <div className={cn(
+                "bg-white dark:bg-zinc-900 p-5 rounded-xl border shadow-sm",
+                tot.qtdNaoClassificado > 0
+                  ? "border-amber-300 dark:border-amber-700 ring-1 ring-amber-200 dark:ring-amber-800"
+                  : "border-zinc-200 dark:border-zinc-800"
+              )}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Não Classificado</p>
+                    <h3 className="text-2xl font-bold mt-1 text-amber-600 dark:text-amber-400">{valFormat(tot.naoClassificado)}</h3>
                   </div>
                   <div className="p-3 bg-amber-100 dark:bg-amber-950/50 rounded-lg">
-                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    {tot.qtdNaoClassificado > 0 ? <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" /> : <HelpCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
                   </div>
                 </div>
-                <p className="text-xs text-zinc-500 mt-3">Somente não atualizados no Dashboard</p>
+                <p className="text-xs text-zinc-500 mt-3">
+                  {tot.qtdNaoClassificado > 0 ? `${tot.qtdNaoClassificado} para classificar manualmente` : 'Tudo classificado'}
+                </p>
               </div>
 
-              <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm col-span-1">
+              {/* Qtd Documentos */}
+              <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Qtd. Documentos</p>
                     <h3 className="text-2xl font-bold mt-1 text-zinc-900 dark:text-zinc-100">{quantidade}</h3>
                   </div>
-                  <div className="p-3 bg-blue-100 dark:bg-blue-950/50 rounded-lg">
-                    <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
+                    <FileText className="h-5 w-5 text-zinc-600 dark:text-zinc-300" />
                   </div>
                 </div>
-                <p className="text-xs text-zinc-500 mt-3">Leituras via Inteligência Artificial</p>
+                <p className="text-xs text-zinc-500 mt-3">
+                  Total geral validado: <strong className="text-emerald-600 dark:text-emerald-400">{valFormat(tot.total)}</strong>
+                </p>
               </div>
             </div>
 
@@ -147,13 +185,24 @@ export default function Comprovantes() {
                 />
               </div>
               <Select value={periodoFilter} onValueChange={setPeriodoFilter}>
-                <SelectTrigger className="w-full md:w-[180px]">
+                <SelectTrigger className="w-full md:w-[160px]">
                   <SelectValue placeholder="Período" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="hoje">Hoje</SelectItem>
                   <SelectItem value="mes">Este Mês</SelectItem>
                   <SelectItem value="tudo">Todo o Histórico</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={categoriaFilter} onValueChange={(v) => setCategoriaFilter(v as ComprovanteCategoria | 'all')}>
+                <SelectTrigger className="w-full md:w-[180px]">
+                  <SelectValue placeholder="Categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as Categorias</SelectItem>
+                  <SelectItem value="jeans">👖 Jeans</SelectItem>
+                  <SelectItem value="alfaiataria">👔 Alfaiataria</SelectItem>
+                  <SelectItem value="nao_classificado">❓ Não classificado</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -178,6 +227,7 @@ export default function Comprovantes() {
                     <TableRow className="bg-zinc-50 dark:bg-zinc-950/50">
                       <TableHead>Data/Hora</TableHead>
                       <TableHead>Pagador</TableHead>
+                      <TableHead>Categoria</TableHead>
                       <TableHead>Valor</TableHead>
                       <TableHead>Recebimento via</TableHead>
                       <TableHead>Status</TableHead>
@@ -190,6 +240,7 @@ export default function Comprovantes() {
                         <TableRow key={i}>
                           <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                          <TableCell><Skeleton className="h-6 w-24 rounded-full" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                           <TableCell><Skeleton className="h-6 w-24 rounded-full" /></TableCell>
@@ -198,7 +249,7 @@ export default function Comprovantes() {
                       ))
                     ) : comprovantes.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-10 text-zinc-500">
+                        <TableCell colSpan={7} className="text-center py-10 text-zinc-500">
                           Nenhum comprovante recebido ou encontrado nos filtros atuais.
                         </TableCell>
                       </TableRow>
@@ -216,6 +267,9 @@ export default function Comprovantes() {
                               <span>{comp.nome_pagador || 'Não identificado'}</span>
                               <div className="text-xs text-muted-foreground">{comp.banco_origem}</div>
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <CategoriaBadge categoria={comp.categoria} />
                           </TableCell>
                           <TableCell className="font-semibold text-zinc-800 dark:text-zinc-200">
                             {valFormat(comp.valor || 0)}
