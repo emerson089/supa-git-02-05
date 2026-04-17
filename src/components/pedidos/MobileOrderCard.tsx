@@ -134,7 +134,7 @@ export function MobileOrderCard({
         />
         <InlineStatusSelect
           options={statusEntregaOptions}
-          value={pedido.status_entrega || 'PEND. ENTREGA'}
+          value={pedido.status_entrega || 'NÃO ENTREGUE'}
           onChange={(value) => onStatusUpdate('statusEntrega', value)}
         />
       </div>

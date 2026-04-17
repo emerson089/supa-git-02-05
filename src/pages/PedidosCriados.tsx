@@ -430,6 +430,18 @@ export default function PedidosCriados() {
       [field]: value
     };
 
+    const applyUpdate = (upd: Partial<Pedido>) => {
+      const dbUpdates: any = {};
+      if (upd.statusPagamento !== undefined) dbUpdates.status_pagamento = upd.statusPagamento;
+      if (upd.statusPedido !== undefined) dbUpdates.status_pedido = upd.statusPedido;
+      if (upd.statusEntrega !== undefined) dbUpdates.status_entrega = upd.statusEntrega;
+      if (upd.estornoRealizado !== undefined) dbUpdates.estorno_realizado = upd.estornoRealizado;
+      if (upd.notificadoSeparado !== undefined) dbUpdates.notificado_separado = upd.notificadoSeparado;
+      if (upd.notificadoNoCarro !== undefined) dbUpdates.notificado_no_carro = upd.notificadoNoCarro;
+      
+      updatePedidoMutate({ id: pedidoId, data: dbUpdates });
+    };
+
     // CASO ESPECIAL: GOLPE CANCELADO selecionado na coluna Pedido - preenche automaticamente os outros
     if (field === 'statusPedido' && value === 'GOLPE CANCELADO') {
       updates.statusPagamento = 'GOLPE CANCELADO';
@@ -448,7 +460,7 @@ export default function PedidosCriados() {
       } else {
         toast.success('Status GOLPE CANCELADO aplicado a todos os campos!');
       }
-      updatePedidoMutate({ id: pedidoId, data: updates as any });
+      applyUpdate(updates);
       return;
     }
 
@@ -468,7 +480,7 @@ export default function PedidosCriados() {
         return; 
       }
       updates.estornoRealizado = false;
-      updatePedidoMutate({ id: pedidoId, data: updates as any });
+      applyUpdate(updates);
       toast.success(`Pedido reativado! ${pedidoItem.total_pecas} peças subtraídas do estoque.`);
     }
     // CASO 2: Cancelando (indo para cancelado)
@@ -486,9 +498,9 @@ export default function PedidosCriados() {
         toast.success('Status atualizado com sucesso!');
       }
       
-      updatePedidoMutate({ id: pedidoId, data: updates as any });
+      applyUpdate(updates);
     } else {
-      updatePedidoMutate({ id: pedidoId, data: updates as any });
+      applyUpdate(updates);
 
       if (field === 'statusPedido' && value === 'SEPARADO') {
         const jaNotificado = pedidoItem.notificado_separado === true;
@@ -510,7 +522,7 @@ Qualquer dúvida é só chamar! 😊`;
                 body: { phone: digits, message: mensagem },
               });
               if (!sendError) {
-                updatePedidoMutate({ id: pedidoId, data: { notificadoSeparado: true } as any });
+                applyUpdate({ notificadoSeparado: true });
                 toast.success('Pedido separado e cliente avisado!');
               } else {
                 throw sendError;
@@ -547,7 +559,7 @@ Qualquer dúvida é só chamar! 😊`;
                 body: { phone: digits, message: mensagem },
               });
               if (!sendError) {
-                updatePedidoMutate({ id: pedidoId, data: { notificadoNoCarro: true } as any });
+                applyUpdate({ notificadoNoCarro: true });
                 toast.success('Pedido no carro e cliente avisado!');
               } else {
                 throw sendError;
@@ -1408,7 +1420,7 @@ Qualquer dúvida é só chamar! 😊`;
                         <InlineStatusSelect options={statusPedidoOptions} value={pedido.status_pedido || 'NÃO SEPARADO'} onChange={value => handleStatusUpdate(pedido, 'statusPedido', value)} />
                       </TableCell>
                       <TableCell className="py-2.5">
-                        <InlineStatusSelect options={statusEntregaOptions} value={pedido.status_entrega || 'PEND. ENTREGA'} onChange={value => handleStatusUpdate(pedido, 'statusEntrega', value)} />
+                        <InlineStatusSelect options={statusEntregaOptions} value={pedido.status_entrega || 'NÃO ENTREGUE'} onChange={value => handleStatusUpdate(pedido, 'statusEntrega', value)} />
                       </TableCell>
                       <TableCell className="py-2.5 text-right">
                         <DropdownMenu>
