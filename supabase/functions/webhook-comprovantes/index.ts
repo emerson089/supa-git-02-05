@@ -215,15 +215,31 @@ Se não conseguir identificar algum campo, use null.
           else totalNaoClass += v;
         }
       }
-      const totalGeral = totalJeans + totalAlfaiataria + totalNaoClass;
+      const totalDia = totalJeans + totalAlfaiataria + totalNaoClass;
 
-      const cabecalho = categoria === 'nao_classificado'
-        ? `✅ *Comprovante registrado!*\n⚠️ *Categoria não informada* — envie a próxima foto com a legenda *J* (Jeans) ou *A* (Alfaiataria), ou corrija na tela de Comprovantes.`
-        : `✅ *Comprovante registrado!*\n🏷️ Categoria: *${rotuloCategoria(categoria)}*`;
+      const dataFmt = extrato.data_pagamento
+        ? new Date(extrato.data_pagamento).toLocaleDateString('pt-BR')
+        : 'Não lida';
 
-      const naoClassLinha = totalNaoClass > 0 ? `\n• Não classificado: ${valFormat(totalNaoClass)}` : '';
+      const linhaNaoClass = totalNaoClass > 0
+        ? `\nTotal não classificado : ${valFormat(totalNaoClass)}`
+        : '';
 
-      const msg = `${cabecalho}\n💰 Valor: ${valFormat(extrato.valor)}\n👤 Pagador: ${extrato.nome_pagador || 'Não lido'}\n🏦 Banco: ${extrato.banco_origem || 'Não lido'}\n📅 Data: ${extrato.data_pagamento ? new Date(extrato.data_pagamento).toLocaleDateString('pt-BR') : 'Não lida'}\n\n📊 *Totais de hoje:*\n• 👖 Jeans: ${valFormat(totalJeans)}\n• 👔 Alfaiataria: ${valFormat(totalAlfaiataria)}${naoClassLinha}\n━━━━━━━━━━━━\n*Total geral: ${valFormat(totalGeral)}*`;
+      const avisoCategoria = categoria === 'nao_classificado'
+        ? `\n\n⚠️ Categoria não informada — envie a próxima foto com a legenda *J* (Jeans) ou *A* (Alfaiataria), ou corrija na tela de Comprovantes.`
+        : '';
+
+      const msg =
+        `✅ *Comprovante registrado!*\n\n` +
+        `💰 Valor: ${valFormat(extrato.valor)}\n` +
+        `👤 Pagador: ${extrato.nome_pagador || 'Não lido'}\n` +
+        `🏦 Banco: ${extrato.banco_origem || 'Não lido'}\n` +
+        `📅 Data: ${dataFmt}\n\n` +
+        `Total jeans : ${valFormat(totalJeans)}\n` +
+        `Total alfaiataria : ${valFormat(totalAlfaiataria)}${linhaNaoClass}\n` +
+        `📊 *Total do dia: ${valFormat(totalDia)}*` +
+        avisoCategoria;
+
       await enviarMensagemZApi(fullBody.phone, msg);
     }
   } catch (err: any) {
@@ -236,15 +252,36 @@ Se não conseguir identificar algum campo, use null.
 async function enviarMensagemZApi(phoneDestino: string, mensagem: string) {
     const instanceId = Deno.env.get("ZAPI_INSTANCE_ID");
     const zapiToken = Deno.env.get("ZAPI_TOKEN");
-    const baseUrl = Deno.env.get("ZAPI_API_URL") || `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}`;
+    const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN");
 
-    if (!instanceId || !zapiToken) return;
+    if (!instanceId || !zapiToken || !clientToken) {
+      console.error("ZAPI envs missing", {
+        hasInstanceId: !!instanceId,
+        hasToken: !!zapiToken,
+        hasClientToken: !!clientToken,
+      });
+      return;
+    }
 
-    await fetch(`${baseUrl}/send-text`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: phoneDestino, message: mensagem }),
-    }).catch(e => console.error("ZAPI Error", e));
+    const url = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-text`;
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Client-Token": clientToken,
+        },
+        body: JSON.stringify({ phone: phoneDestino, message: mensagem }),
+      });
+
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => "");
+        console.error("ZAPI send-text failed", { status: res.status, body: bodyText });
+      }
+    } catch (e) {
+      console.error("ZAPI fetch error", e);
+    }
 }
 
 Deno.serve(async (req) => {
