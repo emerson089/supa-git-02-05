@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Comprovante } from '@/hooks/useComprovantes';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, ExternalLink } from 'lucide-react';
@@ -30,7 +29,8 @@ export function ComprovanteModal({ isOpen, onClose, comprovante, onSave, isSavin
         banco_origem: comprovante.banco_origem || '',
         status: comprovante.status,
         observacoes: comprovante.observacoes || '',
-        tipo_pagamento: comprovante.tipo_pagamento || ''
+        tipo_pagamento: comprovante.tipo_pagamento || '',
+        categoria: comprovante.categoria,
       });
     }
   }, [comprovante]);
@@ -76,6 +76,25 @@ export function ComprovanteModal({ isOpen, onClose, comprovante, onSave, isSavin
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Categoria — destaque no topo */}
+            <div className="space-y-2">
+              <Label>Categoria do Produto</Label>
+              <Select value={formData.categoria || 'nao_classificado'} onValueChange={(v) => handleChange('categoria', v)}>
+                <SelectTrigger className={
+                  formData.categoria === 'jeans' ? 'border-blue-500 text-blue-700 bg-blue-50 dark:bg-blue-950/30' :
+                  formData.categoria === 'alfaiataria' ? 'border-purple-500 text-purple-700 bg-purple-50 dark:bg-purple-950/30' :
+                  'border-amber-500 text-amber-700 bg-amber-50 dark:bg-amber-950/30'
+                }>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="jeans">👖 Jeans</SelectItem>
+                  <SelectItem value="alfaiataria">👔 Alfaiataria</SelectItem>
+                  <SelectItem value="nao_classificado">❓ Não classificado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Valor (R$)</Label>
