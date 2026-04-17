@@ -5,6 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+type Categoria = "jeans" | "alfaiataria" | "nao_classificado";
+
 // Converte ArrayBuffer para string base64
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = '';
@@ -16,14 +18,57 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return btoa(binary);
 }
 
+// Detecta categoria a partir da legenda da imagem (caption do WhatsApp)
+function detectarCategoria(caption: string | null | undefined): Categoria {
+  if (!caption) return "nao_classificado";
+  const norm = caption
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  if (!norm) return "nao_classificado";
+
+  // Match por palavras inteiras ou abreviações
+  // Jeans: "jeans", ou token isolado "j"
+  if (/\bjeans?\b/.test(norm)) return "jeans";
+  // Alfaiataria: "alfaiataria", "alfaiat", ou token isolado "a"
+  if (/\balfaiat\w*\b/.test(norm)) return "alfaiataria";
+
+  // Tokens isolados curtos (J / A) — apenas se a legenda tiver no máximo 3 caracteres
+  if (norm.length <= 3) {
+    if (/^j\b/.test(norm)) return "jeans";
+    if (/^a\b/.test(norm)) return "alfaiataria";
+  }
+
+  return "nao_classificado";
+}
+
+const valFormat = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
+function rotuloCategoria(cat: Categoria) {
+  if (cat === "jeans") return "👖 Jeans";
+  if (cat === "alfaiataria") return "👔 Alfaiataria";
+  return "❓ Não classificado";
+}
+
 // Background Task Principal
-async function processComprovante(imageUrl: string, remetente: string, grupo: string, fullBody: any) {
+async function processComprovante(
+  imageUrl: string,
+  remetente: string,
+  grupo: string,
+  caption: string | null,
+  fullBody: any,
+) {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
   try {
+    const categoria = detectarCategoria(caption);
+
     // 1. Baixar imagem e converter para base64
     const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) {
@@ -136,6 +181,7 @@ Se não conseguir identificar algum campo, use null.
       imagem_url: imageUrl,
       dados_brutos: extrato,
       status: statusFinal,
+      categoria,
       grupo_whatsapp: grupo,
       numero_remetente: remetente,
       observacoes: extrato.observacoes || null
@@ -143,31 +189,47 @@ Se não conseguir identificar algum campo, use null.
 
     if (insertError) throw insertError;
 
-    // 5. Responder com resumo e total acumulado
+    // 5. Responder com resumo e totais segmentados do dia
     if (statusFinal === 'pendente_revisao') {
-      await enviarMensagemZApi(fullBody.phone, "⚠️ *Não consegui ler este comprovante com clareza.* Ele foi salvo para revisão manual. Por favor, confira na aba de Comprovantes.");
+      const aviso = categoria === 'nao_classificado'
+        ? "⚠️ *Não consegui ler este comprovante com clareza* e a *categoria não foi informada* (envie a foto com a legenda *J* para Jeans ou *A* para Alfaiataria). Foi salvo para revisão manual."
+        : `⚠️ *Não consegui ler este comprovante com clareza.* Categoria: *${rotuloCategoria(categoria)}*. Foi salvo para revisão manual.`;
+      await enviarMensagemZApi(fullBody.phone, aviso);
     } else {
-      const startOfDay = new Date();
-      startOfDay.setHours(0,0,0,0);
+      const startOfDayDate = new Date();
+      startOfDayDate.setHours(0,0,0,0);
       const { data: somaData } = await supabase
         .from('comprovantes')
-        .select('valor')
+        .select('valor, categoria')
         .eq('status', 'confirmado')
-        .gte('created_at', startOfDay.toISOString());
+        .gte('created_at', startOfDayDate.toISOString());
 
-      let totalDia = 0;
+      let totalJeans = 0;
+      let totalAlfaiataria = 0;
+      let totalNaoClass = 0;
       if (somaData) {
-        totalDia = somaData.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+        for (const row of somaData as Array<{ valor: number | null; categoria: Categoria }>) {
+          const v = Number(row.valor) || 0;
+          if (row.categoria === 'jeans') totalJeans += v;
+          else if (row.categoria === 'alfaiataria') totalAlfaiataria += v;
+          else totalNaoClass += v;
+        }
       }
+      const totalGeral = totalJeans + totalAlfaiataria + totalNaoClass;
 
-      const valFormat = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+      const cabecalho = categoria === 'nao_classificado'
+        ? `✅ *Comprovante registrado!*\n⚠️ *Categoria não informada* — envie a próxima foto com a legenda *J* (Jeans) ou *A* (Alfaiataria), ou corrija na tela de Comprovantes.`
+        : `✅ *Comprovante registrado!*\n🏷️ Categoria: *${rotuloCategoria(categoria)}*`;
 
-      const msg = `✅ *Comprovante registrado!*\n💰 Valor: ${valFormat(extrato.valor)}\n👤 Pagador: ${extrato.nome_pagador || 'Não lido'}\n🏦 Banco: ${extrato.banco_origem || 'Não lido'}\n📅 Data: ${extrato.data_pagamento ? new Date(extrato.data_pagamento).toLocaleDateString('pt-BR') : 'Não lida'}\n\n📊 *Total acumulado hoje: ${valFormat(totalDia)}*`;
+      const naoClassLinha = totalNaoClass > 0 ? `\n• Não classificado: ${valFormat(totalNaoClass)}` : '';
+
+      const msg = `${cabecalho}\n💰 Valor: ${valFormat(extrato.valor)}\n👤 Pagador: ${extrato.nome_pagador || 'Não lido'}\n🏦 Banco: ${extrato.banco_origem || 'Não lido'}\n📅 Data: ${extrato.data_pagamento ? new Date(extrato.data_pagamento).toLocaleDateString('pt-BR') : 'Não lida'}\n\n📊 *Totais de hoje:*\n• 👖 Jeans: ${valFormat(totalJeans)}\n• 👔 Alfaiataria: ${valFormat(totalAlfaiataria)}${naoClassLinha}\n━━━━━━━━━━━━\n*Total geral: ${valFormat(totalGeral)}*`;
       await enviarMensagemZApi(fullBody.phone, msg);
     }
   } catch (err: any) {
     console.error("Erro processamento:", err);
-    await enviarMensagemZApi(fullBody.phone, `⚠️ Erro ao processar comprovante: ${err.message}`);
+    const message = err instanceof Error ? err.message : String(err);
+    await enviarMensagemZApi(fullBody.phone, `⚠️ Erro ao processar comprovante: ${message}`);
   }
 }
 
@@ -196,6 +258,13 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, message: "Ignorado" }), { status: 200 });
     }
 
+    // Extrai a legenda da imagem (Z-API: image.caption). Fallback para outros campos comuns.
+    const caption: string | null =
+      body?.image?.caption ||
+      body?.caption ||
+      body?.text?.message ||
+      null;
+
     const groupHost = body?.phone || "Private"; 
     const sender = body?.participantPhone || body?.author || "Desconhecido";
 
@@ -206,10 +275,11 @@ Deno.serve(async (req) => {
     }
 
     // Processamento assíncrono
-    processComprovante(imageUrl, sender, groupHost, body).catch(e => console.error(e));
+    processComprovante(imageUrl, sender, groupHost, caption, body).catch(e => console.error(e));
 
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), { status: 500, headers: corsHeaders });
   }
 });

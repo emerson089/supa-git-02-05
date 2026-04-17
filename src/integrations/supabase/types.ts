@@ -174,6 +174,7 @@ export type Database = {
       comprovantes: {
         Row: {
           banco_origem: string | null
+          categoria: Database["public"]["Enums"]["comprovante_categoria"]
           chave_pix: string | null
           created_at: string
           dados_brutos: Json | null
@@ -191,6 +192,7 @@ export type Database = {
         }
         Insert: {
           banco_origem?: string | null
+          categoria?: Database["public"]["Enums"]["comprovante_categoria"]
           chave_pix?: string | null
           created_at?: string
           dados_brutos?: Json | null
@@ -208,6 +210,7 @@ export type Database = {
         }
         Update: {
           banco_origem?: string | null
+          categoria?: Database["public"]["Enums"]["comprovante_categoria"]
           chave_pix?: string | null
           created_at?: string
           dados_brutos?: Json | null
@@ -1496,6 +1499,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "gerente" | "vendedor" | "vendedor_loja"
+      comprovante_categoria: "jeans" | "alfaiataria" | "nao_classificado"
       comprovante_status: "confirmado" | "pendente_revisao" | "rejeitado"
     }
     CompositeTypes: {
@@ -1625,6 +1629,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "gerente", "vendedor", "vendedor_loja"],
+      comprovante_categoria: ["jeans", "alfaiataria", "nao_classificado"],
       comprovante_status: ["confirmado", "pendente_revisao", "rejeitado"],
     },
   },
