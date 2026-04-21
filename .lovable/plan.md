@@ -1,50 +1,53 @@
 
-## Corrigir envio de mensagem de resumo no WhatsApp + ajustar formato
 
-### Causa raiz
-A função `enviarMensagemZApi` dentro de `webhook-comprovantes/index.ts` faz POST para `/send-text` da Z-API **sem o header `Client-Token`**. A função `send-whatsapp/index.ts` (que funciona) envia esse header obrigatório:
+## Enviar PDF do pedido junto com o resumo no WhatsApp + nova mensagem
 
-```ts
-headers: {
-  "Content-Type": "application/json",
-  "Client-Token": clientToken,   // ← faltando no webhook-comprovantes
-}
+### Como vai funcionar (visão do cliente)
+Ao clicar **Criar Pedido** com WhatsApp ligado, o cliente recebe **uma única mensagem no WhatsApp**: o **PDF do pedido anexado** com a seguinte legenda:
+
+```
+Olá, {Cliente}! Pedido confirmado! 🎉
+
+Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido.
+
+💰 *Total: R$ 1.389,93*
+
+PIX (CNPJ):
+40.548.049/0001-06
+
+Favorecido: Delookii Confecções Ltda
 ```
 
-A Z-API rejeita a requisição (geralmente 401), mas como o código usa `.catch(e => console.error(...))` sem await/log estruturado, o erro vira invisível e o webhook responde 200 normalmente. Resultado: comprovante salva, mas resumo nunca chega no grupo.
+CNPJ em linha isolada → WhatsApp permite copiar com 1 toque.
 
-### Mudanças em `supabase/functions/webhook-comprovantes/index.ts`
+### Mudanças técnicas
 
-**1. Corrigir `enviarMensagemZApi`**
-- Ler `ZAPI_CLIENT_TOKEN` do env
-- Adicionar header `Client-Token` na requisição
-- Logar status e corpo de resposta da Z-API quando der erro (para debug futuro)
-- Remover fallback `ZAPI_API_URL` (não é secret cadastrada e confunde) — usar sempre a URL padrão
+**1. Novo util `src/utils/generatePedidoPDF.ts`**
+- Move a função `generatePDF` que hoje está em `PedidosCriados.tsx`
+- Recebe `pedido` + `estoqueItens`, retorna `{ blob, fileName, save() }`
+- `PedidosCriados.tsx` é refatorado para usar o util (botão "Gerar PDF" continua igual)
 
-**2. Aplicar o novo formato de mensagem aprovado anteriormente**
-Reescrever o bloco `msg` em `processComprovante` para:
-```
-✅ *Comprovante registrado!*
+**2. Novo bucket privado `pedidos-pdfs`** (migration)
+- Bucket privado
+- Policies em `storage.objects`: usuário autenticado só pode INSERT/SELECT/DELETE em paths que começam com `{auth.uid()}/`
+- Path padronizado: `{user_id}/{pedido_id}.pdf`
 
-💰 Valor: R$ 50,00
-👤 Pagador: Daniel Silva Chagas
-🏦 Banco: Nubank
-📅 Data: 17/04/2026
+**3. `src/pages/NovoPedido.tsx` — após `addPedido` ter sucesso**
+- Se `enviarWhatsApp && telefone`:
+  1. Gerar PDF (Blob) do `pedidoCriado` usando o util
+  2. Upload pra `pedidos-pdfs/{user_id}/{pedido_id}.pdf` (upsert true)
+  3. Criar **signed URL** com validade de 7 dias
+  4. Montar a nova mensagem (formato acima, com `cliente`, `valorTotal` e CNPJ em linha isolada)
+  5. Chamar `supabase.functions.invoke('send-whatsapp', { body: { type: 'document', phone, documentUrl, fileName: 'Pedido-{Cliente}.pdf', caption: mensagem } })`
+- **Fallback**: se upload ou envio do PDF falhar, envia só o texto (mesma mensagem, sem PDF) e mostra toast `"PDF não enviado, mas resumo foi entregue"`
+- A mensagem **gerencial para administradores** continua igual à atual (sem PDF)
 
-Total jeans : R$ 2.184,00
-Total alfaiataria : R$ 2.015,00
-📊 *Total do dia: R$ 4.199,00*
-```
-- Remove a linha "🏷️ Categoria"
-- Remove bullets `•`, ícones 👖/👔 dos totais e o separador `━━━━━`
-- Troca "Total geral" por "Total do dia"
-- Quando `totalNaoClass > 0`, adiciona linha extra `Total não classificado : {valor}` antes do total do dia
-- Quando o comprovante atual for `nao_classificado`, mantém o aviso compacto no fim da mensagem orientando a corrigir (sem reintroduzir a linha de categoria)
+**4. Nada muda em**
+- `send-whatsapp/index.ts` (já suporta `type: 'document'`)
+- Outros fluxos de WhatsApp (catálogo, transmissão em massa, notificação Separado/No Carro, comprovantes) — todos intactos
+- Banco de dados (sem novas colunas em `pedidos`)
+- UI (nenhum botão novo)
 
-### Sem mudanças
-- Banco de dados: nenhuma alteração
-- Frontend (`/comprovantes`, hook, modal): nenhuma alteração
-- `send-whatsapp/index.ts`: já estava correto, não mexer
+### Como validar
+Criar um pedido de teste com seu próprio número e WhatsApp ligado → você recebe **um PDF anexado** com a legenda no formato novo, e o CNPJ numa linha sozinha pronto pra copiar com 1 toque.
 
-### Como validar depois
-Você manda um comprovante novo no grupo com legenda **J** ou **A** → deve chegar a mensagem de resumo no formato novo em segundos.
