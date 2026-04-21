@@ -55,6 +55,7 @@ const NovoPedido = () => {
     addPedido
   } = usePedidos();
   const {
+    itens: estoqueItens,
     getProdutosAcabados,
     deduzirEstoque,
     getItemById,
