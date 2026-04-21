@@ -11,7 +11,14 @@ import {
     useModelosPadronizados,
     ModeloPadronizado,
     GradeAtacado,
+    VariacaoModelo,
+    TAMANHOS_LETRAS,
+    TAMANHOS_NUMERICOS,
 } from '@/hooks/useModelosPadronizados';
+import { useAddMovimentacao } from '@/hooks/useEstoqueData';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
+import { Plus, X, Package } from 'lucide-react';
 import { GradesEditor } from './GradesEditor';
 
 interface Props {
@@ -21,7 +28,7 @@ interface Props {
 }
 
 export function EditarModeloPadronizadoModal({ modelo, open, onClose }: Props) {
-    const { editarModeloPadronizado } = useModelosPadronizados();
+
 
     const [nome, setNome] = useState('');
     const [composicao, setComposicao] = useState('');
@@ -30,6 +37,15 @@ export function EditarModeloPadronizadoModal({ modelo, open, onClose }: Props) {
     const [custoProducao, setCustoProducao] = useState('');
     const [grades, setGrades] = useState<GradeAtacado[]>([]);
     const [saving, setSaving] = useState(false);
+    const [localVariacoes, setLocalVariacoes] = useState<VariacaoModelo[]>([]);
+    const [addingSize, setAddingSize] = useState(false);
+    const [newSize, setNewSize] = useState('');
+    const [newSizeQtd, setNewSizeQtd] = useState('');
+
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
+    const { mutateAsync: addMovimentacao } = useAddMovimentacao();
+    const { editarModeloPadronizado, adicionarVariacao } = useModelosPadronizados();
 
     // Preencher com dados atuais do modelo
     useEffect(() => {
@@ -42,6 +58,13 @@ export function EditarModeloPadronizadoModal({ modelo, open, onClose }: Props) {
             setPrecoVenda(String(modelo.precoUnitario ?? ''));
             setCustoProducao(String(modelo.meta.custoProducao ?? ''));
             setGrades(modelo.meta.grades ?? []);
+            
+            // Ordenar variações
+            const ORDEM = [...TAMANHOS_LETRAS, ...TAMANHOS_NUMERICOS] as string[];
+            const sorted = [...modelo.variacoes].sort(
+                (a, b) => ORDEM.indexOf(a.tamanho) - ORDEM.indexOf(b.tamanho)
+            );
+            setLocalVariacoes(sorted);
         }
     }, [open, modelo]);
 
@@ -75,8 +98,53 @@ export function EditarModeloPadronizadoModal({ modelo, open, onClose }: Props) {
             });
             toast.success(`Modelo "${nome}" atualizado com sucesso!`);
             onClose();
-        } catch (err: any) {
-            toast.error(err.message || 'Erro ao editar modelo');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Erro ao editar modelo');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleAddSize = async () => {
+        if (!modelo) return;
+        if (!newSize.trim()) return;
+        const qtd = parseInt(newSizeQtd, 10) || 0;
+
+        setSaving(true);
+        try {
+            const novaVar = await adicionarVariacao(modelo.id, newSize.trim().toUpperCase(), qtd);
+            
+            // Adicionar movimentação de entrada inicial
+            if (qtd > 0) {
+                await addMovimentacao({
+                    itemId: novaVar.id,
+                    tipo: 'entrada',
+                    quantidade: qtd,
+                    motivo: `Criação de variação (Edição) - Tam ${newSize}`,
+                    producaoId: null
+                });
+            }
+
+            toast.success(`Tamanho ${newSize} adicionado!`);
+            setAddingSize(false);
+            setNewSize('');
+            setNewSizeQtd('');
+            
+            // Atualizar lista local
+            const ORDEM = [...TAMANHOS_LETRAS, ...TAMANHOS_NUMERICOS] as string[];
+            const novasVars = [...localVariacoes, { 
+                ...novaVar, 
+                tamanho: newSize.trim().toUpperCase(), 
+                referencia: `${modelo.meta.referencia}-${newSize.trim().toUpperCase()}`,
+                modeloId: modelo.id 
+            } as VariacaoModelo].sort(
+                (a, b) => ORDEM.indexOf(a.tamanho) - ORDEM.indexOf(b.tamanho)
+            );
+            setLocalVariacoes(novasVars);
+            
+            queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Erro ao adicionar tamanho');
         } finally {
             setSaving(false);
         }
@@ -182,9 +250,80 @@ export function EditarModeloPadronizadoModal({ modelo, open, onClose }: Props) {
 
                         <Separator />
 
+                        {/* ── Tamanhos ───────────────────────────── */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                    <Package className="h-3.5 w-3.5" />
+                                    Tamanhos do Modelo
+                                </Label>
+                                {!addingSize && (
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={() => setAddingSize(true)}
+                                        className="h-7 text-xs gap-1 border border-dashed border-primary/30 text-primary hover:bg-primary/5 font-bold"
+                                    >
+                                        <Plus className="h-3 w-3" />
+                                        Novo Tamanho
+                                    </Button>
+                                )}
+                            </div>
+
+                            {addingSize && (
+                                <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-3 animate-in fade-in slide-in-from-top-2">
+                                    <div className="flex items-end gap-3">
+                                        <div className="space-y-1.5 flex-1">
+                                            <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Tamanho</Label>
+                                            <Input 
+                                                placeholder="Ex: 46" 
+                                                className="h-9 shadow-sm"
+                                                value={newSize}
+                                                onChange={e => setNewSize(e.target.value)}
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5 w-24">
+                                            <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Qtd Inicial</Label>
+                                            <Input 
+                                                type="number" 
+                                                placeholder="0" 
+                                                className="h-9 shadow-sm"
+                                                value={newSizeQtd}
+                                                onChange={e => setNewSizeQtd(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button size="sm" onClick={handleAddSize} disabled={saving} className="h-9 px-3">
+                                                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                                Salvar
+                                            </Button>
+                                            <Button size="sm" variant="ghost" onClick={() => setAddingSize(false)} disabled={saving} className="h-9 px-2">
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex flex-wrap gap-2">
+                                {localVariacoes.map(v => (
+                                    <div 
+                                        key={v.id}
+                                        className="px-3 py-1.5 rounded-lg bg-muted/50 border border-border flex flex-col items-center min-w-[50px]"
+                                    >
+                                        <span className="text-xs font-black">{v.tamanho}</span>
+                                        <span className="text-[10px] text-muted-foreground font-bold">{v.quantidade} pçs</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <Separator />
+
                         {/* ── Grades de Atacado ─────────────────── */}
                         <GradesEditor
-                            tamanhosSelecionados={tamanhosDasVariacoes}
+                            tamanhosSelecionados={localVariacoes.map(v => v.tamanho)}
                             precoUnitario={parseFloat(precoVenda) || 0}
                             grades={grades}
                             onChange={setGrades}

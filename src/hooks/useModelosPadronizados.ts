@@ -23,7 +23,7 @@ export const TIPO_GARMENT_LABELS: Record<TipoGarment, string> = {
 export const TAMANHOS_LETRAS = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3'] as const;
 export const TAMANHOS_NUMERICOS = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54'] as const;
 export const TAMANHOS_ESPECIAIS = ['PEÇAS'] as const;
-export type Tamanho = typeof TAMANHOS_LETRAS[number] | typeof TAMANHOS_NUMERICOS[number] | typeof TAMANHOS_ESPECIAIS[number];
+export type Tamanho = typeof TAMANHOS_LETRAS[number] | typeof TAMANHOS_NUMERICOS[number] | typeof TAMANHOS_ESPECIAIS[number] | string;
 
 // Prefixo especial salvo na categoria para identificar modelos padronizados
 export const CATEGORIA_MODELO_PAD = 'Modelo Padronizado';
@@ -324,6 +324,44 @@ export function useModelosPadronizados() {
             });
     }, [variacoes]);
 
+    // ── Adicionar uma nova variação a um modelo existente ─────
+    const adicionarVariacao = useCallback(async (modeloId: string, tamanho: string, estoqueInicial: number) => {
+        const modelo = modelosPai.find(m => m.id === modeloId);
+        if (!modelo) throw new Error('Modelo não encontrado');
+
+        const meta = parseMeta(modelo.localizacao);
+        if (!meta) throw new Error('Metadados do modelo inválidos');
+
+        const refVariacao = `${meta.referencia}-${tamanho}`;
+        
+        // Verificar se já existe
+        const existe = variacoes.some(v => {
+            const vm = parseVariacaoMeta(v.localizacao);
+            return vm?.modeloId === modeloId && vm?.tamanho === tamanho;
+        });
+        if (existe) throw new Error(`O tamanho ${tamanho} já existe para este modelo.`);
+
+        const varMeta = { tamanho, referencia: refVariacao, modeloId };
+        
+        const novaVar = await addItem({
+            nome: `${modelo.nome.split(' — ')[0]} — ${refVariacao}`,
+            tipo: 'acabado',
+            categoria: CATEGORIA_VARIACAO_PAD,
+            quantidade: estoqueInicial,
+            unidade: 'peças',
+            quantidadeMinima: 0,
+            precoUnitario: modelo.precoUnitario,
+            localizacao: JSON.stringify(varMeta),
+            imagemUrl: modelo.imagemUrl || undefined,
+        });
+
+        // Atualizar o total no item pai (opcional, já que é calculado, mas bom para consistência)
+        const totalPecas = (modelo.quantidade || 0) + estoqueInicial;
+        await updateItem(modeloId, { quantidade: totalPecas });
+
+        return novaVar;
+    }, [modelosPai, variacoes, addItem, updateItem]);
+
     return {
         modelosPadronizados: modelosComVariacoes,
         variacoes,
@@ -335,6 +373,7 @@ export function useModelosPadronizados() {
         updateModeloGrades,
         parseMeta,
         parseVariacaoMeta,
+        adicionarVariacao,
         CATEGORIA_MODELO_PAD,
         CATEGORIA_VARIACAO_PAD,
     };

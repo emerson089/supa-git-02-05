@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import {
+    useModelosPadronizados,
     ModeloPadronizado,
     VariacaoModelo,
     TIPO_GARMENT_LABELS,
@@ -32,6 +33,7 @@ import {
     Check,
     X,
     Loader2,
+    Plus,
 } from 'lucide-react';
 import { EtiquetasModal } from './EtiquetasModal';
 
@@ -77,11 +79,15 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
     const [saving, setSaving] = useState(false);
     const [qtdGrade, setQtdGrade] = useState('');
     const [applyingGrade, setApplyingGrade] = useState(false);
+    const [addingSize, setAddingSize] = useState(false);
+    const [newSize, setNewSize] = useState('');
+    const [newSizeQtd, setNewSizeQtd] = useState('');
 
     const { user } = useAuth();
     const queryClient = useQueryClient();
     const { mutateAsync: updateItem } = useUpdateItem();
     const { mutateAsync: addMovimentacao } = useAddMovimentacao();
+    const { adicionarVariacao } = useModelosPadronizados();
 
     useEffect(() => {
         if (modelo) {
@@ -170,6 +176,50 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
             queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
         } finally {
             setApplyingGrade(false);
+        }
+    };
+
+    const handleAddSize = async () => {
+        if (!newSize.trim()) return;
+        const qtd = parseInt(newSizeQtd, 10) || 0;
+
+        setSaving(true);
+        try {
+            const novaVar = await adicionarVariacao(modelo.id, newSize.trim().toUpperCase(), qtd);
+            
+            // Adicionar movimentação de entrada inicial
+            if (qtd > 0) {
+                await addMovimentacao({
+                    itemId: novaVar.id,
+                    tipo: 'entrada',
+                    quantidade: qtd,
+                    motivo: `Criação de variação esquecida - Tam ${newSize}`,
+                    producaoId: null
+                });
+            }
+
+            toast.success(`Tamanho ${newSize} adicionado com sucesso!`);
+            setAddingSize(false);
+            setNewSize('');
+            setNewSizeQtd('');
+            
+            // Recarregar variações
+            const ORDEM = [...TAMANHOS_LETRAS, ...TAMANHOS_NUMERICOS] as string[];
+            const novasVars = [...localVariacoes, { 
+                ...novaVar, 
+                tamanho: newSize.trim().toUpperCase(), 
+                referencia: `${meta.referencia}-${newSize.trim().toUpperCase()}`,
+                modeloId: modelo.id 
+            } as VariacaoModelo].sort(
+                (a, b) => ORDEM.indexOf(a.tamanho) - ORDEM.indexOf(b.tamanho)
+            );
+            setLocalVariacoes(novasVars);
+            
+            queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Erro ao adicionar tamanho');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -324,6 +374,51 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                     </h3>
 
                                     <div className="rounded-xl border border-border overflow-hidden bg-background shadow-sm">
+                                        <div className="p-4 bg-muted/20 border-b border-border">
+                                            {addingSize ? (
+                                                <div className="flex items-end gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                    <div className="space-y-1.5 flex-1">
+                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Novo Tamanho</Label>
+                                                        <Input 
+                                                            placeholder="Ex: 46" 
+                                                            className="h-9 shadow-sm"
+                                                            value={newSize}
+                                                            onChange={e => setNewSize(e.target.value)}
+                                                            autoFocus
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5 w-24">
+                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Qtd Inicial</Label>
+                                                        <Input 
+                                                            type="number" 
+                                                            placeholder="0" 
+                                                            className="h-9 shadow-sm"
+                                                            value={newSizeQtd}
+                                                            onChange={e => setNewSizeQtd(e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <Button size="sm" onClick={handleAddSize} disabled={saving} className="h-9">
+                                                            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                                            Salvar
+                                                        </Button>
+                                                        <Button size="sm" variant="ghost" onClick={() => setAddingSize(false)} disabled={saving} className="h-9">
+                                                            Cancelar
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    onClick={() => setAddingSize(true)}
+                                                    className="w-full h-9 border border-dashed border-border hover:border-primary hover:bg-primary/5 text-muted-foreground hover:text-primary gap-2 font-bold"
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                    Adicionar Numeração que faltou
+                                                </Button>
+                                            )}
+                                        </div>
                                         <table className="w-full text-sm">
                                             <thead>
                                                 <tr className="bg-muted/40 border-b border-border">

@@ -38,7 +38,7 @@ function gerarSugestoes(tamanhos: string[], precoUnitario: number): GradeAtacado
         const itens = letras.map(t => ({ tamanho: t, quantidade: 1 }));
         sugestoes.push({
             id: crypto.randomUUID(),
-            nome: 'Grade Letras',
+            nome: 'GRADE',
             itens,
             totalPecas: calcularTotal(itens),
             precoSugerido: calcularPreco(itens, precoUnitario),
@@ -49,7 +49,7 @@ function gerarSugestoes(tamanhos: string[], precoUnitario: number): GradeAtacado
         const itens = numericos_padrao.map(t => ({ tamanho: t, quantidade: 1 }));
         sugestoes.push({
             id: crypto.randomUUID(),
-            nome: 'Grade Completa P',
+            nome: 'GRADE',
             itens,
             totalPecas: calcularTotal(itens),
             precoSugerido: calcularPreco(itens, precoUnitario),
@@ -60,7 +60,7 @@ function gerarSugestoes(tamanhos: string[], precoUnitario: number): GradeAtacado
         const itens = numericos_plus.map(t => ({ tamanho: t, quantidade: 1 }));
         sugestoes.push({
             id: crypto.randomUUID(),
-            nome: 'Grade Plus',
+            nome: 'GRADE',
             itens,
             totalPecas: calcularTotal(itens),
             precoSugerido: calcularPreco(itens, precoUnitario),
@@ -71,7 +71,7 @@ function gerarSugestoes(tamanhos: string[], precoUnitario: number): GradeAtacado
         const itens = tamanhos.map(t => ({ tamanho: t, quantidade: 1 }));
         sugestoes.push({
             id: crypto.randomUUID(),
-            nome: 'Grade Completa',
+            nome: 'GRADE',
             itens,
             totalPecas: calcularTotal(itens),
             precoSugerido: calcularPreco(itens, precoUnitario),
@@ -253,7 +253,7 @@ export function GradesEditor({
         if (tamanhosSelecionados.length > 0 && grades.length === 0 && !sugestoesMostradas) {
             // não auto-popular — usuário clica "Usar Sugestão"
         }
-    }, [tamanhosSelecionados]);
+    }, [tamanhosSelecionados, grades.length, sugestoesMostradas]);
 
     const handleUsarSugestao = () => {
         const sugestoes = gerarSugestoes(tamanhosSelecionados, precoUnitario);

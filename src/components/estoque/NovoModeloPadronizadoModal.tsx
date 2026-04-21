@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Upload, Loader2, RefreshCw, ImagePlus, Package, X, Check } from 'lucide-react';
+import { Upload, Loader2, RefreshCw, ImagePlus, Package, X, Check, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import {
@@ -46,6 +46,7 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
     const [imagemPreview, setImagemPreview] = useState('');
     const [uploadingImage, setUploadingImage] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [customSize, setCustomSize] = useState('');
 
     // Tamanhos selecionados e estoque inicial
     const [tamanhosSelecionados, setTamanhosSelecionados] = useState<Set<Tamanho>>(new Set());
@@ -124,7 +125,7 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
         toast.info('Formulário limpo');
     };
 
-    const gerarRef = async (t: TipoGarment | '') => {
+    const gerarRef = useCallback(async (t: TipoGarment | '') => {
         if (!t) return;
         setGerandoRef(true);
         try {
@@ -133,7 +134,7 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
         } finally {
             setGerandoRef(false);
         }
-    };
+    }, [gerarReferenciaBase]);
 
     const toggleTamanho = (t: Tamanho) => {
         setTamanhosSelecionados(prev => {
@@ -146,6 +147,17 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
             }
             return next;
         });
+    };
+    
+    const handleAddCustomSize = () => {
+        if (!customSize.trim()) return;
+        const size = customSize.trim().toUpperCase();
+        setTamanhosSelecionados(prev => {
+            const next = new Set(prev);
+            next.add(size);
+            return next;
+        });
+        setCustomSize('');
     };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -464,6 +476,44 @@ export function NovoModeloPadronizadoModal({ open, onClose }: Props) {
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <p className="text-xs text-muted-foreground font-medium">Personalizado</p>
+                                <div className="flex gap-2">
+                                    <Input
+                                        value={customSize}
+                                        onChange={e => setCustomSize(e.target.value)}
+                                        placeholder="Ex: 46"
+                                        className="h-9 w-24 text-center shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0"
+                                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddCustomSize())}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleAddCustomSize}
+                                        className="h-9 px-4 gap-2"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        Adicionar
+                                    </Button>
+                                </div>
+                                {Array.from(tamanhosSelecionados).filter(t => !TODOS_TAMANHOS.includes(t as string)).length > 0 && (
+                                    <div className="flex gap-2 flex-wrap mt-2">
+                                        {Array.from(tamanhosSelecionados).filter(t => !TODOS_TAMANHOS.includes(t as string)).map(t => (
+                                            <button
+                                                key={t}
+                                                type="button"
+                                                onClick={() => toggleTamanho(t)}
+                                                className="h-9 px-4 rounded-lg text-sm font-semibold border-2 bg-primary text-primary-foreground border-primary shadow-md flex items-center gap-2 group"
+                                            >
+                                                {t}
+                                                <X className="h-3 w-3 opacity-50 group-hover:opacity-100" />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
