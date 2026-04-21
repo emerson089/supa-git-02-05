@@ -53,6 +53,29 @@ function rotuloCategoria(cat: Categoria) {
   return "❓ Não classificado";
 }
 
+// Filtra nomes de recebedores conhecidos para evitar confusão no campo Pagador
+function limparNomePagador(nome: string | null): string | null {
+  if (!nome) return null;
+  const nomeNorm = nome.toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  const nomesProibidos = [
+    "daniel silva chagas",
+    "delooki jeans"
+  ];
+
+  for (const proibido of nomesProibidos) {
+    if (nomeNorm.includes(proibido)) {
+      console.log(`[Filtro] Nome proibido detectado e removido: ${nome}`);
+      return null;
+    }
+  }
+
+  return nome;
+}
+
 // Background Task Principal
 async function processComprovante(
   imageUrl: string,
@@ -87,14 +110,19 @@ Analise esta imagem de comprovante de pagamento bancário brasileiro. Extraia as
 {
   "valor": (número decimal, ex: 150.50),
   "data_pagamento": (formato ISO 8601, ex: 2025-04-16T14:30:00),
-  "nome_pagador": (nome completo de quem pagou),
+  "nome_pagador": (nome completo de quem pagou/origem),
   "banco_origem": (nome do banco),
   "tipo_pagamento": (PIX, TED, DOC, boleto ou outro),
   "chave_pix": (chave pix se visível, senão null),
   "observacoes": (qualquer informação relevante adicional),
   "id_transacao": (ID/codigo da transacao/autenticacao se houver, caso contraio null)
 }
-Se não conseguir identificar algum campo, use null.
+
+IMPORTANTE SOBRE O CAMPO "nome_pagador":
+1. Identifique quem está ENVIANDO o dinheiro.
+2. NÃO confunda com o Beneficiário/Recebedor (quem recebe).
+3. Os nomes "Daniel Silva Chagas" e "Delooki jeans" são os RECEBEDORES. NUNCA coloque estes nomes no campo "nome_pagador".
+4. Se o nome do pagador não estiver claro ou for idêntico ao do beneficiário, use null.
     `;
 
     const openAiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -127,6 +155,8 @@ Se não conseguir identificar algum campo, use null.
     let extrato;
     try {
       extrato = JSON.parse(aiData.choices[0].message.content);
+      // Aplicar limpeza no nome do pagador retornado pela IA
+      extrato.nome_pagador = limparNomePagador(extrato.nome_pagador);
     } catch(e) {
       throw new Error(`Falha ao fazer parse do JSON retornado pela IA`);
     }

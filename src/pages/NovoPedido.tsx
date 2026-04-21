@@ -34,8 +34,21 @@ import { generatePedidoPDF } from '@/utils/generatePedidoPDF';
 
 function formatPhone(phone: string): string {
   if (!phone) return '';
-  const numbers = phone.replace(/\D/g, '');
+  let numbers = phone.replace(/\D/g, '');
   if (numbers.length === 0) return '';
+
+  // Se começa com 55 e tem mais de 10 dígitos, remove o 55 para formatar apenas o DDD + Número
+  // Ou se tem 11 dígitos começando com 55 (55 + DDD + 7 dígitos), provavelmente falta o 9
+  if (numbers.startsWith('55') && (numbers.length === 11 || numbers.length === 12 || numbers.length === 13)) {
+    if (numbers.length === 11) {
+      // Caso 55 + DDD + 7 dígitos -> transforma em (DDD) 9XXXX-XXXX
+      const ddd = numbers.slice(2, 4);
+      const rest = numbers.slice(4);
+      return `(${ddd}) 9${rest.slice(0, 4)}-${rest.slice(4)}`;
+    }
+    numbers = numbers.slice(2);
+  }
+
   if (numbers.length <= 2) return `(${numbers}`;
   if (numbers.length <= 6) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
   if (numbers.length <= 10) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`;
@@ -354,6 +367,17 @@ Favorecido: Delookii Confecções Ltda`;
         try {
           // Normalizar telefone do cliente
           let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
+          
+          // Caso especial: 11 dígitos começando com 55 (55 + DDD + 7 dígitos)
+          if (digits.length === 11 && digits.startsWith('55')) {
+            digits = digits.slice(0, 4) + '9' + digits.slice(4);
+          }
+
+          // Caso especial: 9 dígitos sem o 55 (DDD + 7 dígitos)
+          if (digits.length === 9 && !digits.startsWith('55')) {
+            digits = digits.slice(0, 2) + '9' + digits.slice(2);
+          }
+
           if (!digits.startsWith('55')) digits = '55' + digits;
 
           if (digits.length >= 12 && digits.length <= 13) {
@@ -539,9 +563,20 @@ Favorecido: Delookii Confecções Ltda`;
       return;
     }
     try {
+      let cleanedTelefone = result.data.telefone; // Already stripped by rawData
+      
+      // Se o telefone foi salvo com 55 no início mas tem 11 dígitos, 
+      // provavelmente é 55 + DDD + 7 dígitos (faltando o 9).
+      if (cleanedTelefone.length === 11 && cleanedTelefone.startsWith('55')) {
+        cleanedTelefone = cleanedTelefone.slice(2, 4) + '9' + cleanedTelefone.slice(4);
+      } else if (cleanedTelefone.startsWith('55') && (cleanedTelefone.length === 12 || cleanedTelefone.length === 13)) {
+        // Se tem 12 ou 13 dígitos e começa com 55, remove o 55 para salvar apenas DDD + Número
+        cleanedTelefone = cleanedTelefone.slice(2);
+      }
+
       const validData = {
         nome: result.data.nome,
-        telefone: result.data.telefone, // Already stripped of non-digits
+        telefone: cleanedTelefone,
         cidade: result.data.cidade,
         estado: result.data.estado,
         excursao: result.data.excursao

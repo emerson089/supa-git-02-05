@@ -179,7 +179,7 @@ export function BottomNavigation() {
           <div className="flex-1 flex items-center justify-center">
             <button
               onClick={() => setQuickActionsOpen(true)}
-              className="absolute -top-5 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all"
+              className="absolute -top-7 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-xl flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all border-4 border-background"
             >
               <Plus size={28} strokeWidth={2.5} />
             </button>

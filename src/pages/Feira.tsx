@@ -508,7 +508,7 @@ export default function Feira() {
     }
   };
 
-  const handleSendWhatsAppResumo = async (resumo: { titulo: string; enviado: number; retornado: number; vendido: number; valorTotal: number; isCorrecao?: boolean }) => {
+  const handleSendWhatsAppResumo = async (resumo: { titulo: string; enviado: number; retornado: number; vendido: number; valorTotal: number; isCorrecao?: boolean; isEdicao?: boolean }) => {
     const metadata = user?.user_metadata || {};
     const adminNumbers = (metadata.notification_numbers || []) as string[];
     const notifyOnOrderGlobal = metadata.notify_on_order !== false;
@@ -516,9 +516,13 @@ export default function Feira() {
     if (notifyOnOrderGlobal && adminNumbers.length > 0) {
       const valorFormatado = resumo.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       const dataHora = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
+      const porcVenda = resumo.enviado > 0 ? Math.round((resumo.vendido / resumo.enviado) * 100) : 0;
       
-      const tituloPrefix = resumo.isCorrecao ? '📝 CORREÇÃO DE CARGA' : '🚀 RESUMO DE CARGA';
-      const mensagem = `${tituloPrefix}: ${resumo.titulo}\n\n📦 Enviado : ${resumo.enviado}\n🔄 Retorno : ${resumo.retornado}\n✅ Vendido : ${resumo.vendido}\n💰 Valor total : ${valorFormatado}\n\n---------------------------\n📅 ${resumo.isCorrecao ? 'Corrigido em' : 'Finalizado em'}: ${dataHora}`;
+      let tituloPrefix = '🚀 RESUMO DE CARGA';
+      if (resumo.isCorrecao) tituloPrefix = '📝 CORREÇÃO DE RETORNO';
+      if (resumo.isEdicao) tituloPrefix = '✏️ EDIÇÃO DE CARGA';
+
+      const mensagem = `${tituloPrefix}: ${resumo.titulo.toUpperCase()}\n\n📦 Enviado : ${resumo.enviado}\n🔄 Retorno : ${resumo.retornado}\n✅ Vendido : ${resumo.vendido}\n📈 % Vendido : ${porcVenda}%\n💰 Valor total : ${valorFormatado}\n\n---------------------------\n📅 ${resumo.isCorrecao || resumo.isEdicao ? 'Atualizado em' : 'Finalizado em'}: ${dataHora}`;
 
       adminNumbers.forEach(async (adminPhone) => {
         try {
@@ -627,6 +631,29 @@ export default function Feira() {
     }, {
       onSuccess: () => {
         toast.success('Carga atualizada com sucesso!');
+        
+        // Notificar WhatsApp sobre a edição
+        if (cargaEditar) {
+          const totalEnviado = itens.reduce((sum, i) => sum + (i.quantidade || i.quantidadeEnviada || 0), 0);
+          const totalRetornado = cargaEditar.itens?.reduce((s, i) => s + (i.quantidadeRetornada || 0), 0) || 0;
+          const totalVendido = totalEnviado - totalRetornado;
+          const valorTotal = itens.reduce((sum, i) => {
+            const ret = cargaEditar.itens?.find(it => it.itemId === i.itemId)?.quantidadeRetornada || 0;
+            const vend = (i.quantidade || i.quantidadeEnviada || 0) - ret;
+            const preco = i.precoUnitario || i.produtoPreco || 0;
+            return sum + (vend * preco);
+          }, 0);
+
+          handleSendWhatsAppResumo({
+            titulo: observacoes || cargaEditar.observacoes || 'Carga Sem Título',
+            enviado: totalEnviado,
+            retornado: totalRetornado,
+            vendido: totalVendido,
+            valorTotal,
+            isEdicao: true
+          });
+        }
+        
         setCargaEditar(null);
       },
       onError: (error: any) => {
@@ -730,7 +757,7 @@ export default function Feira() {
       </div>}
 
       <ScrollArea className="flex-1 overflow-hidden">
-        <div className={cn("p-4 space-y-4", !isMobile && "p-6 space-y-6", isMobile && "pb-6")}>
+        <div className={cn("p-4 space-y-4", !isMobile && "p-6 space-y-6", isMobile && "pb-32")}>
           {/* Filtro de Período */}
           <FiltroPeriodo periodo={periodo} onChange={setPeriodo} />
 
@@ -1378,6 +1405,28 @@ export default function Feira() {
               transferenciaId: r.transferenciaId,
               itensRetornados: r.itens,
             });
+            
+            // Notificar WhatsApp para cada carga individualmente
+            const cargaOriginal = todasCargasAtivas?.find(c => c.id === r.transferenciaId);
+            if (cargaOriginal) {
+              const totalEnviado = cargaOriginal.itens.reduce((sum, i) => sum + i.quantidadeEnviada, 0);
+              const totalRetornado = r.itens.reduce((sum, i) => sum + i.quantidadeRetornada, 0);
+              const totalVendido = totalEnviado - totalRetornado;
+              const valorTotalVendido = cargaOriginal.itens.reduce((sum, i) => {
+                const ret = r.itens.find(it => it.itemId === i.itemId)?.quantidadeRetornada || 0;
+                const vend = i.quantidadeEnviada - ret;
+                const preco = i.precoUnitario || (i as any).produtoPreco || 0;
+                return sum + (vend * preco);
+              }, 0);
+
+              handleSendWhatsAppResumo({
+                titulo: cargaOriginal.observacoes || 'Carga Sem Título',
+                enviado: totalEnviado,
+                retornado: totalRetornado,
+                vendido: totalVendido,
+                valorTotal: valorTotalVendido
+              });
+            }
           }
           toast.success(`Retorno registrado para ${retornos.length} carga(s)!`);
           setShowRetornoEmMassa(false);

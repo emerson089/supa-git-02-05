@@ -60,8 +60,21 @@ function formatCurrency(value: number): string {
 function formatPhone(phone: string): string {
   if (!phone) return '';
   // Remover tudo que não for número
-  const numbers = phone.replace(/\D/g, '');
+  let numbers = phone.replace(/\D/g, '');
   if (numbers.length === 0) return '';
+
+  // Se começa com 55 e tem mais de 10 dígitos, remove o 55 para formatar apenas o DDD + Número
+  // Ou se tem 11 dígitos começando com 55 (55 + DDD + 7 dígitos), provavelmente falta o 9
+  if (numbers.startsWith('55') && (numbers.length === 11 || numbers.length === 12 || numbers.length === 13)) {
+    if (numbers.length === 11) {
+      // Caso 55 + DDD + 7 dígitos -> transforma em (DDD) 9XXXX-XXXX
+      const ddd = numbers.slice(2, 4);
+      const rest = numbers.slice(4);
+      return `(${ddd}) 9${rest.slice(0, 4)}-${rest.slice(4)}`;
+    }
+    numbers = numbers.slice(2);
+  }
+
   if (numbers.length <= 2) return `(${numbers}`;
   if (numbers.length <= 6) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
   if (numbers.length <= 10) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`;
@@ -508,9 +521,22 @@ export default function Clientes() {
       return;
     }
     try {
+      let cleanedTelefone = result.data.telefone.replace(/\D/g, '');
+      
+      // Se o telefone foi salvo com 55 no início mas tem 11 dígitos, 
+      // provavelmente é 55 + DDD + 7 dígitos (faltando o 9).
+      // Vamos normalizar para DDD + 9 + 7 dígitos (10 dígitos total no banco, sem o 55)
+      // para que o sistema de WhatsApp consiga tratar corretamente.
+      if (cleanedTelefone.length === 11 && cleanedTelefone.startsWith('55')) {
+        cleanedTelefone = cleanedTelefone.slice(2, 4) + '9' + cleanedTelefone.slice(4);
+      } else if (cleanedTelefone.startsWith('55') && (cleanedTelefone.length === 12 || cleanedTelefone.length === 13)) {
+        // Se tem 12 ou 13 dígitos e começa com 55, remove o 55 para salvar apenas DDD + Número
+        cleanedTelefone = cleanedTelefone.slice(2);
+      }
+
       const validData = {
         nome: result.data.nome,
-        telefone: result.data.telefone.replace(/\D/g, ''),
+        telefone: cleanedTelefone,
         cidade: result.data.cidade,
         estado: result.data.estado,
         excursao: result.data.excursao

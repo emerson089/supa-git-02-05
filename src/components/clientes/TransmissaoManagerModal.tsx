@@ -69,7 +69,21 @@ interface TransmissaoManagerModalProps {
 const normalizePhoneE164 = (raw: string): { valid: boolean; phone: string } => {
   let digits = raw.replace(/\D/g, '');
   digits = digits.replace(/^0+/, '');
-  if (!digits.startsWith('55')) digits = '55' + digits;
+
+  // Caso especial: 11 dígitos começando com 55 (55 + DDD + 7 dígitos)
+  if (digits.length === 11 && digits.startsWith('55')) {
+    digits = digits.slice(0, 4) + '9' + digits.slice(4);
+  }
+
+  // Caso especial: 9 dígitos sem o 55 (DDD + 7 dígitos)
+  if (digits.length === 9 && !digits.startsWith('55')) {
+    digits = digits.slice(0, 2) + '9' + digits.slice(2);
+  }
+
+  if (!digits.startsWith('55')) {
+    digits = '55' + digits;
+  }
+  
   if (digits.length < 12 || digits.length > 13) return { valid: false, phone: '' };
   return { valid: true, phone: digits };
 };

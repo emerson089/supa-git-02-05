@@ -62,6 +62,18 @@ const normalizePhoneE164 = (raw: string): { valid: boolean; phone: string; error
   // Remove zeros à esquerda
   digits = digits.replace(/^0+/, '');
 
+  // Caso especial: 11 dígitos começando com 55 (55 + DDD + 7 dígitos)
+  // Provavelmente falta o 9. Vamos inserir para ficar E.164 válido (55 + DDD + 9 + 7 dígitos = 12 dígitos)
+  if (digits.length === 11 && digits.startsWith('55')) {
+    digits = digits.slice(0, 4) + '9' + digits.slice(4);
+  }
+
+  // Caso especial: 9 dígitos sem o 55 (DDD + 7 dígitos)
+  // Provavelmente falta o 9. Vamos inserir para ficar DDD + 9 + 7 dígitos = 10 dígitos
+  if (digits.length === 9 && !digits.startsWith('55')) {
+    digits = digits.slice(0, 2) + '9' + digits.slice(2);
+  }
+
   // Adiciona código do país se não tiver
   if (!digits.startsWith('55')) {
     digits = '55' + digits;
