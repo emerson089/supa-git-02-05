@@ -328,23 +328,28 @@ const NovoPedido = () => {
       });
       toast.success('Pedido cadastrado com sucesso! Estoque atualizado.');
 
-      // Geração da mensagem de WhatsApp (mesma para cliente e gerente)
+      // Geração da mensagem de WhatsApp para o CLIENTE
       const clienteNome = cliente?.nome?.split(' ')[0] || 'Cliente';
       const valorFinalPedido = pedidoCriado.valorTotal ?? valorTotal;
       const pecasFinalPedido = pedidoCriado.totalPecas ?? totalPecas;
       const valorFormatado = valorFinalPedido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-      const mensagem = `Olá, ${clienteNome}! Pedido confirmado! 🎉
 
-💰 Total: ${valorFormatado}
-
-PIX (CNPJ): 40.548.049/0001-06
-Favorecido: Delookii Confecções Ltda
+      // Mensagem nova: CNPJ em linha isolada para permitir cópia com 1 toque no WhatsApp
+      const mensagemCliente = `Olá, ${clienteNome}! Pedido confirmado! 🎉
 
 Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido.
 
-Qualquer dúvida é só chamar! 😊`;
+💰 *Total: ${valorFormatado}*
 
-      // 1. Enviar WhatsApp para o CLIENTE automaticamente se ativado
+PIX (CNPJ):
+40.548.049/0001-06
+
+Favorecido: Delookii Confecções Ltda`;
+
+      // Mensagem gerencial (sem mudança)
+      const mensagem = mensagemCliente;
+
+      // 1. Enviar WhatsApp para o CLIENTE automaticamente se ativado (com PDF anexado)
       if (enviarWhatsApp && telefone) {
         try {
           // Normalizar telefone do cliente
@@ -352,16 +357,87 @@ Qualquer dúvida é só chamar! 😊`;
           if (!digits.startsWith('55')) digits = '55' + digits;
 
           if (digits.length >= 12 && digits.length <= 13) {
-            await supabase.functions.invoke('send-whatsapp', {
-              body: { phone: digits, message: mensagem },
-            });
-            toast.success('Resumo enviado ao cliente via WhatsApp!');
+            // Tentar gerar e anexar o PDF
+            let documentUrl: string | null = null;
+            let pdfFileName = `Pedido-${(cliente?.nome || 'Cliente').replace(/\s+/g, '-')}.pdf`;
+
+            try {
+              // Construir snapshot snake_case para a util do PDF
+              const pedidoParaPDF = {
+                cliente_nome: pedidoCriado.clienteNome,
+                telefone: pedidoCriado.telefone,
+                cidade: pedidoCriado.cidade,
+                estado: pedidoCriado.estado,
+                excursao: pedidoCriado.excursao,
+                created_at: pedidoCriado.dataCriacao,
+                total_pecas: pedidoCriado.totalPecas,
+                valor_total: pedidoCriado.valorTotal,
+                taxa_excursao: pedidoCriado.taxaExcursao,
+                status_pagamento: pedidoCriado.statusPagamento,
+                status_pedido: pedidoCriado.statusPedido,
+                status_entrega: pedidoCriado.statusEntrega,
+                pedido_itens: (pedidoCriado.itens || []).map((it) => ({
+                  id: it.id,
+                  produto_id: it.produtoId || null,
+                  produto_nome: it.produtoNome,
+                  quantidade: it.quantidade,
+                  valor_unitario: it.valorUnitario,
+                })),
+              };
+
+              const { blob, fileName } = generatePedidoPDF(pedidoParaPDF, estoqueItens as any);
+              pdfFileName = fileName;
+
+              if (user?.id && pedidoCriado.id) {
+                const path = `${user.id}/${pedidoCriado.id}.pdf`;
+                const { error: uploadError } = await supabase.storage
+                  .from('pedidos-pdfs')
+                  .upload(path, blob, {
+                    contentType: 'application/pdf',
+                    upsert: true,
+                  });
+
+                if (!uploadError) {
+                  const { data: signed } = await supabase.storage
+                    .from('pedidos-pdfs')
+                    .createSignedUrl(path, 60 * 60 * 24 * 7); // 7 dias
+
+                  if (signed?.signedUrl) {
+                    documentUrl = signed.signedUrl;
+                  }
+                } else {
+                  console.error('Erro no upload do PDF:', uploadError);
+                }
+              }
+            } catch (pdfErr) {
+              console.error('Erro ao gerar/upload PDF do pedido:', pdfErr);
+            }
+
+            if (documentUrl) {
+              await supabase.functions.invoke('send-whatsapp', {
+                body: {
+                  type: 'document',
+                  phone: digits,
+                  documentUrl,
+                  fileName: pdfFileName,
+                  caption: mensagemCliente,
+                },
+              });
+              toast.success('Pedido enviado ao cliente com PDF anexado!');
+            } else {
+              // Fallback: envia somente o texto
+              await supabase.functions.invoke('send-whatsapp', {
+                body: { phone: digits, message: mensagemCliente },
+              });
+              toast.success('PDF não enviado, mas resumo foi entregue');
+            }
           }
         } catch (whatsErr) {
           console.error('Erro ao enviar WhatsApp ao cliente:', whatsErr);
           toast.error('Pedido criado, mas erro ao notificar cliente.');
         }
       }
+
 
       // 2. Enviar WhatsApp para os ADMINISTRADORES (Configurações -> Notificações)
       const metadata = user?.user_metadata || {};
