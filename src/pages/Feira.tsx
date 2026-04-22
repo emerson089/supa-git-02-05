@@ -780,9 +780,14 @@ export default function Feira() {
               </Button>
             </RoleGate>
             <RoleGate requiredPermission="feira.create">
-              <Button onClick={handleOpenNovaCarga} className="gap-2">
+              <Button onClick={handleOpenNovaCarga} className="gap-2 relative">
                 <Plus size={18} />
                 Nova Carga
+                {itensCarga.length > 0 && !showNovaCarga && (
+                  <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 tabular-nums">
+                    {itensCarga.length}
+                  </Badge>
+                )}
               </Button>
             </RoleGate>
           </div>
