@@ -49,6 +49,7 @@ import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { generateCargaPDF } from '@/utils/generateCargaPDF';
 import { groupItensByModel } from '@/utils/productNameUtils';
+import { loadFeiraDraft, saveFeiraDraft, clearFeiraDraft } from '@/utils/feiraDraft';
 
 /** Distribui o retorno total de um modelo proporcionalmente entre seus tamanhos */
 function distribuirRetornoProporcional(
