@@ -24,7 +24,9 @@ export interface PedidoPDFInput {
     quantidade: number;
     valor_unitario: number;
   }>;
+  observacoes?: string | null;
 }
+
 
 export interface EstoqueItemForPDF {
   id: string;
@@ -193,12 +195,26 @@ export function generatePedidoPDF(
     );
   }
 
-  // Footer
+// Footer & Observações
+  let currentY = finalY + boxHeight + 10;
+
+  if (pedido.observacoes) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Observações:', 14, currentY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const splitObs = doc.splitTextToSize(pedido.observacoes, pageWidth - 28);
+    doc.text(splitObs, 14, currentY + 5);
+    currentY += (splitObs.length * 5) + 10;
+  }
+
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(10);
-  doc.text('Obrigado pela preferência! Delookii Jeans', pageWidth / 2, finalY + boxHeight + 10, {
+  doc.text('Obrigado pela preferência! Delookii Jeans', pageWidth / 2, currentY, {
     align: 'center',
   });
+
 
   const fileName = `Pedido_${pedido.cliente_nome.replace(/\s+/g, '_')}_${format(
     new Date(pedido.created_at),

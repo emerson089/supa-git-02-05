@@ -27,7 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ClienteSchema, PedidoItemSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
-import { ChevronsUpDown, Check } from 'lucide-react';
+import { ChevronsUpDown, Check, FileText } from 'lucide-react';
 import { parseProductName } from '@/utils/productNameUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { generatePedidoPDF } from '@/utils/generatePedidoPDF';
@@ -92,6 +92,7 @@ const NovoPedido = () => {
   const [excursaoId, setExcursaoId] = useState<string | null>(null);
   const [taxaExcursao, setTaxaExcursao] = useState(0);
   const [desconto, setDesconto] = useState(0);
+  const [observacoes, setObservacoes] = useState('');
   const [enviarWhatsApp, setEnviarWhatsApp] = useState(true);
 
   // Status - valores fixos, não editáveis na UI
@@ -121,6 +122,7 @@ const NovoPedido = () => {
         if (data.excursaoId) setExcursaoId(data.excursaoId);
         if (data.taxaExcursao) setTaxaExcursao(data.taxaExcursao);
         if (data.desconto) setDesconto(data.desconto);
+        if (data.observacoes) setObservacoes(data.observacoes);
         if (data.items && Array.isArray(data.items)) setItems(data.items);
         
         // Sincronizar o ref inicial para evitar salvamento imediato redundante
@@ -145,6 +147,7 @@ const NovoPedido = () => {
       excursaoId,
       taxaExcursao,
       desconto,
+      observacoes,
       items
     };
     
@@ -155,7 +158,7 @@ const NovoPedido = () => {
       localStorage.setItem(STORAGE_KEY, dataString);
       lastSavedDraft.current = dataString;
     }
-  }, [clienteId, cidade, estado, telefone, excursao, excursaoId, taxaExcursao, items, desconto, isInitialized]);
+  }, [clienteId, cidade, estado, telefone, excursao, excursaoId, taxaExcursao, items, desconto, observacoes, isInitialized]);
 
   // Função para limpar o rascunho
   const clearDraft = () => localStorage.removeItem(STORAGE_KEY);
@@ -253,6 +256,7 @@ const NovoPedido = () => {
     setExcursaoId(null);
     setTaxaExcursao(0);
     setDesconto(0);
+    setObservacoes('');
     setItems([]);
     clearDraft();
     toast.success('Formulário limpo');
@@ -333,7 +337,7 @@ const NovoPedido = () => {
         statusPedido: getLabel(statusPedido, statusPedidoOptions),
         statusEntrega: getLabel(statusEntrega, statusEntregaOptions),
         formaPagamento: getLabel(statusPagamento, statusPagamentoOptions),
-        observacoes: '',
+        observacoes: observacoes,
         itens: itensFormatados,
         totalPecas,
         valorTotal,
@@ -639,6 +643,26 @@ Favorecido: Delookii Confecções Ltda`;
 
           {/* Insights do Cliente - Apenas para consulta interna */}
           <ClienteInsightsCard clienteId={clienteId} />
+
+          {/* Observações do Pedido */}
+          <div className="neu-card p-4 sm:p-7 space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-border/30">
+              <FileText className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-bold text-foreground">Observações</h2>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pedido-observacoes" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Notas Internas / Instruções de Entrega
+              </Label>
+              <textarea
+                id="pedido-observacoes"
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                placeholder="Ex: Cliente solicitou entrega após as 14h, ou observações sobre cores específicas..."
+                className="w-full min-h-[100px] p-4 rounded-xl neu-input border-0 bg-background text-sm text-foreground focus:ring-2 focus:ring-primary/30 transition-all resize-none outline-none"
+              />
+            </div>
+          </div>
 
           {/* Status padrão: PENDENTE, NÃO SEPARADO, NÃO ENTREGUE - configurável apenas ao editar pedido */}
 

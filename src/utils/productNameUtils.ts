@@ -14,69 +14,104 @@ export interface ProductInfo {
  * Analisa o nome e a referência de um produto para extrair informações padronizadas
  */
 export const parseProductName = (nome: string, referencia: string): ProductInfo => {
-  const currentRef = (referencia || "").toUpperCase().trim();
+  const currentRef = (referencia || "").trim();
   const currentName = (nome || "").trim();
 
-  // 1. Extrair a referência base e o tamanho (ex: SH2603-0042-M -> SH2603-0042 e M)
-  // Suporta hífens (-), meia-risca (–) e travessão (—)
-  // Expandido para suportar códigos de 2 a 4 dígitos como identificadores/tamanhos (ex: 130, 886, 2604)
-  const sizeMatch = currentRef.match(/^(.+)[-–—](P|M|G|GG|G1|G2|G3|XGG|PEÇAS|\d{2})$/i);
-  const refBase = (sizeMatch ? sizeMatch[1] : currentRef).trim();
-  const tamanho = sizeMatch ? sizeMatch[2].toUpperCase() : null;
-
-  // 2. Tentar extrair os últimos 3 números da referência oficial
-  const numerosMatch = refBase.match(/(\d+)$/);
-  let numeros = numerosMatch ? numerosMatch[1] : "";
+  // 1. Extrair os números da referência (Modelo)
+  // Priorizamos sequências de 3 ou mais dígitos que geralmente representam o modelo
+  let numeros = "";
+  const match3PlusRef = currentRef.match(/(\d{3,})/);
+  const match3PlusName = currentName.match(/(\d{3,})/);
   
-  // 3. Se não achou na referência, tenta achar no nome (ex: "Produto - 123" ou "Produto 123")
-  if (!numeros) {
-    const nomeReferenciaMatch = currentName.match(/\s*[—|-]\s*(\d+)$/);
-    if (nomeReferenciaMatch) {
-      numeros = nomeReferenciaMatch[1];
-    } else {
-      // Tenta pegar números no final do nome se houver espaço (ex: "Produto 123")
-      const finalNumericoMatch = currentName.match(/\s+(\d+)$/);
-      if (finalNumericoMatch) {
-        numeros = finalNumericoMatch[1];
-      }
+  if (match3PlusRef) {
+    numeros = match3PlusRef[1];
+  } else if (match3PlusName) {
+    numeros = match3PlusName[1];
+  } else {
+    // Fallback: se não houver 3 dígitos, tenta o último grupo numérico disponível
+    const numMatchRef = currentRef.match(/(\d+)$/);
+    const numMatchName = currentName.match(/(\d+)$/);
+    numeros = numMatchRef ? numMatchRef[1] : (numMatchName ? numMatchName[1] : "");
+  }
+
+  // 2. Tentar extrair o tamanho (P, M, G, etc ou 2 dígitos no final)
+  const sizeMatch = currentRef.match(/[-—–:/]\s*(P|M|G|GG|G1|G2|G3|XGG|PEÇAS|\d{2})$/i);
+  let tamanho = sizeMatch ? sizeMatch[1].toUpperCase() : null;
+
+  // Ajuste: Se pegamos um tamanho de 2 dígitos como "número de referência", 
+  // e existe uma referência de 3 dígitos antes, corrigimos.
+  if (tamanho && numeros === tamanho && numeros.length <= 2) {
+    const betterNumMatch = currentRef.replace(new RegExp(`[-—–:/\\s]*${tamanho}$`), "").match(/(\d{3,})/);
+    if (betterNumMatch) {
+      numeros = betterNumMatch[1];
     }
   }
 
-  const refCurta = numeros ? `REF ${numeros.slice(-3).padStart(3, '0')}` : "";
-
-  // 4. Limpar o nome (remover referências e tamanhos que estejam no campo nome)
+  // 3. Limpar o nome base
   let nomeBase = currentName;
-  
-  // Se o nome contém a referência técnica completa, removemos ela
-  if (refBase && nomeBase.includes(refBase)) {
-    nomeBase = nomeBase.replace(refBase, '').trim();
+
+
+  // Se a referência técnica estiver no nome, removemos ela primeiro (mais específico)
+  // Ex: "Conjunto — CJ2603-610" onde ref é "CJ2603-610"
+  if (currentRef && currentRef.length > 2 && currentRef !== currentName) {
+    // Escape special chars for regex
+    const escapedRef = currentRef.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const refRegex = new RegExp(`\\s*[-—–:/\\\\|]?\\s*${escapedRef}\\s*`, 'i');
+    nomeBase = nomeBase.replace(refRegex, '').trim();
   }
-  
-  // Limpeza recursiva de padrões de referência (3 dígitos) e tamanhos no final do nome
-  let prevNomeBase;
+
+  // Se ainda sobraram os números identificados no final, removemos
+  if (numeros) {
+    // Regex robusta para remover separadores + números no final do nome
+    const cleanupRegex = new RegExp(`\\s*[-—–:/\\\\|\\s]+\\s*${numeros}$`);
+    nomeBase = nomeBase.replace(cleanupRegex, "").trim();
+  }
+
+  // Limpeza recursiva de tamanhos e outros sufixos para garantir nome limpo
+  let prevNome;
+  let iterations = 0;
   do {
-    prevNomeBase = nomeBase;
-    // Remove referências de 3 ou mais dígitos no final: " — 032", " - 408"
-    nomeBase = nomeBase.replace(/\s*[—|–|-|:]\s*\d{3,}$/, "").trim();
-    // Remove tamanhos comuns: " — 34", " — G", " — GG", etc.
-    nomeBase = nomeBase.replace(/\s*[—|–|-|:]\s*(P|M|G|GG|G1|G2|G3|G4|G5|XG|XGG|PEÇAS|\d{2})$/i, "").trim();
-  } while (nomeBase !== prevNomeBase);
+    prevNome = nomeBase;
+    
+    // Remove tamanhos no final (P, M, G, GG, G1, G2, G3, PEÇAS, 34, 36...)
+    nomeBase = nomeBase.replace(/\s*[-—–:/\\\\|]\s*(P|M|G|GG|G1|G2|G3|G4|G5|XG|XGG|PEÇAS|\d{2})$/i, "").trim();
+    
+    // Remove números repetidos no final
+    if (numeros) {
+       const repeatRegex = new RegExp(`\\s*[-—–:/\\\\|\\s]+\\s*${numeros}$`);
+       nomeBase = nomeBase.replace(repeatRegex, "").trim();
+    }
+    
+    // Remove separadores residuais no final
+    nomeBase = nomeBase.replace(/\s*[-—–:/\\\\|]+\s*$/, "").trim();
 
-  // Limpeza final de qualquer caractere de separação residual no fim
-  nomeBase = nomeBase.replace(/\s*[—|–|-|:]\s*$/, "").trim();
+    iterations++;
+  } while (nomeBase !== prevNome && iterations < 5);
 
-  // 5. Gerar nome de exibição padronizado: "Nome - 000"
-  const numDisplay = numeros ? numeros.slice(-3).padStart(3, '0') : '';
+
+  // 4. Formatação Final: "Nome - REF"
+  // Se a referência tem formato MODELO-TAMANHO (ex: "481-34"), usa o código do modelo para exibição
+  let numDisplay = numeros ? numeros.slice(-3).padStart(3, '0') : '';
+  if (sizeMatch) {
+    const sizeStr = sizeMatch[0];
+    const sizeIdx = currentRef.lastIndexOf(sizeStr);
+    if (sizeIdx > 0) {
+      const modelPart = currentRef.substring(0, sizeIdx);
+      const modelDigits = modelPart.match(/(\d+)$/)?.[1] || '';
+      if (modelDigits) numDisplay = modelDigits;
+    }
+  }
   const nomeExibicao = numDisplay ? `${nomeBase} - ${numDisplay}` : nomeBase;
 
   return {
     nomeBase,
-    refBase: refBase || numeros, // Usar numeros se refBase for vazio para agrupamento
+    refBase: numDisplay || numeros || currentRef,
     tamanho,
-    refCurta,
+    refCurta: numDisplay ? `REF ${numDisplay}` : "",
     nomeExibicao,
   };
 };
+
 
 /**
  * Agrupa itens por modelo (refBase) e preço

@@ -24,6 +24,7 @@ import {
     X,
     Plus,
     Minus,
+    Tag,
 } from 'lucide-react';
 import { useModelosPadronizados, ModeloPadronizado } from '@/hooks/useModelosPadronizados';
 import { ItemPedido } from './ItemPedidoRow';
@@ -128,6 +129,7 @@ export function SmartGradeModal({
     const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
     const [numGrades, setNumGrades] = useState(0);
     const [manualQuantities, setManualQuantities] = useState<Record<string, number>>({});
+    const [customPrice, setCustomPrice] = useState(0);
 
     // Mapear modelos para ModeloAgrupado
     const modelosAgrupados: ModeloAgrupado[] = useMemo(() => {
@@ -178,7 +180,8 @@ export function SmartGradeModal({
                 if (model) {
                     setSelectedModelId(initialModelId);
                     setStep('configure');
-                    
+                    setCustomPrice(model.precoVenda);
+
                     const qtsInput = initialQuantities || {};
                     
                     // Calcular quantidade de grades iniciais
@@ -213,6 +216,7 @@ export function SmartGradeModal({
             setSelectedModelId(null);
             setNumGrades(0);
             setManualQuantities({});
+            setCustomPrice(0);
         }
     }, [open, initialModelId, modelosAgrupados]); // Removido initialQuantities para evitar loops
 
@@ -321,8 +325,12 @@ export function SmartGradeModal({
     // ── Handlers ───────────────────────────────────────────
 
     const handleSelectModel = (id: string) => {
+        const model = modelosAgrupados.find(m => m.id === id);
         setSelectedModelId(id);
         setStep('configure');
+        setCustomPrice(model?.precoVenda || 0);
+        setNumGrades(0);
+        setManualQuantities({});
     };
 
     const handleNumGradesChange = (val: number) => {
@@ -352,7 +360,7 @@ export function SmartGradeModal({
                     produtoId: selectedModel.id,
                     produtoNome: selectedModel.nome,
                     quantidade: qty,
-                    valorUnitario: selectedModel.precoVenda,
+                    valorUnitario: customPrice,
                     valorOriginal: selectedModel.precoVenda,
                     tipo: 'avulso',
                     modeloId: selectedModel.id,
@@ -374,7 +382,7 @@ export function SmartGradeModal({
                         produtoId: v.id,
                         produtoNome: `${selectedModel.nome} — ${v.tamanho}`,
                         quantidade: qty,
-                        valorUnitario: selectedModel.precoVenda,
+                        valorUnitario: customPrice,
                         valorOriginal: selectedModel.precoVenda,
                         tipo: 'grade',
                         gradeId: currentGradeId,
@@ -635,19 +643,54 @@ export function SmartGradeModal({
                 {/* ── Footer ── */}
                 <DialogFooter className="p-6 border-t bg-white dark:bg-indigo-950/10 shrink-0">
                     <div className="flex flex-col w-full gap-4">
-                        {step === 'configure' && (
-                            <div className="flex items-center justify-between px-2">
-                                <div className="text-sm font-bold text-indigo-950 dark:text-indigo-100">
-                                    {stats?.totalItems} peças 
-                                    <span className="text-muted-foreground font-medium ml-1">
-                                        ({stats?.numGradesDetected} grades + {stats?.numLooseDetected} avulsas)
-                                    </span>
+                        {step === 'configure' && (() => {
+                            const precoOriginal = selectedModel?.precoVenda || 0;
+                            const descPorPeca = Math.max(0, precoOriginal - customPrice);
+                            const descontoTotal = descPorPeca * (stats?.totalItems || 0);
+                            const totalFinal = (stats?.totalItems || 0) * customPrice;
+                            return (
+                                <div className="flex flex-col gap-2 px-2">
+                                    {/* Linha peças + preço editável */}
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm font-bold text-indigo-950 dark:text-indigo-100">
+                                            {stats?.totalItems} peças
+                                            <span className="text-muted-foreground font-medium ml-1">
+                                                ({stats?.numGradesDetected} grades + {stats?.numLooseDetected} avulsas)
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Tag className="h-3.5 w-3.5 text-indigo-400" />
+                                            <span className="text-xs text-muted-foreground">R$</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                step={0.01}
+                                                value={customPrice || ''}
+                                                onChange={e => setCustomPrice(Math.max(0, parseFloat(e.target.value) || 0))}
+                                                className="w-20 text-right border-b-2 border-indigo-300 focus:border-indigo-600 outline-none text-base font-black text-indigo-950 dark:text-indigo-100 bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            />
+                                            <span className="text-[10px] text-muted-foreground">/peça</span>
+                                        </div>
+                                    </div>
+                                    {/* Linha desconto + total */}
+                                    <div className="flex items-center justify-between">
+                                        {descontoTotal > 0 ? (
+                                            <div className="flex items-center gap-1.5 text-xs text-rose-600 font-semibold">
+                                                <span className="line-through text-muted-foreground font-normal">
+                                                    R$ {(precoOriginal).toFixed(2)}/peça
+                                                </span>
+                                                <span>— desconto de R$ {descontoTotal.toFixed(2)}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">Preço de tabela</span>
+                                        )}
+                                        <div className="text-lg font-black text-emerald-600">
+                                            R$ {totalFinal.toFixed(2)}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="text-lg font-black text-emerald-600">
-                                    R$ {((stats?.totalItems || 0) * (selectedModel?.precoVenda || 0)).toFixed(2)}
-                                </div>
-                            </div>
-                        )}
+                            );
+                        })()}
                         <div className="flex gap-3">
                             <Button variant="outline" onClick={onClose} className="flex-1 h-12 rounded-xl font-bold border-indigo-100">
                                 Cancelar
