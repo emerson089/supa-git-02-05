@@ -49,6 +49,7 @@ import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { generateCargaPDF } from '@/utils/generateCargaPDF';
 import { groupItensByModel } from '@/utils/productNameUtils';
+import { loadFeiraDraft, saveFeiraDraft, clearFeiraDraft } from '@/utils/feiraDraft';
 
 /** Distribui o retorno total de um modelo proporcionalmente entre seus tamanhos */
 function distribuirRetornoProporcional(
@@ -145,8 +146,15 @@ export default function Feira() {
   const [cargaEstornar, setCargaEstornar] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaCorrigirRetorno, setCargaCorrigirRetorno] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaEditar, setCargaEditar] = useState<TransferenciaComItensHistorico | null>(null);
-  const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
-  const [tituloCarga, setTituloCarga] = useState('');
+  const [itensCarga, setItensCarga] = useState<ItemCarga[]>(() => {
+    const draft = loadFeiraDraft(user?.id);
+    return draft?.itensCarga ?? [];
+  });
+  const [tituloCarga, setTituloCarga] = useState(() => {
+    const draft = loadFeiraDraft(user?.id);
+    return draft?.tituloCarga ?? '';
+  });
+  const draftValidatedRef = useRef(false);
   const [buscaProduto, setBuscaProduto] = useState('');
   const [showAddGrade, setShowAddGrade] = useState(false);
   const [showRetornoEmMassa, setShowRetornoEmMassa] = useState(false);
@@ -206,6 +214,29 @@ export default function Feira() {
   useEffect(() => {
     salvarFiltroPeriodo(periodo);
   }, [periodo]);
+
+  // Persistir rascunho da Nova Carga (itens + título) no localStorage
+  useEffect(() => {
+    saveFeiraDraft(user?.id, itensCarga, tituloCarga);
+  }, [itensCarga, tituloCarga, user?.id]);
+
+  // Validar rascunho carregado contra produtos disponíveis (uma vez, após produtos carregarem)
+  useEffect(() => {
+    if (draftValidatedRef.current) return;
+    if (!produtosAcabados || produtosAcabados.length === 0) return;
+    if (itensCarga.length === 0) {
+      draftValidatedRef.current = true;
+      return;
+    }
+    const idsValidos = new Set(produtosAcabados.map(p => p.id));
+    const validos = itensCarga.filter(i => idsValidos.has(i.itemId));
+    const removidos = itensCarga.length - validos.length;
+    if (removidos > 0) {
+      setItensCarga(validos);
+      toast.info(`${removidos} ${removidos === 1 ? 'item do rascunho foi removido' : 'itens do rascunho foram removidos'} (produtos não disponíveis)`);
+    }
+    draftValidatedRef.current = true;
+  }, [produtosAcabados, itensCarga]);
 
   // Garantir que locais existem - com proteção contra loop infinito
   useEffect(() => {
@@ -364,11 +395,21 @@ export default function Feira() {
         toast.success('Carga criada com sucesso!');
         setItensCarga([]); // Limpar apenas após criar com sucesso
         setTituloCarga(''); // Limpar título após sucesso
+        clearFeiraDraft(user?.id); // Limpar rascunho persistido
       },
       onError: (error: any) => {
         toast.error(error.message || 'Erro ao criar carga');
       }
     });
+  };
+
+  const handleLimparRascunho = () => {
+    if (itensCarga.length === 0 && !tituloCarga.trim()) return;
+    if (!window.confirm('Descartar todos os itens do rascunho?')) return;
+    setItensCarga([]);
+    setTituloCarga('');
+    clearFeiraDraft(user?.id);
+    toast.success('Rascunho descartado');
   };
 
   // Converter TransferenciaComItensHistorico para TransferenciaComItens para o modal de retorno
@@ -739,9 +780,14 @@ export default function Feira() {
               </Button>
             </RoleGate>
             <RoleGate requiredPermission="feira.create">
-              <Button onClick={handleOpenNovaCarga} className="gap-2">
+              <Button onClick={handleOpenNovaCarga} className="gap-2 relative">
                 <Plus size={18} />
                 Nova Carga
+                {itensCarga.length > 0 && !showNovaCarga && (
+                  <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 tabular-nums">
+                    {itensCarga.length}
+                  </Badge>
+                )}
               </Button>
             </RoleGate>
           </div>
@@ -750,9 +796,14 @@ export default function Feira() {
 
       {/* Mobile Action Button - Hidden for vendedor */}
       {isMobile && !isVendedor && <div className="px-4 py-3">
-        <Button onClick={handleOpenNovaCarga} className="w-full gap-2">
+        <Button onClick={handleOpenNovaCarga} className="w-full gap-2 relative">
           <Plus size={18} />
           Nova Carga
+          {itensCarga.length > 0 && !showNovaCarga && (
+            <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 tabular-nums">
+              {itensCarga.length}
+            </Badge>
+          )}
         </Button>
       </div>}
 
@@ -1081,6 +1132,17 @@ export default function Feira() {
               <Package2 size={14} className="mr-1.5" />
               Por Grade
             </Button>
+            {(itensCarga.length > 0 || tituloCarga.trim()) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLimparRascunho}
+                className="h-8 rounded-lg text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 size={14} className="mr-1.5" />
+                Limpar rascunho
+              </Button>
+            )}
           </div>
         </DialogHeader>
 
