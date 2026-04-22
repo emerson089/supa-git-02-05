@@ -1,13 +1,13 @@
 import {
   Package, LayoutDashboard, Warehouse, Users,
-  ShoppingCart, Settings, HelpCircle, LogOut,
-  ChevronDown, ChevronRight, List, ArrowLeftRight, 
+  ShoppingCart, HelpCircle, LogOut,
+  ChevronRight, List,
   Store, Factory, UserPlus, Settings2, Bus, DollarSign, Wrench, FileText, MessageSquare, Receipt
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/contexts/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AppRole } from '@/types/roles';
@@ -129,8 +129,9 @@ const bottomNavGroups: NavItem[] = [
   }
 ];
 
-// Pages that should preserve their URL params
 const PAGES_WITH_PARAMS = ['/estoque', '/producao', '/clientes'];
+const SIDEBAR_OPEN_DELAY = 120;
+const SIDEBAR_CLOSE_DELAY = 180;
 
 export function AppSidebar() {
   const { user, signOut } = useAuth();
@@ -140,8 +141,9 @@ export function AppSidebar() {
   const isMobile = useIsMobile();
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Save current URL when leaving pages with params
   useEffect(() => {
     const currentPath = location.pathname;
     const shouldSave = PAGES_WITH_PARAMS.some(p => currentPath.startsWith(p));
@@ -151,6 +153,22 @@ export function AppSidebar() {
     }
   }, [location.pathname, location.search]);
 
+  const clearHoverTimers = useCallback(() => {
+    if (openTimerRef.current) {
+      clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => clearHoverTimers();
+  }, [clearHoverTimers]);
+
   const toggleGroup = (label: string) => {
     setExpandedGroups(prev => ({
       ...prev,
@@ -158,7 +176,43 @@ export function AppSidebar() {
     }));
   };
 
+  const handleSidebarMouseEnter = useCallback(() => {
+    if (isMobile) return;
+
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+
+    if (isSidebarExpanded || openTimerRef.current) return;
+
+    openTimerRef.current = setTimeout(() => {
+      setIsSidebarExpanded(true);
+      openTimerRef.current = null;
+    }, SIDEBAR_OPEN_DELAY);
+  }, [isMobile, isSidebarExpanded]);
+
+  const handleSidebarMouseLeave = useCallback(() => {
+    if (isMobile) return;
+
+    if (openTimerRef.current) {
+      clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+    }
+
+    closeTimerRef.current = setTimeout(() => {
+      setIsSidebarExpanded(false);
+      closeTimerRef.current = null;
+    }, SIDEBAR_CLOSE_DELAY);
+  }, [isMobile]);
+
   const handleNavigate = useCallback((targetPath: string) => {
+    clearHoverTimers();
+
     if (location.pathname === targetPath && !location.search) return;
 
     if (targetPath === '/pedidos/criados') {
@@ -172,7 +226,11 @@ export function AppSidebar() {
     } else {
       navigate(targetPath);
     }
-  }, [location.pathname, location.search, navigate]);
+  }, [clearHoverTimers, location.pathname, location.search, navigate]);
+
+  const handleItemMouseDown = useCallback(() => {
+    clearHoverTimers();
+  }, [clearHoverTimers]);
 
   if (isMobile) {
     return null;
@@ -200,7 +258,7 @@ export function AppSidebar() {
 
   const visibleNavGroups = filterByRole(mainNavGroups);
   const visibleBottomGroups = filterByRole(bottomNavGroups);
-  
+
   const userInitial = user?.email?.charAt(0).toUpperCase() || 'U';
   const userEmail = user?.email || '';
 
@@ -208,15 +266,13 @@ export function AppSidebar() {
     const active = isActive(item.path);
     const hasSubItems = item.subItems && item.subItems.length > 0;
     const isGroupExpanded = expandedGroups[item.label];
-
-    // Check if any sub-item is active to highlight the parent group
     const isParentActive = hasSubItems && item.subItems?.some(sub => isActive(sub.path));
 
     const handleClick = () => {
       if (hasSubItems) {
         toggleGroup(item.label);
       }
-      
+
       if (item.path) {
         handleNavigate(item.path);
       }
@@ -225,25 +281,26 @@ export function AppSidebar() {
     return (
       <div key={item.label} className="w-full">
         <button
+          onMouseDown={handleItemMouseDown}
           onClick={handleClick}
           title={!isSidebarExpanded && !isSubItem ? item.label : undefined}
           className={`
             w-full flex items-center justify-between px-3 py-2 rounded-xl text-[13px] transition-all duration-200 outline-none
             ${isSubItem ? 'pl-[42px] pr-3 py-2 relative' : ''}
             ${
-              active || (!isSubItem && isParentActive) 
-                ? 'bg-indigo-50/80 text-indigo-700 font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.02)]' 
+              active || (!isSubItem && isParentActive)
+                ? 'bg-indigo-50/80 text-indigo-700 font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.02)]'
                 : 'text-slate-500 font-medium hover:text-slate-800 hover:bg-slate-100/60'
             }
           `}
         >
           {isSubItem && (
-            <div 
+            <div
               className={`absolute left-[22px] top-1/2 -translate-y-1/2 rounded-full transition-colors duration-200
-                ${active ? 'bg-indigo-600 w-[5px] h-[5px]' : 'bg-slate-300 w-1 h-1 group-hover/btn:bg-slate-400'}`} 
+                ${active ? 'bg-indigo-600 w-[5px] h-[5px]' : 'bg-slate-300 w-1 h-1 group-hover/btn:bg-slate-400'}`}
             />
           )}
-          
+
           <div className="flex items-center gap-[14px] overflow-hidden">
             {item.icon && (
               <span className={`flex-shrink-0 transition-colors duration-200 ${active || isParentActive ? 'text-indigo-600' : 'text-slate-400'}`}>
@@ -262,15 +319,13 @@ export function AppSidebar() {
           )}
         </button>
 
-        {/* SubItems Render */}
         {hasSubItems && isGroupExpanded && isSidebarExpanded && (
           <div className="mt-1 mb-2 relative space-y-0.5">
-            {/* Thread line guiding nested items */}
             <div className="absolute left-[24px] top-0 bottom-3 w-[1.5px] bg-slate-100/80 rounded-full" />
             {item.subItems?.map(subItem => (
-               <div key={subItem.label} className="group/btn relative">
-                 {renderNavItem(subItem, true)}
-               </div>
+              <div key={subItem.label} className="group/btn relative">
+                {renderNavItem(subItem, true)}
+              </div>
             ))}
           </div>
         )}
@@ -279,10 +334,10 @@ export function AppSidebar() {
   };
 
   return (
-    <aside 
+    <aside
       className={`group flex-shrink-0 flex flex-col justify-between p-4 bg-white transition-all duration-300 ease-in-out border-r border-slate-200/60 shadow-sm z-20 sticky top-0 h-screen ${isSidebarExpanded ? 'w-[260px]' : 'w-20'}`}
-      onMouseEnter={() => setIsSidebarExpanded(true)}
-      onMouseLeave={() => setIsSidebarExpanded(false)}
+      onMouseEnter={handleSidebarMouseEnter}
+      onMouseLeave={handleSidebarMouseLeave}
       style={{ willChange: 'width' }}
     >
       <div className="flex-1 overflow-y-auto no-scrollbar pb-4 space-y-6">
@@ -290,8 +345,8 @@ export function AppSidebar() {
           <div className="w-9 h-9 rounded-xl bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white shadow-md shadow-indigo-600/20 transition-all">
             <Package size={18} strokeWidth={2.5} />
           </div>
-          <span 
-            className={`text-[15px] font-bold text-slate-900 tracking-tight whitespace-nowrap transition-all duration-300 
+          <span
+            className={`text-[15px] font-bold text-slate-900 tracking-tight whitespace-nowrap transition-all duration-300
             ${isSidebarExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 w-0 overflow-hidden'}`}
           >
             Deloockii Jeans
