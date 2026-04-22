@@ -118,7 +118,7 @@ export function SmartGradeModal({
     onClose,
     onAdd,
     initialModelId,
-    initialQuantities = {}
+    initialQuantities
 }: SmartGradeModalProps) {
     const { modelosPadronizados } = useModelosPadronizados();
 
@@ -172,37 +172,41 @@ export function SmartGradeModal({
 
     // Inicialização (Edição)
     useEffect(() => {
-        if (open && initialModelId) {
-            const model = modelosAgrupados.find(m => m.id === initialModelId);
-            if (model) {
-                setSelectedModelId(initialModelId);
-                setStep('configure');
-                
-                // Calcular quantidade de grades iniciais
-                const gradeSizes = model.metadata.grade_tamanhos;
-                if (gradeSizes.length > 0) {
-                    const qts = gradeSizes.map(t => initialQuantities[t] || 0);
-                    const minQ = Math.min(...qts);
-                    const allEqual = qts.every(q => q === minQ && q > 0);
+        if (open) {
+            if (initialModelId) {
+                const model = modelosAgrupados.find(m => m.id === initialModelId);
+                if (model) {
+                    setSelectedModelId(initialModelId);
+                    setStep('configure');
                     
-                    if (allEqual) {
-                        setNumGrades(minQ);
-                        // Manual é o que sobra
-                        const manual: Record<string, number> = {};
-                        Object.entries(initialQuantities).forEach(([t, q]) => {
-                            manual[t] = q - minQ;
-                        });
-                        setManualQuantities(manual);
+                    const qtsInput = initialQuantities || {};
+                    
+                    // Calcular quantidade de grades iniciais
+                    const gradeSizes = model.metadata.grade_tamanhos;
+                    if (gradeSizes.length > 0) {
+                        const qts = gradeSizes.map(t => qtsInput[t] || 0);
+                        const minQ = Math.min(...qts);
+                        const allEqual = qts.every(q => q === minQ && q > 0);
+                        
+                        if (allEqual) {
+                            setNumGrades(minQ);
+                            // Manual é o que sobra
+                            const manual: Record<string, number> = {};
+                            Object.entries(qtsInput).forEach(([t, q]) => {
+                                manual[t] = q - minQ;
+                            });
+                            setManualQuantities(manual);
+                        } else {
+                            setNumGrades(0);
+                            setManualQuantities(qtsInput);
+                        }
                     } else {
                         setNumGrades(0);
-                        setManualQuantities(initialQuantities);
+                        setManualQuantities(qtsInput);
                     }
-                } else {
-                    setNumGrades(0);
-                    setManualQuantities(initialQuantities);
                 }
             }
-        } else if (!open) {
+        } else {
             // Reset ao fechar
             setStep('search');
             setSearchTerm('');
@@ -210,7 +214,7 @@ export function SmartGradeModal({
             setNumGrades(0);
             setManualQuantities({});
         }
-    }, [open, initialModelId, initialQuantities, modelosAgrupados]);
+    }, [open, initialModelId, modelosAgrupados]); // Removido initialQuantities para evitar loops
 
     // ── Cálculos Dinâmicos ──────────────────────────────────
 

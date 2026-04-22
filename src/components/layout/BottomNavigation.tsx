@@ -143,8 +143,16 @@ export function BottomNavigation() {
   };
 
   const handleNavigate = useCallback((targetPath: string) => {
-    // If already on the same path, don't navigate (preserves current params)
-    if (location.pathname === targetPath) {
+    // Evita navegação redundante se já estivermos no exato mesmo caminho
+    if (location.pathname === targetPath && !location.search) {
+      setMoreMenuOpen(false);
+      setQuickActionsOpen(false);
+      return;
+    }
+
+    // Se estivermos em uma página com parâmetros e clicarmos no mesmo item raiz,
+    // mantemos os parâmetros atuais em vez de resetar
+    if (location.pathname.startsWith(targetPath) && PAGES_WITH_PARAMS.some(p => targetPath.startsWith(p))) {
       setMoreMenuOpen(false);
       setQuickActionsOpen(false);
       return;
@@ -159,7 +167,7 @@ export function BottomNavigation() {
     }
     setMoreMenuOpen(false);
     setQuickActionsOpen(false);
-  }, [location.pathname, navigate]);
+  }, [location.pathname, location.search, navigate]);
 
   const handleSignOut = async () => {
     await signOut();

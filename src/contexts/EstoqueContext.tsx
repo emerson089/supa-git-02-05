@@ -322,26 +322,41 @@ export function EstoqueProvider({ children }: { children: ReactNode }) {
     return { ...novoProduto, status: calcularStatus(novoProduto) };
   }, [itens, updateItemMutation, addItemMutation, addMovimentacaoMutation]);
 
+  const value = useMemo(() => ({
+    itens,
+    movimentacoes: [],
+    isLoading,
+    addItem,
+    updateItem,
+    removeItem,
+    getItemById,
+    getItensByTipo,
+    deduzirEstoque,
+    adicionarEstoque,
+    integrarProducao,
+    criarProdutoAcabado,
+    verificarDisponibilidade,
+    getMateriasPrimas,
+    getProdutosAcabados,
+  }), [
+    itens,
+    isLoading,
+    addItem,
+    updateItem,
+    removeItem,
+    getItemById,
+    getItensByTipo,
+    deduzirEstoque,
+    adicionarEstoque,
+    integrarProducao,
+    criarProdutoAcabado,
+    verificarDisponibilidade,
+    getMateriasPrimas,
+    getProdutosAcabados,
+  ]);
+
   return (
-    <EstoqueContext.Provider
-      value={{
-        itens,
-        movimentacoes: [],
-        isLoading,
-        addItem,
-        updateItem,
-        removeItem,
-        getItemById,
-        getItensByTipo,
-        deduzirEstoque,
-        adicionarEstoque,
-        integrarProducao,
-        criarProdutoAcabado,
-        verificarDisponibilidade,
-        getMateriasPrimas,
-        getProdutosAcabados,
-      }}
-    >
+    <EstoqueContext.Provider value={value}>
       {children}
     </EstoqueContext.Provider>
   );

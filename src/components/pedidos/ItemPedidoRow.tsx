@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, memo } from 'react';
 import { Trash2, AlertCircle, ChevronDown, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,7 +48,7 @@ interface ItemPedidoRowProps {
   availableOverride?: number;
 }
 
-export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, onAutoFocusComplete, availableOverride }: ItemPedidoRowProps) {
+export const ItemPedidoRow = memo(({ item, produtos, onUpdate, onRemove, autoFocus, onAutoFocusComplete, availableOverride }: ItemPedidoRowProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -62,6 +62,13 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
   const quantidadeDisponivel = availableOverride ?? (produtoSelecionado?.quantidadeDisponivel || 0);
   const estoqueInsuficiente = item.produtoId && item.quantidade > quantidadeDisponivel;
   const esgotado = produtoSelecionado && quantidadeDisponivel === 0;
+  
+  // Informações do produto formatadas
+  const productInfo = useMemo(() => {
+    const nomeStr = produtoSelecionado?.nome || item.produtoNome || 'Produto';
+    const refStr = produtoSelecionado?.referencia || item.referencia || '';
+    return parseProductName(nomeStr, refStr);
+  }, [produtoSelecionado, item.produtoNome, item.referencia]);
 
   // Filtrar produtos baseado na busca (nome ou referência)
   const filteredProdutos = useMemo(() => {
@@ -192,17 +199,7 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                     {item.produtoId ? (
                       <>
                         <span className="text-sm font-medium text-foreground truncate w-full text-left">
-                          {(() => {
-                            const nomeStr = produtoSelecionado?.nome || item.produtoNome || 'Produto';
-                            const refStr = produtoSelecionado?.referencia || item.referencia || '';
-                            const info = parseProductName(nomeStr, refStr);
-                            
-                            let display = info.nomeExibicao;
-                            if (info.tamanho && !/^(PEÇAS)$/i.test(info.tamanho)) {
-                              display = `${display} — ${info.tamanho}`;
-                            }
-                            return display;
-                          })()}
+                          {productInfo.nomeExibicao}
 
                         </span>
                       </>
@@ -287,6 +284,9 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                 </p>
               ) : (
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                  {productInfo.tamanho && !/^(PEÇAS)$/i.test(productInfo.tamanho) && (
+                    <span className="font-bold text-primary mr-1.5">TAM {productInfo.tamanho} ·</span>
+                  )}
                   {produtoSelecionado?.gradeReserved
                     ? `${quantidadeDisponivel} fora da grade`
                     : `${quantidadeDisponivel} disponíveis`}
@@ -360,4 +360,6 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
       </div>
     </div>
   );
-}
+});
+
+ItemPedidoRow.displayName = 'ItemPedidoRow';

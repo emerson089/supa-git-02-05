@@ -60,19 +60,29 @@ export function ItensPedidoCard({ items, onUpdateItem, onRemoveItem, onAddGradeI
   // para grades completas e quantas estão livres para venda avulsa.
   const gradeInfoMap = useMemo(() => {
     const map: Record<string, { gradeReservado: number; livreParaAvulso: number }> = {};
+    if (!modelosPadronizados.length) return map;
+
     for (const modelo of modelosPadronizados) {
-      if (!modelo.meta.grades?.length) continue;
-      const grade = modelo.meta.grades[0]; // usa a primeira grade como referência
+      const grades = modelo.meta.grades;
+      if (!grades?.length || !modelo.variacoes.length) continue;
+
+      const grade = grades[0]; // usa a primeira grade como referência
       let maxGrades = Infinity;
+      
+      // Criar mapa de variação por tamanho para busca rápida O(1) dentro do loop
+      const variacaoPorTamanho = new Map(modelo.variacoes.map(v => [v.tamanho, v]));
+
       for (const gradeItem of grade.itens) {
         if (gradeItem.quantidade <= 0) continue;
-        const variacao = modelo.variacoes.find(v => v.tamanho === gradeItem.tamanho);
+        const variacao = variacaoPorTamanho.get(gradeItem.tamanho);
         const stock = variacao?.quantidade ?? 0;
         maxGrades = Math.min(maxGrades, Math.floor(stock / gradeItem.quantidade));
       }
-      if (!isFinite(maxGrades)) maxGrades = 0;
+      
+      if (!isFinite(maxGrades) || maxGrades < 0) maxGrades = 0;
+      
       for (const gradeItem of grade.itens) {
-        const variacao = modelo.variacoes.find(v => v.tamanho === gradeItem.tamanho);
+        const variacao = variacaoPorTamanho.get(gradeItem.tamanho);
         if (!variacao) continue;
         const gradeReservado = maxGrades * gradeItem.quantidade;
         map[variacao.id] = {
@@ -87,29 +97,26 @@ export function ItensPedidoCard({ items, onUpdateItem, onRemoveItem, onAddGradeI
   // Obter produtos acabados do estoque e transformar para o formato esperado
   const produtos = useMemo(() => {
     const todosAcabados = getProdutosAcabados();
+    if (!todosAcabados.length) return [];
     
-    // 1. Dicionário de quantidades por modelo pai (Padronizado)
+    // 1. Dicionário de quantidades por modelo pai e ref base
     const estoquePorModeloId = new Map<string, number>();
-    todosAcabados
-      .filter(i => i.categoria === 'Modelo Padronizado')
-      .forEach(m => estoquePorModeloId.set(m.id, m.quantidade));
-
-    // 2. Dicionário de quantidades por ref base (Legado)
     const estoquePorRefBase = new Map<string, number>();
+
     const getRefBaseLegacy = (ref: string) => {
-      const parts = ref.split('-');
-      if (parts.length > 1) return parts.slice(0, -1).join('-');
-      return ref;
+      const idx = ref.lastIndexOf('-');
+      return idx > 0 ? ref.substring(0, idx) : ref;
     };
 
-    // Pré-calcular estoque total para itens legados
-    todosAcabados
-      .filter(i => i.categoria !== 'Modelo Padronizado' && i.categoria !== 'Variação Padronizada')
-      .forEach(item => {
+    // Single pass to fill dictionaries
+    for (const item of todosAcabados) {
+      if (item.categoria === 'Modelo Padronizado') {
+        estoquePorModeloId.set(item.id, item.quantidade);
+      } else if (item.categoria !== 'Variação Padronizada') {
         let ref = '';
         try {
           if (item.localizacao) {
-            const loc = JSON.parse(item.localizacao);
+            const loc = typeof item.localizacao === 'string' ? JSON.parse(item.localizacao) : item.localizacao;
             ref = loc.referencia || '';
           }
         } catch(e) {}
@@ -118,7 +125,8 @@ export function ItensPedidoCard({ items, onUpdateItem, onRemoveItem, onAddGradeI
           const base = getRefBaseLegacy(ref);
           estoquePorRefBase.set(base, (estoquePorRefBase.get(base) || 0) + item.quantidade);
         }
-      });
+      }
+    }
 
     return todosAcabados
       .filter(item => item.categoria !== 'Modelo Padronizado')
@@ -126,37 +134,32 @@ export function ItensPedidoCard({ items, onUpdateItem, onRemoveItem, onAddGradeI
         let ref = '';
         let modeloId: string | undefined;
         let tamanho: string | undefined;
-        let totalModelEstoque = item.quantidade;
-        let refBase = '';
-
+        
         try {
           if (item.localizacao) {
-            const loc = JSON.parse(item.localizacao);
+            const loc = typeof item.localizacao === 'string' ? JSON.parse(item.localizacao) : item.localizacao;
             ref = loc.referencia || '';
             modeloId = loc.modeloId;
             tamanho = loc.tamanho;
           }
         } catch (e) { }
 
-        // Agrupamento igual ao EditPedidoModal
+        let totalModelEstoque = item.quantidade;
+        let refBase = ref ? getRefBaseLegacy(ref) : '';
+
         if (item.categoria === 'Variação Padronizada' && modeloId) {
           totalModelEstoque = estoquePorModeloId.get(modeloId) || item.quantidade;
-          if (ref) refBase = getRefBaseLegacy(ref);
         } else if (ref) {
-          refBase = getRefBaseLegacy(ref);
           totalModelEstoque = estoquePorRefBase.get(refBase) || item.quantidade;
         }
 
-        // Limpeza de nome para exibir no seletor usando utilitário padronizado
         const info = parseProductName(item.nome, ref);
-        const cleanName = info.nomeBase;
-
         const gradeInfo = gradeInfoMap[item.id];
+        
         return {
           id: item.id,
-          nome: cleanName.trim(),
+          nome: info.nomeBase.trim(),
           preco: item.precoUnitario,
-          // Para variações em grade: mostra apenas o sobrante (fora da grade)
           quantidadeDisponivel: gradeInfo?.livreParaAvulso ?? item.quantidade,
           referencia: ref,
           totalModelEstoque,

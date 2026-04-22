@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { startOfWeek, endOfWeek, addDays, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -55,6 +55,12 @@ function formatPhone(phone: string): string {
   return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
 }
 const STORAGE_KEY = 'novo-pedido-draft';
+
+const getLabel = (value: string, options: {
+  value: string;
+  label: string;
+}[]) => options.find(opt => opt.value === value)?.label || value;
+
 const NovoPedido = () => {
   const isMobile = useIsMobile();
   const { user } = useAuth();
@@ -99,6 +105,7 @@ const NovoPedido = () => {
 
   // Flag para indicar se já carregou do localStorage
   const [isInitialized, setIsInitialized] = useState(false);
+  const lastSavedDraft = useRef<string>('');
 
   // Carregar dados do localStorage ao iniciar
   useEffect(() => {
@@ -115,6 +122,9 @@ const NovoPedido = () => {
         if (data.taxaExcursao) setTaxaExcursao(data.taxaExcursao);
         if (data.desconto) setDesconto(data.desconto);
         if (data.items && Array.isArray(data.items)) setItems(data.items);
+        
+        // Sincronizar o ref inicial para evitar salvamento imediato redundante
+        lastSavedDraft.current = saved;
       } catch (e) {
         // Ignorar erro de parse
       }
@@ -125,6 +135,7 @@ const NovoPedido = () => {
   // Salvar automaticamente quando dados mudam (após inicialização)
   useEffect(() => {
     if (!isInitialized) return;
+    
     const data = {
       clienteId,
       cidade,
@@ -136,8 +147,15 @@ const NovoPedido = () => {
       desconto,
       items
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [clienteId, cidade, estado, telefone, excursao, excursaoId, taxaExcursao, items, isInitialized]);
+    
+    const dataString = JSON.stringify(data);
+    
+    // Só salvar se os dados realmente mudaram para evitar loops de I/O e renderização
+    if (dataString !== lastSavedDraft.current) {
+      localStorage.setItem(STORAGE_KEY, dataString);
+      lastSavedDraft.current = dataString;
+    }
+  }, [clienteId, cidade, estado, telefone, excursao, excursaoId, taxaExcursao, items, desconto, isInitialized]);
 
   // Função para limpar o rascunho
   const clearDraft = () => localStorage.removeItem(STORAGE_KEY);
@@ -179,43 +197,38 @@ const NovoPedido = () => {
       qtdPorProduto[item.produtoId] = (qtdPorProduto[item.produtoId] || 0) + item.quantidade;
     }
     return Object.entries(qtdPorProduto).some(([produtoId, total]) => {
-      const produto = getItemById(produtoId);
+      const produto = estoqueItens.find(i => i.id === produtoId);
       return !!produto && total > produto.quantidade;
     });
-  }, [items, getItemById]);
+  }, [items, estoqueItens]);
 
-  // Calcular quantidade de modelos únicos
   // Calcular quantidade de modelos únicos baseada no agrupamento inteligente
   const quantidadeModelos = useMemo(() => {
+    if (items.length === 0) return 0;
+    
     const groups = new Set();
     
-    items.forEach(item => {
-      if (!item.produtoId) return;
+    for (const item of items) {
+      if (!item.produtoId) continue;
       
       // Se tiver modeloId (itens de grade), usamos ele como chave única
       if (item.modeloId) {
         groups.add(item.modeloId);
-        return;
+        continue;
       }
       
-      const produto = getItemById(item.produtoId);
-      let refTecnica = '';
-      if (produto?.localizacao) {
-        try {
-          const loc = JSON.parse(produto.localizacao);
-          refTecnica = loc.referencia || '';
-        } catch (e) {}
-      }
-
+      // Para itens avulsos, tentamos obter a referência base sem disparar buscas pesadas
+      // Se já tivermos a referência no item, usamos ela
+      const refTecnica = item.metadata?.referencia || item.referencia || '';
       const info = parseProductName(item.produtoNome || "", refTecnica);
       
       // Chave de agrupamento para itens avulsos: RefBase + Valor + NomeBase
       const key = `${info.refBase}|${item.valorUnitario}|${info.nomeBase}`;
       groups.add(key);
-    });
+    }
     
     return groups.size;
-  }, [items, getItemById]);
+  }, [items]);
 
   // Item handlers
   const handleUpdateItem = useCallback((updatedItem: ItemPedido) => {
@@ -228,8 +241,10 @@ const NovoPedido = () => {
     setItems(prev => [...novosItens, ...prev]);
   }, []);
 
+  const handleNewItemFocused = useCallback(() => setNewItemId(null), []);
+
   // Form actions
-  const handleLimpar = () => {
+  const handleLimpar = useCallback(() => {
     setClienteId('');
     setCidade('');
     setEstado('');
@@ -241,8 +256,8 @@ const NovoPedido = () => {
     setItems([]);
     clearDraft();
     toast.success('Formulário limpo');
-  };
-  const handleCriarPedido = async () => {
+  }, []);
+  const handleCriarPedido = useCallback(async () => {
     // Validações
     if (!clienteId) {
       toast.error('Selecione um cliente');
@@ -304,10 +319,6 @@ const NovoPedido = () => {
       );
 
       // Criar pedido no contexto - usando labels em maiúsculo para matching de cores
-      const getLabel = (value: string, options: {
-        value: string;
-        label: string;
-      }[]) => options.find(opt => opt.value === value)?.label || value;
       const pedidoCriado = await addPedido({
         clienteId,
         clienteNome: cliente?.nome || 'Cliente',
@@ -523,11 +534,11 @@ Favorecido: Delookii Confecções Ltda`;
     } finally {
       setIsLoading(false);
     }
-  };
-  const handleAddCliente = () => {
+  }, [clienteId, items, hasEstoqueInsuficiente, getClienteById, getLabel, statusPedido, statusPedidoOptions, statusPagamento, statusPagamentoOptions, statusEntrega, statusEntregaOptions, addPedido, totalPecas, valorTotal, desconto, enviarWhatsApp, telefone, user?.id, user?.user_metadata, estoqueItens, handleLimpar, navigate]);
+  const handleAddCliente = useCallback(() => {
     setShowAddCliente(true);
-  };
-  const handleSaveNovoCliente = async () => {
+  }, []);
+  const handleSaveNovoCliente = useCallback(async () => {
     // Custom pre-flight validations for UI alerts
     if (!novoCliente.telefone) {
       toast.error('O telefone é obrigatório.');
@@ -602,7 +613,7 @@ Favorecido: Delookii Confecções Ltda`;
     } catch (error) {
       toast.error('Erro ao cadastrar cliente');
     }
-  };
+  }, [novoCliente, addCliente, excursoesAtivas]);
   return <div className="min-h-screen bg-background flex overflow-hidden">
     {/* Mobile Header */}
     {isMobile && <MobileHeader title="Novo Pedido" />}
@@ -651,7 +662,14 @@ Favorecido: Delookii Confecções Ltda`;
           />
 
           {/* Items Card - agora abaixo do resumo */}
-          <ItensPedidoCard items={items} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} onAddGradeItems={handleAddGradeItems} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
+          <ItensPedidoCard 
+            items={items} 
+            onUpdateItem={handleUpdateItem} 
+            onRemoveItem={handleRemoveItem} 
+            onAddGradeItems={handleAddGradeItems} 
+            newItemId={newItemId} 
+            onNewItemFocused={handleNewItemFocused} 
+          />
         </div>
       </div>
     </main>

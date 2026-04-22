@@ -44,7 +44,7 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
 
   const refCurta = numeros ? `REF ${numeros.slice(-3).padStart(3, '0')}` : "";
 
-  // 4. Limpar o nome (remover referências que estejam no campo nome)
+  // 4. Limpar o nome (remover referências e tamanhos que estejam no campo nome)
   let nomeBase = currentName;
   
   // Se o nome contém a referência técnica completa, removemos ela
@@ -52,13 +52,20 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
     nomeBase = nomeBase.replace(refBase, '').trim();
   }
   
-  // Se o nome termina com qualquer padrão de referência (ex: " - 123"), removemos
-  nomeBase = nomeBase.replace(/\s*[—|-|:]\s*\d{3}$/, "").trim();
+  // Limpeza recursiva de padrões de referência (3 dígitos) e tamanhos no final do nome
+  let prevNomeBase;
+  do {
+    prevNomeBase = nomeBase;
+    // Remove referências de 3 ou mais dígitos no final: " — 032", " - 408"
+    nomeBase = nomeBase.replace(/\s*[—|–|-|:]\s*\d{3,}$/, "").trim();
+    // Remove tamanhos comuns: " — 34", " — G", " — GG", etc.
+    nomeBase = nomeBase.replace(/\s*[—|–|-|:]\s*(P|M|G|GG|G1|G2|G3|G4|G5|XG|XGG|PEÇAS|\d{2})$/i, "").trim();
+  } while (nomeBase !== prevNomeBase);
 
   // Limpeza final de qualquer caractere de separação residual no fim
-  nomeBase = nomeBase.replace(/\s*[—|-|:]\s*$/, "").trim();
+  nomeBase = nomeBase.replace(/\s*[—|–|-|:]\s*$/, "").trim();
 
-  // 5. Gerar nome de exibição padronizado: "Nome XXX"
+  // 5. Gerar nome de exibição padronizado: "Nome - 000"
   const numDisplay = numeros ? numeros.slice(-3).padStart(3, '0') : '';
   const nomeExibicao = numDisplay ? `${nomeBase} - ${numDisplay}` : nomeBase;
 

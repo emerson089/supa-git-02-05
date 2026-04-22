@@ -118,76 +118,66 @@ export function useModelosPadronizados() {
     // Modelos com suas variações hidratadas + Modelos Manuais (Simples)
     const modelosComVariacoes: ModeloPadronizado[] = useMemo(() => {
         try {
-            // 1. Agrupar variações por modeloId antecipadamente (O(M))
+            // 1. Agrupar variações por modeloId antecipadamente (O(V))
             const variacoesPorModelo = new Map<string, VariacaoModelo[]>();
             
-            variacoes.forEach(v => {
-                try {
-                    const vm = parseVariacaoMeta(v.localizacao);
-                    if (vm?.modeloId) {
-                        const variacaoHidratada: VariacaoModelo = {
-                            ...v,
-                            tamanho: vm.tamanho,
-                            referencia: vm.referencia,
-                            modeloId: vm.modeloId,
-                        };
-                        
-                        if (!variacoesPorModelo.has(vm.modeloId)) {
-                            variacoesPorModelo.set(vm.modeloId, []);
-                        }
-                        variacoesPorModelo.get(vm.modeloId)!.push(variacaoHidratada);
+            for (const v of variacoes) {
+                const vm = parseVariacaoMeta(v.localizacao);
+                if (vm?.modeloId) {
+                    const variacaoHidratada: VariacaoModelo = {
+                        ...v,
+                        tamanho: vm.tamanho,
+                        referencia: vm.referencia,
+                        modeloId: vm.modeloId,
+                    };
+                    
+                    let group = variacoesPorModelo.get(vm.modeloId);
+                    if (!group) {
+                        group = [];
+                        variacoesPorModelo.set(vm.modeloId, group);
                     }
-                } catch (e) {
-                    // Ignora variação malformada
+                    group.push(variacaoHidratada);
                 }
-            });
+            }
 
-            // 2. Processar Modelos Padronizados (O(N))
-            const padronizados = modelosPai.map(pai => {
-                try {
-                    const meta = parseMeta(pai.localizacao);
-                    if (!meta) return null;
+            // 2. Processar Modelos Padronizados (O(P))
+            const padronizados: ModeloPadronizado[] = [];
+            for (const pai of modelosPai) {
+                const meta = parseMeta(pai.localizacao);
+                if (!meta) continue;
 
-                    return {
-                        ...pai,
-                        meta,
-                        variacoes: variacoesPorModelo.get(pai.id) || [],
-                    } as ModeloPadronizado;
-                } catch (err) {
-                    console.error("Erro ao processar modelo pai:", pai.id, err);
-                    return null;
-                }
-            }).filter(Boolean) as ModeloPadronizado[];
+                padronizados.push({
+                    ...pai,
+                    meta,
+                    variacoes: variacoesPorModelo.get(pai.id) || [],
+                });
+            }
 
-            // 3. Incluir Modelos Manuais (Itens Acabados que não são pais nem variações)
-            const manuais = itens
-                .filter(i => 
+            // 3. Incluir Modelos Manuais (O(I))
+            // Itens Acabados que não são pais nem variações
+            const manuais: ModeloPadronizado[] = [];
+            for (const i of itens) {
+                if (
                     i.tipo === 'acabado' && 
                     i.categoria !== CATEGORIA_MODELO_PAD && 
                     i.categoria !== CATEGORIA_VARIACAO_PAD
-                )
-                .map(i => {
-                    try {
-                        const info = parseProductName(i.nome, i.localizacao || '');
-                        
-                        return {
-                            ...i,
-                            nome: info.nomeBase,
-                            meta: {
-                                tipo: 'OT',
-                                composicao: '',
-                                colecao: '',
-                                custoProducao: 0,
-                                referencia: info.refBase || i.nome,
-                                grades: []
-                            },
-                            variacoes: []
-                        } as ModeloPadronizado;
-                    } catch (err) {
-                        return null;
-                    }
-                })
-                .filter(Boolean) as ModeloPadronizado[];
+                ) {
+                    const info = parseProductName(i.nome, i.localizacao || '');
+                    manuais.push({
+                        ...i,
+                        nome: info.nomeBase,
+                        meta: {
+                            tipo: 'OT',
+                            composicao: '',
+                            colecao: '',
+                            custoProducao: 0,
+                            referencia: info.refBase || i.nome,
+                            grades: []
+                        },
+                        variacoes: []
+                    });
+                }
+            }
 
             return [...padronizados, ...manuais];
         } catch (globalErr) {

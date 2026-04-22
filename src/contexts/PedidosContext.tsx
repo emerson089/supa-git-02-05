@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useMemo } from 'react';
 import { usePedidos as usePedidosQuery, useAddPedido, useUpdatePedido, useRemovePedido, usePedidoById, PedidoDB, PedidoInsert, PedidoUpdate } from '@/hooks/usePedidosData';
 
 export interface ItemPedido {
@@ -49,6 +49,9 @@ const PedidosContext = createContext<PedidosContextType | undefined>(undefined);
 
 // Transform database format to context format
 function transformDBToContext(pedidoDB: PedidoDB): Pedido {
+  if (!pedidoDB) {
+    return {} as Pedido;
+  }
   return {
     id: pedidoDB.id,
     clienteId: pedidoDB.cliente_id || '',
@@ -89,7 +92,12 @@ export function PedidosProvider({ children }: { children: ReactNode }) {
   const updatePedidoMutation = useUpdatePedido();
   const removePedidoMutation = useRemovePedido();
 
-  const pedidos: Pedido[] = (pedidosDB || []).map(transformDBToContext);
+  const pedidos: Pedido[] = useMemo(() => 
+    (pedidosDB || [])
+      .filter(p => !!p)
+      .map(transformDBToContext),
+    [pedidosDB]
+  );
 
   const addPedido = async (pedidoData: Omit<Pedido, 'id' | 'dataCriacao' | 'dataPagamento'>): Promise<Pedido> => {
     const pedidoInsert: PedidoInsert = {
@@ -162,8 +170,17 @@ export function PedidosProvider({ children }: { children: ReactNode }) {
     return pedidos.find(pedido => pedido.id === id);
   };
 
+  const value = useMemo(() => ({
+    pedidos,
+    isLoading,
+    addPedido,
+    updatePedido,
+    removePedido,
+    getPedidoById
+  }), [pedidos, isLoading, addPedido, updatePedido, removePedido]);
+
   return (
-    <PedidosContext.Provider value={{ pedidos, isLoading, addPedido, updatePedido, removePedido, getPedidoById }}>
+    <PedidosContext.Provider value={value}>
       {children}
     </PedidosContext.Provider>
   );

@@ -210,23 +210,27 @@ export function AppSidebar() {
     }, SIDEBAR_CLOSE_DELAY);
   }, [isMobile]);
 
-  const handleNavigate = useCallback((targetPath: string) => {
+  const handleNavigate = useCallback((path: string, searchParams?: string) => {
     clearHoverTimers();
 
-    if (location.pathname === targetPath && !location.search) return;
-
-    if (targetPath === '/pedidos/criados') {
-      navigate(targetPath);
+    // Evita navegação redundante se já estivermos no caminho exato
+    if (location.pathname === path && !searchParams && !location.search) {
       return;
     }
 
-    const savedUrl = sessionStorage.getItem(`lastUrl_${targetPath}`);
-    if (savedUrl && savedUrl.startsWith(targetPath)) {
+    // Se estivermos em uma página com parâmetros e clicarmos no mesmo item raiz,
+    // mantemos os parâmetros atuais em vez de resetar
+    if (location.pathname.startsWith(path) && PAGES_WITH_PARAMS.some(p => path.startsWith(p)) && !searchParams) {
+      return;
+    }
+
+    const savedUrl = sessionStorage.getItem(`lastUrl_${path}`);
+    if (savedUrl && !searchParams) {
       navigate(savedUrl);
     } else {
-      navigate(targetPath);
+      navigate(path + (searchParams || ""));
     }
-  }, [clearHoverTimers, location.pathname, location.search, navigate]);
+  }, [clearHoverTimers, navigate, location.pathname, location.search]);
 
   const handleItemMouseDown = useCallback(() => {
     clearHoverTimers();
