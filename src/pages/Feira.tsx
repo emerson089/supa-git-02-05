@@ -215,6 +215,29 @@ export default function Feira() {
     salvarFiltroPeriodo(periodo);
   }, [periodo]);
 
+  // Persistir rascunho da Nova Carga (itens + título) no localStorage
+  useEffect(() => {
+    saveFeiraDraft(user?.id, itensCarga, tituloCarga);
+  }, [itensCarga, tituloCarga, user?.id]);
+
+  // Validar rascunho carregado contra produtos disponíveis (uma vez, após produtos carregarem)
+  useEffect(() => {
+    if (draftValidatedRef.current) return;
+    if (!produtosAcabados || produtosAcabados.length === 0) return;
+    if (itensCarga.length === 0) {
+      draftValidatedRef.current = true;
+      return;
+    }
+    const idsValidos = new Set(produtosAcabados.map(p => p.id));
+    const validos = itensCarga.filter(i => idsValidos.has(i.itemId));
+    const removidos = itensCarga.length - validos.length;
+    if (removidos > 0) {
+      setItensCarga(validos);
+      toast.info(`${removidos} ${removidos === 1 ? 'item do rascunho foi removido' : 'itens do rascunho foram removidos'} (produtos não disponíveis)`);
+    }
+    draftValidatedRef.current = true;
+  }, [produtosAcabados, itensCarga]);
+
   // Garantir que locais existem - com proteção contra loop infinito
   useEffect(() => {
     // Proteção: só tenta uma vez, e não tenta se já falhou
