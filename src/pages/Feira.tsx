@@ -1132,6 +1132,17 @@ export default function Feira() {
               <Package2 size={14} className="mr-1.5" />
               Por Grade
             </Button>
+            {(itensCarga.length > 0 || tituloCarga.trim()) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLimparRascunho}
+                className="h-8 rounded-lg text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 size={14} className="mr-1.5" />
+                Limpar rascunho
+              </Button>
+            )}
           </div>
         </DialogHeader>
 
