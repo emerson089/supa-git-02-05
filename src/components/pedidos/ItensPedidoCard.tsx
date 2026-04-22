@@ -1,10 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Package2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ItemPedidoRow, ItemPedido } from './ItemPedidoRow';
 import { GradeCompactCard } from './GradeCompactCard';
 import { useEstoque } from '@/contexts/EstoqueContext';
-import { useMemo } from 'react';
 import { SmartGradeModal } from './SmartGradeModal';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
