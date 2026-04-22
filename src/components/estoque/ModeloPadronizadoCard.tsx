@@ -16,6 +16,7 @@ import { ModeloPadronizado, TIPO_GARMENT_LABELS, TAMANHOS_LETRAS, TAMANHOS_NUMER
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { EditarModeloPadronizadoModal } from './EditarModeloPadronizadoModal';
+import { parseProductName } from '@/utils/productNameUtils';
 
 interface ModeloPadronizadoCardProps {
     modelo: ModeloPadronizado;
@@ -146,9 +147,10 @@ export function ModeloPadronizadoCard({
                     {/* Head */}
                     <div className="space-y-1">
                         <h3 className="font-bold text-base text-foreground line-clamp-2 leading-tight">
-                            {nome.split('—')[0].trim()}
+                            {parseProductName(nome, meta.referencia).nomeExibicao}
                         </h3>
                         <p className="text-sm text-foreground/80 font-medium line-clamp-1">{meta.referencia}</p>
+
                         <p className="text-xs text-muted-foreground">{TIPO_GARMENT_LABELS[meta.tipo]}</p>
                     </div>
 

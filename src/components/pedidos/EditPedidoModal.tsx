@@ -563,7 +563,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
                 const formatDisplayName = (parsed: any) => {
                   if (parsed.refModelo && parsed.tamanho) {
-                    return `${parsed.nomeBase} ref ${parsed.refModelo} - ${parsed.tamanho}`;
+                    return `${parsed.nomeBase} ${parsed.refModelo} — ${parsed.tamanho}`;
                   }
                   return parsed.nomeBase;
                 };
@@ -590,7 +590,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                   if (groupingKey && parsed.tamanho) {
                     if (!gradeGroups.has(groupingKey)) {
                       gradeGroups.set(groupingKey, { 
-                        refBase: modeloId || parsed.refBase, 
+                        refBase: parsed.refBase || '', 
                         nomeModelo: parsed.nomeBase, 
                         itens: [] 
                       });

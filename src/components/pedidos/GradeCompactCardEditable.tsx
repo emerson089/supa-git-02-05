@@ -72,7 +72,7 @@ export function GradeCompactCardEditable({
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                         <h4 className="font-bold text-slate-800 dark:text-slate-200 truncate">
-                            {grupo.nomeModelo}
+                            {grupo.nomeModelo} {grupo.refBase?.slice(-3)}
                         </h4>
                         <Badge variant="secondary" className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-none text-[10px] py-0 px-2 h-5 flex items-center gap-1 font-semibold">
                             <Layers size={10} />

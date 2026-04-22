@@ -3,6 +3,7 @@ import { Trash2, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { parseProductName } from '@/utils/productNameUtils';
 
 export interface EditableItem {
   id: string;
@@ -10,6 +11,7 @@ export interface EditableItem {
   produto_nome: string;
   quantidade: number;
   valor_unitario: number;
+  referencia?: string;
 }
 
 interface EditableItemRowProps {
@@ -100,8 +102,9 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
         {/* Linha 1: Nome + Lixeira */}
         <div className="flex items-start gap-2 w-full justify-between">
           <p className="font-medium text-foreground text-sm break-words mt-1">
-            {item.produto_nome}
+            {parseProductName(item.produto_nome, item.referencia || '').nomeExibicao}
           </p>
+
           <Button
             type="button"
             variant="ghost"
@@ -153,8 +156,11 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
       <div className="hidden lg:flex items-start gap-2">
         {/* Product Name - Allowed to wrap and show full text */}
         <div className="flex-1 min-w-0 pr-4 mt-1.5">
-          <p className="font-medium text-foreground text-sm leading-tight break-words">{item.produto_nome}</p>
+          <p className="font-medium text-foreground text-sm leading-tight break-words">
+            {parseProductName(item.produto_nome, item.referencia || '').nomeExibicao}
+          </p>
         </div>
+
 
         {/* Quantity Input */}
         <div className="w-14 shrink-0">

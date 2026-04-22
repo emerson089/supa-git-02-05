@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { parseProductName } from '@/utils/productNameUtils';
 
 export interface ItemPedido {
   id: string;
@@ -23,6 +24,8 @@ export interface ItemPedido {
   modeloNome?: string;
   // Itens expandidos: preenchido ao criar pedido (uma entrada por variação)
   gradeItensExpandidos?: { variacaoId: string; tamanho: string; quantidade: number }[];
+  metadata?: any;
+  referencia?: string;
 }
 
 interface ItemPedidoRowProps {
@@ -190,19 +193,18 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                       <>
                         <span className="text-sm font-medium text-foreground truncate w-full text-left">
                           {(() => {
-                            let nomeStr = produtoSelecionado?.nome || item.produtoNome || 'Produto';
-                            const t = produtoSelecionado?.tamanho || '';
-                            if (t && !/^(PEÇAS)$/i.test(t) && !nomeStr.includes(t)) {
-                              nomeStr = `${nomeStr} — ${t}`;
+                            const nomeStr = produtoSelecionado?.nome || item.produtoNome || 'Produto';
+                            const refStr = produtoSelecionado?.referencia || item.referencia || '';
+                            const info = parseProductName(nomeStr, refStr);
+                            
+                            let display = info.nomeExibicao;
+                            if (info.tamanho && !/^(PEÇAS)$/i.test(info.tamanho)) {
+                              display = `${display} — ${info.tamanho}`;
                             }
-                            return nomeStr;
-                          })() /* Standardized Display */}
+                            return display;
+                          })()}
+
                         </span>
-                        {(produtoSelecionado?.refBase || produtoSelecionado?.referencia) && (
-                          <span className="text-[10px] text-muted-foreground mt-0.5 truncate w-full text-left font-medium">
-                            REF {(produtoSelecionado?.refBase || produtoSelecionado?.referencia || "").slice(-3)}
-                          </span>
-                        )}
                       </>
                     ) : (
                       <span className="text-sm text-muted-foreground">Selecione um produto</span>

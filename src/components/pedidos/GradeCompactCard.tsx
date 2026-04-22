@@ -3,6 +3,7 @@ import { Trash2, Package2, Layers } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ItemPedido } from './ItemPedidoRow';
 import { cn } from '@/lib/utils';
+import { parseProductName } from '@/utils/productNameUtils';
 
 const ORDEM_TAMANHOS = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'G1', 'G2', 'G3', 'G4', 'G5'];
 
@@ -33,10 +34,14 @@ export function GradeCompactCard({ itens, onRemoveGrupo, onClick }: GradeCompact
     if (itens.length === 0) return null;
 
     const primeiroItem = itens[0];
-    const modeloNome = primeiroItem.modeloNome || primeiroItem.produtoNome?.split(' — ')[0] || 'Modelo';
+    const referencia = primeiroItem.referencia || (primeiroItem as any).metadata?.referencia || '';
+    const info = parseProductName(primeiroItem.produtoNome || primeiroItem.modeloNome || 'Modelo', referencia);
+    
+    const modeloNome = info.nomeExibicao; // Já formata como "Nome - 165"
     const valorUnitario = primeiroItem.valorUnitario;
     const totalPecas = itens.reduce((s, i) => s + i.quantidade, 0);
     const subtotal = totalPecas * valorUnitario;
+
 
     // Agrupar e ordenar tamanhos
     const aggregated = useMemo(() => {

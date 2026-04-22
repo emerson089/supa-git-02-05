@@ -197,11 +197,28 @@ export function ItensPedidoCard({ items, onUpdateItem, onRemoveItem, onAddGradeI
           return i.modeloId === item.modeloId && i.valorUnitario === item.valorUnitario;
         });
 
+        // Enriquecer itens com referência se faltar
+        const enrichedGradeItens = gradeItens.map(i => {
+          if (i.metadata?.referencia) return i;
+          const p = produtos.find(prod => prod.id === i.produtoId);
+          if (p?.referencia) {
+            return {
+              ...i,
+              referencia: p.referencia,
+              metadata: {
+                ...(i.metadata || {}),
+                referencia: p.referencia
+              }
+            };
+          }
+          return i;
+        });
+
         blocks.push({
           type: 'grade',
           gradeId: item.gradeId || 'auto',
           modeloId: item.modeloId!,
-          itens: gradeItens
+          itens: enrichedGradeItens
         });
         processedGrades.add(gradeKey);
       } else {
@@ -214,7 +231,7 @@ export function ItensPedidoCard({ items, onUpdateItem, onRemoveItem, onAddGradeI
     });
 
     return blocks;
-  }, [items]);
+  }, [items, produtos]);
 
   return (
     <>

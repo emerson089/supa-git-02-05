@@ -3,6 +3,7 @@ import { useEstoque, ItemEstoque } from '@/contexts/EstoqueContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { parseProductName } from '@/utils/productNameUtils';
 
 // ─────────────────────────────────────────────────────────
 // Tipos
@@ -114,34 +115,85 @@ export function useModelosPadronizados() {
         [itens]
     );
 
-    // Modelos com suas variações hidratadas
+    // Modelos com suas variações hidratadas + Modelos Manuais (Simples)
     const modelosComVariacoes: ModeloPadronizado[] = useMemo(() => {
-        return modelosPai.map(pai => {
-            const meta = parseMeta(pai.localizacao);
-            if (!meta) return null;
+        try {
+            // 1. Processar Modelos Padronizados (Hierarchy)
+            const padronizados = modelosPai.map(pai => {
+                try {
+                    const meta = parseMeta(pai.localizacao);
+                    if (!meta) return null;
 
-            const vars: VariacaoModelo[] = variacoes
-                .filter(v => {
-                    const vm = parseVariacaoMeta(v.localizacao);
-                    return vm?.modeloId === pai.id;
-                })
-                .map(v => {
-                    const vm = parseVariacaoMeta(v.localizacao)!;
+                    const vars: VariacaoModelo[] = variacoes
+                        .filter(v => {
+                            try {
+                                const vm = parseVariacaoMeta(v.localizacao);
+                                return vm?.modeloId === pai.id;
+                            } catch {
+                                return false;
+                            }
+                        })
+                        .map(v => {
+                            const vm = parseVariacaoMeta(v.localizacao);
+                            if (!vm) return null;
+                            return {
+                                ...v,
+                                tamanho: vm.tamanho,
+                                referencia: vm.referencia,
+                                modeloId: pai.id,
+                            };
+                        })
+                        .filter(Boolean) as VariacaoModelo[];
+
                     return {
-                        ...v,
-                        tamanho: vm.tamanho,
-                        referencia: vm.referencia,
-                        modeloId: pai.id,
-                    };
-                });
+                        ...pai,
+                        meta,
+                        variacoes: vars,
+                    } as ModeloPadronizado;
+                } catch (err) {
+                    console.error("Erro ao processar modelo pai:", pai.id, err);
+                    return null;
+                }
+            }).filter(Boolean) as ModeloPadronizado[];
 
-            return {
-                ...pai,
-                meta,
-                variacoes: vars,
-            } as ModeloPadronizado;
-        }).filter(Boolean) as ModeloPadronizado[];
-    }, [modelosPai, variacoes]);
+            // 2. Incluir Modelos Manuais (Itens Acabados que não são pais nem variações)
+            const manuais = itens
+                .filter(i => 
+                    i.tipo === 'acabado' && 
+                    i.categoria !== CATEGORIA_MODELO_PAD && 
+                    i.categoria !== CATEGORIA_VARIACAO_PAD
+                )
+                .map(i => {
+                    try {
+                        // Tenta extrair a referência e nome base usando o utilitário padronizado
+                        const info = parseProductName(i.nome, i.localizacao || '');
+                        
+                        return {
+                            ...i,
+                            nome: info.nomeBase, // Nome limpo sem sufixos
+                            meta: {
+                                tipo: 'OT',
+                                composicao: '',
+                                colecao: '',
+                                custoProducao: 0,
+                                referencia: info.refBase || i.nome,
+                                grades: []
+                            },
+                            variacoes: [] // Modelos manuais não têm variações por tamanho no DB
+                        } as ModeloPadronizado;
+                    } catch (err) {
+                        console.error("Erro ao processar modelo manual:", i.id, err);
+                        return null;
+                    }
+                })
+                .filter(Boolean) as ModeloPadronizado[];
+
+            return [...padronizados, ...manuais];
+        } catch (globalErr) {
+            console.error("Erro global no useMemo de modelosPadronizados:", globalErr);
+            return [];
+        }
+    }, [modelosPai, variacoes, itens]);
 
     // ── Gerar próxima referência sequencial ──────────────────
     const gerarReferenciaBase = useCallback(async (tipo: TipoGarment): Promise<string> => {

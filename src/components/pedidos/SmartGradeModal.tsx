@@ -133,13 +133,15 @@ export function SmartGradeModal({
     const modelosAgrupados: ModeloAgrupado[] = useMemo(() => {
         return modelosPadronizados.map(m => {
             const variacoesOrdenadas = [...m.variacoes].sort((a, b) => compararTamanhos(a.tamanho, b.tamanho));
+            const isManual = m.variacoes.length === 0;
+
             return {
                 id: m.id,
                 nome: m.nome.split(' — ')[0].trim(),
                 referencia: m.meta.referencia,
-                precoVenda: m.precoUnitario,
-                quantidadeTotal: m.variacoes.reduce((s, v) => s + v.quantidade, 0),
-                isModeloPadronizado: true,
+                precoVenda: m.precoUnitario || 0,
+                quantidadeTotal: isManual ? (m as any).quantidade : m.variacoes.reduce((s, v) => s + v.quantidade, 0),
+                isModeloPadronizado: !isManual,
                 tamanhos: variacoesOrdenadas.map(v => v.tamanho),
                 variacoesRaw: variacoesOrdenadas.map(v => ({
                     id: v.id,
@@ -249,6 +251,29 @@ export function SmartGradeModal({
             ))
             : 0;
 
+        // Caso especial: Modelo Manual (sem variações)
+        if (selectedModel.variacoesRaw.length === 0) {
+            const qty = manualQuantities['AVULSO'] || 0;
+            const disponivel = selectedModel.quantidadeTotal;
+            return {
+                totalItems: qty,
+                numGradesDetected: 0,
+                numLooseDetected: qty,
+                stockStatus: {
+                    'AVULSO': {
+                        disponivel,
+                        looseTotal: disponivel,
+                        isOverStock: qty > disponivel,
+                        isBreakingGrade: false,
+                        totalPescado: qty
+                    }
+                },
+                gradesEmEstoquePosSelecao: 0,
+                hasOverStock: qty > disponivel,
+                gradeSizes: []
+            };
+        }
+
         selectedModel.variacoesRaw.forEach(v => {
             const t = v.tamanho;
             const totalPescado = totalPerSize[t] || 0;
@@ -311,30 +336,56 @@ export function SmartGradeModal({
     const handleConfirm = () => {
         if (!selectedModel || !stats || stats.totalItems === 0 || stats.hasOverStock) return;
 
-        const currentGradeId = crypto.randomUUID(); // Identificador único para este grupo de seleção
+        const currentGradeId = crypto.randomUUID();
         const items: ItemPedido[] = [];
         
-        selectedModel.variacoesRaw.forEach(v => {
-            const qty = (selectedModel.metadata.grade_tamanhos.includes(v.tamanho) ? numGrades : 0) + (manualQuantities[v.tamanho] || 0);
-            
+        if (selectedModel.variacoesRaw.length === 0) {
+            // Modelo Manual
+            const qty = manualQuantities['AVULSO'] || 0;
             if (qty > 0) {
                 items.push({
                     id: crypto.randomUUID(),
-                    produtoId: v.id,
-                    produtoNome: `${selectedModel.nome} — ${v.tamanho}`,
+                    produtoId: selectedModel.id,
+                    produtoNome: selectedModel.nome,
                     quantidade: qty,
                     valorUnitario: selectedModel.precoVenda,
                     valorOriginal: selectedModel.precoVenda,
-                    tipo: 'grade', // Marca como grade para o ItensPedidoCard agrupar
-                    gradeId: currentGradeId,
+                    tipo: 'avulso',
                     modeloId: selectedModel.id,
+                    referencia: selectedModel.referencia,
                     metadata: {
-                        model_id: selectedModel.id,
-                        tamanho: v.tamanho
+                        referencia: selectedModel.referencia,
+                        isManual: true
                     }
                 });
             }
-        });
+        } else {
+            // Modelo Padronizado (Grade)
+            selectedModel.variacoesRaw.forEach(v => {
+                const qty = (selectedModel.metadata.grade_tamanhos.includes(v.tamanho) ? numGrades : 0) + (manualQuantities[v.tamanho] || 0);
+                
+                if (qty > 0) {
+                    items.push({
+                        id: crypto.randomUUID(),
+                        produtoId: v.id,
+                        produtoNome: `${selectedModel.nome} — ${v.tamanho}`,
+                        quantidade: qty,
+                        valorUnitario: selectedModel.precoVenda,
+                        valorOriginal: selectedModel.precoVenda,
+                        tipo: 'grade',
+                        gradeId: currentGradeId,
+                        modeloId: selectedModel.id,
+                        modeloNome: selectedModel.nome,
+                        referencia: selectedModel.referencia,
+                        metadata: {
+                            model_id: selectedModel.id,
+                            referencia: selectedModel.referencia,
+                            tamanho: v.tamanho
+                        }
+                    });
+                }
+            });
+        }
 
         onAdd(items);
         onClose();
@@ -399,6 +450,11 @@ export function SmartGradeModal({
                                                     <span className="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded tracking-wider uppercase">
                                                         Ref {m.referencia}
                                                     </span>
+                                                    {!m.isModeloPadronizado && (
+                                                        <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase tracking-tighter">
+                                                            Manual
+                                                        </span>
+                                                    )}
                                                     <span className="text-[10px] font-medium text-muted-foreground">
                                                         • {m.quantidadeTotal} pçs em estoque
                                                     </span>
@@ -434,115 +490,139 @@ export function SmartGradeModal({
                                     </Button>
                                 </div>
 
-                                {/* Bloco Estoque Disponível */}
-                                <div className="space-y-3">
-                                    <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] px-1">Estoque Disponível</h4>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="p-4 rounded-xl bg-white dark:bg-background/40 border border-indigo-100 dark:border-indigo-900/30">
-                                            <p className="text-2xl font-black text-indigo-600">{stats?.gradesEmEstoquePosSelecao}</p>
-                                            <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">Grades Livres</p>
-                                        </div>
-                                        <div className="p-4 rounded-xl bg-white dark:bg-background/40 border border-indigo-100 dark:border-indigo-900/30">
-                                            <div className="flex flex-wrap gap-2">
-                                                {selectedModel?.variacoesRaw
-                                                    .filter(v => (v.quantidade - (stats?.stockStatus[v.tamanho].totalPescado || 0)) > 0)
-                                                    .map(v => {
-                                                        const disponivelReal = v.quantidade - (stats?.stockStatus[v.tamanho].totalPescado || 0);
-                                                        return (
-                                                            <div key={v.tamanho} className="inline-flex items-center rounded-md border border-indigo-200 dark:border-indigo-800 overflow-hidden shadow-sm">
-                                                                <span className="bg-indigo-600 text-white text-[10px] font-black px-2 py-0.5 min-w-[24px] text-center">
-                                                                    {v.tamanho}
-                                                                </span>
-                                                                <span className="bg-white dark:bg-slate-900 text-indigo-600 text-[11px] font-bold px-2 py-0.5">
-                                                                    {disponivelReal}
-                                                                </span>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                {selectedModel?.variacoesRaw.filter(v => (v.quantidade - (stats?.stockStatus[v.tamanho].totalPescado || 0)) > 0).length === 0 && (
-                                                    <span className="text-[10px] text-muted-foreground italic">Esgotado</span>
-                                                )}
+                                {selectedModel?.variacoesRaw.length === 0 ? (
+                                    <div className="space-y-6">
+                                        <div className="p-6 rounded-xl border border-indigo-100 bg-white dark:bg-background/40 flex items-center justify-between shadow-sm">
+                                            <div>
+                                                <p className="text-sm font-bold text-indigo-950 dark:text-indigo-100">Quantidade Total</p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">Estoque disponível: {selectedModel.quantidadeTotal} pçs</p>
                                             </div>
-                                            <p className="text-[10px] font-bold text-muted-foreground uppercase mt-2">Peças Avulsas em Estoque</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Inserir Grades Completas */}
-                                <div className="space-y-3">
-                                    <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] px-1">Inserir Grades Completas</Label>
-                                    <div className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/20">
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold text-indigo-950 dark:text-indigo-100">Grade Padrão</p>
-                                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                                                Tamanhos: {selectedModel?.metadata.grade_tamanhos.join(', ')}
-                                            </p>
-                                        </div>
-                                        <div className="w-auto">
                                             <QuantityStepper 
-                                                value={numGrades} 
-                                                onChange={handleNumGradesChange}
+                                                value={manualQuantities['AVULSO'] || 0}
+                                                onChange={(val) => setManualQuantities({ 'AVULSO': val })}
                                                 className="w-32"
                                             />
                                         </div>
+                                        { (manualQuantities['AVULSO'] || 0) > selectedModel.quantidadeTotal && (
+                                            <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium">
+                                                <AlertTriangle size={14} />
+                                                <span>Quantidade selecionada acima do estoque disponível.</span>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-
-                                {/* Grid Ajuste de Peças */}
-                                <div className="space-y-3">
-                                    <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] px-1">Ajuste de Peças por Tamanho</Label>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                        {selectedModel?.variacoesRaw.map(v => {
-                                            const s = stats?.stockStatus[v.tamanho];
-                                            const isInGrade = selectedModel.metadata.grade_tamanhos.includes(v.tamanho);
-                                            const baseQty = isInGrade ? numGrades : 0;
-                                            const manualQty = manualQuantities[v.tamanho] || 0;
-                                            const total = baseQty + manualQty;
-
-                                            return (
-                                                <div 
-                                                    key={v.tamanho} 
-                                                    className={cn(
-                                                        "p-3 rounded-xl border transition-all",
-                                                        s?.isOverStock 
-                                                            ? "border-red-500 bg-red-50 dark:bg-red-950/20" 
-                                                            : s?.isBreakingGrade 
-                                                                ? "border-amber-500 bg-amber-50 dark:bg-amber-950/20"
-                                                                : "border-indigo-100 dark:border-indigo-900/30 bg-white dark:bg-background/20"
-                                                    )}
-                                                >
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="text-xs font-black text-indigo-950 dark:text-indigo-100">{v.tamanho}</span>
-                                                            {isInGrade && <Layers className="h-3 w-3 text-indigo-400" />}
-                                                        </div>
-                                                        <span className="text-[9px] font-bold text-muted-foreground">Estoque: {v.quantidade}</span>
-                                                    </div>
-                                                    <QuantityStepper 
-                                                        value={total}
-                                                        onChange={newTotal => {
-                                                            const m = Math.max(0, newTotal - baseQty);
-                                                            if (newTotal < baseQty) {
-                                                                setManualQuantities(prev => ({ ...prev, [v.tamanho]: Math.max(0, newTotal - (isInGrade ? numGrades : 0)) }));
-                                                            } else {
-                                                                handleManualChange(v.tamanho, m);
-                                                            }
-                                                        }}
-                                                        className={cn(
-                                                            "h-10 w-full",
-                                                            s?.isOverStock ? "border-red-300" : "border-indigo-100"
-                                                        )}
-                                                    />
-                                                    {s?.isOverStock ? (
-                                                        <p className="text-[9px] text-red-600 font-bold mt-1 text-center uppercase tracking-tighter">Estoque insuficiente</p>
-                                                    ) : s?.isBreakingGrade ? (
-                                                        <p className="text-[9px] text-amber-600 font-bold mt-1 text-center uppercase tracking-tighter">Quebra grade</p>
-                                                    ) : null}
+                                ) : (
+                                    <>
+                                        {/* Bloco Estoque Disponível */}
+                                        <div className="space-y-3">
+                                            <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] px-1">Estoque Disponível</h4>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="p-4 rounded-xl bg-white dark:bg-background/40 border border-indigo-100 dark:border-indigo-900/30">
+                                                    <p className="text-2xl font-black text-indigo-600">{stats?.gradesEmEstoquePosSelecao}</p>
+                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">Grades Livres</p>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
+                                                <div className="p-4 rounded-xl bg-white dark:bg-background/40 border border-indigo-100 dark:border-indigo-900/30">
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {selectedModel?.variacoesRaw
+                                                            .filter(v => (stats?.stockStatus[v.tamanho].looseTotal || 0) > 0)
+                                                            .map(v => {
+                                                                const looseQty = stats?.stockStatus[v.tamanho].looseTotal || 0;
+                                                                return (
+                                                                    <div key={v.tamanho} className="inline-flex items-center rounded-md border border-indigo-200 dark:border-indigo-800 overflow-hidden shadow-sm">
+                                                                        <span className="bg-indigo-600 text-white text-[10px] font-black px-2 py-0.5 min-w-[24px] text-center">
+                                                                            {v.tamanho}
+                                                                        </span>
+                                                                        <span className="bg-white dark:bg-slate-900 text-indigo-600 text-[11px] font-bold px-2 py-0.5">
+                                                                            {looseQty}
+                                                                        </span>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        {selectedModel?.variacoesRaw.filter(v => (stats?.stockStatus[v.tamanho].looseTotal || 0) > 0).length === 0 && (
+                                                            <span className="text-[10px] text-muted-foreground italic px-1">Nenhuma peça avulsa</span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase mt-2">Peças Avulsas em Estoque</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Inserir Grades Completas */}
+                                        <div className="space-y-3">
+                                            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] px-1">Inserir Grades Completas</Label>
+                                            <div className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/20">
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-bold text-indigo-950 dark:text-indigo-100">Grade Padrão</p>
+                                                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                                                        Tamanhos: {selectedModel?.metadata.grade_tamanhos.join(', ')}
+                                                    </p>
+                                                </div>
+                                                <div className="w-auto">
+                                                    <QuantityStepper 
+                                                        value={numGrades} 
+                                                        onChange={handleNumGradesChange}
+                                                        className="w-32"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Grid Ajuste de Peças */}
+                                        <div className="space-y-3">
+                                            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] px-1">Ajuste de Peças por Tamanho</Label>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                {selectedModel?.variacoesRaw.map(v => {
+                                                    const s = stats?.stockStatus[v.tamanho];
+                                                    const isInGrade = selectedModel.metadata.grade_tamanhos.includes(v.tamanho);
+                                                    const baseQty = isInGrade ? numGrades : 0;
+                                                    const manualQty = manualQuantities[v.tamanho] || 0;
+                                                    const total = baseQty + manualQty;
+
+                                                    return (
+                                                        <div 
+                                                            key={v.tamanho} 
+                                                            className={cn(
+                                                                "p-3 rounded-xl border transition-all",
+                                                                s?.isOverStock 
+                                                                    ? "border-red-500 bg-red-50 dark:bg-red-950/20" 
+                                                                    : s?.isBreakingGrade 
+                                                                        ? "border-amber-500 bg-amber-50 dark:bg-amber-950/20"
+                                                                        : "border-indigo-100 dark:border-indigo-900/30 bg-white dark:bg-background/20"
+                                                            )}
+                                                        >
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-xs font-black text-indigo-950 dark:text-indigo-100">{v.tamanho}</span>
+                                                                    {isInGrade && <Layers className="h-3 w-3 text-indigo-400" />}
+                                                                </div>
+                                                                <span className="text-[9px] font-bold text-muted-foreground">Estoque: {v.quantidade}</span>
+                                                            </div>
+                                                            <QuantityStepper 
+                                                                value={total}
+                                                                onChange={newTotal => {
+                                                                    const m = Math.max(0, newTotal - baseQty);
+                                                                    if (newTotal < baseQty) {
+                                                                        setManualQuantities(prev => ({ ...prev, [v.tamanho]: Math.max(0, newTotal - (isInGrade ? numGrades : 0)) }));
+                                                                    } else {
+                                                                        handleManualChange(v.tamanho, m);
+                                                                    }
+                                                                }}
+                                                                className={cn(
+                                                                    "h-10 w-full",
+                                                                    s?.isOverStock ? "border-red-300" : "border-indigo-100"
+                                                                )}
+                                                            />
+                                                            {s?.isOverStock ? (
+                                                                <p className="text-[9px] text-red-600 font-bold mt-1 text-center uppercase tracking-tighter">Estoque insuficiente</p>
+                                                            ) : s?.isBreakingGrade ? (
+                                                                <p className="text-[9px] text-amber-600 font-bold mt-1 text-center uppercase tracking-tighter">Quebra grade</p>
+                                                            ) : null}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </ScrollArea>
                     )}

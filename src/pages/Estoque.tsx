@@ -101,7 +101,7 @@ export default function Estoque() {
   const search = searchParams.get('q') || '';
   const activeTab = searchParams.get('tab') as 'materia_prima' | 'produto_acabado' || 'produto_acabado';
   const filtroRapido = searchParams.get('filtro') as FiltroRapido || 'todos';
-  const currentPage = parseInt(searchParams.get('page') || '0', 10);
+  const currentPage = parseInt(searchParams.get('page') || '0', 10) || 0;
 
   // Ref para restaurar scroll
   const scrollContainerRef = useRef<HTMLDivElement>(null);
