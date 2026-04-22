@@ -796,9 +796,14 @@ export default function Feira() {
 
       {/* Mobile Action Button - Hidden for vendedor */}
       {isMobile && !isVendedor && <div className="px-4 py-3">
-        <Button onClick={handleOpenNovaCarga} className="w-full gap-2">
+        <Button onClick={handleOpenNovaCarga} className="w-full gap-2 relative">
           <Plus size={18} />
           Nova Carga
+          {itensCarga.length > 0 && !showNovaCarga && (
+            <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 tabular-nums">
+              {itensCarga.length}
+            </Badge>
+          )}
         </Button>
       </div>}
 
