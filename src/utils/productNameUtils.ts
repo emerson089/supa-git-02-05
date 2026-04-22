@@ -101,7 +101,18 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
       if (modelDigits) numDisplay = modelDigits;
     }
   }
-  const nomeExibicao = numDisplay ? `${nomeBase} - ${numDisplay}` : nomeBase;
+  // Fallback: se nomeBase ficou vazio (ex: produtos cadastrados manualmente sem nome descritivo),
+  // usa o nome original limpo ou a referência completa para evitar exibir " - 130"
+  let nomeExibicao: string;
+  if (nomeBase) {
+    nomeExibicao = numDisplay ? `${nomeBase} - ${numDisplay}` : nomeBase;
+  } else {
+    // Sem nome base — tenta usar o nome original; se também vazio, usa a referência
+    const fallbackNome = currentName.trim() || currentRef.trim();
+    nomeExibicao = numDisplay && !fallbackNome.includes(numDisplay)
+      ? `${fallbackNome} - ${numDisplay}`.trim()
+      : fallbackNome || numDisplay || 'Sem nome';
+  }
 
   return {
     nomeBase,
