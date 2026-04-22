@@ -27,7 +27,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ClienteSchema, PedidoItemSchema } from '@/lib/validations';
 import { cn } from '@/lib/utils';
-import { ChevronsUpDown, Check, FileText } from 'lucide-react';
+import { ChevronsUpDown, Check, FileText, Plus } from 'lucide-react';
+import { QuickAddExcursaoModal } from '@/components/excursoes/QuickAddExcursaoModal';
 import { parseProductName } from '@/utils/productNameUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { generatePedidoPDF } from '@/utils/generatePedidoPDF';
@@ -169,6 +170,9 @@ const NovoPedido = () => {
   // Add Cliente Modal
   const [showAddCliente, setShowAddCliente] = useState(false);
   const [novoClienteExcursaoOpen, setNovoClienteExcursaoOpen] = useState(false);
+  const [excursaoSearch, setExcursaoSearch] = useState('');
+  const [quickAddExcursaoOpen, setQuickAddExcursaoOpen] = useState(false);
+  const [quickAddExcursaoNome, setQuickAddExcursaoNome] = useState('');
   const [novoCliente, setNovoCliente] = useState({
     nome: '',
     telefone: '',
@@ -751,27 +755,72 @@ Favorecido: Delookii Confecções Ltda`;
               </PopoverTrigger>
               <PopoverContent className="w-[--radix-popover-trigger-width] p-0 overflow-hidden" align="start">
                 <Command>
-                  <CommandInput placeholder="Buscar excursão..." />
+                  <CommandInput
+                    placeholder="Buscar excursão..."
+                    value={excursaoSearch}
+                    onValueChange={setExcursaoSearch}
+                  />
                   <CommandList>
-                    <CommandEmpty>Nenhuma excursão encontrada</CommandEmpty>
-                    {(excursoesAtivas || []).map(exc => (
-                      <CommandItem key={exc.id} value={exc.nome} onSelect={() => {
-                        setNovoCliente(prev => ({ ...prev, excursao: exc.nome }));
-                        setNovoClienteExcursaoOpen(false);
-                      }} className="flex items-center">
-                        <Check className={cn("mr-2 h-4 w-4 shrink-0", novoCliente.excursao === exc.nome ? "opacity-100" : "opacity-0")} />
-                        <span className="flex-1 truncate">{exc.nome}</span>
-                        <span className="text-xs text-emerald-600 font-semibold ml-2 shrink-0">
-                          {exc.taxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>
-                      </CommandItem>
-                    ))}
+                    {(() => {
+                      const search = excursaoSearch.trim();
+                      const lower = search.toLowerCase();
+                      const list = excursoesAtivas || [];
+                      const hasExactMatch = list.some(e => e.nome.toLowerCase() === lower);
+                      const showCreate = search.length >= 2 && !hasExactMatch;
+                      return (
+                        <>
+                          {showCreate && (
+                            <CommandItem
+                              value={`__create__${search}`}
+                              onSelect={() => {
+                                setQuickAddExcursaoNome(search);
+                                setNovoClienteExcursaoOpen(false);
+                                setQuickAddExcursaoOpen(true);
+                              }}
+                              className="flex items-center text-primary font-medium"
+                            >
+                              <Plus className="mr-2 h-4 w-4 shrink-0" />
+                              <span className="truncate">Cadastrar nova excursão "{search}"</span>
+                            </CommandItem>
+                          )}
+                          {list.length === 0 && !showCreate && (
+                            <CommandEmpty>Nenhuma excursão encontrada</CommandEmpty>
+                          )}
+                          {list.map(exc => (
+                            <CommandItem key={exc.id} value={exc.nome} onSelect={() => {
+                              setNovoCliente(prev => ({ ...prev, excursao: exc.nome }));
+                              setNovoClienteExcursaoOpen(false);
+                              setExcursaoSearch('');
+                            }} className="flex items-center">
+                              <Check className={cn("mr-2 h-4 w-4 shrink-0", novoCliente.excursao === exc.nome ? "opacity-100" : "opacity-0")} />
+                              <span className="flex-1 truncate">{exc.nome}</span>
+                              <span className="text-xs text-emerald-600 font-semibold ml-2 shrink-0">
+                                {exc.taxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </span>
+                            </CommandItem>
+                          ))}
+                          {list.length > 0 && !showCreate && (
+                            <CommandEmpty>Nenhuma excursão encontrada</CommandEmpty>
+                          )}
+                        </>
+                      );
+                    })()}
                   </CommandList>
                 </Command>
               </PopoverContent>
             </Popover>
           </div>
         </div>
+
+        <QuickAddExcursaoModal
+          open={quickAddExcursaoOpen}
+          onOpenChange={setQuickAddExcursaoOpen}
+          defaultNome={quickAddExcursaoNome}
+          onCreated={(nova) => {
+            setNovoCliente(prev => ({ ...prev, excursao: nova.nome }));
+            setExcursaoSearch('');
+          }}
+        />
         <div className="flex gap-3 pt-4">
           <Button variant="outline" onClick={() => setShowAddCliente(false)} className="flex-1 h-11 rounded-xl border-0 text-muted-foreground hover:text-foreground">
             Cancelar
