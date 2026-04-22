@@ -88,16 +88,16 @@ export function AddItemSelector({ produtos, onAdd, isAdding, existingProductIds 
         onClick={() => setIsOpen(!isOpen)}
         disabled={isAdding || availableProdutos.length === 0}
         className={cn(
-          "w-full h-11 justify-between rounded-xl border-dashed border-2 border-primary/30",
-          "hover:border-primary hover:bg-primary/5 transition-all",
-          isOpen && "border-primary bg-primary/5"
+          "w-full h-11 flex items-center justify-center gap-2 rounded-xl border-dashed border-2 border-indigo-400/40",
+          "hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all group",
+          isOpen && "border-indigo-500 bg-indigo-50/50"
         )}
       >
-        <span className="flex items-center gap-2 text-primary font-medium">
-          {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+        <span className="flex items-center gap-2 text-indigo-600 font-bold">
+          {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 group-hover:scale-110 transition-transform" />}
           {isAdding ? 'Adicionando...' : `Adicionar item${availableProdutos.length > 0 ? ` (${availableProdutos.length} disponíveis)` : ''}`}
         </span>
-        <ChevronDown className={cn("h-4 w-4 text-primary/60 transition-transform", isOpen && "rotate-180")} />
+        <ChevronDown className={cn("h-4 w-4 text-indigo-600/60 transition-transform", isOpen && "rotate-180")} />
       </Button>
 
       {isOpen && (

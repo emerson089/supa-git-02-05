@@ -46,15 +46,14 @@ const leftNavItems: NavItemType[] = [
 ];
 
 const rightNavItems: NavItemType[] = [
-  { label: 'Estoque', icon: Warehouse, path: '/estoque', roles: ['admin', 'gerente'] },
   { label: 'Feira', icon: Store, path: '/feira', roles: ['admin', 'gerente', 'vendedor'] },
 ];
 
 const moreMenuItems: NavItemType[] = [
+  { label: 'Estoque', icon: Warehouse, path: '/estoque', roles: ['admin', 'gerente'] },
   { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente'] },
   { label: 'Clientes', icon: Users, path: '/clientes', roles: ['admin', 'gerente'] },
   { label: 'Produção', icon: Factory, path: '/producao', roles: ['admin', 'gerente'] },
-  { label: 'Pedidos Criados', icon: FileText, path: '/pedidos/criados', roles: ['admin', 'gerente'] },
   { label: 'Configurações', icon: Settings, path: '/configuracoes/usuarios', roles: ['admin'] },
   { label: 'Ajuda', icon: HelpCircle, path: '/ajuda' },
 ];
@@ -82,19 +81,27 @@ const NavItem = forwardRef<HTMLButtonElement, NavItemProps>(
         ref={ref}
         onClick={onClick}
         className={cn(
-          "flex flex-col items-center justify-center flex-1 h-full min-w-[60px] min-h-[44px] gap-1 transition-colors rounded-lg",
+          "flex flex-col items-center justify-center flex-1 h-full min-w-[60px] min-h-[44px] gap-1 transition-all duration-300 rounded-lg relative overflow-hidden",
           isActive
             ? "text-primary"
-            : "text-muted-foreground active:text-foreground"
+            : "text-muted-foreground active:text-foreground active:bg-muted/50"
         )}
       >
-        <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+        <div className={cn(
+          "transition-transform duration-300 ease-out",
+          isActive && "scale-110 -translate-y-0.5"
+        )}>
+          <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+        </div>
         <span className={cn(
-          "text-[10px] font-medium",
-          isActive && "font-semibold"
+          "text-[10px] font-medium transition-all duration-300",
+          isActive ? "font-semibold opacity-100" : "opacity-80"
         )}>
           {item.label}
         </span>
+        {isActive && (
+          <div className="absolute bottom-1 w-1 h-1 rounded-full bg-primary animate-in fade-in zoom-in duration-500" />
+        )}
       </button>
     );
   }
@@ -179,9 +186,9 @@ export function BottomNavigation() {
           <div className="flex-1 flex items-center justify-center">
             <button
               onClick={() => setQuickActionsOpen(true)}
-              className="absolute -top-7 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-xl flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all border-4 border-background"
+              className="absolute -top-7 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgb(0,0,0,0.2)] flex items-center justify-center hover:bg-primary/90 active:scale-90 transition-all duration-300 border-[6px] border-background group"
             >
-              <Plus size={28} strokeWidth={2.5} />
+              <Plus size={28} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-500" />
             </button>
           </div>
 

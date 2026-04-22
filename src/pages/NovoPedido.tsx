@@ -218,17 +218,6 @@ const NovoPedido = () => {
   }, [items, getItemById]);
 
   // Item handlers
-  const handleAddItem = useCallback(() => {
-    const newId = crypto.randomUUID();
-    const newItem: ItemPedido = {
-      id: newId,
-      produtoId: '',
-      quantidade: 1,
-      valorUnitario: 0
-    };
-    setItems(prev => [newItem, ...prev]); // Inserir no topo
-    setNewItemId(newId); // Marcar para auto-focus
-  }, []);
   const handleUpdateItem = useCallback((updatedItem: ItemPedido) => {
     setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
   }, []);
@@ -662,7 +651,7 @@ Favorecido: Delookii Confecções Ltda`;
           />
 
           {/* Items Card - agora abaixo do resumo */}
-          <ItensPedidoCard items={items} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} onAddGradeItems={handleAddGradeItems} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
+          <ItensPedidoCard items={items} onUpdateItem={handleUpdateItem} onRemoveItem={handleRemoveItem} onAddGradeItems={handleAddGradeItems} newItemId={newItemId} onNewItemFocused={() => setNewItemId(null)} />
         </div>
       </div>
     </main>

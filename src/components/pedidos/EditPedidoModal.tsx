@@ -6,8 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { EditableItemRow, EditableItem } from './EditableItemRow';
-import { AddItemSelector } from './AddItemSelector';
-import { AddGradeModal } from './AddGradeModal';
+import { SmartGradeModal } from './SmartGradeModal';
 import { useAddPedidoItem, useUpdatePedidoItem, useRemovePedidoItem } from '@/hooks/usePedidoItensData';
 import { GradeCompactCardEditable } from './GradeCompactCardEditable';
 import { useEstoque } from '@/contexts/EstoqueContext';
@@ -44,6 +43,18 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
   const [localDesconto, setLocalDesconto] = useState(pedido?.desconto ?? 0);
   const [isSavingDesconto, setIsSavingDesconto] = useState(false);
   const [gradeModalOpen, setGradeModalOpen] = useState(false);
+  const [editingGrade, setEditingGrade] = useState<{ modelId: string, quantities: Record<string, number> } | null>(null);
+
+  const handleEditGrade = useCallback((modelId: string, currentItens: any[]) => {
+    const quantities: Record<string, number> = {};
+    currentItens.forEach(it => {
+      const parts = it.produto_nome.split(' — ');
+      const tamanho = parts.length > 1 ? parts[1].split(' | ')[0] : '';
+      if (tamanho) quantities[tamanho] = it.quantidade;
+    });
+    setEditingGrade({ modelId, quantities });
+    setGradeModalOpen(true);
+  }, []);
 
   useEffect(() => {
     setLocalDesconto(pedido?.desconto ?? 0);
@@ -323,45 +334,59 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
     }
   };
 
-  // Handle adding a full grade from AddGradeModal
-  const handleAddGrade = async (gradeItems: ItemPedido[]) => {
+  const handleAddOrReplaceGrade = async (newItems: any[]) => {
     if (!pedido) return;
-
-    try {
-      let addedPecas = 0;
-      let addedValor = 0;
-
-      for (const item of gradeItems) {
-        // Deduct from stock
-        const estoqueAtual = estoqueItens.find(e => e.id === item.produtoId && e.tipo === 'acabado');
-        if (estoqueAtual) {
-          if (estoqueAtual.quantidade < item.quantidade) {
-            toast.error(`Estoque insuficiente para ${item.produtoNome}!`);
-            continue;
+    
+    // Se estiver editando, remover os itens antigos do mesmo modelo primeiro
+    if (editingGrade) {
+      const idsToRemove = pedido.itens
+        .filter(it => {
+          const produto = estoqueItens.find(p => p.id === it.produto_id);
+          let vmId = '';
+          if (produto) {
+            try {
+              const vm = JSON.parse(produto.localizacao || '');
+              vmId = vm.modeloId;
+            } catch(e){}
           }
-          await updateEstoqueItem(estoqueAtual.id, {
-            quantidade: estoqueAtual.quantidade - item.quantidade,
-          });
+          return vmId === editingGrade.modelId;
+        })
+        .map(it => it.id);
+      
+      for (const id of idsToRemove) {
+        await handleRemoveItem(id);
+      }
+    }
+
+    // Adicionar novos itens
+    let addedPecas = 0;
+    for (const item of newItems) {
+      // Deduct from stock
+      const estoqueAtual = estoqueItens.find(e => e.id === item.produtoId && e.tipo === 'acabado');
+      if (estoqueAtual) {
+        if (estoqueAtual.quantidade < item.quantidade) {
+          toast.error(`Estoque insuficiente para ${item.produtoNome}!`);
+          continue;
         }
-
-        addedPecas += item.quantidade;
-        addedValor += item.quantidade * item.valorUnitario;
-
-        await addItemMutation.mutateAsync({
-          pedido_id: pedido.id,
-          produto_id: item.produtoId,
-          produto_nome: item.produtoNome || '',
-          quantidade: item.quantidade,
-          valor_unitario: item.valorUnitario,
+        await updateEstoqueItem(estoqueAtual.id, {
+          quantidade: estoqueAtual.quantidade - item.quantidade,
         });
       }
 
-      await refetchPedido();
-      toast.success(`Grade adicionada! ${addedPecas} peças no total.`);
-    } catch (error) {
-      console.error('Error adding grade:', error);
-      toast.error('Erro ao adicionar grade');
+      addedPecas += item.quantidade;
+      await addItemMutation.mutateAsync({
+        pedido_id: pedido.id,
+        produto_id: item.produtoId,
+        produto_nome: item.produtoNome || '',
+        quantidade: item.quantidade,
+        valor_unitario: item.valorUnitario,
+      });
     }
+
+    await refetchPedido();
+    toast.success(`${editingGrade ? 'Grade atualizada' : 'Grade adicionada'}! ${addedPecas} peças.`);
+    setGradeModalOpen(false);
+    setEditingGrade(null);
   };
 
   const formatCurrency = (value: number) => {
@@ -477,9 +502,9 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         {/* Items List - Native scroll for better flexbox compatibility */}
         <div className="flex-1 overflow-y-auto flex flex-col min-h-0 overscroll-contain touch-pan-y">
           <div className="px-3 sm:px-6 py-2 sm:py-3 flex-shrink-0 sticky top-0 bg-background z-10 border-b border-border/30">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm sm:text-base font-semibold text-foreground">Itens do Pedido</h3>
-              <div className="hidden lg:flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-semibold text-foreground flex-1">Itens do Pedido</h3>
+              <div className="hidden lg:flex items-center gap-2 text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
                 <span className="w-14 text-center shrink-0">Qtd</span>
                 <span className="w-20 text-center shrink-0">Valor Unit.</span>
                 <span className="w-24 text-right shrink-0">Subtotal</span>
@@ -501,8 +526,10 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                   const produtoId = item.produto_id || '';
                   const produto = estoqueItens.find(p => p.id === produtoId);
                   let refStr = '';
+                  let baseName = item.produto_nome;
 
                   if (produto) {
+                    baseName = produto.nome;
                     try {
                       if (produto.localizacao) {
                         const loc = JSON.parse(produto.localizacao);
@@ -510,22 +537,35 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                       }
                     } catch (e) { }
                   } else if (item.produto_nome.includes(' | REF: ')) {
-                    refStr = item.produto_nome.split(' | REF: ')[1] || '';
+                    const parts = item.produto_nome.split(' | REF: ');
+                    baseName = parts[0];
+                    refStr = parts[1] || '';
                   }
+
+                  // Limpar baseName de sufixos comuns
+                  baseName = baseName.split(' — ')[0].trim();
 
                   if (refStr) {
                     const m = refStr.match(/^(.+)-(P|M|G|GG|G1|G2|G3|XGG|\d{2})$/);
                     if (m) {
-                      const refBase = m[1];
+                      const refBaseFull = m[1];
                       const tamanho = m[2];
-                      let nomeModelo = item.produto_nome;
-                      if (produto && produto.nome) nomeModelo = produto.nome;
-                      if (nomeModelo.includes(' | REF: ')) nomeModelo = nomeModelo.split(' | REF: ')[0];
-                      nomeModelo = nomeModelo.replace(/\s*—\s*Tamanho\s+/gi, ' — ').trim();
-                      return { refBase, tamanho, nomeModelo, refStr };
+                      
+                      // Extrair apenas o número do modelo se houver prefixo (ex: CA2603-110 -> 110)
+                      const refParts = refBaseFull.split('-');
+                      const refModelo = refParts.length > 1 ? refParts[1] : refParts[0];
+                      
+                      return { refBase: refBaseFull, refModelo, tamanho, nomeBase: baseName, refStr };
                     }
                   }
-                  return null;
+                  return { nomeBase: baseName, refStr };
+                };
+
+                const formatDisplayName = (parsed: any) => {
+                  if (parsed.refModelo && parsed.tamanho) {
+                    return `${parsed.nomeBase} ref ${parsed.refModelo} - ${parsed.tamanho}`;
+                  }
+                  return parsed.nomeBase;
                 };
 
                 const gradeGroups = new Map<string, { refBase: string; nomeModelo: string; itens: Array<{ item: EditableItem; tamanho: string }> }>();
@@ -533,12 +573,29 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
 
                 pedido.itens.forEach(item => {
                   const parsed = parseItem(item);
-                  if (parsed) {
-                    const key = `${parsed.refBase}|${item.valor_unitario}`;
-                    if (!gradeGroups.has(key)) {
-                      gradeGroups.set(key, { refBase: parsed.refBase, nomeModelo: parsed.nomeModelo, itens: [] });
+                  
+                  // Tentar encontrar o modeloId através do estoque para agrupamento preciso
+                  const produto = estoqueItens.find(p => p.id === item.produto_id);
+                  let modeloId = '';
+                  if (produto) {
+                    try {
+                      const vm = JSON.parse(produto.localizacao || '');
+                      modeloId = vm.modeloId;
+                    } catch(e){}
+                  }
+
+                  // Chave de agrupamento: prioriza modeloId real, senão usa refBase (legado)
+                  const groupingKey = modeloId ? `mod-${modeloId}-${item.valor_unitario}` : parsed.refBase ? `ref-${parsed.refBase}-${item.valor_unitario}` : null;
+
+                  if (groupingKey && parsed.tamanho) {
+                    if (!gradeGroups.has(groupingKey)) {
+                      gradeGroups.set(groupingKey, { 
+                        refBase: modeloId || parsed.refBase, 
+                        nomeModelo: parsed.nomeBase, 
+                        itens: [] 
+                      });
                     }
-                    gradeGroups.get(key)!.itens.push({ item, tamanho: parsed.tamanho });
+                    gradeGroups.get(groupingKey)!.itens.push({ item, tamanho: parsed.tamanho });
                   } else {
                     avulsosItems.push(item);
                   }
@@ -577,6 +634,17 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                               onRemove={handleRemoveItem}
                               hasPendingUpdates={hasPendingUpdates}
                               hasRemovingUpdates={hasRemovingUpdates}
+                              onClick={() => {
+                                // Encontrar o modelId real a partir dos itens
+                                const firstItem = grupo.itens[0]?.item;
+                                const produto = estoqueItens.find(p => p.id === firstItem.produto_id);
+                                if (produto) {
+                                  try {
+                                    const vm = JSON.parse(produto.localizacao || '');
+                                    handleEditGrade(vm.modeloId, grupo.itens.map(i => i.item));
+                                  } catch(e){}
+                                }
+                              }}
                             />
                           );
                         })}
@@ -597,20 +665,7 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                       <div className="space-y-2">
                         {avulsosItems.map((item) => {
                           const parsed = parseItem(item);
-                          let displayName = item.produto_nome;
-
-                           if (parsed) {
-                            displayName = `${parsed.nomeModelo} — ${parsed.tamanho} | REF: ${parsed.refStr}`;
-                          } else {
-                            const produtoId = item.produto_id || '';
-                            const produto = estoqueItens.find(p => p.id === produtoId);
-                            if (produto && produto.nome) displayName = produto.nome;
-                          }
-
-                          // Remove unwanted labels for display
-                          displayName = displayName
-                            .replace(/\s*—\s*Tamanho\s+/gi, ' — ');
-
+                          const displayName = formatDisplayName(parsed);
                           const enhancedItem = { ...item, produto_nome: displayName };
 
                           return (
@@ -621,6 +676,17 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
                               onRemove={handleRemoveItem}
                               isUpdating={updatingItemId === item.id}
                               isRemoving={removingItemId === item.id}
+                              onClick={() => {
+                                const produto = estoqueItens.find(p => p.id === item.produto_id);
+                                if (produto) {
+                                  try {
+                                    const vm = JSON.parse(produto.localizacao || '');
+                                    if (vm.modeloId) {
+                                      handleEditGrade(vm.modeloId, [item]);
+                                    }
+                                  } catch(e){}
+                                }
+                              }}
                             />
                           );
                         })}
@@ -634,41 +700,31 @@ export function EditPedidoModal({ pedido, open, onClose }: EditPedidoModalProps)
         </div>
 
         {/* Add Item Section */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border/50 flex-shrink-0 space-y-2">
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setGradeModalOpen(true)}
-              disabled={addItemMutation.isPending}
-              className="h-11 flex-1 rounded-xl border-dashed border-2 border-indigo-400/30 hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all"
-            >
-              <Layers className="h-4 w-4 mr-2 text-indigo-600" />
-              <span className="text-indigo-600 font-medium">Adicionar Grade</span>
-            </Button>
-          </div>
-          <AddItemSelector
-            produtos={produtosAcabados}
-            onAdd={handleAddItem}
-            isAdding={addItemMutation.isPending}
-            existingProductIds={existingProductIds}
-          />
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border/50 flex-shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setGradeModalOpen(true)}
+            disabled={addItemMutation.isPending}
+            className="h-11 w-full rounded-xl border-dashed border-2 border-indigo-400/40 hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all flex items-center justify-center gap-2 group"
+          >
+            <Layers className="h-4 w-4 text-indigo-600 group-hover:scale-110 transition-transform" />
+            <span className="text-indigo-600 font-bold">Adicionar Itens</span>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
 
-    {/* Add Grade Modal */}
-    <AddGradeModal
+    {/* Smart Grade Modal */}
+    <SmartGradeModal
       open={gradeModalOpen}
-      onClose={() => setGradeModalOpen(false)}
-      onAdd={handleAddGrade}
-      existingItems={pedido.itens.map(i => ({
-        id: i.id,
-        produtoId: i.produto_id || '',
-        produtoNome: i.produto_nome,
-        quantidade: i.quantidade,
-        valorUnitario: i.valor_unitario,
-      }))}
+      onClose={() => {
+        setGradeModalOpen(false);
+        setEditingGrade(null);
+      }}
+      onAdd={handleAddOrReplaceGrade}
+      initialModelId={editingGrade?.modelId}
+      initialQuantities={editingGrade?.quantities}
     />
     </>
   );

@@ -1,18 +1,17 @@
 import { useState, useCallback } from 'react';
-import { Plus, Package2 } from 'lucide-react';
+import { Package2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ItemPedidoRow, ItemPedido } from './ItemPedidoRow';
 import { GradeCompactCard } from './GradeCompactCard';
 import { useEstoque } from '@/contexts/EstoqueContext';
 import { useMemo } from 'react';
-import { AddGradeModal } from './AddGradeModal';
+import { SmartGradeModal } from './SmartGradeModal';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useModelosPadronizados } from '@/hooks/useModelosPadronizados';
 
 interface ItensPedidoCardProps {
   items: ItemPedido[];
-  onAddItem: () => void;
   onUpdateItem: (item: ItemPedido) => void;
   onRemoveItem: (id: string) => void;
   onAddGradeItems: (items: ItemPedido[]) => void;
@@ -20,7 +19,7 @@ interface ItensPedidoCardProps {
   onNewItemFocused?: () => void;
 }
 
-export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, onAddGradeItems, newItemId, onNewItemFocused }: ItensPedidoCardProps) {
+export function ItensPedidoCard({ items, onUpdateItem, onRemoveItem, onAddGradeItems, newItemId, onNewItemFocused }: ItensPedidoCardProps) {
   const { getProdutosAcabados } = useEstoque();
   const { modelosPadronizados } = useModelosPadronizados();
   const [showAddGrade, setShowAddGrade] = useState(false);
@@ -29,6 +28,33 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
   const handleRemoveGrupo = useCallback((ids: string[]) => {
     ids.forEach(id => onRemoveItem(id));
   }, [onRemoveItem]);
+
+  // Estado para edição de grade
+  const [editingGrade, setEditingGrade] = useState<{ modelId: string, quantities: Record<string, number> } | null>(null);
+
+  const handleEditGrade = useCallback((modelId: string, itens: ItemPedido[]) => {
+    const quantities: Record<string, number> = {};
+    itens.forEach(it => {
+      const tamanho = it.metadata?.tamanho || it.produtoNome?.split(' — ').pop() || '';
+      if (tamanho) quantities[tamanho] = it.quantidade;
+    });
+    setEditingGrade({ modelId, quantities });
+    setShowAddGrade(true);
+  }, []);
+
+  const handleAddOrReplaceItems = useCallback((novosItens: ItemPedido[]) => {
+    if (editingGrade) {
+      // Remover itens antigos do mesmo modelo
+      const idsToRemove = items
+        .filter(it => it.metadata?.model_id === editingGrade.modelId || it.modeloId === editingGrade.modelId)
+        .map(it => it.id);
+      
+      idsToRemove.forEach(id => onRemoveItem(id));
+    }
+    
+    onAddGradeItems(novosItens);
+    setEditingGrade(null);
+  }, [editingGrade, items, onAddGradeItems, onRemoveItem]);
 
   // Para cada variação que pertence a uma grade, calcula quantas peças estão reservadas
   // para grades completas e quantas estão livres para venda avulsa.
@@ -152,21 +178,34 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
     const processedGrades = new Set<string>();
 
     items.forEach(item => {
-      if (item.tipo === 'grade' && item.gradeId) {
-        const gradeKey = `${item.gradeId}-${item.modeloId}`;
+      // Chave única para agrupamento: prioriza gradeId (agrupamento atômico da seleção), 
+      // mas aceita modeloId como fallback para itens que devem estar juntos.
+      const gradeKey = item.tipo === 'grade' && item.gradeId 
+        ? `${item.gradeId}-${item.modeloId}` 
+        : item.modeloId 
+          ? `auto-${item.modeloId}-${item.valorUnitario}` 
+          : null;
+
+      if (gradeKey) {
         if (processedGrades.has(gradeKey)) return;
 
-        // Se for grade, busca TODOS os itens desta grade no array total
-        const gradeItens = items.filter(i => i.tipo === 'grade' && i.gradeId === item.gradeId && i.modeloId === item.modeloId);
+        // Se for grade, busca TODOS os itens deste grupo no array total
+        const gradeItens = items.filter(i => {
+          if (item.tipo === 'grade' && item.gradeId) {
+            return i.tipo === 'grade' && i.gradeId === item.gradeId && i.modeloId === item.modeloId;
+          }
+          return i.modeloId === item.modeloId && i.valorUnitario === item.valorUnitario;
+        });
+
         blocks.push({
           type: 'grade',
-          gradeId: item.gradeId,
+          gradeId: item.gradeId || 'auto',
           modeloId: item.modeloId!,
           itens: gradeItens
         });
         processedGrades.add(gradeKey);
       } else {
-        // Se for avulso (ou sem gradeId), adiciona como bloco individual
+        // Se for avulso sem qualquer vínculo de modelo, adiciona como bloco individual
         blocks.push({
           type: 'avulso',
           item
@@ -182,39 +221,31 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
       <div className="neu-card p-4 sm:p-7">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-border/30">
           <h2 className="text-lg font-bold text-foreground">Itens do Pedido</h2>
-          <div className="grid grid-cols-2 sm:flex gap-2">
-            {/* Botão Grade */}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowAddGrade(true)}
-              className="h-11 sm:h-10 rounded-xl border-indigo-200 dark:border-indigo-800 bg-background hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium px-3 sm:px-4 text-xs sm:text-sm"
-            >
-              <Package2 size={15} className="mr-1.5 sm:mr-2" />
-              Por Grade
-            </Button>
-            {/* Botão Avulso */}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onAddItem}
-              className="h-11 sm:h-10 rounded-xl border-border bg-background hover:bg-muted/50 text-foreground font-medium px-3 sm:px-4 text-xs sm:text-sm"
-            >
-              <Plus size={16} className="mr-1.5 sm:mr-2" />
-              Avulso
-            </Button>
-          </div>
+          {/* Botão Adicionar Itens (Smart Grade) */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowAddGrade(true)}
+            className="h-11 sm:h-12 w-full sm:w-auto rounded-xl border-2 border-dashed border-indigo-400/40 hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-bold px-6 text-sm transition-all flex items-center justify-center gap-2"
+          >
+            <Package2 size={18} className="text-indigo-600" />
+            Adicionar Itens
+          </Button>
         </div>
 
         {items.length === 0 ? (
           <div className="py-10 text-center text-muted-foreground">
             <p className="text-sm">Nenhum item adicionado</p>
             <p className="text-xs mt-1.5 text-muted-foreground/70">
-              Use "Por Grade" para atacado ou "Avulso" para peças individuais
+              Clique em "Adicionar Itens" para selecionar um modelo
             </p>
           </div>
         ) : (
           <div className="space-y-4">
+            <div className="flex items-center justify-between px-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+              <span>Modelo / Detalhamento</span>
+              <span>Total</span>
+            </div>
             {/* ── Seção: Itens por Grade ── */}
             {groupedBlocks.map((block, index) => {
               if (block.type === 'grade') {
@@ -224,6 +255,7 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
                     itens={block.itens}
                     onUpdate={onUpdateItem}
                     onRemoveGrupo={handleRemoveGrupo}
+                    onClick={() => handleEditGrade(block.modeloId, block.itens)}
                   />
                 );
               }
@@ -255,11 +287,15 @@ export function ItensPedidoCard({ items, onAddItem, onUpdateItem, onRemoveItem, 
         )}
       </div>
 
-      <AddGradeModal
+      <SmartGradeModal
         open={showAddGrade}
-        onClose={() => setShowAddGrade(false)}
-        onAdd={onAddGradeItems}
-        existingItems={items}
+        onClose={() => {
+          setShowAddGrade(false);
+          setEditingGrade(null);
+        }}
+        onAdd={handleAddOrReplaceItems}
+        initialModelId={editingGrade?.modelId}
+        initialQuantities={editingGrade?.quantities}
       />
     </>
   );

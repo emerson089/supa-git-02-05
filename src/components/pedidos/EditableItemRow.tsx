@@ -18,9 +18,10 @@ interface EditableItemRowProps {
   onRemove: (id: string) => Promise<void>;
   isUpdating: boolean;
   isRemoving: boolean;
+  onClick?: () => void;
 }
 
-export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemoving }: EditableItemRowProps) {
+export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemoving, onClick }: EditableItemRowProps) {
   const [quantidade, setQuantidade] = useState(item.quantidade);
   const [valorUnitario, setValorUnitario] = useState(item.valor_unitario);
   const [pendingUpdate, setPendingUpdate] = useState<ReturnType<typeof setTimeout> | null>(null);
@@ -85,11 +86,15 @@ export function EditableItemRow({ item, onUpdate, onRemove, isUpdating, isRemovi
   const isDisabled = isUpdating || isRemoving;
 
   return (
-    <div className={cn(
-      "py-3 px-2 sm:px-3 rounded-xl transition-all",
-      "bg-muted/30 hover:bg-muted/50",
-      isDisabled && "opacity-60"
-    )}>
+    <div 
+      className={cn(
+        "py-3 px-2 sm:px-3 rounded-xl transition-all",
+        "bg-muted/30 hover:bg-muted/50",
+        isDisabled && "opacity-60",
+        onClick && "cursor-pointer"
+      )}
+      onClick={onClick}
+    >
       {/* Compact Layout - Mobile/Tablet (< lg) - 3 linhas para garantir que cabe */}
       <div className="lg:hidden space-y-2 w-full overflow-hidden">
         {/* Linha 1: Nome + Lixeira */}
