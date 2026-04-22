@@ -38,7 +38,7 @@ export interface ModeloAgrupado {
     referencia: string;
     precoVenda: number;
     quantidadeTotal: number;
-    isModeloPadronizado: true;
+    isModeloPadronizado: boolean;
     tamanhos: string[];
     variacoesRaw: Array<{
         id: string;
