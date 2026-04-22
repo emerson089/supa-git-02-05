@@ -20,7 +20,7 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
   // 1. Extrair a referência base e o tamanho (ex: SH2603-0042-M -> SH2603-0042 e M)
   // Suporta hífens (-), meia-risca (–) e travessão (—)
   // Expandido para suportar códigos de 2 a 4 dígitos como identificadores/tamanhos (ex: 130, 886, 2604)
-  const sizeMatch = currentRef.match(/^(.+)[-–—](P|M|G|GG|G1|G2|G3|XGG|PEÇAS|\d{2,4})$/i);
+  const sizeMatch = currentRef.match(/^(.+)[-–—](P|M|G|GG|G1|G2|G3|XGG|PEÇAS|\d{2})$/i);
   const refBase = (sizeMatch ? sizeMatch[1] : currentRef).trim();
   const tamanho = sizeMatch ? sizeMatch[2].toUpperCase() : null;
 
@@ -45,19 +45,18 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
   const refCurta = numeros ? `REF ${numeros.slice(-3).padStart(3, '0')}` : "";
 
   // 4. Limpar o nome (remover referências que estejam no campo nome)
-  // Divide por " — ", " - " ou ":" e pega a primeira parte, mas remove a refBase especificamente se estiver lá
   let nomeBase = currentName;
   
-  // Se o nome contém a referência completa, removemos ela primeiro
+  // Se o nome contém a referência técnica completa, removemos ela
   if (refBase && nomeBase.includes(refBase)) {
     nomeBase = nomeBase.replace(refBase, '').trim();
   }
   
-  // Remove sufixos de separadores e códigos residuais
-  nomeBase = nomeBase.split(/\s*[—|-|:]\s*/)[0].trim();
-  
-  // Limpeza final de qualquer caractere de pontuação que tenha sobrado no fim
-  nomeBase = nomeBase.replace(/[\s—\-:]+$/, "").trim();
+  // Se o nome termina com qualquer padrão de referência (ex: " - 123"), removemos
+  nomeBase = nomeBase.replace(/\s*[—|-|:]\s*\d{3}$/, "").trim();
+
+  // Limpeza final de qualquer caractere de separação residual no fim
+  nomeBase = nomeBase.replace(/\s*[—|-|:]\s*$/, "").trim();
 
   // 5. Gerar nome de exibição padronizado: "Nome XXX"
   const numDisplay = numeros ? numeros.slice(-3).padStart(3, '0') : '';

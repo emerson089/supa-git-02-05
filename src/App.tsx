@@ -28,6 +28,7 @@ import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 import PecasEmConserto from "./pages/PecasEmConserto";
 import Comprovantes from "./pages/Comprovantes";
+import Transferencias from "./pages/Transferencias";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,37 +40,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Wrapper: EstoqueProvider apenas para rotas que precisam de estoque
-function EstoqueLayout() {
-  return (
-    <EstoqueProvider>
-      <Outlet />
-    </EstoqueProvider>
-  );
-}
-
-// Wrapper: ClientesProvider + PedidosProvider + EstoqueProvider para rotas de pedidos
-function PedidosLayout() {
-  return (
-    <ClientesProvider>
-      <EstoqueProvider>
-        <PedidosProvider>
-          <Outlet />
-        </PedidosProvider>
-      </EstoqueProvider>
-    </ClientesProvider>
-  );
-}
-
-// Wrapper: ClientesProvider para rota de clientes
-function ClientesLayout() {
-  return (
-    <ClientesProvider>
-      <Outlet />
-    </ClientesProvider>
-  );
-}
-
 function App() {
   return (
   <QueryClientProvider client={queryClient}>
@@ -78,176 +48,183 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <RoleProvider>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route
-                path="/alterar-senha"
-                element={
-                  <ProtectedRoute>
-                    <AlterarSenha />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/configuracoes/usuarios"
-                element={
-                  <ProtectedRoute allowedRoles={['admin']}>
-                    <ConfigUsuarios />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/configuracoes/tipos-ajuste"
-                element={
-                  <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                    <ConfigTiposAjuste />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/configuracoes/excursoes"
-                element={
-                  <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                    <ConfigExcursoes />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/configuracoes/custos-padrao"
-                element={
-                  <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                    <ConfigCustosPadrao />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/configuracoes/catalogo"
-                element={
-                  <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                    <ConfigCatalogo />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/configuracoes/notificacoes"
-                element={
-                  <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                    <ConfigNotificacoes />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/comprovantes"
-                element={
-                  <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                    <Comprovantes />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <RoleBasedRedirect />
-                  </ProtectedRoute>
-                }
-              />
+            <ClientesProvider>
+              <EstoqueProvider>
+                <PedidosProvider>
+                  <Routes>
+                    <Route path="/auth" element={<Auth />} />
+                    <Route
+                      path="/alterar-senha"
+                      element={
+                        <ProtectedRoute>
+                          <AlterarSenha />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/usuarios"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin']}>
+                          <ConfigUsuarios />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/tipos-ajuste"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <ConfigTiposAjuste />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/excursoes"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <ConfigExcursoes />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/custos-padrao"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <ConfigCustosPadrao />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/catalogo"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <ConfigCatalogo />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/notificacoes"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <ConfigNotificacoes />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/dashboard"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <Dashboard />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/comprovantes"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <Comprovantes />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/"
+                      element={
+                        <ProtectedRoute>
+                          <RoleBasedRedirect />
+                        </ProtectedRoute>
+                      }
+                    />
 
-              {/* Rotas com EstoqueProvider */}
-              <Route element={<EstoqueLayout />}>
-                <Route
-                  path="/producao"
-                  element={
-                    <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                      <Index />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/producao/consertos"
-                  element={
-                    <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                      <PecasEmConserto />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/estoque"
-                  element={
-                    <ProtectedRoute>
-                      <Estoque />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/feira"
-                  element={
-                    <ProtectedRoute>
-                      <Feira />
-                    </ProtectedRoute>
-                  }
-                />
-              </Route>
+                    {/* Rotas de Produção */}
+                    <Route
+                      path="/producao"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <Index />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/producao/consertos"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <PecasEmConserto />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/estoque"
+                      element={
+                        <ProtectedRoute>
+                          <Estoque />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/transferencias"
+                      element={
+                        <ProtectedRoute>
+                          <Transferencias />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/feira"
+                      element={
+                        <ProtectedRoute>
+                          <Feira />
+                        </ProtectedRoute>
+                      }
+                    />
 
-              {/* Rotas com ClientesProvider */}
-              <Route element={<ClientesLayout />}>
-                <Route
-                  path="/clientes"
-                  element={
-                    <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                      <Clientes />
-                    </ProtectedRoute>
-                  }
-                />
-              </Route>
+                    {/* Rotas de Clientes */}
+                    <Route
+                      path="/clientes"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <Clientes />
+                        </ProtectedRoute>
+                      }
+                    />
 
-              {/* Rotas com PedidosProvider (inclui Clientes + Estoque) */}
-              <Route element={<PedidosLayout />}>
-                <Route
-                  path="/pedidos"
-                  element={
-                    <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                      <NovoPedido />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/pedidos/novo"
-                  element={
-                    <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                      <NovoPedido />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/pedidos/criados"
-                  element={
-                    <ProtectedRoute allowedRoles={['admin', 'gerente']}>
-                      <PedidosCriados />
-                    </ProtectedRoute>
-                  }
-                />
-              </Route>
+                    {/* Rotas de Pedidos */}
+                    <Route
+                      path="/pedidos"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <NovoPedido />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/pedidos/novo"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <NovoPedido />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/pedidos/criados"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <PedidosCriados />
+                        </ProtectedRoute>
+                      }
+                    />
 
-              <Route
-                path="/ajuda"
-                element={
-                  <ProtectedRoute>
-                    <Ajuda />
-                  </ProtectedRoute>
-                }
-              />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                    <Route
+                      path="/ajuda"
+                      element={
+                        <ProtectedRoute>
+                          <Ajuda />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </PedidosProvider>
+              </EstoqueProvider>
+            </ClientesProvider>
           </RoleProvider>
         </AuthProvider>
       </BrowserRouter>

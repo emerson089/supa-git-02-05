@@ -9,6 +9,7 @@ import { SmartGradeModal } from './SmartGradeModal';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useModelosPadronizados } from '@/hooks/useModelosPadronizados';
+import { parseProductName } from '@/utils/productNameUtils';
 
 interface ItensPedidoCardProps {
   items: ItemPedido[];
@@ -147,11 +148,9 @@ export function ItensPedidoCard({ items, onUpdateItem, onRemoveItem, onAddGradeI
           totalModelEstoque = estoquePorRefBase.get(refBase) || item.quantidade;
         }
 
-        // Limpeza de nome para exibir no seletor
-        let cleanName = item.nome.replace(/\s*—\s*Tamanho\s+/gi, ' — ');
-        if (ref) {
-          cleanName = cleanName.replace(new RegExp(`\\s*—\\s*${ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'), '');
-        }
+        // Limpeza de nome para exibir no seletor usando utilitário padronizado
+        const info = parseProductName(item.nome, ref);
+        const cleanName = info.nomeBase;
 
         const gradeInfo = gradeInfoMap[item.id];
         return {

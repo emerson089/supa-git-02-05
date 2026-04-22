@@ -156,7 +156,7 @@ export default function Estoque() {
   const [modeloDetalhes, setModeloDetalhes] = useState<ModeloPadronizado | null>(null);
 
   // Hook de Modelos Padronizados
-  const { modelosPadronizados } = useModelosPadronizados();
+  const { modelosPadronizados, modelosPadronizadosMap } = useModelosPadronizados();
 
   // Mapear tipo de tab para tipo de estoque
   const tipoEstoque = activeTab === 'materia_prima' ? 'materia-prima' : 'acabado';
@@ -888,7 +888,7 @@ export default function Estoque() {
               ).map(item => {
                 // Se for um Modelo Padronizado (pai)
                 if (item.categoria === CATEGORIA_MODELO_PAD) {
-                    const modeloCompleto = modelosPadronizados.find(m => m.id === item.id);
+                    const modeloCompleto = modelosPadronizadosMap.get(item.id);
                     if (!modeloCompleto) return null; // Fallback se não bater no hook ainda
                     
                     // Somar vendas da semana de todas as variações deste modelo

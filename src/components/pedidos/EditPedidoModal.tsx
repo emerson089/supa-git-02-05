@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Package, DollarSign, X, Percent, Check, Layers } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';

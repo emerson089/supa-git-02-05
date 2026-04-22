@@ -242,9 +242,9 @@ export function ItemPedidoRow({ item, produtos, onUpdate, onRemove, autoFocus, o
                         </span>
                         <span className="text-[10px] text-muted-foreground mt-0.5 truncate uppercase tracking-tight">
                           {(() => {
-                            const refToDisplay = produto.refBase || produto.referencia || "";
-                            const lastThree = refToDisplay ? refToDisplay.slice(-3) : '';
-                            const refDisplay = lastThree ? `REF ${lastThree} · ` : '';
+                            const refStr = produto.referencia || produto.refBase || "";
+                            const info = parseProductName(produto.nome, refStr);
+                            const refDisplay = info.refCurta ? `${info.refCurta} · ` : '';
                             
                             if (produto.quantidadeDisponivel === 0) {
                               return refDisplay + (produto.gradeReserved ? 'Todos em grade' : 'Esgotado');

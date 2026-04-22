@@ -118,37 +118,40 @@ export function useModelosPadronizados() {
     // Modelos com suas variações hidratadas + Modelos Manuais (Simples)
     const modelosComVariacoes: ModeloPadronizado[] = useMemo(() => {
         try {
-            // 1. Processar Modelos Padronizados (Hierarchy)
+            // 1. Agrupar variações por modeloId antecipadamente (O(M))
+            const variacoesPorModelo = new Map<string, VariacaoModelo[]>();
+            
+            variacoes.forEach(v => {
+                try {
+                    const vm = parseVariacaoMeta(v.localizacao);
+                    if (vm?.modeloId) {
+                        const variacaoHidratada: VariacaoModelo = {
+                            ...v,
+                            tamanho: vm.tamanho,
+                            referencia: vm.referencia,
+                            modeloId: vm.modeloId,
+                        };
+                        
+                        if (!variacoesPorModelo.has(vm.modeloId)) {
+                            variacoesPorModelo.set(vm.modeloId, []);
+                        }
+                        variacoesPorModelo.get(vm.modeloId)!.push(variacaoHidratada);
+                    }
+                } catch (e) {
+                    // Ignora variação malformada
+                }
+            });
+
+            // 2. Processar Modelos Padronizados (O(N))
             const padronizados = modelosPai.map(pai => {
                 try {
                     const meta = parseMeta(pai.localizacao);
                     if (!meta) return null;
 
-                    const vars: VariacaoModelo[] = variacoes
-                        .filter(v => {
-                            try {
-                                const vm = parseVariacaoMeta(v.localizacao);
-                                return vm?.modeloId === pai.id;
-                            } catch {
-                                return false;
-                            }
-                        })
-                        .map(v => {
-                            const vm = parseVariacaoMeta(v.localizacao);
-                            if (!vm) return null;
-                            return {
-                                ...v,
-                                tamanho: vm.tamanho,
-                                referencia: vm.referencia,
-                                modeloId: pai.id,
-                            };
-                        })
-                        .filter(Boolean) as VariacaoModelo[];
-
                     return {
                         ...pai,
                         meta,
-                        variacoes: vars,
+                        variacoes: variacoesPorModelo.get(pai.id) || [],
                     } as ModeloPadronizado;
                 } catch (err) {
                     console.error("Erro ao processar modelo pai:", pai.id, err);
@@ -156,7 +159,7 @@ export function useModelosPadronizados() {
                 }
             }).filter(Boolean) as ModeloPadronizado[];
 
-            // 2. Incluir Modelos Manuais (Itens Acabados que não são pais nem variações)
+            // 3. Incluir Modelos Manuais (Itens Acabados que não são pais nem variações)
             const manuais = itens
                 .filter(i => 
                     i.tipo === 'acabado' && 
@@ -165,12 +168,11 @@ export function useModelosPadronizados() {
                 )
                 .map(i => {
                     try {
-                        // Tenta extrair a referência e nome base usando o utilitário padronizado
                         const info = parseProductName(i.nome, i.localizacao || '');
                         
                         return {
                             ...i,
-                            nome: info.nomeBase, // Nome limpo sem sufixos
+                            nome: info.nomeBase,
                             meta: {
                                 tipo: 'OT',
                                 composicao: '',
@@ -179,10 +181,9 @@ export function useModelosPadronizados() {
                                 referencia: info.refBase || i.nome,
                                 grades: []
                             },
-                            variacoes: [] // Modelos manuais não têm variações por tamanho no DB
+                            variacoes: []
                         } as ModeloPadronizado;
                     } catch (err) {
-                        console.error("Erro ao processar modelo manual:", i.id, err);
                         return null;
                     }
                 })
@@ -414,8 +415,16 @@ export function useModelosPadronizados() {
         return novaVar;
     }, [modelosPai, variacoes, addItem, updateItem]);
 
+    // Map para busca rápida (O(1)) por ID
+    const modelosPadronizadosMap = useMemo(() => {
+        const map = new Map<string, ModeloPadronizado>();
+        modelosComVariacoes.forEach(m => map.set(m.id, m));
+        return map;
+    }, [modelosComVariacoes]);
+
     return {
         modelosPadronizados: modelosComVariacoes,
+        modelosPadronizadosMap,
         variacoes,
         gerarReferenciaBase,
         criarModeloPadronizado,
