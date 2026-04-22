@@ -146,8 +146,15 @@ export default function Feira() {
   const [cargaEstornar, setCargaEstornar] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaCorrigirRetorno, setCargaCorrigirRetorno] = useState<TransferenciaComItensHistorico | null>(null);
   const [cargaEditar, setCargaEditar] = useState<TransferenciaComItensHistorico | null>(null);
-  const [itensCarga, setItensCarga] = useState<ItemCarga[]>([]);
-  const [tituloCarga, setTituloCarga] = useState('');
+  const [itensCarga, setItensCarga] = useState<ItemCarga[]>(() => {
+    const draft = loadFeiraDraft(user?.id);
+    return draft?.itensCarga ?? [];
+  });
+  const [tituloCarga, setTituloCarga] = useState(() => {
+    const draft = loadFeiraDraft(user?.id);
+    return draft?.tituloCarga ?? '';
+  });
+  const draftValidatedRef = useRef(false);
   const [buscaProduto, setBuscaProduto] = useState('');
   const [showAddGrade, setShowAddGrade] = useState(false);
   const [showRetornoEmMassa, setShowRetornoEmMassa] = useState(false);
