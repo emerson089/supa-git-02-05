@@ -36,6 +36,7 @@ import {
     Plus,
 } from 'lucide-react';
 import { EtiquetasModal } from './EtiquetasModal';
+import { toast } from 'sonner';
 
 interface Props {
     modelo: ModeloPadronizado | null;
