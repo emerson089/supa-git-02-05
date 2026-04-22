@@ -395,11 +395,21 @@ export default function Feira() {
         toast.success('Carga criada com sucesso!');
         setItensCarga([]); // Limpar apenas após criar com sucesso
         setTituloCarga(''); // Limpar título após sucesso
+        clearFeiraDraft(user?.id); // Limpar rascunho persistido
       },
       onError: (error: any) => {
         toast.error(error.message || 'Erro ao criar carga');
       }
     });
+  };
+
+  const handleLimparRascunho = () => {
+    if (itensCarga.length === 0 && !tituloCarga.trim()) return;
+    if (!window.confirm('Descartar todos os itens do rascunho?')) return;
+    setItensCarga([]);
+    setTituloCarga('');
+    clearFeiraDraft(user?.id);
+    toast.success('Rascunho descartado');
   };
 
   // Converter TransferenciaComItensHistorico para TransferenciaComItens para o modal de retorno
