@@ -730,10 +730,16 @@ Após o pagamento, envie o comprovante aqui e a gente já separa o seu pedido. �
             </div>
             <div className="space-y-2">
               <Label htmlFor="novo-estado">Estado</Label>
-              <Input id="novo-estado" value={novoCliente.estado} onChange={e => setNovoCliente(prev => ({
-                ...prev,
-                estado: e.target.value
-              }))} placeholder="UF" maxLength={2} className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+              <Select value={novoCliente.estado} onValueChange={value => setNovoCliente(prev => ({ ...prev, estado: value }))}>
+                <SelectTrigger id="novo-estado" className="shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0">
+                  <SelectValue placeholder="UF" />
+                </SelectTrigger>
+                <SelectContent>
+                  {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
+                    <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="space-y-2">
