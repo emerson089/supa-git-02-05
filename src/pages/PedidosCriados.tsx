@@ -1434,7 +1434,17 @@ Qualquer dúvida é só chamar! 😊`;
             },
             getItemNome: (item: any) => {
               const produto = estoqueItens.find(p => p.id === item.produto_id);
-              return produto?.nome || item.produto_nome || "";
+              if (produto?.nome) return produto.nome;
+              // Fallback para itens antigos: busca pelo produto_nome como referência
+              const refLegado = item.produto_nome;
+              if (refLegado) {
+                const porRef = estoqueItens.find(p => {
+                  if (!p.localizacao) return false;
+                  try { return JSON.parse(p.localizacao)?.referencia === refLegado; } catch { return false; }
+                });
+                if (porRef?.nome) return porRef.nome;
+              }
+              return item.produto_nome || "";
             },
             getItemPreco: (item: any) => item.valor_unitario || 0,
             getItemQtd: (item: any) => item.quantidade || 0,

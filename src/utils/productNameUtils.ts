@@ -17,12 +17,13 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
   const currentRef = (referencia || "").trim();
   const currentName = (nome || "").trim();
 
-  // 1. Extrair os números da referência (Modelo)
-  // Priorizamos sequências de 3 ou mais dígitos que geralmente representam o modelo
+  // 1. Extrair o código do modelo da referência
+  // Usa o último grupo de 3+ dígitos (antes de sufixo de tamanho opcional como "-34", "-36")
+  // Ex: "SA2604-540" → "540", "SH2604-481-34" → "481", "481-34" → "481"
   let numeros = "";
-  const match3PlusRef = currentRef.match(/(\d{3,})/);
-  const match3PlusName = currentName.match(/(\d{3,})/);
-  
+  const match3PlusRef = currentRef.match(/(\d{3,})(?:[-—–:/]\d{1,2})?$/);
+  const match3PlusName = currentName.match(/(\d{3,})(?:[-—–:/]\d{1,2})?$/);
+
   if (match3PlusRef) {
     numeros = match3PlusRef[1];
   } else if (match3PlusName) {
@@ -104,8 +105,12 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
   // Fallback: se nomeBase ficou vazio (ex: produtos cadastrados manualmente sem nome descritivo),
   // usa o nome original limpo ou a referência completa para evitar exibir " - 130"
   let nomeExibicao: string;
-  if (nomeBase) {
+  if (nomeBase && nomeBase !== numDisplay) {
+    // Nome descritivo diferente do número de referência — formato normal: "Nome - 165"
     nomeExibicao = numDisplay ? `${nomeBase} - ${numDisplay}` : nomeBase;
+  } else if (nomeBase && nomeBase === numDisplay) {
+    // Nome é apenas o número de referência (produto legado) — evita "165 - 165"
+    nomeExibicao = nomeBase;
   } else {
     // Sem nome base — tenta usar o nome original; se também vazio, usa a referência
     const fallbackNome = currentName.trim() || currentRef.trim();
