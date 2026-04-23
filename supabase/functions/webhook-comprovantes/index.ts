@@ -319,8 +319,13 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const imageUrl = body?.image?.imageUrl || body?.document?.documentUrl || body?.url;
-    
+    // Ignora PDFs e outros documentos — só processa imagens de comprovante
+    if (body?.document) {
+      return new Response(JSON.stringify({ ok: true, message: "Documento ignorado" }), { status: 200 });
+    }
+
+    const imageUrl = body?.image?.imageUrl || body?.url;
+
     if (!imageUrl) {
       return new Response(JSON.stringify({ ok: true, message: "Ignorado" }), { status: 200 });
     }
