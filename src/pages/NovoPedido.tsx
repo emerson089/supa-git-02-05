@@ -355,17 +355,13 @@ const NovoPedido = () => {
       const pecasFinalPedido = pedidoCriado.totalPecas ?? totalPecas;
       const valorFormatado = valorFinalPedido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-      // Mensagem nova: CNPJ em linha isolada para permitir cópia com 1 toque no WhatsApp
       const mensagemCliente = `Olá, ${clienteNome}! Pedido confirmado! 🎉
 
-Após o pagamento, envie o comprovante aqui que a gente já separa o seu pedido.
+📦 *Resumo do pedido:*
+💰 Total: *${valorFormatado}*
+Peças: ${pecasFinalPedido} | Modelos: ${quantidadeModelos}
 
-💰 *Total: ${valorFormatado}*
-
-PIX (CNPJ):
-40.548.049/0001-06
-
-Favorecido: Delookii Confecções Ltda`;
+Após o pagamento, envie o comprovante aqui e a gente já separa o seu pedido. ✅`;
 
       // Mensagem gerencial (sem mudança)
       const mensagem = mensagemCliente;
