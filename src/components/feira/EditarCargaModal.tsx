@@ -27,6 +27,7 @@ interface ItemEdicao {
 interface Produto {
   id: string;
   nome: string;
+  quantidade?: number;
   precoUnitario: number | null;
   imagemUrl?: string | null;
   modeloId?: string | null;
@@ -60,7 +61,16 @@ export function EditarCargaModal({
   // STORAGE KEY
   const STORAGE_KEY = carga ? `df_edit_carga_${carga.id}` : null;
 
-  // Inicializar itens quando a carga muda
+  // Retorna o disponível no central com fallback para estoque_itens quando não há
+  // registro em estoque_por_local (evita "Máximo disponível: 0" por dessincronização)
+  const getDisponivel = (itemId: string): number => {
+    const fromLocal = getDisponivelCentral(itemId);
+    if (fromLocal > 0) return fromLocal;
+    return produtos.find(p => p.id === itemId)?.quantidade ?? 0;
+  };
+
+  // Inicializar itens quando a carga muda (sem getDisponivelCentral na deps para
+  // evitar reset do estado a cada re-render do pai)
   useEffect(() => {
     if (carga && STORAGE_KEY) {
       // 1. Sempre carregar os dados oficiais inicialmente
@@ -70,7 +80,7 @@ export function EditarCargaModal({
         quantidade: item.quantidadeEnviada,
         quantidadeOriginal: item.quantidadeEnviada,
         precoUnitario: item.precoUnitario ?? item.produtoPreco ?? 0,
-        disponivelCentral: getDisponivelCentral(item.itemId) + item.quantidadeEnviada,
+        disponivelCentral: getDisponivel(item.itemId) + item.quantidadeEnviada,
         imagemUrl: item.produtoImagem ?? null,
         isNovo: false,
         modeloId: item.modeloId,
@@ -99,7 +109,8 @@ export function EditarCargaModal({
         }
       }
     }
-  }, [carga, getDisponivelCentral, STORAGE_KEY]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carga, STORAGE_KEY]);
 
   // Função para recuperar rascunho
   const handleRecoverDraft = () => {
@@ -170,7 +181,7 @@ export function EditarCargaModal({
   }, [produtos, itensEdicao, buscaProduto]);
 
   const handleAddItem = (produto: Produto) => {
-    const disponivel = getDisponivelCentral(produto.id);
+    const disponivel = getDisponivel(produto.id);
     if (disponivel <= 0) {
       toast.error('Produto sem estoque disponível no Central');
       return;
@@ -200,7 +211,7 @@ export function EditarCargaModal({
         const existingIdx = result.findIndex(i => i.itemId === item.itemId);
         if (existingIdx >= 0) {
           const existing = result[existingIdx];
-          const maxQtd = getDisponivelCentral(item.itemId) + existing.quantidadeOriginal;
+          const maxQtd = getDisponivel(item.itemId) + existing.quantidadeOriginal;
           result[existingIdx] = { ...existing, quantidade: Math.min(existing.quantidade + item.quantidade, maxQtd) };
         } else {
           result.push({
