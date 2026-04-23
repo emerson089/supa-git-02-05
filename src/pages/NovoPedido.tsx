@@ -476,7 +476,8 @@ Favorecido: Delookii Confecções Ltda`;
       const adminNumbers = (metadata.notification_numbers || []) as string[];
       const notifyOnOrderGlobal = metadata.notify_on_order !== false;
 
-      if (notifyOnOrderGlobal && adminNumbers.length > 0) {
+      if (enviarWhatsApp && notifyOnOrderGlobal && adminNumbers.length > 0) {
+
         // Busca dados da semana para o resumo gerencial
         const hoje = new Date();
         const segunda = startOfWeek(hoje, { weekStartsOn: 1 });
@@ -524,13 +525,10 @@ Favorecido: Delookii Confecções Ltda`;
             console.error('Erro ao notificar administrador:', adminPhone, err);
           }
         });
-        
-        if (!enviarWhatsApp || !telefone) {
-          toast.success('Gerência notificada via WhatsApp!');
-        }
       }
 
       clearDraft();
+
       handleLimpar();
 
       // Redirecionar para página de pedidos criados
