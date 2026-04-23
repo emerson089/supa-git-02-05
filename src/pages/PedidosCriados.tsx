@@ -1401,20 +1401,34 @@ Qualquer dúvida é só chamar! 😊`;
     {/* Order Details Modal */}
     <Dialog open={!!selectedPedido} onOpenChange={() => setSelectedPedido(null)}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-3">
+        {/* ── Header: título + nome + status ── */}
+        <DialogHeader className="pb-0">
+          <DialogTitle className="text-base font-semibold text-muted-foreground tracking-wide uppercase">
             Detalhes do Pedido
-            <div className="flex gap-2">
-              <Badge className={`${statusPagamentoColors[selectedPedido?.status_pagamento || ''] || 'bg-muted'} border text-[10px]`}>
-                {selectedPedido?.status_pagamento || 'Pendente'}
-              </Badge>
-            </div>
           </DialogTitle>
+          <div className="flex items-center justify-between mt-1">
+            <div>
+              <p className="text-xl font-bold text-foreground leading-tight">{selectedPedido?.cliente_nome}</p>
+              {selectedPedido?.telefone && (
+                <a href={`tel:${selectedPedido.telefone}`} className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  {selectedPedido.telefone}
+                </a>
+              )}
+            </div>
+            <Badge className={`${statusPagamentoColors[selectedPedido?.status_pagamento || ''] || 'bg-muted'} border text-[11px] px-3 py-1`}>
+              {selectedPedido?.status_pagamento || 'Pendente'}
+            </Badge>
+          </div>
         </DialogHeader>
 
         {selectedPedido && (() => {
           const allItems = selectedPedido.pedido_itens || [];
-          
+          const taxa = selectedPedido.taxa_excursao || 0;
+          const desconto = selectedPedido.desconto || 0;
+          const total = selectedPedido.valor_total || 0;
+          const subtotal = total + desconto - taxa;
+          const temAjustes = taxa > 0 || desconto > 0;
+
           // Agrupamento centralizado para uso no Modal usando utilitário centralizado
           const groupedItens = groupItensByModel(allItems as any[], {
             getItemId: (item: any) => {
@@ -1426,7 +1440,6 @@ Qualquer dúvida é só chamar! 😊`;
                   if (loc.referencia) return loc.referencia;
                 } catch (e) {}
               }
-              // Fallback se não tiver no estoque ou localizacao
               if (item.produto_nome?.includes(' | REF: ')) {
                 return item.produto_nome.split(' | REF: ')[1] || "";
               }
@@ -1435,7 +1448,6 @@ Qualquer dúvida é só chamar! 😊`;
             getItemNome: (item: any) => {
               const produto = estoqueItens.find(p => p.id === item.produto_id);
               if (produto?.nome) return produto.nome;
-              // Fallback para itens antigos: busca pelo produto_nome como referência
               const refLegado = item.produto_nome;
               if (refLegado) {
                 const porRef = estoqueItens.find(p => {
@@ -1455,171 +1467,124 @@ Qualquer dúvida é só chamar! 😊`;
           });
 
           return (
-            <div className="space-y-6 mt-4">
-              {/* Informações do Cliente */}
-              <div className="neu-card p-4 rounded-xl">
-                <h3 className="font-semibold text-foreground mb-3">Informações do Cliente</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Nome</p>
-                    <p className="font-medium text-foreground">{selectedPedido.cliente_nome}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <p className="font-medium text-foreground">{selectedPedido.telefone || '-'}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <p className="font-medium text-foreground">{selectedPedido.cidade}, {selectedPedido.estado}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Bus className="h-4 w-4 text-muted-foreground" />
-                    <p className="font-medium text-foreground">{selectedPedido.excursao || '-'}</p>
-                  </div>
+            <div className="space-y-4 mt-4">
+
+              {/* ── Card único: localização + excursão + data + pagamento + status ── */}
+              <div className="neu-card p-4 rounded-xl space-y-3">
+                {/* Linha 1: localização, excursão, data, pagamento */}
+                <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                  {(selectedPedido.cidade || selectedPedido.estado) && (
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" />
+                      <span className="font-medium text-foreground">{[selectedPedido.cidade, selectedPedido.estado].filter(Boolean).join(', ')}</span>
+                    </span>
+                  )}
+                  {selectedPedido.excursao && (
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Bus className="h-3.5 w-3.5 shrink-0" />
+                      <span className="font-medium text-foreground">{selectedPedido.excursao}</span>
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="font-medium text-foreground">
+                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </span>
+                  </span>
+                  {selectedPedido.forma_pagamento && (
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5 shrink-0" />
+                      <span className="font-medium text-foreground">{selectedPedido.forma_pagamento}</span>
+                    </span>
+                  )}
+                </div>
+                {/* Linha 2: badges de status */}
+                <div className="flex flex-wrap gap-1.5 pt-1 border-t border-border/30">
+                  <Badge className={`${statusPagamentoColors[selectedPedido.status_pagamento || ''] || 'bg-muted'} border text-[10px]`}>
+                    {selectedPedido.status_pagamento || 'Pendente'}
+                  </Badge>
+                  <Badge className={`${statusPedidoColors[selectedPedido.status_pedido || ''] || 'bg-muted'} border text-[10px]`}>
+                    {selectedPedido.status_pedido || 'Não separado'}
+                  </Badge>
+                  <Badge className={`${statusEntregaColors[selectedPedido.status_entrega || ''] || 'bg-muted'} border text-[10px]`}>
+                    {selectedPedido.status_entrega || 'Não entregue'}
+                  </Badge>
                 </div>
               </div>
 
-              {/* Informações do Pedido */}
+              {/* ── Itens do Pedido ── */}
               <div className="neu-card p-4 rounded-xl">
-                <h3 className="font-semibold text-foreground mb-3">Informações do Pedido</h3>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Data de Criação</p>
-                    <p className="font-medium text-foreground">
-                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy HH:mm", {
-                        locale: ptBR
-                      })}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Forma de Pagamento</p>
-                    <p className="font-medium text-foreground">{selectedPedido.forma_pagamento || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Status</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      <Badge className={`${statusPagamentoColors[selectedPedido.status_pagamento || ''] || 'bg-muted'} border text-[9px]`}>
-                        {selectedPedido.status_pagamento || 'Pendente'}
-                      </Badge>
-                      <Badge className={`${statusPedidoColors[selectedPedido.status_pedido || ''] || 'bg-muted'} border text-[9px]`}>
-                        {selectedPedido.status_pedido || 'Nao separado'}
-                      </Badge>
-                      <Badge className={`${statusEntregaColors[selectedPedido.status_entrega || ''] || 'bg-muted'} border text-[9px]`}>
-                        {selectedPedido.status_entrega || 'Pend. Entrega'}
-                      </Badge>
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-foreground">Itens do Pedido</h3>
+                  <span className="text-xs font-semibold text-primary bg-primary/10 rounded-full px-2.5 py-0.5">
+                    {selectedPedido.total_pecas || 0} peças · {groupedItens.length} {groupedItens.length === 1 ? 'modelo' : 'modelos'}
+                  </span>
                 </div>
-              </div>
-
-              {/* Itens do Pedido */}
-              <div className="neu-card p-4 rounded-xl">
-                <h3 className="font-semibold text-foreground mb-3">Itens do Pedido</h3>
+                {/* Cabeçalho da lista */}
+                {groupedItens.length > 0 && (
+                  <div className="flex justify-between text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest px-1 mb-1">
+                    <span>Modelo</span>
+                    <span>Total</span>
+                  </div>
+                )}
                 {groupedItens.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">Nenhum item</p>
                 ) : (
-                  <div className="space-y-0">
+                  <div>
                     {groupedItens.map((group, index) => (
-                      <div key={index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                        <div>
-                          <p className="font-medium text-foreground">
-                            {group.nomeExibicao}
-                          </p>
-                          <p className="text-sm text-muted-foreground mt-0.5">
+                      <div key={index} className="flex justify-between items-start py-2.5 border-b border-border/40 last:border-0 gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground text-sm leading-snug">{group.nomeExibicao}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                             {Object.keys(group.tamanhosComQtd ?? {}).length > 0
-                              ? `${Object.entries(group.tamanhosComQtd).map(([t, q]) => `${q}× ${t}`).join(', ')} · `
+                              ? `${Object.entries(group.tamanhosComQtd).map(([t, q]) => `${q}×${t}`).join(' · ')} · `
                               : ''}
                             {group.quantidadeTotal} peça{group.quantidadeTotal !== 1 ? 's' : ''} · {formatCurrency(group.valorUnitario)}
                           </p>
                         </div>
-                        <p className="font-bold text-emerald-600">
-                          {formatCurrency(group.subtotal)}
-                        </p>
+                        <p className="font-bold text-emerald-600 shrink-0 text-sm">{formatCurrency(group.subtotal)}</p>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Totais */}
+              {/* ── Resumo Financeiro estilo recibo ── */}
               <div className="neu-card p-4 rounded-xl">
-                {/* Linha auxiliar: Subtotal e Taxa */}
-                {((selectedPedido.taxa_excursao || 0) > 0) && (
-                  <div className="flex flex-wrap items-center gap-4 mb-3 text-sm text-muted-foreground">
-                    <span>Subtotal: <strong className="text-foreground">{formatCurrency((selectedPedido.valor_total || 0) + (selectedPedido.desconto || 0) - (selectedPedido.taxa_excursao || 0))}</strong></span>
-                    <span>Taxa Excursão: <strong className="text-amber-600">+ {formatCurrency(selectedPedido.taxa_excursao || 0)}</strong></span>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {/* Total de Peças */}
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-                      Total de Peças
-                    </p>
-                    <p className="text-2xl font-semibold leading-tight text-primary">
-                      {selectedPedido.total_pecas || 0} <span className="text-sm font-normal text-muted-foreground">peças</span>
-                    </p>
-                  </div>
-
-                  {/* Quantidade de Modelos */}
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-                      Qtd de Modelos
-                    </p>
-                    <p className="text-2xl font-semibold leading-tight text-violet-600">
-                      {groupedItens.length} <span className="text-sm font-normal text-muted-foreground">
-                        {groupedItens.length === 1 ? 'modelo' : 'modelos'}
-                      </span>
-                    </p>
-                  </div>
-
-                  {/* Desconto (Interno) */}
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-                      Desconto (Interno)
-                    </p>
-                    {(selectedPedido.desconto || 0) > 0 ? (
-                      <p className="text-2xl font-semibold leading-tight text-rose-600">
-                        - {formatCurrency(selectedPedido.desconto || 0)}
-                      </p>
-                    ) : (
-                      <p className="text-2xl font-semibold leading-tight text-muted-foreground/50">
-                        —
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Valor Total */}
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
-                      Valor Total
-                    </p>
-                    {(selectedPedido.desconto || 0) > 0 ? (
-                      <div className="flex flex-col gap-0.5">
-                        <p className="text-sm text-muted-foreground line-through">
-                          {formatCurrency((selectedPedido.valor_total || 0) + (selectedPedido.desconto || 0))}
-                        </p>
-                        <p className="text-2xl font-semibold leading-tight text-emerald-600">
-                          {formatCurrency(selectedPedido.valor_total || 0)}
-                        </p>
-                        <span className="inline-flex items-center w-fit rounded-full bg-rose-100 text-rose-700 border border-rose-200 text-xs font-medium px-2 py-0.5">
-                          - {formatCurrency(selectedPedido.desconto || 0)} de desconto
-                        </span>
-                      </div>
-                    ) : (
-                      <p className="text-2xl font-semibold leading-tight text-emerald-600">
-                        {formatCurrency(selectedPedido.valor_total || 0)}
-                      </p>
-                    )}
+                <div className="space-y-1.5 text-sm">
+                  {temAjustes && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Subtotal</span>
+                      <span className="font-medium text-foreground">{formatCurrency(subtotal)}</span>
+                    </div>
+                  )}
+                  {taxa > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Taxa Excursão{selectedPedido.excursao ? ` (${selectedPedido.excursao})` : ''}</span>
+                      <span className="font-medium text-amber-600">+ {formatCurrency(taxa)}</span>
+                    </div>
+                  )}
+                  {desconto > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Desconto (interno)</span>
+                      <span className="font-medium text-rose-600">- {formatCurrency(desconto)}</span>
+                    </div>
+                  )}
+                  <div className={`flex justify-between items-center ${temAjustes ? 'pt-2 mt-1 border-t border-border/50' : ''}`}>
+                    <span className="font-bold text-foreground text-base uppercase tracking-wide">Total</span>
+                    <span className="font-bold text-emerald-600 text-xl">{formatCurrency(total)}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Observações */}
+              {/* ── Observações ── */}
               {selectedPedido.observacoes && (
-                <div className="neu-card p-4 rounded-xl">
-                  <h3 className="font-semibold text-foreground mb-2 text-sm">Observações</h3>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedPedido.observacoes}</p>
+                <div className="flex gap-3 p-4 rounded-xl border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-950/20 neu-card">
+                  <FileText className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1">Observações</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{selectedPedido.observacoes}</p>
+                  </div>
                 </div>
               )}
             </div>
