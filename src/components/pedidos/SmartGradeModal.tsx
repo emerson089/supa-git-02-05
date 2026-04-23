@@ -530,11 +530,13 @@ export function SmartGradeModal({
                                         {/* Bloco Estoque Disponível */}
                                         <div className="space-y-3">
                                             <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] px-1">Estoque Disponível</h4>
-                                            <div className="grid grid-cols-2 gap-3">
+                                            <div className={`grid gap-3 ${(selectedModel?.metadata.grade_tamanhos.length ?? 0) > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                                {(selectedModel?.metadata.grade_tamanhos.length ?? 0) > 0 && (
                                                 <div className="p-4 rounded-xl bg-white dark:bg-background/40 border border-indigo-100 dark:border-indigo-900/30">
                                                     <p className="text-2xl font-black text-indigo-600">{stats?.gradesEmEstoquePosSelecao}</p>
                                                     <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">Grades Livres</p>
                                                 </div>
+                                                )}
                                                 <div className="p-4 rounded-xl bg-white dark:bg-background/40 border border-indigo-100 dark:border-indigo-900/30">
                                                     <div className="flex flex-wrap gap-2">
                                                         {selectedModel?.variacoesRaw
@@ -585,7 +587,8 @@ export function SmartGradeModal({
                                             </div>
                                         </div>
 
-                                        {/* Inserir Grades Completas */}
+                                        {/* Inserir Grades Completas — só exibe se o modelo tem grade configurada */}
+                                        {(selectedModel?.metadata.grade_tamanhos.length ?? 0) > 0 && (
                                         <div className="space-y-3">
                                             <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] px-1">Inserir Grades Completas</Label>
                                             <div className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/20">
@@ -596,14 +599,15 @@ export function SmartGradeModal({
                                                     </p>
                                                 </div>
                                                 <div className="w-auto">
-                                                    <QuantityStepper 
-                                                        value={numGrades} 
+                                                    <QuantityStepper
+                                                        value={numGrades}
                                                         onChange={handleNumGradesChange}
                                                         className="w-32"
                                                     />
                                                 </div>
                                             </div>
                                         </div>
+                                        )}
 
                                         {/* Grid Ajuste de Peças */}
                                         <div className="space-y-3">
