@@ -1614,6 +1614,14 @@ Qualquer dúvida é só chamar! 😊`;
                   </div>
                 </div>
               </div>
+
+              {/* Observações */}
+              {selectedPedido.observacoes && (
+                <div className="neu-card p-4 rounded-xl">
+                  <h3 className="font-semibold text-foreground mb-2 text-sm">Observações</h3>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedPedido.observacoes}</p>
+                </div>
+              )}
             </div>
           );
         })()}
