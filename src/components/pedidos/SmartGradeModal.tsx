@@ -25,6 +25,8 @@ import {
     Plus,
     Minus,
     Tag,
+    Copy,
+    Check,
 } from 'lucide-react';
 import { useModelosPadronizados, ModeloPadronizado } from '@/hooks/useModelosPadronizados';
 import { ItemPedido } from './ItemPedidoRow';
@@ -130,6 +132,7 @@ export function SmartGradeModal({
     const [numGrades, setNumGrades] = useState(0);
     const [manualQuantities, setManualQuantities] = useState<Record<string, number>>({});
     const [customPrice, setCustomPrice] = useState(0);
+    const [copiedLoose, setCopiedLoose] = useState(false);
 
     // Mapear modelos para ModeloAgrupado
     const modelosAgrupados: ModeloAgrupado[] = useMemo(() => {
@@ -553,7 +556,31 @@ export function SmartGradeModal({
                                                             <span className="text-[10px] text-muted-foreground italic px-1">Nenhuma peça avulsa</span>
                                                         )}
                                                     </div>
-                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase mt-2">Peças Avulsas em Estoque</p>
+                                                    <div className="flex items-center justify-between mt-2">
+                                                        <p className="text-[10px] font-bold text-muted-foreground uppercase">Peças Avulsas em Estoque</p>
+                                                        {(() => {
+                                                            const avulsas = selectedModel?.variacoesRaw.filter(v => (stats?.stockStatus[v.tamanho].looseTotal || 0) > 0) || [];
+                                                            if (avulsas.length === 0) return null;
+                                                            const handleCopy = () => {
+                                                                const texto = `*${selectedModel?.nome}* — Peças avulsas disponíveis:\n` +
+                                                                    avulsas.map(v => `  Tam. ${v.tamanho}: ${stats?.stockStatus[v.tamanho].looseTotal} pç`).join('\n');
+                                                                navigator.clipboard.writeText(texto);
+                                                                setCopiedLoose(true);
+                                                                setTimeout(() => setCopiedLoose(false), 2000);
+                                                            };
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleCopy}
+                                                                    className="flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-600 transition-colors"
+                                                                    title="Copiar disponibilidade"
+                                                                >
+                                                                    {copiedLoose ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                                                                    <span>{copiedLoose ? 'Copiado!' : 'Copiar'}</span>
+                                                                </button>
+                                                            );
+                                                        })()}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
