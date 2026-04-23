@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -89,7 +89,8 @@ export default function Feira() {
     getProdutosAcabados
   } = useEstoque();
   const {
-    getDisponivelCentral,
+    getDisponivelCentral: _getDisponivelCentral,
+    estoquePorLocal,
     isLoading: isLoadingLocais
   } = useDisponivelCentral();
   const {
@@ -170,6 +171,18 @@ export default function Feira() {
   const [buscaRetorno, setBuscaRetorno] = useState('');
   const [retornosSalvos, setRetornosSalvos] = useState<Record<string, Record<string, string>>>({});
   const produtosAcabados = getProdutosAcabados();
+
+  // Wrapper com fallback: quando não há registro em estoque_por_local (sincronização
+  // incompleta), usa a quantidade de estoque_itens diretamente para evitar "Máximo: 0"
+  const getDisponivelCentral = useCallback((itemId: string): number => {
+    const temRegistro = estoquePorLocal.some(e => e.itemId === itemId);
+    if (!temRegistro) {
+      const item = produtosAcabados.find(p => p.id === itemId);
+      return item?.quantidade ?? 0;
+    }
+    return _getDisponivelCentral(itemId);
+  }, [_getDisponivelCentral, estoquePorLocal, produtosAcabados]);
+
   const periodoEhHoje = periodo.tipo === 'hoje';
 
   // Proteção contra loop infinito na criação de locais
