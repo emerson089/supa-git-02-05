@@ -1,19 +1,16 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { fetchAllRows } from "@/lib/supabase-utils";
 import {
   differenceInDays,
   addDays,
   isBefore,
   isAfter,
-  isEqual,
   getISOWeekYear,
   getISOWeek,
   format,
   subYears,
-  startOfYear,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -26,60 +23,37 @@ import {
   startOfDaySP,
 } from "@/utils/dateTz";
 import { equivalentPrevious, Range } from "@/utils/comparativePeriods";
+import { TrendMode } from "./useSalesTrendChart";
 
-export type TrendGranularity = 'year' | 'month' | 'week';
-
-export type TrendMode =
-  | { granularity: 'year' }
-  | { granularity: 'month'; submode: 'yoy' | 'mom' }
-  | { granularity: 'week'; submode: 'wow' | 'yoy' };
-
-export interface TrendDataPoint {
+export interface RecebimentoDataPoint {
   label: string;
   bucketKey: string;
   atual: number;
   anterior: number | null;
-  pedidosAtual: number;
-  pecasAtual: number;
-  pedidosAnterior: number;
-  pecasAnterior: number;
+  qtdAtual: number;
+  qtdAnterior: number;
 }
 
-export interface UseSalesTrendChartResult {
-  chartData: TrendDataPoint[];
-  isLoading: boolean;
-  currentLabel: string;
-  previousLabel: string;
-  totals: { atual: number; anterior: number; deltaPct: number | null };
-}
-
-const STATUS_CANCELADOS = ["CANCELADO", "GOLPE CANCELADO", "GOLPE"];
-
-export function useSalesTrendChart(opts: {
-  excluirCancelados: boolean;
+export function useRecebimentosTrendChart(opts: {
   mode: TrendMode;
-}): UseSalesTrendChartResult {
-  const { excluirCancelados, mode } = opts;
+}) {
+  const { mode } = opts;
   const { user } = useAuth();
   const userId = user?.id;
 
-  // Cache stable midnight to avoid excessive re-renders, but it will still update daily
   const nowSP = useMemo(() => nowInSP(), []);
   const startOfLastYearSP = startOfYearSP(subYears(nowSP, 1));
   const { gte } = getSupabaseUtcRangeSP(startOfLastYearSP, nowSP);
 
   const { data: records, isLoading } = useQuery({
-    queryKey: ["sales-trend-chart-v2", userId, gte, excluirCancelados],
+    queryKey: ["recebimentos-trend-chart-v2", userId, gte],
     queryFn: async () => {
-      if (!userId) return [];
-      const pedidosData = await fetchAllRows<any>(() =>
-        supabase
-          .from("pedidos")
-          .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at")
-          .eq("user_id", userId)
-          .gte("created_at", gte)
-      );
-      return pedidosData || [];
+      const { data } = await supabase
+        .from("comprovantes")
+        .select("valor, created_at")
+        .eq("status", "confirmado")
+        .gte("created_at", gte);
+      return data || [];
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000,
@@ -94,14 +68,6 @@ export function useSalesTrendChart(opts: {
         totals: { atual: 0, anterior: 0, deltaPct: null },
       };
     }
-
-    const pedidosFiltrados = excluirCancelados
-      ? records.filter((p: any) => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
-      : records;
-
-    const pedidosPagos = pedidosFiltrados.filter((p: any) =>
-      ["PAGO", "CONCLUIDO"].includes((p.status_pagamento || "").toUpperCase())
-    );
 
     let currentRange: Range;
     if (mode.granularity === 'year') {
@@ -144,7 +110,7 @@ export function useSalesTrendChart(opts: {
     }
 
     const elapsedDays = differenceInDays(currentRange.end, currentRange.start);
-    const result: TrendDataPoint[] = [];
+    const result: RecebimentoDataPoint[] = [];
 
     for (let i = 0; i <= elapsedDays; i++) {
       const currDay = addDays(currentRange.start, i);
@@ -167,35 +133,31 @@ export function useSalesTrendChart(opts: {
         bucketKey,
         atual: 0,
         anterior: isPrevValid ? 0 : null,
-        pedidosAtual: 0,
-        pecasAtual: 0,
-        pedidosAnterior: 0,
-        pecasAnterior: 0,
+        qtdAtual: 0,
+        qtdAnterior: 0,
         _currDayStart: startOfDaySP(currDay),
         _prevDayStart: startOfDaySP(prevDay),
         _isPrevValid: isPrevValid
       } as any);
     }
 
-    pedidosPagos.forEach((p: any) => {
-      const d = toSP(p.created_at);
+    records.forEach((c: any) => {
+      const d = toSP(c.created_at);
       const dStart = startOfDaySP(d);
 
       if (!isBefore(dStart, startOfDaySP(currentRange.start)) && !isAfter(dStart, startOfDaySP(currentRange.end))) {
         const daysDiff = differenceInDays(dStart, startOfDaySP(currentRange.start));
         if (result[daysDiff]) {
-          result[daysDiff].atual += p.valor_total || 0;
-          result[daysDiff].pedidosAtual += 1;
-          result[daysDiff].pecasAtual += p.total_pecas || 0;
+          result[daysDiff].atual += c.valor || 0;
+          result[daysDiff].qtdAtual += 1;
         }
       }
 
       if (!isBefore(dStart, startOfDaySP(prevRange.start)) && !isAfter(dStart, startOfDaySP(prevRange.end))) {
         const daysDiff = differenceInDays(dStart, startOfDaySP(prevRange.start));
         if (result[daysDiff] && result[daysDiff]._isPrevValid) {
-          result[daysDiff].anterior = (result[daysDiff].anterior || 0) + (p.valor_total || 0);
-          result[daysDiff].pedidosAnterior += 1;
-          result[daysDiff].pecasAnterior += p.total_pecas || 0;
+          result[daysDiff].anterior = (result[daysDiff].anterior || 0) + (c.valor || 0);
+          result[daysDiff].qtdAnterior += 1;
         }
       }
     });
@@ -222,7 +184,7 @@ export function useSalesTrendChart(opts: {
       previousLabel,
       totals: { atual: totAtual, anterior: totAnterior, deltaPct },
     };
-  }, [records, mode, excluirCancelados, nowSP]);
+  }, [records, mode, nowSP]);
 
   return {
     ...processedData,

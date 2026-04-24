@@ -7,6 +7,7 @@ import type {
   TopModelo,
   FaturamentoDiaSemana,
 } from "@/hooks/useDashboardData";
+import { TrendMode } from "./useSalesTrendChart";
 
 export interface InsightItem {
   id: string;
@@ -25,12 +26,9 @@ export interface InsightsDashboardResult {
 interface InsightsDashboardParams {
   kpis: {
     faturamento: number;
-    faturamentoYoY: number;
     pedidosPendentes: number;
-    anoPassado: number;
   };
   metaAutomatica: MetaAutomatica;
-  /** Simplified trend array — only `atual` (current year value) is needed for drop detection */
   tendenciaVendas: { atual: number }[];
   estoqueBaixo: EstoqueBaixoItem[];
   topModelos: TopModelo[];
@@ -38,6 +36,11 @@ interface InsightsDashboardParams {
   holidayMap: Map<string, Holiday[]>;
   dateRange?: { from?: Date; to?: Date };
   loading: boolean;
+  trendMode: TrendMode;
+  excluirCancelados: boolean;
+  chartTotals?: { atual: number; anterior: number; deltaPct: number | null };
+  currentLabel?: string;
+  previousLabel?: string;
 }
 
 const MESES_PT: Record<number, string> = {
@@ -60,7 +63,7 @@ const PRIORIDADE_ORDER: Record<InsightItem["prioridade"], number> = {
   contexto: 2,
 };
 
-const ATENCAO_IDS = new Set(["meta-abaixo-leve", "concentracao-dia", "meta-atingida", "meta-acima", "yoy-crescimento"]);
+const ATENCAO_IDS = new Set(["meta-abaixo-leve", "concentracao-dia", "meta-atingida", "meta-acima", "trend-comparativo"]);
 const CONTEXTO_IDS = new Set(["historico-mes", "feriados-periodo", "sem-anomalias", "ticket-medio"]);
 
 function getPrioridade(tipo: InsightItem["tipo"], id: string): InsightItem["prioridade"] {
@@ -75,33 +78,8 @@ const FOCO_MAP: Record<string, string> = {
   "estoque-top-zerado": "Prioridade: repor estoque dos modelos mais vendidos para evitar perda de vendas.",
   "tendencia-queda": "Prioridade: entender a queda consecutiva dos últimos períodos.",
   "pendentes-alto": "Prioridade: acionar cobrança dos pedidos pendentes acumulados.",
-  "yoy-queda": "Prioridade: analisar os fatores da queda comparado ao ano anterior.",
+  "trend-comparativo-queda": "Prioridade: analisar os fatores da queda comparado ao período equivalente anterior.",
 };
-
-function gerarResumoExecutivo(
-  metaAutomatica: MetaAutomatica,
-  kpis: InsightsDashboardParams["kpis"],
-): string {
-  if (metaAutomatica.metaCalculada > 0) {
-    if (metaAutomatica.statusMeta === "atingida" || metaAutomatica.statusMeta === "acima") {
-      return "Desempenho positivo no período — faturamento acima do ritmo esperado.";
-    }
-    if (metaAutomatica.statusMeta === "abaixo" && metaAutomatica.diferencaRitmo < -10) {
-      return "Período com desempenho abaixo do esperado — faturamento significativamente abaixo do ritmo sazonal.";
-    }
-    if (metaAutomatica.statusMeta === "abaixo") {
-      return "Desempenho levemente abaixo do ritmo esperado para o período.";
-    }
-  }
-
-  if (kpis.faturamentoYoY > 0) {
-    const varYoY = ((kpis.faturamento - kpis.faturamentoYoY) / kpis.faturamentoYoY) * 100;
-    if (varYoY > 20) return "Período de crescimento — faturamento acima do mesmo período do ano anterior.";
-    if (varYoY < -20) return "Atenção: faturamento em queda comparado ao mesmo período do ano anterior.";
-  }
-
-  return "Desempenho dentro do esperado para o período analisado.";
-}
 
 export function useInsightsDashboard(params: InsightsDashboardParams): InsightsDashboardResult {
   const {
@@ -114,6 +92,10 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
     holidayMap,
     dateRange,
     loading,
+    trendMode,
+    chartTotals,
+    currentLabel,
+    previousLabel,
   } = params;
 
   return useMemo(() => {
@@ -160,7 +142,6 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       }
     }
 
-    // Melhoria #3: normalização robusta de nomes para evitar falha com acentos/espaços
     function normalizeStr(s: string): string {
       return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
     }
@@ -179,10 +160,6 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       });
     }
 
-    // 3. Concentração de vendas
-    // Melhoria #1: Threshold subiu de 40% para 65%.
-    // Com 4 dias úteis de venda (Seg–Qui), 25% por dia é a base esperada.
-    // Só alertamos se UMA única dia ultrapassar 65% (=2.6x a baseline), indicando risco real.
     const totalFatSemana = faturamentoDiaSemana.reduce((s, d) => s + d.valor, 0);
     if (totalFatSemana > 0) {
       const diaConcentrado = faturamentoDiaSemana.find((d) => d.percentual > 65);
@@ -196,7 +173,6 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       }
     }
 
-    // 4. Tendência de queda (uses current year 'atual' values)
     if (tendenciaVendas.length >= 3) {
       const ultimos3 = tendenciaVendas.slice(-3);
       const quedaConsecutiva =
@@ -211,8 +187,6 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       }
     }
 
-    // 5. Pedidos pendentes acumulados
-    // Melhoria #2: Threshold subiu de 10 para 20 pedidos — para um atacado, <20 é operacionalmente normal.
     if (kpis.pedidosPendentes > 20) {
       raw.push({
         id: "pendentes-alto",
@@ -222,8 +196,6 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       });
     }
 
-    // 5b. Ticket médio por pedido — novo insight de contexto
-    // Melhoria #4: Usa pedidos pagos do faturamentoDiaSemana para calcular ticket médio
     const totalPedidosPeriodo = faturamentoDiaSemana.reduce((sum, d) => sum + d.pedidos, 0);
     if (totalPedidosPeriodo > 0 && kpis.faturamento > 0) {
       const ticketMedio = kpis.faturamento / totalPedidosPeriodo;
@@ -235,27 +207,47 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       });
     }
 
-    // 6. Comparação YoY
-    if (kpis.faturamentoYoY > 0) {
-      const varYoY = ((kpis.faturamento - kpis.faturamentoYoY) / kpis.faturamentoYoY) * 100;
-      if (varYoY < -20) {
+    // Comparação do Gráfico Tendência de Vendas
+    let isQuedaTrend = false;
+    if (chartTotals && chartTotals.deltaPct !== null && currentLabel && previousLabel) {
+      const absDelta = Math.abs(chartTotals.deltaPct).toFixed(0);
+      const isQueda = chartTotals.deltaPct < 0;
+      isQuedaTrend = isQueda;
+
+      let msg = "";
+      if (trendMode.granularity === 'year') {
+        msg = `Faturamento ${absDelta}% ${isQueda ? 'abaixo' : 'acima'} de ${previousLabel}.`;
+      } else if (trendMode.granularity === 'month') {
+        if (trendMode.submode === 'yoy') {
+          msg = `Faturamento ${absDelta}% ${isQueda ? 'abaixo' : 'acima'} dos mesmos dias de ${previousLabel}.`;
+        } else {
+          msg = `Faturamento ${absDelta}% ${isQueda ? 'abaixo' : 'acima'} dos mesmos dias de ${previousLabel}.`;
+        }
+      } else if (trendMode.granularity === 'week') {
+        if (trendMode.submode === 'wow') {
+          msg = `Faturamento ${absDelta}% ${isQueda ? 'abaixo' : 'acima'} da ${previousLabel}.`;
+        } else {
+          msg = `${currentLabel} ${absDelta}% ${isQueda ? 'abaixo' : 'acima'} da ${previousLabel}.`;
+        }
+      }
+
+      if (isQueda && chartTotals.deltaPct < -10) {
         raw.push({
-          id: "yoy-queda",
+          id: "trend-comparativo-queda",
           tipo: "alerta",
-          mensagem: `Faturamento ${Math.abs(varYoY).toFixed(0)}% abaixo do mesmo período de ${kpis.anoPassado}. Verifique se há fatores sazonais.`,
+          mensagem: msg,
           icone: "trending-down",
         });
-      } else if (varYoY > 20) {
+      } else if (!isQueda && chartTotals.deltaPct > 10) {
         raw.push({
-          id: "yoy-crescimento",
+          id: "trend-comparativo",
           tipo: "positivo",
-          mensagem: `Crescimento de ${varYoY.toFixed(0)}% vs mesmo período de ${kpis.anoPassado}.`,
+          mensagem: msg,
           icone: "trending-up",
         });
       }
     }
 
-    // 7. Contexto sazonal: histórico do mês
     if (metaAutomatica.temHistoricoSazonal && metaAutomatica.anosUsados.length > 0) {
       const mesNome = MESES_PT[new Date().getMonth()] || "";
       const nAnos = metaAutomatica.anosUsados.length;
@@ -268,7 +260,6 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       });
     }
 
-    // 8. Feriados no período
     if (holidayMap.size > 0 && dateRange?.from && dateRange?.to) {
       try {
         const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
@@ -298,13 +289,11 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       }
     }
 
-    // Add priority and sort
     const insights: InsightItem[] = raw
       .map((item) => ({ ...item, prioridade: getPrioridade(item.tipo, item.id) }))
       .sort((a, b) => PRIORIDADE_ORDER[a.prioridade] - PRIORIDADE_ORDER[b.prioridade])
       .slice(0, 4);
 
-    // Fallback if empty
     if (insights.length === 0) {
       insights.push({
         id: "sem-anomalias",
@@ -315,14 +304,21 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
       });
     }
 
-    // Resumo executivo
-    const resumoBase = gerarResumoExecutivo(metaAutomatica, kpis);
-    const hasYoyQueda = insights.some(i => i.id === "yoy-queda");
-    const resumoExecutivo = (hasYoyQueda && resumoBase.includes("positivo"))
-      ? "Faturamento acima do ritmo esperado, mas abaixo do mesmo período do ano anterior."
-      : resumoBase;
+    let resumoExecutivo = "Desempenho dentro do esperado para o período analisado.";
+    if (metaAutomatica.metaCalculada > 0) {
+      if (metaAutomatica.statusMeta === "atingida" || metaAutomatica.statusMeta === "acima") {
+        resumoExecutivo = "Desempenho positivo no período — faturamento acima do ritmo esperado.";
+      } else if (metaAutomatica.statusMeta === "abaixo" && metaAutomatica.diferencaRitmo < -10) {
+        resumoExecutivo = "Período com desempenho abaixo do esperado — faturamento significativamente abaixo do ritmo sazonal.";
+      } else if (metaAutomatica.statusMeta === "abaixo") {
+        resumoExecutivo = "Desempenho levemente abaixo do ritmo esperado para o período.";
+      }
+    }
 
-    // Sugestão de foco: first critical insight
+    if (isQuedaTrend && resumoExecutivo.includes("positivo")) {
+      resumoExecutivo = "Faturamento acima do ritmo sazonal, mas abaixo do mesmo período anterior.";
+    }
+
     const firstCritico = insights.find((i) => i.prioridade === "critico");
     const sugestaoFoco = firstCritico ? (FOCO_MAP[firstCritico.id] ?? null) : null;
 
@@ -330,9 +326,7 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
   }, [
     loading,
     kpis.faturamento,
-    kpis.faturamentoYoY,
     kpis.pedidosPendentes,
-    kpis.anoPassado,
     metaAutomatica,
     tendenciaVendas,
     estoqueBaixo,
@@ -341,5 +335,9 @@ export function useInsightsDashboard(params: InsightsDashboardParams): InsightsD
     holidayMap,
     dateRange?.from,
     dateRange?.to,
+    trendMode,
+    chartTotals,
+    currentLabel,
+    previousLabel,
   ]);
 }

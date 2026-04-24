@@ -28,8 +28,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { format, startOfMonth, getYear, subDays, subMonths, startOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Line, ComposedChart } from "recharts";
-import { useSalesTrendChart, TrendDataPoint } from "@/hooks/useSalesTrendChart";
+import { TendenciaVendasChart } from "@/components/dashboard/TendenciaVendasChart";
+import { RecebimentosTrendChart } from "@/components/dashboard/RecebimentosTrendChart";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { TrendMode, useSalesTrendChart } from "@/hooks/useSalesTrendChart";
+import { useRecebimentosTrendChart } from "@/hooks/useRecebimentosTrendChart";
 import { useTaxasExcursao } from "@/hooks/useTaxasExcursao";
 import { useComprovantes } from "@/hooks/useComprovantes";
 import { startOfDay, endOfDay } from "date-fns";
@@ -59,98 +62,7 @@ function calcVariation(atual: number, anterior: number): {
   };
 }
 
-// Custom tooltip for sales trend chart
-function TrendTooltip({
-  active,
-  payload,
-  label,
-  granularity,
-  currentYear,
-  previousYear
-}: any) {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload as TrendDataPoint;
-    const isAno = granularity === "ano";
 
-    const diff = data.atual - data.anterior;
-    const isPositive = diff >= 0;
-    const perc = data.anterior > 0 ? Math.abs((diff / data.anterior) * 100) : (data.atual > 0 ? 100 : 0);
-
-    return (
-      <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-lg min-w-[200px] z-50 text-sm text-gray-700">
-        <p className="font-medium text-sm border-b border-gray-100 pb-2 mb-2 text-gray-800">
-          {isAno ? `${label}` : `Dia ${label}`}
-        </p>
-
-        <div className="flex flex-col gap-2">
-          {/* Atual */}
-          <div className="flex justify-between items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-primary"></div>
-              <span className="text-xs font-semibold text-foreground">{currentYear}</span>
-            </div>
-            <span className="text-sm font-bold text-primary">{formatCurrency(data.atual)}</span>
-          </div>
-
-          {/* Recebimentos */}
-          {(data.valorComprovantes || 0) > 0 && (
-            <div className="flex justify-between items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                <span className="text-xs font-semibold text-emerald-600">Recebido</span>
-              </div>
-              <span className="text-sm font-bold text-emerald-600">{formatCurrency(data.valorComprovantes || 0)}</span>
-            </div>
-          )}
-
-          {/* Anterior */}
-          {data.anterior > 0 && (
-            <div className="flex justify-between items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full border border-muted-foreground bg-transparent"></div>
-                <span className="text-xs text-muted-foreground">{previousYear}</span>
-              </div>
-              <span className="text-sm font-medium text-muted-foreground">{formatCurrency(data.anterior)}</span>
-            </div>
-          )}
-
-          {/* Diferença */}
-          {data.anterior > 0 && (
-            <div className={`flex justify-between items-center mt-1 pt-2 border-t text-xs font-semibold ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-              <span>Comparativo</span>
-              <div className="flex items-center gap-1">
-                {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                {formatCurrency(Math.abs(diff))} ({perc.toFixed(1)}%)
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-  return null;
-}
-
-// Renderiza pontos apenas nos picos (valores maiores ou menores significativos)
-const renderCustomDot = (props: any) => {
-  const { cx, cy, payload, index, value } = props;
-  // payload é o elemento inteiro. data é o array?
-  // O Recharts não passa o array inteiro facilmente via propriedades simples do dot, 
-  // mas podemos apenas desenhar o dot se o valor atual > 0 
-  // e se for um dia importante (ex: index % 5 === 0) no mes, ou todo mes no ano
-  if (!value || payload.isFuture) return null;
-
-  // Desenha no primeiro, último, ou a cada N pontos. Para 'ano', desenha todos.
-  const isMes = payload.label.length <= 2; // "01", "02" vs "Jan", "Fev"
-  const isRelevant = !isMes || index === 0 || index % 5 === 0 || value > 5000;
-
-  if (isRelevant) {
-    return (
-      <circle cx={cx} cy={cy} r={3} fill="hsl(var(--background))" stroke="hsl(var(--primary))" strokeWidth={2} />
-    );
-  }
-  return null;
-};
 
 // Custom tooltip for weekday chart
 function WeekdayTooltip({
@@ -248,14 +160,17 @@ export default function Dashboard() {
     isError
   } = useDashboardData(periodo, dateRange, excluirCancelados, percentualCrescimento);
 
-  const {
-    granularity,
-    setGranularity,
-    chartData: trendData,
-    isLoading: trendLoading,
-    currentYear: trendCurrentYear,
-    previousYear: trendPreviousYear
-  } = useSalesTrendChart(excluirCancelados);
+  const [trendMode, setTrendMode] = useState<TrendMode>({ granularity: 'month', submode: 'yoy' });
+
+  // Hooks chamados diretamente no pai para fluxo de dados estável
+  const salesTrend = useSalesTrendChart({
+    excluirCancelados,
+    mode: trendMode,
+  });
+
+  const recebimentosTrend = useRecebimentosTrendChart({
+    mode: trendMode,
+  });
 
   const { data: taxasExcursao, loading: taxasLoading } = useTaxasExcursao();
 
@@ -286,13 +201,18 @@ export default function Dashboard() {
   const { insights: dashboardInsights, resumoExecutivo, sugestaoFoco } = useInsightsDashboard({
     kpis: data.kpis,
     metaAutomatica: data.metaAutomatica,
-    tendenciaVendas: trendData,
+    tendenciaVendas: salesTrend.chartData,
     estoqueBaixo: data.estoqueBaixo,
     topModelos: data.topModelos,
     faturamentoDiaSemana: data.faturamentoDiaSemana,
     holidayMap,
     dateRange: insightsDateRange,
     loading,
+    trendMode,
+    excluirCancelados,
+    chartTotals: salesTrend.totals,
+    currentLabel: salesTrend.currentLabel,
+    previousLabel: salesTrend.previousLabel,
   });
 
   const navigate = useNavigate();
@@ -898,124 +818,16 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Tendência de Vendas - Full Width, antes dos Insights */}
-      <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <CardHeader className="pb-2">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <CardTitle className="text-base font-semibold">Tendência de Vendas</CardTitle>
-              <div className="flex items-center gap-2 flex-wrap mt-1">
-                <p className="text-sm text-muted-foreground flex items-center gap-2">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary"></span> {trendCurrentYear}</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full border border-muted-foreground bg-transparent"></span> {trendPreviousYear}</span>
-                </p>
-              </div>
-            </div>
-            <div className="flex bg-muted/50 p-1 rounded-lg">
-              <button
-                onClick={() => setGranularity("ano")}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${granularity === "ano" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                Ano
-              </button>
-              <button
-                onClick={() => setGranularity("mes")}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${granularity === "mes" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                Mês
-              </button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {trendLoading ? (
-            <Skeleton className="h-[280px] w-full" />
-          ) : trendData.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-16">
-              Nenhuma venda no período
-            </p>
-          ) : (
-            <div>
-              <div className="h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorAtual" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                    <XAxis
-                      dataKey="label"
-                      fontSize={12}
-                      tickLine={false}
-                      axisLine={false}
-                      stroke="#6B7280"
-                      interval={granularity === "mes" ? 4 : 0}
-                    />
-                    <YAxis
-                      fontSize={12}
-                      tickLine={false}
-                      axisLine={false}
-                      stroke="#6B7280"
-                      tickFormatter={(value: number) => value >= 1000 ? `R$${(value / 1000).toFixed(0)}k` : `R$${value}`}
-                      width={55}
-                    />
-                    <Tooltip
-                      content={<TrendTooltip granularity={granularity} currentYear={trendCurrentYear} previousYear={trendPreviousYear} />}
-                      cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
-                    />
-                    {/* Linha do ano anterior */}
-                    <Line
-                      type="monotone"
-                      dataKey="anterior"
-                      stroke="hsl(var(--muted-foreground))"
-                      strokeWidth={1.5}
-                      strokeDasharray="5 3"
-                      strokeOpacity={0.7}
-                      connectNulls={true}
-                      dot={(props: any) => {
-                        const { cx, cy, payload } = props;
-                        const key = props.key ?? `dot-ant-${cx}-${cy}`;
-                        if (!payload?.anterior || payload.anterior === 0) return <g key={key} />;
-                        return <circle key={key} cx={cx} cy={cy} r={3} fill="hsl(var(--muted-foreground))" fillOpacity={0.7} stroke="none" />;
-                      }}
-                      activeDot={{ r: 4, fill: "hsl(var(--muted-foreground))", fillOpacity: 0.9 }}
-                    />
-                    {/* Linha de Comprovantes */}
-                    <Line
-                      type="monotone"
-                      dataKey={(d) => d.isFuture && (d.valorComprovantes || 0) === 0 ? null : d.valorComprovantes}
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4, fill: "#10b981", stroke: "white" }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey={(d) => d.isFuture && d.atual === 0 ? null : d.atual}
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorAtual)"
-                      dot={renderCustomDot}
-                      activeDot={{ r: 6, strokeWidth: 2, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))" }}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-              {/* Nota informativa no modo Mês */}
-              {granularity === "mes" && (
-                <p className="text-xs text-muted-foreground/60 text-center mt-2 flex items-center justify-center gap-1">
-                  <span>📊</span>
-                  <span>Comparativo com os mesmos dias de {trendPreviousYear} (período equivalente)</span>
-                </p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <TendenciaVendasChart 
+        excluirCancelados={excluirCancelados}
+        mode={trendMode}
+        setMode={setTrendMode}
+        salesTrend={salesTrend}
+      />
+      <RecebimentosTrendChart 
+        mode={trendMode} 
+        recebimentosTrend={recebimentosTrend}
+      />
 
       {/* Insights do Período */}
       <InsightsPanel insights={dashboardInsights} resumoExecutivo={resumoExecutivo} sugestaoFoco={sugestaoFoco} />

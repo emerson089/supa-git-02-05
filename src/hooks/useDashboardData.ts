@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchAllRows } from "@/lib/supabase-utils";
 import { parseProductName } from "@/utils/productNameUtils";
+import { equivalentPrevious } from "@/utils/comparativePeriods";
+import { getSupabaseUtcRangeSP, toSP } from "@/utils/dateTz";
 import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, startOfYear, getWeek, endOfMonth, subYears, getMonth, getYear, subMonths, getDate, getDaysInMonth, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -386,8 +388,11 @@ async function fetchDashboardData(
   // START OF WEEK specifically for Top Modelos
   const startDateTopModelos = startOfWeek(now, { weekStartsOn: 0 }).toISOString();
 
-  const startDateYoY = subYears(new Date(startDate), 1).toISOString();
-  const endDateYoY = subYears(new Date(endDate), 1).toISOString();
+  // Usando a nova regra de período equivalente para YoY
+  const rangeAtual = { start: new Date(startDate), end: new Date(endDate) };
+  const prevRange = equivalentPrevious(rangeAtual, 'yoy');
+  const startDateYoY = prevRange.start.toISOString();
+  const endDateYoY = prevRange.end.toISOString();
 
   const savedPercentual = localStorage.getItem('dashboard-meta-crescimento');
   const percentualCrescimento = savedPercentual ? parseFloat(savedPercentual) / 100 : 0.10;
@@ -501,12 +506,14 @@ async function fetchDashboardData(
     supabase.rpc('get_media_mes_anos_anteriores', {
       p_user_id: userId,
       p_mes: mesAtual + 1,
-      p_limite_anos: 5
+      p_limite_anos: 5,
+      p_excluir_cancelados: excluirCancelados
     }),
 
     supabase.rpc('get_curva_mes', {
       p_user_id: userId,
-      p_mes: mesAtual + 1
+      p_mes: mesAtual + 1,
+      p_excluir_cancelados: excluirCancelados
     }),
   ]);
 
