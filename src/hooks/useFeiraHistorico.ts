@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format, startOfDay, endOfDay, subDays, isToday } from 'date-fns';
@@ -167,10 +168,12 @@ export function useCargasPorPeriodo(inicio: Date, fim: Date) {
     queryFn: async () => {
       if (!user) return [];
 
-      // Buscar todas as cargas do período
-      // Para concluídas: filtrar por data_retorno OU data_saida
-      // Para em_andamento: filtrar por data_saida
-      // Buscar todas as cargas do período (sem filtrar user_id - vendedores precisam ver cargas de todos)
+      const inicioISO = inicio.toISOString();
+      const fimISO = fim.toISOString();
+
+      // Filtro no servidor: inclui cargas onde data_saida OU data_retorno cai no período.
+      // Usa um range levemente expandido (data_saida <= fim) para capturar cargas em_andamento
+      // que ainda não têm data_retorno. O filtro no cliente garante precisão final.
       const { data, error } = await supabase
         .from('transferencias')
         .select(`
@@ -184,11 +187,12 @@ export function useCargasPorPeriodo(inicio: Date, fim: Date) {
         `)
         .eq('tipo', 'carga_feira')
         .is('deleted_at', null)
+        .or(`and(data_saida.gte.${inicioISO},data_saida.lte.${fimISO}),and(data_retorno.gte.${inicioISO},data_retorno.lte.${fimISO})`)
         .order('data_saida', { ascending: false });
 
       if (error) throw error;
 
-      // Filtrar no cliente baseado na data de referência correta
+      // Filtro no cliente para precisão de fuso horário e edge cases
       const cargas = (data || [])
         .map(mapDbToTransferenciaHistorico)
         .filter(carga => {
@@ -234,6 +238,7 @@ export function useTodasCargasAtivas() {
       return (data || []).map(mapDbToTransferenciaHistorico);
     },
     enabled: !!user,
+    staleTime: 30000,
   });
 }
 
@@ -241,7 +246,7 @@ export function useTodasCargasAtivas() {
 export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
   const { data: cargas, isLoading } = useCargasPorPeriodo(inicio, fim);
 
-  const calcularResumo = (): ResumoFeiraPeriodo => {
+  const resumo = useMemo((): ResumoFeiraPeriodo => {
     if (!cargas || cargas.length === 0) {
       return {
         totalCarga: 0,
@@ -272,7 +277,6 @@ export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
       valorVendido += totais.valor;
     });
 
-    // Calcular total de modelos únicos em todas as cargas do período
     const todosItens = cargas.flatMap(c => c.itens);
     const modelosUnicos = new Set(todosItens.map(i => {
       if (i.modeloId) return i.modeloId;
@@ -291,10 +295,10 @@ export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
       taxaVenda: totalCarga > 0 ? Math.round((Math.max(0, totalCarga - totalRetorno) / totalCarga) * 100) : 0,
       totalModelos: modelosUnicos.size,
     };
-  };
+  }, [cargas]);
 
   return {
-    resumo: calcularResumo(),
+    resumo,
     cargas: cargas || [],
     isLoading,
   };
@@ -304,7 +308,7 @@ export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
 export function useHistoricoAgrupado(inicio: Date, fim: Date) {
   const { data: cargas, isLoading } = useCargasPorPeriodo(inicio, fim);
 
-  const agruparPorData = (): CargaDiaAgrupada[] => {
+  const historico = useMemo((): CargaDiaAgrupada[] => {
     if (!cargas || cargas.length === 0) return [];
 
     const grupos = new Map<string, CargaDiaAgrupada>();
@@ -331,7 +335,6 @@ export function useHistoricoAgrupado(inicio: Date, fim: Date) {
       grupo.totalCargas++;
       grupo.cargas.push(carga);
 
-      // Calcular totais da carga
       const totais = calcularTotaisCarga(carga.itens);
       grupo.totalEnviado += totais.enviado;
       grupo.totalRetornado += totais.retornado;
@@ -339,12 +342,11 @@ export function useHistoricoAgrupado(inicio: Date, fim: Date) {
       grupo.valorVendido += totais.valor;
     }
 
-    // Ordenar por data mais recente
     return Array.from(grupos.values()).sort((a, b) => b.data.localeCompare(a.data));
-  };
+  }, [cargas]);
 
   return {
-    historico: agruparPorData(),
+    historico,
     isLoading,
   };
 }

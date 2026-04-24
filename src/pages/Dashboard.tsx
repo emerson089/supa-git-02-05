@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip as TooltipUI, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { KpiCardSkeleton, ChartSkeleton, DonutChartSkeleton, ListItemSkeleton, TopModelosSkeleton, ProducaoKanbanSkeleton } from "@/components/ui/dashboard-skeleton";
-import { Banknote, Package, AlertCircle, Factory, TrendingUp, TrendingDown, Calendar as CalendarIcon, AlertTriangle, ChevronRight, Wrench, Wand2, Target, Pencil, X, Filter, Settings, Bus, Receipt } from "lucide-react";
+import { Banknote, Package, AlertCircle, Factory, TrendingUp, TrendingDown, Calendar as CalendarIcon, AlertTriangle, ChevronRight, Wrench, Wand2, Target, Pencil, X, Filter, Settings, Bus } from "lucide-react";
 import { useInsightsDashboard } from "@/hooks/useInsightsDashboard";
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
 import { useDashboardData, Periodo, DateRange, STATUS_COLORS, MetaYoY, TopModelo, StatusPedido, TopModelosCoverage, PrevisaoMensal, MetaAutomatica, FaturamentoDiaSemana } from "@/hooks/useDashboardData";
@@ -34,8 +34,6 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { TrendMode, useSalesTrendChart } from "@/hooks/useSalesTrendChart";
 import { useRecebimentosTrendChart } from "@/hooks/useRecebimentosTrendChart";
 import { useTaxasExcursao } from "@/hooks/useTaxasExcursao";
-import { useComprovantes } from "@/hooks/useComprovantes";
-import { startOfDay, endOfDay } from "date-fns";
 
 
 function formatCurrency(value: number) {
@@ -174,13 +172,7 @@ export default function Dashboard() {
 
   const { data: taxasExcursao, loading: taxasLoading } = useTaxasExcursao();
 
-  const { data: comprovantesData, isLoading: loadingComprovantes } = useComprovantes({
-    startDate: startOfDay(new Date()),
-    endDate: endOfDay(new Date()),
-    status: ['confirmado']
-  });
-  const comprovantes = comprovantesData?.data || [];
-  const valorComprovantesHoje = comprovantes.reduce((acc, c) => acc + (c.valor || 0), 0);
+
 
   // Calcular dateRange efetivo para insights
   const insightsDateRange = (() => {
@@ -412,26 +404,6 @@ export default function Dashboard() {
       { label: "Pend. Entrega", value: data.kpis.pedidosPendEntrega, colorClass: "bg-blue-100 text-blue-700" },
       { label: "Incompleto", value: data.kpis.pedidosIncompletos, colorClass: "bg-orange-100 text-orange-700" },
     ],
-  }, {
-    title: "Produção Ativa",
-    value: `${formatNumber(data.kpis.producaoAtiva)} pçs`,
-    icon: Factory,
-    variation: calcVariation(data.kpis.producaoAtiva, data.kpis.producaoYoY),
-    color: "text-violet-600",
-    bgColor: "bg-violet-100",
-    clickable: true,
-    onClick: () => navigate("/producao"),
-    showBruto: false
-  }, {
-    title: "Recebimentos Hoje",
-    value: formatCurrency(valorComprovantesHoje),
-    icon: Receipt,
-    variation: { value: comprovantes.length, isPositive: true }, 
-    color: "text-emerald-600",
-    bgColor: "bg-emerald-100",
-    clickable: true,
-    onClick: () => navigate("/comprovantes"),
-    showBruto: false
   }];
   const maxModelo = Math.max(...data.topModelos.map(m => m.quantidade), 1);
   const getEstoqueStatusConfig = (status: "baixo" | "zerado" | "negativo") => {

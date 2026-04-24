@@ -48,7 +48,7 @@ import { cn } from '@/lib/utils';
 import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { generateCargaPDF } from '@/utils/generateCargaPDF';
-import { groupItensByModel } from '@/utils/productNameUtils';
+import { groupItensByModel, parseProductName } from '@/utils/productNameUtils';
 import { loadFeiraDraft, saveFeiraDraft, clearFeiraDraft } from '@/utils/feiraDraft';
 
 /** Distribui o retorno total de um modelo proporcionalmente entre seus tamanhos */
@@ -631,6 +631,42 @@ export default function Feira() {
   const totalCarga = itensCarga.reduce((sum, i) => sum + i.quantidade, 0);
   const valorCarga = itensCarga.reduce((sum, i) => sum + i.quantidade * i.precoUnitario, 0);
 
+  // Grupos de modelos para o browser de produtos no Dialog Desktop
+  const SIZE_ORDER_DESKTOP: Record<string, number> = { PP: 1, P: 2, M: 3, G: 4, GG: 5, XG: 6, XGG: 7, G1: 8, G2: 9, G3: 10, G4: 11, G5: 12 };
+  const modeloGroupsDesktop = useMemo(() => {
+    const groups: Record<string, { key: string; nomeExibicao: string; valorUnitario: number; imagemUrl: string | null; skus: { id: string; tamanho: string | null; disponivel: number; produto: typeof produtosFiltrados[0] }[]; totalEmCarga: number }> = {};
+    for (const produto of produtosFiltrados) {
+      const info = parseProductName(produto.nome, produto.id);
+      const preco = produto.precoUnitario || 0;
+      // Só agrupa quando há tamanho real; sem tamanho cada SKU é entrada própria
+      const key = info.tamanho ? `${info.refBase}-${preco}` : `solo-${produto.id}`;
+      if (!groups[key]) {
+        groups[key] = { key, nomeExibicao: info.nomeExibicao, valorUnitario: preco, imagemUrl: produto.imagemUrl ?? null, skus: [], totalEmCarga: 0 };
+      }
+      const disponivel = getDisponivelCentral(produto.id);
+      const emCarga = itensCarga.find(i => i.itemId === produto.id);
+      groups[key].skus.push({ id: produto.id, tamanho: info.tamanho ?? null, disponivel, produto });
+      groups[key].totalEmCarga += emCarga?.quantidade || 0;
+    }
+    return Object.values(groups)
+      .map(g => ({
+        ...g,
+        skus: [...g.skus].sort((a, b) => {
+          if (!a.tamanho || !b.tamanho) return 0;
+          const an = parseInt(a.tamanho), bn = parseInt(b.tamanho);
+          if (!isNaN(an) && !isNaN(bn)) return an - bn;
+          if (!isNaN(an)) return -1;
+          if (!isNaN(bn)) return 1;
+          return (SIZE_ORDER_DESKTOP[a.tamanho] ?? 99) - (SIZE_ORDER_DESKTOP[b.tamanho] ?? 99);
+        })
+      }))
+      .sort((a, b) => {
+        if (a.totalEmCarga > 0 && b.totalEmCarga === 0) return -1;
+        if (a.totalEmCarga === 0 && b.totalEmCarga > 0) return 1;
+        return a.nomeExibicao.localeCompare(b.nomeExibicao);
+      });
+  }, [produtosFiltrados, itensCarga, getDisponivelCentral]);
+
   // Handler para excluir carga (apenas em_andamento)
   const handleExcluirCarga = (carga: TransferenciaComItensHistorico) => {
     if (carga.status !== 'em_andamento') {
@@ -1107,17 +1143,19 @@ export default function Feira() {
     {/* Modal Nova Carga - Mobile uses new components, Desktop uses Dialog */}
     {isMobile ? <Sheet open={showNovaCarga} onOpenChange={open => !open && handleCloseNovaCarga()}>
       <SheetContent side="bottom" className="h-[95vh] flex flex-col p-0 rounded-t-2xl [&>button]:hidden relative">
-        <NovaCargaStepProdutos 
-          produtos={produtosFiltrados} 
-          itensCarga={itensCarga} 
-          isLoading={isRefetchingEstoque} 
-          buscaProduto={buscaProduto} 
-          onBuscaChange={setBuscaProduto} 
-          onAddItem={handleAddItemCarga} 
-          onClose={handleCloseNovaCarga} 
-          getDisponivelCentral={getDisponivelCentral} 
-          formatCurrency={formatCurrency} 
-          titulo={tituloCarga} 
+        <NovaCargaStepProdutos
+          produtos={produtosFiltrados}
+          itensCarga={itensCarga}
+          isLoading={isRefetchingEstoque}
+          buscaProduto={buscaProduto}
+          onBuscaChange={setBuscaProduto}
+          onAddItem={handleAddItemCarga}
+          onUpdateQtd={handleSetQuantidadeCarga}
+          onRemoveItem={handleRemoveItemCarga}
+          onClose={handleCloseNovaCarga}
+          getDisponivelCentral={getDisponivelCentral}
+          formatCurrency={formatCurrency}
+          titulo={tituloCarga}
           onTituloChange={setTituloCarga}
           onOpenGrade={() => setShowAddGrade(true)}
         />
@@ -1129,168 +1167,270 @@ export default function Feira() {
         <NovaCargaBottomBar qtdItens={itensCarga.length} totalPecas={totalCarga} valorTotal={formatCurrency(valorCarga)} onCriarCarga={handleCriarCarga} isPending={criarCarga.isPending} disabled={itensCarga.length === 0} />
       </SheetContent>
     </Sheet> : <Dialog open={showNovaCarga} onOpenChange={open => !open && handleCloseNovaCarga()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
-        <DialogHeader className="px-4 pt-4 pb-3 border-b shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Truck className="h-5 w-5 text-primary" />
-            Nova Carga para Feira
-          </DialogTitle>
-          <div className="flex gap-2 mr-6">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAddGrade(true)}
-              className="h-8 rounded-lg border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-medium"
-            >
-              <Package2 size={14} className="mr-1.5" />
-              Por Grade
-            </Button>
-            {(itensCarga.length > 0 || tituloCarga.trim()) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLimparRascunho}
-                className="h-8 rounded-lg text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 size={14} className="mr-1.5" />
-                Limpar rascunho
+      <DialogContent className="max-w-5xl h-[88vh] overflow-hidden flex flex-col p-0 gap-0">
+        {/* Header */}
+        <DialogHeader className="px-5 pt-4 pb-3 border-b shrink-0">
+          <div className="flex items-center justify-between gap-3 mr-6">
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" />
+              Nova Carga para Feira
+            </DialogTitle>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowAddGrade(true)}
+                className="h-8 gap-1.5 border-primary/30 text-primary hover:bg-primary/5 font-medium text-xs">
+                <Package2 size={13} />
+                Por Grade
               </Button>
-            )}
+              {(itensCarga.length > 0 || tituloCarga.trim()) && (
+                <Button variant="ghost" size="sm" onClick={handleLimparRascunho}
+                  className="h-8 gap-1.5 text-muted-foreground hover:text-destructive text-xs">
+                  <Trash2 size={13} />
+                  Limpar rascunho
+                </Button>
+              )}
+            </div>
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-          {/* Campo de título da carga (Desktop) */}
-          <div className="px-4 py-3 border-b bg-muted/20">
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5 block">
-              Título da carga (opcional)
-            </label>
-            <Input placeholder="Ex: Alfaiataria, Jeans..." value={tituloCarga} onChange={e => setTituloCarga(e.target.value)} className="bg-background h-10" />
-          </div>
+        {/* Corpo: duas colunas */}
+        <div className="flex-1 min-h-0 flex overflow-hidden">
 
-          {/* Campo de Busca */}
-          <div className="px-4 py-3 border-b bg-muted/30">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar produto (nome, código...)" value={buscaProduto} onChange={e => setBuscaProduto(e.target.value)} className="pl-9 pr-9 bg-background" />
-              {buscaProduto && <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setBuscaProduto('')}>
-                <X className="h-4 w-4" />
-              </Button>}
-            </div>
-          </div>
-
-          {/* Produtos Disponíveis */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <div className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b bg-muted/20">
-              Produtos Disponíveis ({produtosFiltrados.length})
-            </div>
-            <ScrollArea className="h-[200px]">
-              {isRefetchingEstoque ? <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div> : produtosFiltrados.length === 0 ? <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <Package className="h-10 w-10 mb-2 opacity-40" />
-                <p className="text-sm">Nenhum produto encontrado</p>
-              </div> : <div className="divide-y">
-                {produtosFiltrados.map(produto => {
-                  const disponivel = getDisponivelCentral(produto.id);
-                  const jaAdicionado = itensCarga.some(i => i.itemId === produto.id);
-                  const semEstoque = disponivel <= 0;
-                  return <div key={produto.id} className={cn("flex items-center gap-3 px-4 py-3 transition-all", jaAdicionado && "bg-emerald-50 dark:bg-emerald-900/20", semEstoque && "opacity-50 cursor-not-allowed", !jaAdicionado && !semEstoque && "hover:bg-muted/30 cursor-pointer")} onClick={() => !jaAdicionado && !semEstoque && handleAddItemCarga(produto)}>
-                    <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0 border">
-                      <LotImage src={produto.imagemUrl} alt={produto.nome} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{produto.nome}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className={cn("text-xs font-medium", disponivel > 0 ? "text-emerald-600" : "text-muted-foreground")}>
-                          Disp: {disponivel}
-                        </span>
-                        <span className="text-xs text-muted-foreground">•</span>
-                        <span className="text-xs text-muted-foreground">{formatCurrency(produto.precoUnitario || 0)}</span>
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0">
-                      {jaAdicionado && <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
-                        <Check size={12} className="mr-1" /> Na carga
-                      </Badge>}
-                      {!jaAdicionado && semEstoque && <Badge variant="outline" className="text-muted-foreground">Sem estoque</Badge>}
-                      {!jaAdicionado && !semEstoque && <Button size="icon" variant="ghost" className="h-8 w-8 text-primary"><Plus size={18} /></Button>}
-                    </div>
-                  </div>;
-                })}
-              </div>}
-            </ScrollArea>
-          </div>
-
-          {/* Itens Selecionados */}
-          {itensCarga.length > 0 && <div className="border-t flex-shrink-0">
-            <div className="px-4 py-2 flex items-center justify-between border-b bg-primary/5">
-              <span className="text-xs font-medium text-primary uppercase tracking-wide">
-                Itens Selecionados ({itensCarga.length})
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {totalCarga} pç • {formatCurrency(valorCarga)}
-              </span>
-            </div>
-            <ScrollArea className="h-[200px]">
-              <div className="divide-y">
-                {itensCarga.map(item => <div key={item.itemId} className="flex items-center gap-3 px-4 py-2.5 bg-card">
-                  <div className="w-10 h-10 rounded overflow-hidden bg-muted flex-shrink-0 border">
-                    <LotImage src={item.imagemUrl} alt={item.nome} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.nome}</p>
-                    <p className="text-xs text-muted-foreground">{formatCurrency(item.precoUnitario)} × {item.quantidade}</p>
-                  </div>
-                  <Input type="text" inputMode="numeric" value={item.quantidade || ''} onChange={e => {
-                    const val = e.target.value.replace(/\D/g, '');
-                    handleSetQuantidadeCarga(item.itemId, val === '' ? 0 : parseInt(val));
-                  }} onBlur={e => {
-                    const val = parseInt(e.target.value) || 1;
-                    if (val < 1) handleSetQuantidadeCarga(item.itemId, 1);
-                  }} onFocus={e => e.target.select()} onClick={e => e.stopPropagation()} className="w-16 h-8 text-center text-sm font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                  <span className="text-sm font-semibold text-primary w-20 text-right">{formatCurrency(item.precoUnitario * item.quantidade)}</span>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={e => {
-                    e.stopPropagation();
-                    handleRemoveItemCarga(item.itemId);
-                  }}>
-                    <Trash2 size={14} />
+          {/* Coluna esquerda — browser de produtos */}
+          <div className="flex-1 min-w-0 flex flex-col border-r overflow-hidden">
+            {/* Busca */}
+            <div className="px-4 py-2.5 border-b bg-muted/20 shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar modelo ou referência..." value={buscaProduto}
+                  onChange={e => setBuscaProduto(e.target.value)} autoFocus
+                  className="pl-9 pr-8 h-9 bg-background" />
+                {buscaProduto && (
+                  <Button variant="ghost" size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    onClick={() => setBuscaProduto('')}>
+                    <X className="h-3.5 w-3.5" />
                   </Button>
-                </div>)}
-              </div>
-            </ScrollArea>
-          </div>}
-        </div>
-
-        <DialogFooter className="border-t px-4 py-3 bg-muted/30">
-          <div className="flex items-center justify-between w-full gap-3">
-            <div className="flex items-center gap-3 text-sm">
-              <div className="flex items-center gap-1.5">
-                <Package className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Itens:</span>
-                <strong>{itensCarga.length}</strong>
-              </div>
-              <span className="text-muted-foreground">•</span>
-              <div className="flex items-center gap-1.5">
-                <ShoppingBag className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Peças:</span>
-                <strong>{totalCarga}</strong>
-              </div>
-              <span className="text-muted-foreground">•</span>
-              <div className="flex items-center gap-1.5">
-                <DollarSign className="h-4 w-4 text-primary" />
-                <span className="text-muted-foreground">Total:</span>
-                <strong className="text-primary text-base">{formatCurrency(valorCarga)}</strong>
+                )}
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleCloseNovaCarga}>Cancelar</Button>
-              <Button onClick={handleCriarCarga} disabled={itensCarga.length === 0 || criarCarga.isPending} className="min-w-[140px]">
-                {criarCarga.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Criando...</> : itensCarga.length === 0 ? 'Selecione produtos' : <><Truck className="h-4 w-4 mr-2" /> Criar Carga</>}
-              </Button>
+            {/* Contagem */}
+            <div className="px-4 py-1.5 text-xs text-muted-foreground border-b bg-muted/10 shrink-0 flex items-center gap-2">
+              <span>{modeloGroupsDesktop.length} modelo{modeloGroupsDesktop.length !== 1 ? 's' : ''}</span>
+              {modeloGroupsDesktop.filter(g => g.totalEmCarga > 0).length > 0 && (
+                <>
+                  <span>·</span>
+                  <span className="text-primary font-medium">
+                    {modeloGroupsDesktop.filter(g => g.totalEmCarga > 0).length} selecionado{modeloGroupsDesktop.filter(g => g.totalEmCarga > 0).length !== 1 ? 's' : ''}
+                  </span>
+                </>
+              )}
+            </div>
+            {/* Lista agrupada */}
+            <ScrollArea className="flex-1">
+              {isRefetchingEstoque ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : modeloGroupsDesktop.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <Package className="h-12 w-12 mb-3 opacity-30" />
+                  <p className="text-sm font-medium">Nenhum modelo encontrado</p>
+                  {buscaProduto && <p className="text-xs mt-1 opacity-70">Tente outro termo de busca</p>}
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {modeloGroupsDesktop.map(grupo => {
+                    const emCarga = grupo.totalEmCarga > 0;
+                    return (
+                      <div key={grupo.key} className={cn("px-4 py-3", emCarga && "bg-emerald-50/60 dark:bg-emerald-950/20")}>
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted flex-shrink-0 border">
+                            <LotImage src={grupo.imagemUrl} alt={grupo.nomeExibicao} className="w-full h-full object-cover" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 mb-1.5">
+                              <p className="text-sm font-semibold line-clamp-1 leading-snug">{grupo.nomeExibicao}</p>
+                              <span className="text-xs text-muted-foreground shrink-0 mt-0.5">{formatCurrency(grupo.valorUnitario)}</span>
+                            </div>
+                            {grupo.skus[0]?.tamanho ? (
+                              /* COM tamanho: chips de tamanho */
+                              <div className="flex flex-wrap gap-1.5">
+                                {grupo.skus.map(sku => {
+                                  const item = itensCarga.find(i => i.itemId === sku.id);
+                                  const qtd = item?.quantidade || 0;
+                                  const semEstoque = sku.disponivel <= 0;
+                                  if (qtd > 0) {
+                                    return (
+                                      <div key={sku.id}
+                                        className="inline-flex items-center bg-primary text-primary-foreground rounded-lg text-xs font-semibold overflow-hidden">
+                                        <span className="pl-2.5 pr-1 py-1 leading-none">{sku.tamanho}</span>
+                                        <span className="pr-1 py-1 opacity-60 leading-none">·</span>
+                                        <span className="pr-1.5 py-1 leading-none tabular-nums">{qtd}</span>
+                                        <button className="w-6 h-full flex items-center justify-center hover:bg-white/20 transition-colors"
+                                          onClick={() => { if (qtd <= 1) handleRemoveItemCarga(sku.id); else handleSetQuantidadeCarga(sku.id, qtd - 1); }}>
+                                          <Minus size={10} />
+                                        </button>
+                                        <button className="w-6 h-full flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-40"
+                                          onClick={() => { if (qtd < sku.disponivel) handleSetQuantidadeCarga(sku.id, qtd + 1); }}
+                                          disabled={qtd >= sku.disponivel}>
+                                          <Plus size={10} />
+                                        </button>
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <button key={sku.id} disabled={semEstoque}
+                                      onClick={() => !semEstoque && handleAddItemCarga(sku.produto)}
+                                      className={cn(
+                                        "inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium transition-colors leading-none",
+                                        semEstoque
+                                          ? "border-border/50 text-muted-foreground/40 cursor-not-allowed bg-muted/20"
+                                          : "border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 hover:border-primary/60 cursor-pointer"
+                                      )}>
+                                      <span>{sku.tamanho}</span>
+                                      {!semEstoque && <span className="text-[10px] opacity-60 tabular-nums">{sku.disponivel}</span>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              /* SEM tamanho (solo): botão Adicionar / controles inline */
+                              (() => {
+                                const sku = grupo.skus[0];
+                                if (!sku) return null;
+                                const item = itensCarga.find(i => i.itemId === sku.id);
+                                const qtd = item?.quantidade || 0;
+                                const semEstoque = sku.disponivel <= 0;
+                                return (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className={cn("text-xs font-medium", semEstoque ? "text-muted-foreground/50" : "text-emerald-600")}>
+                                      {semEstoque ? 'Sem estoque' : `Disp: ${sku.disponivel}`}
+                                    </span>
+                                    {!semEstoque && qtd === 0 && (
+                                      <button onClick={() => handleAddItemCarga(sku.produto)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 text-xs font-medium transition-colors">
+                                        <Plus size={11} />
+                                        Adicionar
+                                      </button>
+                                    )}
+                                    {qtd > 0 && (
+                                      <div className="inline-flex items-center bg-primary text-primary-foreground rounded-lg text-xs font-semibold overflow-hidden">
+                                        <span className="pl-2.5 pr-1.5 py-1 leading-none tabular-nums">{qtd} pç</span>
+                                        <button className="w-6 h-full flex items-center justify-center hover:bg-white/20 transition-colors"
+                                          onClick={() => { if (qtd <= 1) handleRemoveItemCarga(sku.id); else handleSetQuantidadeCarga(sku.id, qtd - 1); }}>
+                                          <Minus size={10} />
+                                        </button>
+                                        <button className="w-6 h-full flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-40"
+                                          onClick={() => { if (qtd < sku.disponivel) handleSetQuantidadeCarga(sku.id, qtd + 1); }}
+                                          disabled={qtd >= sku.disponivel}>
+                                          <Plus size={10} />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+
+          {/* Coluna direita — carrinho */}
+          <div className="w-72 xl:w-80 shrink-0 flex flex-col bg-muted/5">
+            {/* Título da carga */}
+            <div className="px-4 py-3 border-b shrink-0">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5 block">
+                Nome da carga (opcional)
+              </label>
+              <Input placeholder="Ex: Alfaiataria, Jeans..." value={tituloCarga}
+                onChange={e => setTituloCarga(e.target.value)} className="h-9 bg-background text-sm" />
+            </div>
+
+            {/* Cabeçalho carrinho */}
+            <div className="px-4 py-2 border-b shrink-0 flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Selecionados
+              </span>
+              {itensCarga.length > 0 && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {itensCarga.length} sku · {totalCarga} pç
+                </span>
+              )}
+            </div>
+
+            {/* Lista do carrinho */}
+            {itensCarga.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground px-4">
+                <Package className="h-10 w-10 mb-3 opacity-20" />
+                <p className="text-sm font-medium text-center">Nenhum item adicionado</p>
+                <p className="text-xs mt-1 opacity-70 text-center">Clique nos tamanhos à esquerda para adicionar</p>
+              </div>
+            ) : (
+              <ScrollArea className="flex-1">
+                <div className="p-2 space-y-1.5">
+                  {itensCarga.map(item => (
+                    <div key={item.itemId} className="flex items-center gap-2 p-2 rounded-lg border bg-card">
+                      <div className="w-8 h-8 rounded overflow-hidden bg-muted flex-shrink-0 border">
+                        <LotImage src={item.imagemUrl} alt={item.nome} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate leading-tight">
+                          {parseProductName(item.nome, item.itemId).nomeExibicao}
+                        </p>
+                        <p className="text-xs text-muted-foreground tabular-nums">
+                          {formatCurrency(item.precoUnitario)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            if (item.quantidade <= 1) handleRemoveItemCarga(item.itemId);
+                            else handleSetQuantidadeCarga(item.itemId, item.quantidade - 1);
+                          }}>
+                          {item.quantidade <= 1 ? <X size={11} /> : <Minus size={11} />}
+                        </Button>
+                        <span className="w-6 text-center text-xs font-bold tabular-nums">{item.quantidade}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6"
+                          onClick={() => handleSetQuantidadeCarga(item.itemId, item.quantidade + 1)}
+                          disabled={item.quantidade >= item.disponivelCentral}>
+                          <Plus size={11} />
+                        </Button>
+                      </div>
+                      <span className="text-xs font-bold text-primary tabular-nums w-14 text-right shrink-0">
+                        {formatCurrency(item.precoUnitario * item.quantidade)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+
+            {/* Footer com total e ação */}
+            <div className="border-t p-3 space-y-2.5 shrink-0 bg-muted/10">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Total</span>
+                <span className="text-lg font-bold text-primary tabular-nums">{formatCurrency(valorCarga)}</span>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1 h-9" onClick={handleCloseNovaCarga}>
+                  Cancelar
+                </Button>
+                <Button className="flex-1 h-9 gap-1.5" onClick={handleCriarCarga}
+                  disabled={itensCarga.length === 0 || criarCarga.isPending}>
+                  {criarCarga.isPending
+                    ? <><Loader2 className="h-4 w-4 animate-spin" />Criando...</>
+                    : <><Truck className="h-4 w-4" />Criar Carga</>}
+                </Button>
+              </div>
             </div>
           </div>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>}
 
@@ -1351,7 +1491,7 @@ export default function Feira() {
                       </div>
                       <div className="flex-1 min-w-0 pt-0.5">
                         <p className="text-sm font-medium leading-tight line-clamp-2">
-                          {grupo.nomeBase}
+                          {grupo.nomeExibicao}
                         </p>
                         {tamanhos.length > 0 && (
                           <p className="text-[10px] text-muted-foreground mt-0.5 truncate">

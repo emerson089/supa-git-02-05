@@ -1,11 +1,9 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Truck, X, Search, Package, Package2, Loader2, Plus, Check, Minus } from 'lucide-react';
+import { Truck, X, Search, Package, Loader2, Plus, Minus, Package2 } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
 import { parseProductName } from '@/utils/productNameUtils';
 
 interface Produto {
@@ -24,19 +22,53 @@ interface ItemCarga {
   imagemUrl: string | null;
 }
 
-interface NovaCargaStepProdutosProps {
+interface SkuInfo {
+  id: string;
+  tamanho: string | null; // null = produto sem tamanho extraído (solo)
+  disponivel: number;
+  produto: Produto;
+}
+
+interface ModeloGroup {
+  key: string;
+  nomeExibicao: string;
+  refBase: string;
+  valorUnitario: number;
+  imagemUrl: string | null;
+  skus: SkuInfo[];
+  totalEmCarga: number;
+}
+
+export interface NovaCargaStepProdutosProps {
   produtos: Produto[];
   itensCarga: ItemCarga[];
   isLoading: boolean;
   buscaProduto: string;
   onBuscaChange: (value: string) => void;
   onAddItem: (produto: Produto, quantidade: number) => boolean;
+  onUpdateQtd: (itemId: string, novaQuantidade: number) => void;
+  onRemoveItem: (itemId: string) => void;
   onClose: () => void;
   getDisponivelCentral: (itemId: string) => number;
   formatCurrency: (value: number) => string;
   titulo?: string;
   onTituloChange?: (value: string) => void;
   onOpenGrade?: () => void;
+}
+
+const SIZE_ORDER: Record<string, number> = {
+  PP: 1, P: 2, M: 3, G: 4, GG: 5, XG: 6, XGG: 7,
+  G1: 8, G2: 9, G3: 10, G4: 11, G5: 12,
+};
+
+function sortTamanhos(a: SkuInfo, b: SkuInfo): number {
+  if (!a.tamanho || !b.tamanho) return 0;
+  const aNum = parseInt(a.tamanho);
+  const bNum = parseInt(b.tamanho);
+  if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+  if (!isNaN(aNum)) return -1;
+  if (!isNaN(bNum)) return 1;
+  return (SIZE_ORDER[a.tamanho] ?? 99) - (SIZE_ORDER[b.tamanho] ?? 99);
 }
 
 export function NovaCargaStepProdutos({
@@ -46,6 +78,8 @@ export function NovaCargaStepProdutos({
   buscaProduto,
   onBuscaChange,
   onAddItem,
+  onUpdateQtd,
+  onRemoveItem,
   onClose,
   getDisponivelCentral,
   formatCurrency,
@@ -53,258 +87,299 @@ export function NovaCargaStepProdutos({
   onTituloChange,
   onOpenGrade,
 }: NovaCargaStepProdutosProps) {
-  const [produtoSelecionado, setProdutoSelecionado] = useState<string | null>(null);
-  const [quantidadeSelecionada, setQuantidadeSelecionada] = useState(1);
 
-  const handleIniciarSelecao = (produtoId: string) => {
-    setProdutoSelecionado(produtoId);
-    setQuantidadeSelecionada(1);
-  };
+  const modeloGroups = useMemo((): ModeloGroup[] => {
+    const groups: Record<string, ModeloGroup> = {};
 
-  const handleCancelarSelecao = () => {
-    setProdutoSelecionado(null);
-    setQuantidadeSelecionada(1);
-  };
+    for (const produto of produtos) {
+      const info = parseProductName(produto.nome, produto.id);
+      const preco = produto.precoUnitario || 0;
+      // Só agrupa quando há tamanho real extraído (ex: 36, 38, P, M, G…).
+      // Sem tamanho cada SKU vira sua própria entrada para evitar chips idênticos.
+      const key = info.tamanho ? `${info.refBase}-${preco}` : `solo-${produto.id}`;
 
-  const handleConfirmarAdicao = (produto: Produto, disponivel: number) => {
-    const qtdFinal = Math.min(quantidadeSelecionada, disponivel);
-    const sucesso = onAddItem(produto, qtdFinal);
-    
-    if (sucesso) {
-      toast.success(
-        `${produto.nome.length > 25 ? produto.nome.slice(0, 25) + '...' : produto.nome} (${qtdFinal}x) adicionado`
-      );
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          nomeExibicao: info.nomeExibicao,
+          refBase: info.refBase,
+          valorUnitario: preco,
+          imagemUrl: produto.imagemUrl ?? null,
+          skus: [],
+          totalEmCarga: 0,
+        };
+      }
+
+      const disponivel = getDisponivelCentral(produto.id);
+      const emCarga = itensCarga.find(i => i.itemId === produto.id);
+
+      groups[key].skus.push({
+        id: produto.id,
+        // null = produto sem tamanho (solo) → renderizado como linha simples
+        tamanho: info.tamanho ?? null,
+        disponivel,
+        produto,
+      });
+      groups[key].totalEmCarga += emCarga?.quantidade || 0;
     }
-    
-    setProdutoSelecionado(null);
-    setQuantidadeSelecionada(1);
+
+    return Object.values(groups)
+      .map(g => ({ ...g, skus: [...g.skus].sort(sortTamanhos) }))
+      .sort((a, b) => {
+        if (a.totalEmCarga > 0 && b.totalEmCarga === 0) return -1;
+        if (a.totalEmCarga === 0 && b.totalEmCarga > 0) return 1;
+        return a.nomeExibicao.localeCompare(b.nomeExibicao);
+      });
+  }, [produtos, itensCarga, getDisponivelCentral]);
+
+  const selecionados = modeloGroups.filter(g => g.totalEmCarga > 0).length;
+
+  const handleSkuClick = (sku: SkuInfo) => {
+    if (itensCarga.some(i => i.itemId === sku.id)) return;
+    if (sku.disponivel <= 0) return;
+    onAddItem(sku.produto, 1);
   };
 
-  const handleQuantidadeChange = (value: string, disponivel: number) => {
-    const val = parseInt(value.replace(/\D/g, '')) || 1;
-    if (val > disponivel) {
-      toast.error(`Máximo: ${disponivel} unidades`);
-      setQuantidadeSelecionada(disponivel);
-    } else {
-      setQuantidadeSelecionada(Math.max(1, val));
-    }
+  const handleIncrement = (sku: SkuInfo, qtd: number) => {
+    if (qtd >= sku.disponivel) return;
+    onUpdateQtd(sku.id, qtd + 1);
+  };
+
+  const handleDecrement = (sku: SkuInfo, qtd: number) => {
+    if (qtd <= 1) onRemoveItem(sku.id);
+    else onUpdateQtd(sku.id, qtd - 1);
   };
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header fixo */}
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-background shrink-0">
         <div className="flex items-center gap-2">
           <Truck className="h-5 w-5 text-primary" />
           <span className="text-base font-semibold">Nova Carga</span>
         </div>
-        <Button 
-          variant="ghost" 
-          size="sm"
-          className="h-9 px-3 text-muted-foreground touch-manipulation"
-          onClick={onClose}
-        >
-          <X className="h-4 w-4 mr-1" />
-          Fechar
-        </Button>
-      </div>
-
-      {/* Ação de Grade para Mobile */}
-      {onOpenGrade && (
-        <div className="px-4 py-2 border-b bg-primary/5 flex items-center justify-between">
-          <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Opções rápidas</span>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onOpenGrade}
-            className="h-8 rounded-lg border-primary/20 bg-background text-primary font-bold text-xs"
+        <div className="flex items-center gap-1.5">
+          {onOpenGrade && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenGrade}
+              className="h-8 gap-1.5 border-primary/30 text-primary hover:bg-primary/5 font-medium text-xs"
+            >
+              <Package2 size={13} />
+              Por Grade
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground"
+            onClick={onClose}
           >
-            <Package2 size={14} className="mr-1.5" />
-            Por Grade
+            <X className="h-4 w-4" />
           </Button>
         </div>
-      )}
+      </div>
 
-      {/* Campo de título da carga */}
+      {/* Título da carga */}
       {onTituloChange && (
-        <div className="px-4 py-3 border-b bg-muted/20 shrink-0">
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5 block">
-            Título da carga (opcional)
-          </label>
+        <div className="px-4 py-2.5 border-b bg-muted/10 shrink-0">
           <Input
-            placeholder="Ex: Alfaiataria, Jeans..."
+            placeholder="Nome da carga (opcional) — ex: Alfaiataria, Jeans..."
             value={titulo || ''}
             onChange={(e) => onTituloChange(e.target.value)}
-            className="bg-background h-10 text-base"
+            className="h-9 bg-background text-sm"
           />
         </div>
       )}
 
-      {/* Campo de busca fixo */}
-      <div className="px-4 py-3 border-b bg-muted/30 shrink-0">
+      {/* Busca */}
+      <div className="px-4 py-2.5 border-b bg-muted/20 shrink-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar produto..."
+            placeholder="Buscar modelo ou referência..."
             value={buscaProduto}
             onChange={(e) => onBuscaChange(e.target.value)}
             autoFocus
-            className="pl-9 pr-9 bg-background h-11 text-base"
+            className="pl-9 pr-8 h-9 bg-background"
           />
           {buscaProduto && (
             <Button
               variant="ghost"
               size="icon"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
               onClick={() => onBuscaChange('')}
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>
       </div>
 
-      {/* Label de contagem */}
-      <div className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b bg-muted/20 shrink-0">
-        Produtos ({produtos.length})
+      {/* Barra de contagem */}
+      <div className="px-4 py-1.5 flex items-center gap-2 text-xs text-muted-foreground border-b bg-muted/10 shrink-0">
+        <span>{modeloGroups.length} modelo{modeloGroups.length !== 1 ? 's' : ''}</span>
+        {selecionados > 0 && (
+          <>
+            <span>·</span>
+            <span className="text-primary font-medium">
+              {selecionados} selecionado{selecionados !== 1 ? 's' : ''}
+            </span>
+          </>
+        )}
       </div>
 
-      {/* Lista de produtos - scroll principal */}
-      <div className="flex-1 overflow-y-auto pb-48">
+      {/* Lista de modelos */}
+      <div className="flex-1 overflow-y-auto pb-40">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-        ) : produtos.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <Package className="h-12 w-12 mb-3 opacity-40" />
-            <p className="text-sm">Nenhum produto encontrado</p>
+        ) : modeloGroups.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Package className="h-12 w-12 mb-3 opacity-30" />
+            <p className="text-sm font-medium">Nenhum modelo encontrado</p>
             {buscaProduto && (
-              <p className="text-xs mt-1">Tente outro termo de busca</p>
+              <p className="text-xs mt-1 text-muted-foreground/70">Tente outro termo de busca</p>
             )}
           </div>
         ) : (
           <div className="divide-y">
-            {produtos.map(produto => {
-              const disponivel = getDisponivelCentral(produto.id);
-              const jaAdicionado = itensCarga.some(i => i.itemId === produto.id);
-              const itemNoCarrinho = itensCarga.find(i => i.itemId === produto.id);
-              const semEstoque = disponivel <= 0;
-              const estaSelecionado = produtoSelecionado === produto.id;
-              
+            {modeloGroups.map(grupo => {
+              const emCarga = grupo.totalEmCarga > 0;
               return (
-                <div 
-                  key={produto.id}
+                <div
+                  key={grupo.key}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 transition-colors min-h-[72px]",
-                    jaAdicionado && "bg-emerald-50/80 dark:bg-emerald-900/20",
-                    estaSelecionado && "bg-primary/5",
-                    semEstoque && "opacity-50",
-                    !jaAdicionado && !semEstoque && !estaSelecionado && "active:bg-muted/50"
+                    "px-4 py-3 transition-colors",
+                    emCarga && "bg-emerald-50/60 dark:bg-emerald-950/20"
                   )}
                 >
-                  {/* Imagem */}
-                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0 border">
-                    <LotImage 
-                      src={produto.imagemUrl} 
-                      alt={produto.nome} 
-                      className="w-full h-full object-cover" 
-                    />
-                  </div>
-                  
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium line-clamp-1 leading-tight">
-                      {parseProductName(produto.nome, produto.id).nomeExibicao}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className={cn(
-                        "text-xs font-semibold",
-                        disponivel > 0 ? "text-emerald-600" : "text-muted-foreground"
-                      )}>
-                        Disp: {disponivel}
-                      </span>
-                      <span className="text-xs text-muted-foreground">•</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatCurrency(produto.precoUnitario || 0)}
-                      </span>
+                  <div className="flex items-start gap-3">
+                    {/* Thumbnail */}
+                    <div className="w-11 h-11 rounded-lg overflow-hidden bg-muted flex-shrink-0 border">
+                      <LotImage
+                        src={grupo.imagemUrl}
+                        alt={grupo.nomeExibicao}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                  </div>
-                  
-                  {/* Ação */}
-                  <div className="flex-shrink-0">
-                    {jaAdicionado ? (
-                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-xs px-2.5 py-1">
-                        <Check size={12} className="mr-1" />
-                        {itemNoCarrinho?.quantidade}x
-                      </Badge>
-                    ) : semEstoque ? (
-                      <Badge variant="outline" className="text-muted-foreground text-xs">
-                        Sem estoque
-                      </Badge>
-                    ) : estaSelecionado ? (
-                      /* Seletor de Quantidade Inline */
-                      <div className="flex items-center gap-1 bg-muted/60 rounded-lg p-1">
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          className="h-8 w-8 shrink-0"
-                          onClick={() => setQuantidadeSelecionada(q => Math.max(1, q - 1))}
-                          disabled={quantidadeSelecionada <= 1}
-                        >
-                          <Minus size={14} />
-                        </Button>
-                        
-                        <Input
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          value={quantidadeSelecionada}
-                          onChange={(e) => handleQuantidadeChange(e.target.value, disponivel)}
-                          onFocus={(e) => e.target.select()}
-                          className="w-12 h-8 text-center text-base font-semibold px-1"
-                        />
-                        
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          className="h-8 w-8 shrink-0"
-                          onClick={() => setQuantidadeSelecionada(q => Math.min(q + 1, disponivel))}
-                          disabled={quantidadeSelecionada >= disponivel}
-                        >
-                          <Plus size={14} />
-                        </Button>
-                        
-                        {/* Confirmar */}
-                        <Button 
-                          size="icon" 
-                          className="h-8 w-8 shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => handleConfirmarAdicao(produto, disponivel)}
-                        >
-                          <Check size={14} />
-                        </Button>
-                        
-                        {/* Cancelar */}
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          className="h-8 w-8 shrink-0 text-muted-foreground"
-                          onClick={handleCancelarSelecao}
-                        >
-                          <X size={14} />
-                        </Button>
+
+                    {/* Info + chips */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <p className="text-sm font-semibold line-clamp-1 leading-snug">
+                          {grupo.nomeExibicao}
+                        </p>
+                        <span className="text-xs text-muted-foreground shrink-0 mt-0.5">
+                          {formatCurrency(grupo.valorUnitario)}
+                        </span>
                       </div>
-                    ) : (
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        className="h-10 px-3 gap-1.5 touch-manipulation font-medium"
-                        onClick={() => handleIniciarSelecao(produto.id)}
-                      >
-                        <Plus size={16} />
-                        Adicionar
-                      </Button>
-                    )}
+
+                      {/* Size chips ou controle solo */}
+                      {grupo.skus[0]?.tamanho ? (
+                        /* Produtos COM tamanho: chips de tamanho */
+                        <div className="flex flex-wrap gap-1.5">
+                          {grupo.skus.map(sku => {
+                            const item = itensCarga.find(i => i.itemId === sku.id);
+                            const qtd = item?.quantidade || 0;
+                            const semEstoque = sku.disponivel <= 0;
+
+                            if (qtd > 0) {
+                              return (
+                                <div
+                                  key={sku.id}
+                                  className="inline-flex items-center bg-primary text-primary-foreground rounded-lg text-xs font-semibold overflow-hidden"
+                                >
+                                  <span className="pl-2.5 pr-1 py-1 leading-none">{sku.tamanho}</span>
+                                  <span className="pr-1 py-1 opacity-60 leading-none">·</span>
+                                  <span className="pr-1.5 py-1 leading-none tabular-nums">{qtd}</span>
+                                  <button
+                                    className="w-6 h-full flex items-center justify-center hover:bg-white/20 active:bg-white/30 transition-colors touch-manipulation"
+                                    onClick={() => handleDecrement(sku, qtd)}
+                                  >
+                                    <Minus size={10} />
+                                  </button>
+                                  <button
+                                    className="w-6 h-full flex items-center justify-center hover:bg-white/20 active:bg-white/30 transition-colors touch-manipulation disabled:opacity-40"
+                                    onClick={() => handleIncrement(sku, qtd)}
+                                    disabled={qtd >= sku.disponivel}
+                                  >
+                                    <Plus size={10} />
+                                  </button>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <button
+                                key={sku.id}
+                                disabled={semEstoque}
+                                onClick={() => handleSkuClick(sku)}
+                                className={cn(
+                                  "inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium transition-colors touch-manipulation leading-none",
+                                  semEstoque
+                                    ? "border-border/50 text-muted-foreground/40 cursor-not-allowed bg-muted/20"
+                                    : "border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 hover:border-primary/60 active:bg-primary/20"
+                                )}
+                              >
+                                <span>{sku.tamanho}</span>
+                                {!semEstoque && (
+                                  <span className="text-[10px] opacity-60 tabular-nums">{sku.disponivel}</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        /* Produto SEM tamanho (solo): controles + / - inline */
+                        (() => {
+                          const sku = grupo.skus[0];
+                          if (!sku) return null;
+                          const item = itensCarga.find(i => i.itemId === sku.id);
+                          const qtd = item?.quantidade || 0;
+                          const semEstoque = sku.disponivel <= 0;
+                          return (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={cn(
+                                "text-xs font-medium",
+                                semEstoque ? "text-muted-foreground/50" : "text-emerald-600"
+                              )}>
+                                {semEstoque ? 'Sem estoque' : `Disp: ${sku.disponivel}`}
+                              </span>
+                              {!semEstoque && qtd === 0 && (
+                                <button
+                                  onClick={() => handleSkuClick(sku)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 text-xs font-medium transition-colors touch-manipulation"
+                                >
+                                  <Plus size={11} />
+                                  Adicionar
+                                </button>
+                              )}
+                              {qtd > 0 && (
+                                <div className="inline-flex items-center bg-primary text-primary-foreground rounded-lg text-xs font-semibold overflow-hidden">
+                                  <span className="pl-2.5 pr-1.5 py-1 leading-none tabular-nums">{qtd} pç</span>
+                                  <button
+                                    className="w-6 h-full flex items-center justify-center hover:bg-white/20 transition-colors touch-manipulation"
+                                    onClick={() => handleDecrement(sku, qtd)}
+                                  >
+                                    <Minus size={10} />
+                                  </button>
+                                  <button
+                                    className="w-6 h-full flex items-center justify-center hover:bg-white/20 transition-colors touch-manipulation disabled:opacity-40"
+                                    onClick={() => handleIncrement(sku, qtd)}
+                                    disabled={qtd >= sku.disponivel}
+                                  >
+                                    <Plus size={10} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()
+                      )}
+                    </div>
                   </div>
                 </div>
               );

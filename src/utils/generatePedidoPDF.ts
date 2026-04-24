@@ -17,6 +17,7 @@ export interface PedidoPDFInput {
   status_pagamento?: string | null;
   status_pedido?: string | null;
   status_entrega?: string | null;
+  desconto?: number | null;
   pedido_itens?: Array<{
     id: string;
     produto_id: string | null;
@@ -155,12 +156,24 @@ export function generatePedidoPDF(
   });
 
   // @ts-ignore - jspdf-autotable adds this property
-  const finalY = doc.lastAutoTable.finalY + 10;
-
+  let finalY = doc.lastAutoTable.finalY + 10;
+  const pageHeight = doc.internal.pageSize.getHeight();
   const quantidadeModelos = groupedItens.length;
   const taxaExcursao = pedido.taxa_excursao || 0;
+  const desconto = (pedido as any).desconto || 0; // PedidoPDFInput may need cast or update
+  
+  // Calcula altura dinâmica baseada nos campos presentes
+  let extraLines = 0;
+  if (taxaExcursao !== 0) extraLines++;
+  if (desconto !== 0) extraLines++;
+  const boxHeight = 28 + (extraLines * 8);
 
-  const boxHeight = taxaExcursao > 0 ? 38 : 28;
+  // Verificação de quebra de página manual para o resumo
+  if (finalY + boxHeight > pageHeight - 15) {
+    doc.addPage();
+    finalY = 20; // Recomeça no topo da nova página
+  }
+
   doc.setFillColor(240, 240, 240);
   doc.rect(14, finalY, pageWidth - 28, boxHeight, 'F');
   doc.setFont('helvetica', 'bold');
@@ -169,31 +182,29 @@ export function generatePedidoPDF(
   doc.text(`Total de Peças: ${pedido.total_pecas || 0}`, 20, finalY + 10);
   doc.text(`Quantidade de Modelos: ${quantidadeModelos}`, pageWidth / 2, finalY + 10);
 
-  if (taxaExcursao > 0) {
-    doc.text(`Taxa Excursão: + ${formatCurrency(taxaExcursao)}`, 20, finalY + 18);
-
-    doc.setFontSize(12);
-    doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 28);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(
-      `Status: ${pedido.status_pagamento || '-'} | ${pedido.status_pedido || '-'} | ${pedido.status_entrega || '-'}`,
-      pageWidth - 20,
-      finalY + 28,
-      { align: 'right' }
-    );
-  } else {
-    doc.setFontSize(12);
-    doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, finalY + 18);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(
-      `Status: ${pedido.status_pagamento || '-'} | ${pedido.status_pedido || '-'} | ${pedido.status_entrega || '-'}`,
-      pageWidth - 20,
-      finalY + 18,
-      { align: 'right' }
-    );
+  let currentSummaryY = finalY + 18;
+  
+  if (taxaExcursao !== 0) {
+    doc.text(`Taxa Excursão: ${taxaExcursao > 0 ? '+' : ''} ${formatCurrency(taxaExcursao)}`, 20, currentSummaryY);
+    currentSummaryY += 8;
   }
+
+  if (desconto !== 0) {
+    doc.text(`Desconto: - ${formatCurrency(desconto)}`, 20, currentSummaryY);
+    currentSummaryY += 8;
+  }
+
+  doc.setFontSize(12);
+  doc.text(`Valor Total: ${formatCurrency(pedido.valor_total || 0)}`, 20, currentSummaryY);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(
+    `Status: ${pedido.status_pagamento || '-'} | ${pedido.status_pedido || '-'} | ${pedido.status_entrega || '-'}`,
+    pageWidth - 20,
+    currentSummaryY,
+    { align: 'right' }
+  );
 
 // Footer & Observações
   let currentY = finalY + boxHeight + 10;

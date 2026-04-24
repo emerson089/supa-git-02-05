@@ -51,20 +51,18 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
   // 3. Limpar o nome base
   let nomeBase = currentName;
 
-
   // Se a referência técnica estiver no nome, removemos ela primeiro (mais específico)
-  // Ex: "Conjunto — CJ2603-610" onde ref é "CJ2603-610"
   if (currentRef && currentRef.length > 2 && currentRef !== currentName) {
-    // Escape special chars for regex
     const escapedRef = currentRef.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const refRegex = new RegExp(`\\s*[-—–:/\\\\|]?\\s*${escapedRef}\\s*`, 'i');
     nomeBase = nomeBase.replace(refRegex, '').trim();
   }
 
   // Se ainda sobraram os números identificados no final, removemos
+  // Melhoria: Capturar também prefixos de 1 ou 2 letras que costumam vir antes da ref (ex: SH, CA, CJ)
   if (numeros) {
-    // Regex robusta para remover separadores + números no final do nome
-    const cleanupRegex = new RegExp(`\\s*[-—–:/\\\\|\\s]+\\s*${numeros}$`);
+    // Regex que aceita separadores + opcionalmente 1-2 letras + os números
+    const cleanupRegex = new RegExp(`\\s*[-—–:/\\\\|\\s]+\\s*[A-Z]{0,2}${numeros}$`, 'i');
     nomeBase = nomeBase.replace(cleanupRegex, "").trim();
   }
 
@@ -77,9 +75,9 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
     // Remove tamanhos no final (P, M, G, GG, G1, G2, G3, PEÇAS, 34, 36...)
     nomeBase = nomeBase.replace(/\s*[-—–:/\\\\|]\s*(P|M|G|GG|G1|G2|G3|G4|G5|XG|XGG|PEÇAS|\d{2})$/i, "").trim();
     
-    // Remove números repetidos no final
+    // Remove números repetidos ou referências curtas no final
     if (numeros) {
-       const repeatRegex = new RegExp(`\\s*[-—–:/\\\\|\\s]+\\s*${numeros}$`);
+       const repeatRegex = new RegExp(`\\s*[-—–:/\\\\|\\s]+\\s*[A-Z]{0,2}${numeros}$`, 'i');
        nomeBase = nomeBase.replace(repeatRegex, "").trim();
     }
     
@@ -93,26 +91,20 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
   // 4. Formatação Final: "Nome - REF"
   // Se a referência tem formato MODELO-TAMANHO (ex: "481-34"), usa o código do modelo para exibição
   let numDisplay = numeros ? numeros.slice(-3).padStart(3, '0') : '';
-  if (sizeMatch) {
-    const sizeStr = sizeMatch[0];
-    const sizeIdx = currentRef.lastIndexOf(sizeStr);
-    if (sizeIdx > 0) {
-      const modelPart = currentRef.substring(0, sizeIdx);
-      const modelDigits = modelPart.match(/(\d+)$/)?.[1] || '';
-      if (modelDigits) numDisplay = modelDigits;
+  
+  // Tentar encontrar o número do modelo ignorando o tamanho no final da referência
+  if (sizeMatch && currentRef) {
+    const modelPart = currentRef.replace(sizeMatch[0], '');
+    const modelMatch = modelPart.match(/(\d+)$/);
+    if (modelMatch) {
+      numDisplay = modelMatch[1].slice(-3).padStart(3, '0');
     }
   }
-  // Fallback: se nomeBase ficou vazio (ex: produtos cadastrados manualmente sem nome descritivo),
-  // usa o nome original limpo ou a referência completa para evitar exibir " - 130"
+
   let nomeExibicao: string;
   if (nomeBase && nomeBase !== numDisplay) {
-    // Nome descritivo diferente do número de referência — formato normal: "Nome - 165"
     nomeExibicao = numDisplay ? `${nomeBase} - ${numDisplay}` : nomeBase;
-  } else if (nomeBase && nomeBase === numDisplay) {
-    // Nome é apenas o número de referência (produto legado) — evita "165 - 165"
-    nomeExibicao = nomeBase;
   } else {
-    // Sem nome base — tenta usar o nome original; se também vazio, usa a referência
     const fallbackNome = currentName.trim() || currentRef.trim();
     nomeExibicao = numDisplay && !fallbackNome.includes(numDisplay)
       ? `${fallbackNome} - ${numDisplay}`.trim()

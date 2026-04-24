@@ -222,6 +222,18 @@ export function useFeiraOffline() {
         }
     }, [isOnline]); // Intentionally only on isOnline change
 
+    // Avisar usuário ao fechar aba com retornos offline pendentes não sincronizados
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            const pending = loadQueue().filter(p => p.syncStatus === 'pending' || p.syncStatus === 'syncing');
+            if (pending.length > 0) {
+                e.preventDefault();
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, []);
+
     // ── Remove a queued item ───────────────────────────────
     const removeFromQueue = useCallback((id: string) => {
         const updated = loadQueue().filter(p => p.id !== id);

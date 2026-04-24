@@ -156,7 +156,10 @@ export function useCargasHoje() {
 
       const { data: transferencias, error } = await supabase
         .from('transferencias')
-        .select('*')
+        .select(`
+          *,
+          transferencia_itens (*)
+        `)
         .eq('tipo', 'carga_feira')
         .is('deleted_at', null)
         .gte('data_saida', hoje.toISOString())
@@ -165,21 +168,10 @@ export function useCargasHoje() {
 
       if (error) throw error;
 
-      // Buscar itens de cada transferência
-      const result: TransferenciaComItens[] = [];
-      for (const t of transferencias as DbTransferencia[]) {
-        const { data: itens } = await supabase
-          .from('transferencia_itens')
-          .select('*')
-          .eq('transferencia_id', t.id);
-
-        result.push({
-          ...mapDbToTransferencia(t),
-          itens: (itens as DbTransferenciaItem[] || []).map(mapDbToItem),
-        });
-      }
-
-      return result;
+      return (transferencias as (DbTransferencia & { transferencia_itens: DbTransferenciaItem[] })[]).map(t => ({
+        ...mapDbToTransferencia(t),
+        itens: (t.transferencia_itens || []).map(mapDbToItem),
+      }));
     },
     enabled: !!user,
   });
@@ -533,9 +525,13 @@ export function useRegistrarRetornoFeira() {
           throw new Error(`Item não encontrado na carga original`);
         }
 
-        const enviado = Number(itemOriginal.quantidade_enviada);
+        const enviado = Number(itemOriginal.quantidade_enviada) || 0;
         const retornado = item.quantidadeRetornada;
         const vendido = enviado - retornado;
+
+        if (enviado === 0) {
+          throw new Error(`Item com quantidade enviada inválida na carga. Exclua e recrie a carga.`);
+        }
 
         // Validação: Retornado não pode exceder Enviado
         if (retornado > enviado) {
@@ -607,6 +603,7 @@ export function useRegistrarRetornoFeira() {
 
         // Registrar movimentação VENDA_FEIRA se vendido > 0 (COM TRATAMENTO DE ERRO)
         if (vendido > 0) {
+          const estoqueBancaAposVenda = Math.max(0, quantidadeAntesBanca - enviado);
           const { error: movVendaError } = await supabase.from('estoque_movimentacoes').insert({
             user_id: user.id,
             item_id: item.itemId,
@@ -616,7 +613,7 @@ export function useRegistrarRetornoFeira() {
             transferencia_id: transferenciaId,
             local_id: banca.id,
             estoque_antes: quantidadeAntesBanca,
-            estoque_depois: 0, // Banca fica zerada após fechamento
+            estoque_depois: estoqueBancaAposVenda,
           });
 
           if (movVendaError) {
@@ -652,9 +649,12 @@ export function useRegistrarRetornoFeira() {
             .eq('id', estoqueCentral.id);
         }
 
-        // Sincronizar estoque_itens.quantidade (passando central.id para evitar re-consulta)
-        await sincronizarEstoqueTotal(item.itemId, user.id, central.id);
       }
+
+      // Sincronizar estoque_itens de todos os itens em paralelo (evita N round-trips sequenciais)
+      await Promise.all(
+        itensRetornados.map(item => sincronizarEstoqueTotal(item.itemId, user.id, central.id))
+      );
 
       // Marcar transferência como concluída
       await supabase
