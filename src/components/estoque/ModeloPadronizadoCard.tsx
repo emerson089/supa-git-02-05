@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Camera, Package, Eye, Trash2, AlertTriangle, Pencil, ArrowUp, ArrowDown } from 'lucide-react';
+import { Camera, Package, Eye, Trash2, AlertTriangle, Pencil, ArrowUp, ArrowDown, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -36,16 +36,17 @@ function ModeloImage({ imagemUrl, nome, onImageClick }: { imagemUrl?: string; no
             ) : imagemUrl && signedUrl ? (
                 <LazyImage src={signedUrl} alt={nome} className="w-full h-full object-cover object-center block" containerClassName="w-full h-full" />
             ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-500/10 to-indigo-500/10">
-                    <div className="text-muted-foreground/50 text-center">
-                        <Camera size={32} className="mx-auto mb-2 opacity-50" />
-                        <span className="text-xs">Sem imagem</span>
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted/40 to-muted/20">
+                    <div className="text-muted-foreground/40 text-center">
+                        <Camera size={28} className="mx-auto mb-1.5 opacity-50" />
+                        <span className="text-[10px] font-medium tracking-wide uppercase">Sem imagem</span>
                     </div>
                 </div>
             )}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center rounded-t-2xl">
-                <Camera className="w-8 h-8 text-white mb-2" />
-                <span className="text-white text-sm font-medium">Trocar Foto</span>
+            {/* Hover overlay */}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center rounded-t-2xl">
+                <Camera className="w-7 h-7 text-white mb-1.5" />
+                <span className="text-white text-xs font-semibold tracking-wide">Trocar Foto</span>
             </div>
         </div>
     );
@@ -64,21 +65,26 @@ export function ModeloPadronizadoCard({ modelo, onVerDetalhes, onImageUpdate, ve
     const variacoes = [...variacoesRaw].sort((a, b) => ORDEM_TAMANHOS.indexOf(a.tamanho) - ORDEM_TAMANHOS.indexOf(b.tamanho));
 
     const totalPecas = variacoes.reduce((s, v) => s + v.quantidade, 0);
-    const totalProduzido = variacoes.reduce((s, v) => s + (v.quantidadeInicial || v.quantidade), 0);
+    const totalProduzidoRaw = variacoes.reduce((s, v) => s + (v.quantidadeInicial || v.quantidade), 0);
+    const totalProduzido = Math.max(totalProduzidoRaw, totalPecas);
     const tamanhosEsgotados = variacoes.filter(v => v.quantidade <= 0).map(v => v.tamanho);
+    const hasEsgotados = tamanhosEsgotados.length > 0;
 
-    // Métricas de performance
-    const taxaGiro = totalProduzido > 0 ? Math.min(100, ((totalProduzido - totalPecas) / totalProduzido) * 100) : 0;
+    // Performance metrics
+    const taxaGiro = totalProduzido > 0 ? Math.max(0, Math.min(100, ((totalProduzido - totalPecas) / totalProduzido) * 100)) : 0;
     const cobertura = vendasSemana > 0 ? Math.ceil(totalPecas / vendasSemana) : null;
     const tendencia = vendasSemanaAnterior > 0
         ? ((vendasSemana - vendasSemanaAnterior) / vendasSemanaAnterior) * 100
         : vendasSemana > 0 ? 100 : null;
 
+    // Color mappings
     const giroColor = taxaGiro >= 70 ? 'bg-emerald-500' : taxaGiro >= 30 ? 'bg-amber-500' : 'bg-red-500';
     const giroTextColor = taxaGiro >= 70 ? 'text-emerald-600' : taxaGiro >= 30 ? 'text-amber-600' : 'text-red-500';
-    const coberturaColor = cobertura === null ? 'text-muted-foreground' : cobertura <= 2 ? 'text-red-500' : cobertura <= 4 ? 'text-amber-600' : 'text-emerald-600';
+    const coberturaColor = cobertura === null ? 'text-muted-foreground' : cobertura <= 2 ? 'text-red-500 font-black' : cobertura <= 4 ? 'text-amber-600 font-bold' : 'text-emerald-600 font-bold';
 
-    const statusColor = totalPecas <= 0 ? 'bg-red-500' : variacoes.some(v => v.quantidade <= 0) ? 'bg-amber-500' : 'bg-emerald-500';
+    // Status dot
+    const isEsgotado = totalPecas <= 0;
+    const statusDot = isEsgotado ? 'bg-red-500' : hasEsgotados ? 'bg-amber-500' : 'bg-emerald-500';
 
     const handleImageClick = () => fileInputRef.current?.click();
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,19 +108,30 @@ export function ModeloPadronizadoCard({ modelo, onVerDetalhes, onImageUpdate, ve
 
     return (
         <>
-            <div className="overflow-hidden rounded-2xl bg-white dark:bg-gray-800 border border-purple-100 dark:border-purple-900/30 shadow-soft transition-all duration-300 hover:shadow-lg relative flex flex-col h-full">
-                <div className={cn('absolute top-3 right-3 w-3 h-3 rounded-full z-10 shadow-sm', statusColor)} title={totalPecas === 0 ? 'Esgotado' : 'Disponível'} />
+            <div className={cn(
+                "overflow-hidden rounded-2xl bg-white dark:bg-gray-800 border shadow-[4px_4px_14px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background)/0.8)] transition-all duration-250 hover:shadow-[6px_6px_20px_hsl(var(--muted)/0.5),-2px_-2px_10px_hsl(var(--background))] hover:-translate-y-0.5 relative flex flex-col h-full",
+                isEsgotado ? "border-red-200/60 dark:border-red-900/30" : hasEsgotados ? "border-amber-200/60 dark:border-amber-900/30" : "border-border/50 dark:border-gray-700/50"
+            )}>
+                {/* Status indicator dot */}
+                <div className={cn('absolute top-3 right-3 w-2.5 h-2.5 rounded-full z-10 shadow-sm ring-2 ring-white/80 dark:ring-gray-800/80', statusDot)} title={isEsgotado ? 'Esgotado' : hasEsgotados ? 'Tamanhos esgotados' : 'Disponível'} />
+
                 <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
                 <ModeloImage imagemUrl={modelo.imagemUrl} nome={nome} onImageClick={handleImageClick} />
 
-                <div className="p-4 flex flex-col flex-1 gap-3">
-                    {/* Identificação */}
-                    <div className="space-y-1">
-                        <h3 className="font-bold text-base text-foreground line-clamp-2 leading-tight">
-                            {parseProductName(nome, meta.referencia).nomeExibicao}
-                        </h3>
-                        <p className="text-sm text-foreground/80 font-medium line-clamp-1">{meta.referencia}</p>
-                        <p className="text-xs text-muted-foreground">{TIPO_GARMENT_LABELS[meta.tipo]}</p>
+                <div className="p-3.5 flex flex-col flex-1 gap-2.5">
+                    {/* — Identification row — */}
+                    <div className="space-y-0.5">
+                        <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-bold text-sm text-foreground line-clamp-2 leading-snug flex-1">
+                                {parseProductName(nome, meta.referencia).nomeExibicao}
+                            </h3>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <p className="text-xs text-muted-foreground font-mono font-medium">{meta.referencia}</p>
+                            <span className="text-muted-foreground/30">·</span>
+                            <p className="text-[10px] text-muted-foreground/70">{TIPO_GARMENT_LABELS[meta.tipo]}</p>
+                        </div>
+                        {/* Integrity badges */}
                         {(!modelo.imagemUrl || !precoUnitario) && (
                             <div className="flex flex-wrap gap-1 pt-0.5">
                                 {!modelo.imagemUrl && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 uppercase tracking-wide">Sem imagem</span>}
@@ -123,44 +140,61 @@ export function ModeloPadronizadoCard({ modelo, onVerDetalhes, onImageUpdate, ve
                         )}
                     </div>
 
-                    {meta.colecao && <p className="text-xs text-muted-foreground/70 italic">{meta.colecao}</p>}
+                    {/* — Key numbers: Estoque + Preço — */}
+                    <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-muted/30 border border-border/30">
+                        <div>
+                            <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Estoque</p>
+                            <p className={cn("font-extrabold text-lg leading-none tabular-nums", isEsgotado ? 'text-red-600' : hasEsgotados ? 'text-amber-600' : 'text-foreground')}>
+                                {totalPecas}
+                            </p>
+                            <p className="text-[9px] text-muted-foreground/60 mt-0.5">peças</p>
+                        </div>
+                        <div>
+                            <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Preço de Venda</p>
+                            <p className="font-extrabold text-lg leading-none tabular-nums text-emerald-600">
+                                R${(precoUnitario ?? 0).toFixed(2)}
+                            </p>
+                            <p className="text-[9px] text-muted-foreground/60 mt-0.5">por peça</p>
+                        </div>
+                    </div>
 
-                    {/* Tamanhos */}
-                    <div className="space-y-1.5">
+                    {/* — Sizes grid — */}
+                    <div>
                         <div className="flex flex-wrap gap-1">
                             {variacoes.map(v => (
-                                <span key={v.id} className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', v.quantidade > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200 opacity-60')} title={`${v.tamanho}: ${v.quantidade} peças`}>
+                                <span
+                                    key={v.id}
+                                    className={cn(
+                                        'text-[9px] font-bold px-1.5 py-0.5 rounded-md border transition-colors',
+                                        v.quantidade > 0
+                                            ? 'bg-background text-foreground/80 border-border/50'
+                                            : 'bg-red-50 text-red-500 border-red-200/60 line-through opacity-60 dark:bg-red-950/20 dark:text-red-400'
+                                    )}
+                                    title={`${v.tamanho}: ${v.quantidade} peças`}
+                                >
                                     {v.tamanho}
                                 </span>
                             ))}
                         </div>
-                        {tamanhosEsgotados.length > 0 && <p className="text-[10px] text-muted-foreground/60">Esgotados: {tamanhosEsgotados.join(', ')}</p>}
+                        {hasEsgotados && (
+                            <p className="text-[9px] text-red-500/70 mt-1 font-medium">
+                                Esgotados: {tamanhosEsgotados.join(' · ')}
+                            </p>
+                        )}
                     </div>
 
-                    {/* Estoque + Preço */}
-                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/30">
-                        <div>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Quantidade</p>
-                            <p className="font-bold text-lg">{totalPecas} <span className="text-xs font-normal text-muted-foreground">peças</span></p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Preço de Venda</p>
-                            <p className="font-bold text-emerald-600">R$ {(precoUnitario ?? 0).toFixed(2)}</p>
-                        </div>
-                    </div>
-
-                    {/* Métricas de performance */}
-                    <div className="space-y-2.5 pt-1 border-t border-border/30">
-                        {/* Vendas Semana + Tendência */}
+                    {/* — Performance metrics — */}
+                    <div className="space-y-2 pt-1 border-t border-border/20">
+                        {/* Vendas semana + tendência */}
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Vendas Semana</span>
+                            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Vendas Semana</span>
                             <div className="flex items-center gap-1.5">
-                                <span className={cn('text-sm font-bold', vendasSemana > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground')}>
+                                <span className={cn('text-sm font-bold tabular-nums', vendasSemana > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground')}>
                                     {vendasSemana} pçs
                                 </span>
                                 {tendencia !== null && (
-                                    <span className={cn('flex items-center gap-0.5 text-[10px] font-bold', tendencia > 0 ? 'text-emerald-600' : tendencia < 0 ? 'text-red-500' : 'text-muted-foreground')}>
-                                        {tendencia > 0 ? <ArrowUp size={10} /> : tendencia < 0 ? <ArrowDown size={10} /> : null}
+                                    <span className={cn('flex items-center gap-0.5 text-[10px] font-bold px-1 py-0.5 rounded', tendencia > 0 ? 'text-emerald-700 bg-emerald-100' : tendencia < 0 ? 'text-red-600 bg-red-100' : 'text-muted-foreground')}>
+                                        {tendencia > 0 ? <ArrowUp size={9} /> : tendencia < 0 ? <ArrowDown size={9} /> : null}
                                         {tendencia > 0 ? '+' : ''}{tendencia.toFixed(0)}%
                                     </span>
                                 )}
@@ -170,34 +204,53 @@ export function ModeloPadronizadoCard({ modelo, onVerDetalhes, onImageUpdate, ve
                         {/* Giro do Lote */}
                         <div className="space-y-1">
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Giro do Lote</span>
-                                <span className={cn('text-[11px] font-black', giroTextColor)}>{taxaGiro.toFixed(0)}%</span>
+                                <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Giro do Lote</span>
+                                <span className={cn('text-[10px] font-extrabold', giroTextColor)}>{taxaGiro.toFixed(0)}%</span>
                             </div>
-                            <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
-                                <div className={cn('h-full rounded-full transition-all', giroColor)} style={{ width: `${taxaGiro}%` }} />
+                            <div className="h-1.5 w-full rounded-full bg-muted/50 overflow-hidden">
+                                <div className={cn('h-full rounded-full transition-all duration-500', giroColor)} style={{ width: `${taxaGiro}%` }} />
                             </div>
                         </div>
 
-                        {/* Cobertura de Estoque */}
+                        {/* Cobertura */}
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Cobertura</span>
-                            <span className={cn('text-[11px] font-black', coberturaColor)}>
-                                {cobertura === null ? '—' : cobertura === 1 ? '1 semana' : `${cobertura} semanas`}
+                            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Cobertura</span>
+                            <span className={cn('text-[11px]', coberturaColor)}>
+                                {cobertura === null ? (
+                                    <span className="text-muted-foreground font-normal">—</span>
+                                ) : cobertura === 1 ? '1 semana' : `${cobertura} semanas`}
                             </span>
                         </div>
                     </div>
 
-                    {/* Ações */}
-                    <div className="flex gap-2 mt-auto">
-                        <Button variant="outline" size="sm" className="flex-1 gap-2 h-9 border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300 transition-colors" onClick={() => onVerDetalhes(modelo)}>
-                            <Eye size={14} />
+                    {/* — Actions — */}
+                    <div className="flex gap-1.5 mt-auto pt-1">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 gap-1.5 h-8 text-xs font-semibold border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/50 transition-colors"
+                            onClick={() => onVerDetalhes(modelo)}
+                        >
+                            <Eye size={12} />
                             Ver Detalhes
                         </Button>
-                        <Button variant="outline" size="sm" className="h-9 px-3 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-gray-200 dark:border-gray-600" onClick={() => setShowEdit(true)} title="Editar modelo">
-                            <Pencil size={14} />
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 hover:border-blue-200 border-border/50 transition-colors"
+                            onClick={() => setShowEdit(true)}
+                            title="Editar modelo"
+                        >
+                            <Pencil size={13} />
                         </Button>
-                        <Button variant="outline" size="sm" className="h-9 px-3 text-destructive hover:text-destructive hover:bg-destructive/10 border-gray-200 dark:border-gray-600" onClick={() => setShowConfirmDelete(true)} title="Excluir modelo e todas as variações">
-                            <Trash2 size={14} />
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30 border-border/50 transition-colors"
+                            onClick={() => setShowConfirmDelete(true)}
+                            title="Excluir modelo e todas as variações"
+                        >
+                            <Trash2 size={13} />
                         </Button>
                     </div>
                 </div>

@@ -84,7 +84,7 @@ export default function Comprovantes() {
   };
 
   return (
-    <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950 overflow-hidden font-inter transition-colors duration-300">
+    <div className="flex h-screen bg-gray-100 dark:bg-background overflow-hidden font-inter transition-colors duration-300">
       <AppSidebar />
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
         <MobileHeader title="Comprovantes" />
@@ -95,97 +95,116 @@ export default function Comprovantes() {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Comprovantes</h1>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Leitura automática de recibos integrados via Z-API · use legenda <strong>J</strong> (Jeans) ou <strong>A</strong> (Alfaiataria) ao enviar a foto</p>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">Comprovantes</h1>
+                <p className="text-sm font-medium text-muted-foreground mt-0.5">Leitura automática de recibos integrados via Z-API · use legenda <strong>J</strong> (Jeans) ou <strong>A</strong> (Alfaiataria) ao enviar a foto</p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-                  <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} /> Atualizar
+                <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-1.5 h-8 text-xs font-semibold shadow-[3px_3px_8px_hsl(var(--muted)/0.35),-1px_-1px_5px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
+                  <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} /> Atualizar
                 </Button>
               </div>
             </div>
 
-            {/* Summary Cards — separados por categoria */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               {/* Jeans */}
-              <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Jeans</p>
-                    <h3 className="text-2xl font-bold mt-1 text-blue-600 dark:text-blue-400">{valFormat(tot.jeans)}</h3>
+              <div className="relative overflow-hidden rounded-2xl bg-card border border-border/60 shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] transition-all duration-250 flex flex-col group hover:-translate-y-0.5 hover:shadow-[6px_6px_16px_hsl(var(--muted)/0.4),-3px_-3px_10px_hsl(var(--background))] p-4 sm:p-5">
+                <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl transition-opacity bg-blue-500 opacity-80 group-hover:opacity-100" />
+                <div className="flex flex-col gap-3 flex-1 pt-0.5">
+                  <div className="flex items-center justify-between w-full">
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-900/50">
+                      <Shirt className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400 uppercase tracking-wide">Jeans</span>
                   </div>
-                  <div className="p-3 bg-blue-100 dark:bg-blue-950/50 rounded-lg">
-                    <Shirt className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <div className="space-y-1 mt-auto pt-2">
+                    <p className="text-xl sm:text-[26px] font-black tracking-tight leading-none tabular-nums text-blue-600 dark:text-blue-400">
+                      {valFormat(tot.jeans)}
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate mt-2 border-t border-border/40 pt-2.5">
+                      <strong className="text-foreground">{tot.qtdJeans}</strong> comprovante(s)
+                    </p>
                   </div>
                 </div>
-                <p className="text-xs text-zinc-500 mt-3">{tot.qtdJeans} comprovante(s)</p>
               </div>
 
               {/* Alfaiataria */}
-              <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Alfaiataria</p>
-                    <h3 className="text-2xl font-bold mt-1 text-purple-600 dark:text-purple-400">{valFormat(tot.alfaiataria)}</h3>
+              <div className="relative overflow-hidden rounded-2xl bg-card border border-border/60 shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] transition-all duration-250 flex flex-col group hover:-translate-y-0.5 hover:shadow-[6px_6px_16px_hsl(var(--muted)/0.4),-3px_-3px_10px_hsl(var(--background))] p-4 sm:p-5">
+                <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl transition-opacity bg-purple-500 opacity-80 group-hover:opacity-100" />
+                <div className="flex flex-col gap-3 flex-1 pt-0.5">
+                  <div className="flex items-center justify-between w-full">
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-900/50">
+                      <Scissors className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900/50 dark:bg-purple-900/20 dark:text-purple-400 uppercase tracking-wide">Alfaiataria</span>
                   </div>
-                  <div className="p-3 bg-purple-100 dark:bg-purple-950/50 rounded-lg">
-                    <Scissors className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  <div className="space-y-1 mt-auto pt-2">
+                    <p className="text-xl sm:text-[26px] font-black tracking-tight leading-none tabular-nums text-purple-600 dark:text-purple-400">
+                      {valFormat(tot.alfaiataria)}
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate mt-2 border-t border-border/40 pt-2.5">
+                      <strong className="text-foreground">{tot.qtdAlfaiataria}</strong> comprovante(s)
+                    </p>
                   </div>
                 </div>
-                <p className="text-xs text-zinc-500 mt-3">{tot.qtdAlfaiataria} comprovante(s)</p>
               </div>
 
               {/* Não Classificado */}
-              <div className={cn(
-                "bg-white dark:bg-zinc-900 p-5 rounded-xl border shadow-sm",
-                tot.qtdNaoClassificado > 0
-                  ? "border-amber-300 dark:border-amber-700 ring-1 ring-amber-200 dark:ring-amber-800"
-                  : "border-zinc-200 dark:border-zinc-800"
-              )}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Não Classificado</p>
-                    <h3 className="text-2xl font-bold mt-1 text-amber-600 dark:text-amber-400">{valFormat(tot.naoClassificado)}</h3>
+              <div className={cn("relative overflow-hidden rounded-2xl bg-card shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] transition-all duration-250 flex flex-col group hover:-translate-y-0.5 hover:shadow-[6px_6px_16px_hsl(var(--muted)/0.4),-3px_-3px_10px_hsl(var(--background))] p-4 sm:p-5", tot.qtdNaoClassificado > 0 ? "border-2 border-amber-300 dark:border-amber-700" : "border border-border/60")}>
+                <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl transition-opacity bg-amber-500 opacity-80 group-hover:opacity-100" />
+                <div className="flex flex-col gap-3 flex-1 pt-0.5">
+                  <div className="flex items-center justify-between w-full">
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/50">
+                      {tot.qtdNaoClassificado > 0 ? <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-400" /> : <HelpCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-400" />}
+                    </div>
+                    <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-400 uppercase tracking-wide">Pendente</span>
                   </div>
-                  <div className="p-3 bg-amber-100 dark:bg-amber-950/50 rounded-lg">
-                    {tot.qtdNaoClassificado > 0 ? <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" /> : <HelpCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
+                  <div className="space-y-1 mt-auto pt-2">
+                    <p className="text-xl sm:text-[26px] font-black tracking-tight leading-none tabular-nums text-amber-600 dark:text-amber-400">
+                      {valFormat(tot.naoClassificado)}
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate mt-2 border-t border-border/40 pt-2.5">
+                      {tot.qtdNaoClassificado > 0 ? <><strong className="text-foreground">{tot.qtdNaoClassificado}</strong> p/ classificar</> : 'Tudo classificado'}
+                    </p>
                   </div>
                 </div>
-                <p className="text-xs text-zinc-500 mt-3">
-                  {tot.qtdNaoClassificado > 0 ? `${tot.qtdNaoClassificado} para classificar manualmente` : 'Tudo classificado'}
-                </p>
               </div>
 
               {/* Qtd Documentos */}
-              <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Qtd. Documentos</p>
-                    <h3 className="text-2xl font-bold mt-1 text-zinc-900 dark:text-zinc-100">{quantidade}</h3>
+              <div className="relative overflow-hidden rounded-2xl bg-card border border-border/60 shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] transition-all duration-250 flex flex-col group hover:-translate-y-0.5 hover:shadow-[6px_6px_16px_hsl(var(--muted)/0.4),-3px_-3px_10px_hsl(var(--background))] p-4 sm:p-5">
+                <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl transition-opacity bg-emerald-500 opacity-80 group-hover:opacity-100" />
+                <div className="flex flex-col gap-3 flex-1 pt-0.5">
+                  <div className="flex items-center justify-between w-full">
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900/50">
+                      <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-400 uppercase tracking-wide">Validado</span>
                   </div>
-                  <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
-                    <FileText className="h-5 w-5 text-zinc-600 dark:text-zinc-300" />
+                  <div className="space-y-1 mt-auto pt-2">
+                    <p className="text-xl sm:text-[26px] font-black tracking-tight leading-none tabular-nums text-foreground">
+                      {quantidade}
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate mt-2 border-t border-border/40 pt-2.5">
+                      Total: <strong className="text-emerald-600 dark:text-emerald-400">{valFormat(tot.total)}</strong>
+                    </p>
                   </div>
                 </div>
-                <p className="text-xs text-zinc-500 mt-3">
-                  Total geral validado: <strong className="text-emerald-600 dark:text-emerald-400">{valFormat(tot.total)}</strong>
-                </p>
               </div>
             </div>
 
             {/* Filters */}
-            <div className="flex flex-col md:flex-row gap-3 bg-white dark:bg-zinc-900 p-3 rounded-lg border shadow-sm">
+            <div className="flex flex-col md:flex-row gap-3 bg-card border border-border/60 rounded-2xl shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] p-2 sm:p-2.5">
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
                   placeholder="Buscar por nome do pagador..." 
-                  className="pl-9"
+                  className="pl-9 h-9 border-border/50 bg-background/50 text-sm font-medium focus-visible:ring-primary/20 transition-all rounded-xl"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
               <Select value={periodoFilter} onValueChange={setPeriodoFilter}>
-                <SelectTrigger className="w-full md:w-[160px]">
+                <SelectTrigger className="w-full md:w-[160px] h-9 border-border/50 bg-background/50 font-semibold rounded-xl text-xs">
                   <SelectValue placeholder="Período" />
                 </SelectTrigger>
                 <SelectContent>
@@ -195,7 +214,7 @@ export default function Comprovantes() {
                 </SelectContent>
               </Select>
               <Select value={categoriaFilter} onValueChange={(v) => setCategoriaFilter(v as ComprovanteCategoria | 'all')}>
-                <SelectTrigger className="w-full md:w-[180px]">
+                <SelectTrigger className="w-full md:w-[180px] h-9 border-border/50 bg-background/50 font-semibold rounded-xl text-xs">
                   <SelectValue placeholder="Categoria" />
                 </SelectTrigger>
                 <SelectContent>
@@ -206,8 +225,8 @@ export default function Comprovantes() {
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <Filter className="h-4 w-4 mr-2 text-zinc-400 inline" />
+                <SelectTrigger className="w-full md:w-[180px] h-9 border-border/50 bg-background/50 font-semibold rounded-xl text-xs">
+                  <Filter className="h-3.5 w-3.5 mr-2 text-muted-foreground inline" />
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -220,7 +239,7 @@ export default function Comprovantes() {
             </div>
 
             {/* Content Table */}
-            <div className="bg-white dark:bg-zinc-900 border rounded-xl shadow-sm overflow-hidden flex flex-col">
+            <div className="bg-card border border-border/60 rounded-2xl shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] overflow-hidden flex flex-col">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>

@@ -387,7 +387,7 @@ export function useEstoqueMetrics(tipo?: 'materia-prima' | 'acabado', search?: s
         
         totalPecas += qty;
         valorTotal += preco * qty;
-        totalProduzido += card.quantidadeInicial || qty;
+        totalProduzido += Math.max(card.quantidadeInicial || 0, qty);
         
         if (qty <= 0) {
           itensEsgotados++;

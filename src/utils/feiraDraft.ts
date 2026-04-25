@@ -4,6 +4,7 @@
 export interface FeiraDraftItem {
   itemId: string;
   nome: string;
+  referencia: string;
   quantidade: number;
   precoUnitario: number;
   disponivelCentral: number;

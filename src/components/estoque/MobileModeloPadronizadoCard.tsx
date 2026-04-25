@@ -55,10 +55,11 @@ export function MobileModeloPadronizadoCard({ modelo, onVerDetalhes, onImageUpda
     const variacoes = [...variacoesRaw].sort((a, b) => ORDEM_TAMANHOS.indexOf(a.tamanho) - ORDEM_TAMANHOS.indexOf(b.tamanho));
 
     const totalPecas = variacoes.reduce((s, v) => s + v.quantidade, 0);
-    const totalProduzido = variacoes.reduce((s, v) => s + (v.quantidadeInicial || v.quantidade), 0);
+    const totalProduzidoRaw = variacoes.reduce((s, v) => s + (v.quantidadeInicial || v.quantidade), 0);
+    const totalProduzido = Math.max(totalProduzidoRaw, totalPecas);
 
     // Métricas de performance
-    const taxaGiro = totalProduzido > 0 ? Math.min(100, ((totalProduzido - totalPecas) / totalProduzido) * 100) : 0;
+    const taxaGiro = totalProduzido > 0 ? Math.max(0, Math.min(100, ((totalProduzido - totalPecas) / totalProduzido) * 100)) : 0;
     const cobertura = vendasSemana > 0 ? Math.ceil(totalPecas / vendasSemana) : null;
     const tendencia = vendasSemanaAnterior > 0
         ? ((vendasSemana - vendasSemanaAnterior) / vendasSemanaAnterior) * 100

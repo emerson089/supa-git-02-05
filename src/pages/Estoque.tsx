@@ -724,33 +724,68 @@ export default function Estoque() {
       {/* Header - Desktop only */}
       {!isMobile && <header className="px-6 py-4 border-b border-border bg-card/50">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">CONTROLE DE ESTOQUE</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {itens.length} itens cadastrados
-            </p>
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground tracking-tight">CONTROLE DE ESTOQUE</h1>
+              <div className="flex items-center gap-3 mt-1">
+                <p className="text-sm text-muted-foreground">
+                  {totalItens} modelos · {totalPecas.toLocaleString()} peças
+                </p>
+                {/* Health pills */}
+                {itensEsgotados > 0 && (
+                  <button
+                    onClick={() => handleFilterChange('esgotado')}
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-700 border border-red-200 hover:bg-red-200 transition-colors cursor-pointer"
+                    title="Clique para filtrar esgotados"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                    {itensEsgotados} esgotados
+                  </button>
+                )}
+                {itensAlerta > 0 && (
+                  <button
+                    onClick={() => handleFilterChange('baixo')}
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-200 transition-colors cursor-pointer"
+                    title="Clique para filtrar estoque baixo"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                    {itensAlerta} baixo estoque
+                  </button>
+                )}
+                {itensEsgotados === 0 && itensAlerta === 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                    Estoque saudável
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {/* Botão de Refresh */}
-            <Button variant="ghost" size="icon" onClick={handleRefreshData} disabled={isRefreshing} title="Atualizar dados">
-              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleRefreshData}
+              disabled={isRefreshing}
+              title="Atualizar dados"
+              className="h-9 w-9 rounded-xl hover:bg-muted/60"
+            >
+              <RefreshCw className={cn("h-4 w-4 text-muted-foreground", isRefreshing && "animate-spin")} />
             </Button>
-
-            {/* Alerta de baixo estoque */}
-            {itensAlerta > 0 && <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
-              <AlertTriangle size={16} className="text-amber-600" />
-              <span className="text-sm text-amber-700 font-medium">
-                {itensAlerta} itens com estoque baixo
-              </span>
-            </div>}
 
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-              <Input placeholder="Buscar item..." value={search} onChange={e => handleSearchChange(e.target.value)} className="pl-10 pr-8 w-64 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+              <Input
+                placeholder="Buscar modelo..."
+                value={search}
+                onChange={e => handleSearchChange(e.target.value)}
+                className="pl-9 pr-8 w-64 h-9 bg-background shadow-[inset_2px_2px_5px_hsl(var(--muted)/0.3),inset_-2px_-2px_5px_hsl(var(--background))] border-0 text-sm"
+              />
               {search && <button onClick={handleClearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted" title="Limpar busca">
-                <X size={14} className="text-muted-foreground" />
+                <X size={13} className="text-muted-foreground" />
               </button>}
             </div>
           </div>
@@ -770,146 +805,220 @@ export default function Estoque() {
 
       {/* Content */}
       <div ref={scrollContainerRef} className={cn("flex-1 overflow-auto", isMobile ? "p-4" : "p-6")}>
-        {/* Metrics Cards */}
-        <div className={cn("grid gap-3 mb-4", isMobile ? "grid-cols-3" : "grid-cols-4")}>
-          <Card className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Package className="h-4 w-4 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Total Peças</p>
-                <p className="font-bold text-sm sm:text-lg">{totalPecas.toLocaleString()}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-emerald-500/10">
-                <DollarSign className="h-4 w-4 text-emerald-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Valor Total</p>
-                <p className="font-bold text-sm sm:text-lg text-emerald-600">
-                  {isMobile ? `${(valorTotal / 1000).toFixed(1)}k` : `R$ ${valorTotal.toLocaleString('pt-BR', {
-                    minimumFractionDigits: 2
-                  })}`}
-                </p>
+
+        {/* KPI Cards — Pro decision bar */}
+        <div className={cn("grid gap-3 mb-5", isMobile ? "grid-cols-3" : "grid-cols-5")}>
+
+          {/* Total Peças */}
+          <div className="relative overflow-hidden rounded-2xl bg-card border border-border/60 shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] p-4 flex flex-col gap-1.5 group">
+            <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl bg-primary/60" />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Peças</span>
+              <div className="p-1.5 rounded-lg bg-primary/10 group-hover:bg-primary/15 transition-colors">
+                <Package className="h-3.5 w-3.5 text-primary" />
               </div>
             </div>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-amber-500/10">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Em Alerta</p>
-                <p className="font-bold text-sm sm:text-lg text-amber-600">{itensAlerta}</p>
-              </div>
-            </div>
-          </Card>
-          {!isMobile && <Card className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-red-500/10">
-                <PackageX className="h-4 w-4 text-red-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Esgotados</p>
-                <p className="font-bold text-lg text-red-600">{itensEsgotados}</p>
+            <p className="font-extrabold text-xl sm:text-2xl text-foreground tabular-nums leading-none">{totalPecas.toLocaleString()}</p>
+            <p className="text-[10px] text-muted-foreground/70">{totalItens} modelos cadastrados</p>
+          </div>
+
+          {/* Valor Total */}
+          <div className="relative overflow-hidden rounded-2xl bg-card border border-border/60 shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] p-4 flex flex-col gap-1.5 group">
+            <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl bg-emerald-500/70" />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground">Capital em Estoque</span>
+              <div className="p-1.5 rounded-lg bg-emerald-500/10 group-hover:bg-emerald-500/15 transition-colors">
+                <DollarSign className="h-3.5 w-3.5 text-emerald-600" />
               </div>
             </div>
-          </Card>}
-          <Card className="p-3 bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <ShoppingBag className="h-4 w-4 text-blue-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-blue-700/70 dark:text-blue-400 font-medium truncate">Total Vendas</p>
-                <p className="font-bold text-sm sm:text-lg text-blue-600 dark:text-blue-400">
-                  {Math.max(0, (metrics?.totalProduzido || 0) - totalPecas).toLocaleString()}
-                </p>
+            <p className="font-extrabold text-xl sm:text-2xl text-emerald-600 tabular-nums leading-none">
+              {isMobile ? `R$${(valorTotal / 1000).toFixed(1)}k` : `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            </p>
+            <p className="text-[10px] text-muted-foreground/70">valor de venda total</p>
+          </div>
+
+          {/* Total Vendas */}
+          <div className="relative overflow-hidden rounded-2xl bg-card border border-border/60 shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] p-4 flex flex-col gap-1.5 group">
+            <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl bg-blue-500/70" />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Vendas</span>
+              <div className="p-1.5 rounded-lg bg-blue-500/10 group-hover:bg-blue-500/15 transition-colors">
+                <ShoppingBag className="h-3.5 w-3.5 text-blue-600" />
               </div>
             </div>
-          </Card>
+            <p className="font-extrabold text-xl sm:text-2xl text-blue-600 dark:text-blue-400 tabular-nums leading-none">
+              {Math.max(0, (metrics?.totalProduzido || 0) - totalPecas).toLocaleString()}
+            </p>
+            <p className="text-[10px] text-muted-foreground/70">peças vendidas acumuladas</p>
+          </div>
+
+          {/* Em Alerta — clicável */}
+          <button
+            onClick={() => handleFilterChange(filtroRapido === 'baixo' ? 'todos' : 'baixo')}
+            className={cn(
+              "relative overflow-hidden rounded-2xl bg-card border shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] p-4 flex flex-col gap-1.5 text-left cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg",
+              filtroRapido === 'baixo' ? "border-amber-400 ring-2 ring-amber-200" : "border-amber-200/60"
+            )}
+            title="Clique para filtrar modelos com estoque baixo"
+          >
+            <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl bg-amber-500/70" />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-amber-700/80">Em Alerta</span>
+              <div className="p-1.5 rounded-lg bg-amber-500/10">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+              </div>
+            </div>
+            <p className={cn("font-extrabold text-xl sm:text-2xl tabular-nums leading-none", itensAlerta > 0 ? 'text-amber-600' : 'text-muted-foreground')}>{itensAlerta}</p>
+            <p className="text-[10px] text-amber-600/70 font-medium">{filtroRapido === 'baixo' ? 'filtro ativo · clique para limpar' : 'clique para ver'}</p>
+          </button>
+
+          {/* Esgotados — clicável */}
+          <button
+            onClick={() => handleFilterChange(filtroRapido === 'esgotado' ? 'todos' : 'esgotado')}
+            className={cn(
+              "relative overflow-hidden rounded-2xl bg-card border shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] p-4 flex flex-col gap-1.5 text-left cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg",
+              filtroRapido === 'esgotado' ? "border-red-400 ring-2 ring-red-200" : "border-red-200/60"
+            )}
+            title="Clique para filtrar modelos esgotados"
+          >
+            <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl bg-red-500/70" />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-red-700/80">Esgotados</span>
+              <div className="p-1.5 rounded-lg bg-red-500/10">
+                <PackageX className="h-3.5 w-3.5 text-red-600" />
+              </div>
+            </div>
+            <p className={cn("font-extrabold text-xl sm:text-2xl tabular-nums leading-none", itensEsgotados > 0 ? 'text-red-600' : 'text-muted-foreground')}>{itensEsgotados}</p>
+            <p className="text-[10px] text-red-600/70 font-medium">{filtroRapido === 'esgotado' ? 'filtro ativo · clique para limpar' : 'clique para ver'}</p>
+          </button>
         </div>
 
-        {/* Quick Filters */}
-        <div className="flex gap-2 mb-4 flex-wrap">
-          <Button variant={filtroRapido === 'todos' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('todos')} className="h-8">
-            Ver Todos
-          </Button>
-          <Button variant={filtroRapido === 'esgotado' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('esgotado')} className={cn("h-8 gap-1", filtroRapido === 'esgotado' ? "bg-red-600 hover:bg-red-700" : "text-red-600 border-red-200 hover:bg-red-50")}>
-            <div className="w-2 h-2 rounded-full bg-red-500" />
+        {/* Quick Filters — cleaner pill bar */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <span className="text-xs text-muted-foreground font-medium mr-1">Filtrar:</span>
+          <button
+            onClick={() => handleFilterChange('todos')}
+            className={cn(
+              "h-7 px-3 rounded-full text-xs font-semibold border transition-all",
+              filtroRapido === 'todos'
+                ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                : "bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+            )}
+          >
+            Todos ({totalCount})
+          </button>
+          <button
+            onClick={() => handleFilterChange('esgotado')}
+            className={cn(
+              "h-7 px-3 rounded-full text-xs font-semibold border transition-all flex items-center gap-1.5",
+              filtroRapido === 'esgotado'
+                ? "bg-red-600 text-white border-red-600 shadow-sm"
+                : "bg-card text-red-600 border-red-200 hover:bg-red-50"
+            )}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
             Esgotados ({itensEsgotados})
-          </Button>
-          <Button variant={filtroRapido === 'baixo' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('baixo')} className={cn("h-8 gap-1", filtroRapido === 'baixo' ? "bg-amber-600 hover:bg-amber-700" : "text-amber-600 border-amber-200 hover:bg-amber-50")}>
-            <div className="w-2 h-2 rounded-full bg-amber-500" />
+          </button>
+          <button
+            onClick={() => handleFilterChange('baixo')}
+            className={cn(
+              "h-7 px-3 rounded-full text-xs font-semibold border transition-all flex items-center gap-1.5",
+              filtroRapido === 'baixo'
+                ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                : "bg-card text-amber-600 border-amber-200 hover:bg-amber-50"
+            )}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
             Estoque Baixo ({itensAlerta})
-          </Button>
+          </button>
+          {isPaginatedFetching && (
+            <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+              <RefreshCw size={11} className="animate-spin" />
+              Atualizando...
+            </span>
+          )}
         </div>
 
         {/* Banner de integridade — só na aba de produto acabado */}
         {activeTab === 'produto_acabado' && integridadeProblemas.total > 0 && (
-          <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/50">
-            <AlertTriangle size={16} className="text-amber-600 shrink-0" />
-            <span className="text-sm font-medium text-amber-800 dark:text-amber-300 flex-1">
+          <div className="flex items-center gap-3 mb-4 px-4 py-2.5 rounded-xl bg-amber-50/80 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/50">
+            <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 flex-1">
+              <span className="text-xs font-bold text-amber-800 dark:text-amber-300">Atenção à integridade:</span>
               {integridadeProblemas.manuais > 0 && (
-                <span>{integridadeProblemas.manuais} modelo{integridadeProblemas.manuais > 1 ? 's' : ''} legado{integridadeProblemas.manuais > 1 ? 's' : ''}</span>
+                <span className="text-xs text-amber-700 dark:text-amber-400">{integridadeProblemas.manuais} modelo{integridadeProblemas.manuais > 1 ? 's' : ''} legado{integridadeProblemas.manuais > 1 ? 's' : ''}</span>
               )}
-              {integridadeProblemas.manuais > 0 && (integridadeProblemas.padSemImagem > 0 || integridadeProblemas.padSemPreco > 0) && ' · '}
               {integridadeProblemas.padSemImagem > 0 && (
-                <span>{integridadeProblemas.padSemImagem} sem imagem</span>
+                <span className="text-xs text-amber-700 dark:text-amber-400">{integridadeProblemas.padSemImagem} sem imagem</span>
               )}
-              {integridadeProblemas.padSemImagem > 0 && integridadeProblemas.padSemPreco > 0 && ' · '}
               {integridadeProblemas.padSemPreco > 0 && (
-                <span>{integridadeProblemas.padSemPreco} sem preço</span>
+                <span className="text-xs text-amber-700 dark:text-amber-400">{integridadeProblemas.padSemPreco} sem preço</span>
               )}
-              <span className="text-amber-600 dark:text-amber-400"> — Verifique os cards com badges de atenção.</span>
-            </span>
+            </div>
+            <span className="text-[10px] font-medium text-amber-600/70 dark:text-amber-400/60 shrink-0">Verifique os cards com badge</span>
           </div>
         )}
 
         <Tabs value={activeTab} onValueChange={v => handleTabChange(v as 'materia_prima' | 'produto_acabado')}>
-          {/* Mobile: Scrollable tabs */}
-
-            <div className="flex items-center justify-end mb-6">
-
-              {activeTab === 'produto_acabado' && <div className="flex items-center gap-3">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
-                      <Download size={18} />
-                      Exportar Modelos
-                      <ChevronDown size={14} />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={handleExportModelos} className="gap-2 cursor-pointer">
-                      <FileText size={16} />
-                      Exportar CSV (texto)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportModelosPDF} className="gap-2 cursor-pointer">
-                      <Image size={16} />
-                      Exportar PDF (com imagens)
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button onClick={() => setShowImportModal(true)} variant="outline" className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
-                  <FileSpreadsheet size={18} />
-                  Importar Lista de Modelos
-                </Button>
-                <Button onClick={() => setShowNovoModeloPadronizadoModal(true)} className="gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]">
-                  <Sparkles size={18} />
-                  + Novo Modelo Padronizado
-                </Button>
-              </div>}
-              {activeTab === 'materia_prima' && <Button onClick={() => handleOpenModal()} className="gap-2 shadow-[4px_4px_10px_hsl(var(--muted)/0.4),-2px_-2px_8px_hsl(var(--background))]">
-                <Plus size={18} />
-                Novo Item
-              </Button>}
+          {/* Toolbar row: item count on left + actions on right */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-muted-foreground">
+                {isPaginatedFetching ? (
+                  <span className="inline-flex items-center gap-1.5"><RefreshCw size={12} className="animate-spin" /> Carregando...</span>
+                ) : (
+                  <span><span className="font-semibold text-foreground">{totalCount}</span> {activeTab === 'produto_acabado' ? 'modelos' : 'itens'} {filtroRapido !== 'todos' && <span className="text-xs text-primary font-medium">(filtrado)</span>}</span>
+                )}
+              </p>
             </div>
+
+            {activeTab === 'produto_acabado' && <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 h-8 text-xs shadow-[3px_3px_8px_hsl(var(--muted)/0.35),-1px_-1px_5px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50"
+                  >
+                    <Download size={14} />
+                    Exportar
+                    <ChevronDown size={12} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportModelos} className="gap-2 cursor-pointer">
+                    <FileText size={16} />
+                    Exportar CSV (texto)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportModelosPDF} className="gap-2 cursor-pointer">
+                    <Image size={16} />
+                    Exportar PDF (com imagens)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                onClick={() => setShowImportModal(true)}
+                variant="outline"
+                size="sm"
+                className="gap-1.5 h-8 text-xs shadow-[3px_3px_8px_hsl(var(--muted)/0.35),-1px_-1px_5px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50"
+              >
+                <FileSpreadsheet size={14} />
+                Importar
+              </Button>
+              <Button
+                onClick={() => setShowNovoModeloPadronizadoModal(true)}
+                size="sm"
+                className="gap-1.5 h-8 text-xs bg-primary hover:bg-primary/90 shadow-[3px_3px_8px_hsl(var(--muted)/0.4),-1px_-1px_5px_hsl(var(--background))]"
+              >
+                <Sparkles size={14} />
+                + Novo Modelo
+              </Button>
+            </div>}
+            {activeTab === 'materia_prima' && <Button onClick={() => handleOpenModal()} size="sm" className="gap-1.5 h-8 text-xs shadow-[3px_3px_8px_hsl(var(--muted)/0.4),-1px_-1px_5px_hsl(var(--background))]">
+              <Plus size={14} />
+              Novo Item
+            </Button>}
+          </div>
 
           <TabsContent value={activeTab} className="mt-0">
             {/* ── Seção Única de Produtos Acabados ────────────────────────── */}
@@ -1009,12 +1118,21 @@ export default function Estoque() {
                 );
               })}
 
-              {itensFiltrados.length === 0 && !isPaginatedLoading && <div className="col-span-full text-center py-12 text-muted-foreground">
-                {search ? 'Nenhum item encontrado para a busca.' : activeTab === 'materia_prima' ? 'Nenhuma matéria-prima cadastrada.' : 'Nenhum produto acabado no estoque.'}
+              {itensFiltrados.length === 0 && !isPaginatedLoading && <div className="col-span-full flex flex-col items-center justify-center py-16 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+                  <Package size={28} className="text-muted-foreground/40" />
+                </div>
+                <p className="font-semibold text-foreground/70 mb-1">
+                  {search ? `Nenhum resultado para "${search}"` : filtroRapido === 'esgotado' ? 'Nenhum modelo esgotado' : filtroRapido === 'baixo' ? 'Nenhum modelo com estoque baixo' : activeTab === 'materia_prima' ? 'Nenhuma matéria-prima cadastrada.' : 'Nenhum produto acabado no estoque.'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {search ? 'Tente outros termos ou limpe a busca.' : filtroRapido !== 'todos' ? 'Filtro ativo — tente "Todos" para ver todos os itens.' : 'Adicione novos modelos para começar.'}
+                </p>
               </div>}
 
-              {isPaginatedLoading && <div className="col-span-full text-center py-12 text-muted-foreground">
-                Carregando...
+              {isPaginatedLoading && <div className="col-span-full flex flex-col items-center justify-center py-16 text-center">
+                <RefreshCw size={24} className="animate-spin text-muted-foreground/50 mb-3" />
+                <p className="text-sm text-muted-foreground">Carregando estoque...</p>
               </div>}
             </div>
 

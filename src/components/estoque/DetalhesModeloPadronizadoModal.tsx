@@ -27,13 +27,13 @@ import {
     Shirt,
     DollarSign,
     Palette,
-    Hash,
     Layers,
     Pencil,
     Check,
     X,
     Loader2,
     Plus,
+    PackagePlus,
 } from 'lucide-react';
 import { EtiquetasModal } from './EtiquetasModal';
 import { toast } from 'sonner';
@@ -83,6 +83,9 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
     const [addingSize, setAddingSize] = useState(false);
     const [newSize, setNewSize] = useState('');
     const [newSizeQtd, setNewSizeQtd] = useState('');
+    const [reposicaoMode, setReposicaoMode] = useState(false);
+    const [reposicaoQtd, setReposicaoQtd] = useState<Record<string, string>>({});
+    const [savingReposicao, setSavingReposicao] = useState(false);
 
     const { user } = useAuth();
     const queryClient = useQueryClient();
@@ -105,7 +108,8 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
     const { meta, nome, precoUnitario } = modelo;
 
     const totalPecas = localVariacoes.reduce((s, v) => s + v.quantidade, 0);
-    const totalProduzido = localVariacoes.reduce((s, v) => s + (v.quantidadeInicial ?? v.quantidade), 0);
+    const totalProduzidoRaw = localVariacoes.reduce((s, v) => s + (v.quantidadeInicial ?? v.quantidade), 0);
+    const totalProduzido = Math.max(totalProduzidoRaw, totalPecas);
 
     const startEdit = (v: VariacaoModelo) => {
         setEditingId(v.id);
@@ -161,7 +165,11 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
             for (const v of localVariacoes) {
                 const diff = valorGrade - v.quantidade;
                 if (diff !== 0) {
-                    await updateItem({ id: v.id, quantidade: valorGrade });
+                    // Se é entrada (diff > 0), soma também no histórico para manter Giro correto
+                    const qtdIniAtual = v.quantidadeInicial || v.quantidade;
+                    const novaQtdIni = diff > 0 ? qtdIniAtual + diff : qtdIniAtual;
+
+                    await updateItem({ id: v.id, quantidade: valorGrade, quantidadeInicial: novaQtdIni });
                     await addMovimentacao({
                         itemId: v.id,
                         tipo: diff > 0 ? 'entrada' : 'saida',
@@ -172,11 +180,64 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                 }
             }
 
-            setLocalVariacoes(prev => prev.map(v => ({ ...v, quantidade: valorGrade })));
+            setLocalVariacoes(prev => prev.map(v => {
+                const diff = valorGrade - v.quantidade;
+                if (diff === 0) return v;
+                const qtdIniAtual = v.quantidadeInicial || v.quantidade;
+                return { ...v, quantidade: valorGrade, quantidadeInicial: diff > 0 ? qtdIniAtual + diff : qtdIniAtual };
+            }));
             setQtdGrade('');
             queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
         } finally {
             setApplyingGrade(false);
+        }
+    };
+
+    const handleReposicao = async () => {
+        const entradas = localVariacoes.map(v => ({
+            variacao: v,
+            chegaram: parseInt(reposicaoQtd[v.id] || '0', 10) || 0,
+        })).filter(e => e.chegaram > 0);
+
+        if (entradas.length === 0) {
+            toast.error('Informe a quantidade chegada em pelo menos um tamanho.');
+            return;
+        }
+
+        setSavingReposicao(true);
+        try {
+            for (const { variacao: v, chegaram } of entradas) {
+                const novaQtd = v.quantidade + chegaram;
+                const novaQtdIni = (v.quantidadeInicial || v.quantidade) + chegaram;
+                await updateItem({ id: v.id, quantidade: novaQtd, quantidadeInicial: novaQtdIni });
+                await addMovimentacao({
+                    itemId: v.id,
+                    tipo: 'entrada',
+                    quantidade: chegaram,
+                    motivo: `Reposição de estoque - Tam ${v.tamanho}`,
+                    producaoId: null,
+                });
+            }
+
+            setLocalVariacoes(prev => prev.map(v => {
+                const chegaram = parseInt(reposicaoQtd[v.id] || '0', 10) || 0;
+                if (!chegaram) return v;
+                return {
+                    ...v,
+                    quantidade: v.quantidade + chegaram,
+                    quantidadeInicial: (v.quantidadeInicial || v.quantidade) + chegaram,
+                };
+            }));
+
+            const totalChegou = entradas.reduce((s, e) => s + e.chegaram, 0);
+            toast.success(`Reposição registrada: +${totalChegou} peças em ${entradas.length} tamanho(s).`);
+            setReposicaoMode(false);
+            setReposicaoQtd({});
+            queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
+        } catch {
+            toast.error('Erro ao registrar reposição.');
+        } finally {
+            setSavingReposicao(false);
         }
     };
 
@@ -369,10 +430,66 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                 </div>
 
                                 <div className="space-y-3">
-                                    <h3 className="font-bold text-sm flex items-center gap-2 px-1">
-                                        <Tags className="h-4 w-4 text-primary" />
-                                        Estoque por Tamanho
-                                    </h3>
+                                    <div className="flex items-center justify-between px-1">
+                                        <h3 className="font-bold text-sm flex items-center gap-2">
+                                            <Tags className="h-4 w-4 text-primary" />
+                                            Estoque por Tamanho
+                                        </h3>
+                                        {!reposicaoMode && (
+                                            <button
+                                                onClick={() => { setReposicaoQtd({}); setReposicaoMode(true); }}
+                                                className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition-colors"
+                                            >
+                                                <PackagePlus className="h-3.5 w-3.5" />
+                                                Registrar Reposição
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Painel de Reposição */}
+                                    {reposicaoMode && (
+                                        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 dark:bg-emerald-950/20 dark:border-emerald-900/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <div className="px-4 py-3 bg-emerald-100/70 dark:bg-emerald-900/30 border-b border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <PackagePlus className="h-4 w-4 text-emerald-700" />
+                                                    <span className="text-sm font-bold text-emerald-800 dark:text-emerald-300">Registrar Reposição</span>
+                                                </div>
+                                                <button onClick={() => { setReposicaoMode(false); setReposicaoQtd({}); }} className="text-emerald-600 hover:text-emerald-800 transition-colors">
+                                                    <X className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                            <div className="p-4 space-y-3">
+                                                <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                                                    Informe quantas peças chegaram por tamanho. O sistema soma ao estoque atual e ao histórico automaticamente.
+                                                </p>
+                                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                                    {localVariacoes.map(v => (
+                                                        <div key={v.id} className="flex items-center gap-2 bg-white dark:bg-emerald-950/30 rounded-lg px-3 py-2 border border-emerald-200 dark:border-emerald-900/50">
+                                                            <span className="font-black text-sm text-emerald-800 dark:text-emerald-300 w-8 shrink-0">{v.tamanho}</span>
+                                                            <span className="text-xs text-emerald-600 shrink-0">+</span>
+                                                            <Input
+                                                                type="number"
+                                                                min={0}
+                                                                placeholder="0"
+                                                                value={reposicaoQtd[v.id] || ''}
+                                                                onChange={e => setReposicaoQtd(prev => ({ ...prev, [v.id]: e.target.value }))}
+                                                                className="h-7 text-sm font-bold text-center border-emerald-200 bg-transparent p-1"
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="flex gap-2 pt-1">
+                                                    <Button className="flex-1 h-10 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={handleReposicao} disabled={savingReposicao}>
+                                                        {savingReposicao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                                        Confirmar Reposição
+                                                    </Button>
+                                                    <Button variant="outline" className="h-10 px-4 border-emerald-200 text-emerald-700" onClick={() => { setReposicaoMode(false); setReposicaoQtd({}); }} disabled={savingReposicao}>
+                                                        Cancelar
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="rounded-xl border border-border overflow-hidden bg-background shadow-sm">
                                         <div className="p-4 bg-muted/20 border-b border-border">

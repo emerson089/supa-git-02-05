@@ -60,8 +60,9 @@ export function MobileProductCard({ item, editingPriceId, editingPrice, onEditPr
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditingPrice = editingPriceId === item.id;
 
-  const totalProduzido = item.quantidadeInicial || item.quantidade;
-  const taxaGiro = totalProduzido > 0 ? Math.min(100, ((totalProduzido - item.quantidade) / totalProduzido) * 100) : 0;
+  const totalProduzidoRaw = item.quantidadeInicial || item.quantidade;
+  const totalProduzido = Math.max(totalProduzidoRaw, item.quantidade);
+  const taxaGiro = totalProduzido > 0 ? Math.max(0, Math.min(100, ((totalProduzido - item.quantidade) / totalProduzido) * 100)) : 0;
   const cobertura = vendasSemana > 0 ? Math.ceil(item.quantidade / vendasSemana) : null;
   const tendencia = vendasSemanaAnterior > 0
     ? ((vendasSemana - vendasSemanaAnterior) / vendasSemanaAnterior) * 100

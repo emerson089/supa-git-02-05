@@ -421,28 +421,30 @@ export default function Dashboard() {
         {/* Título - apenas desktop */}
         {!isMobile && <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">DASHBOARD GERAL </h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+              DASHBOARD GERAL
+            </h1>
+            <p className="text-sm font-medium text-muted-foreground mt-0.5">
               Visão geral do desempenho e controle
             </p>
           </div>
         </div>}
 
         {/* Barra de Filtros */}
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+        <div className="bg-card border border-border/60 rounded-2xl shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] p-2 sm:p-2.5">
           {isMobile ? (
             /* ── Mobile ─────────────────────────────────── */
-            <div className="p-3 space-y-2.5">
+            <div className="space-y-2.5">
               {/* Scroll de períodos */}
               <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-0.5 px-0.5 scrollbar-hide">
-                <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5 shrink-0">
+                <div className="inline-flex items-center gap-1.5 shrink-0">
                   {periodos.map(p => (
                     <button key={p.value} onClick={() => handlePeriodoClick(p.value)}
                       className={cn(
-                        "px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap",
+                        "px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap border",
                         periodo === p.value
-                          ? "bg-white shadow-sm text-gray-900 font-semibold"
-                          : "text-gray-500 hover:text-gray-700"
+                          ? "bg-foreground text-background border-transparent shadow-md"
+                          : "bg-background text-muted-foreground border-border/50 shadow-sm hover:border-border hover:text-foreground"
                       )}>
                       {p.label}
                     </button>
@@ -451,10 +453,10 @@ export default function Dashboard() {
                 <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                   <PopoverTrigger asChild>
                     <button className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all shrink-0",
+                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all shrink-0",
                       periodo === "personalizado"
-                        ? "bg-indigo-600 text-white border-indigo-600"
-                        : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                        ? "bg-primary text-primary-foreground border-primary shadow-md"
+                        : "bg-background border-border/50 text-muted-foreground shadow-sm hover:border-border hover:text-foreground"
                     )}>
                       <CalendarIcon size={13} />
                       {periodo === "personalizado" && dateRange.from && dateRange.to
@@ -470,26 +472,26 @@ export default function Dashboard() {
                 </Popover>
               </div>
               {/* Linha 2: toggle + limpar + exibindo */}
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 px-1">
                 <div className="flex flex-wrap items-center gap-2 min-w-0">
                   <button
                     onClick={() => setExcluirCancelados(v => !v)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all shrink-0",
+                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-all shrink-0",
                       !excluirCancelados
-                        ? "bg-amber-50 border-amber-300 text-amber-700"
-                        : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"
+                        ? "bg-amber-100 border-amber-300 text-amber-700 shadow-sm"
+                        : "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted"
                     )}>
-                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", !excluirCancelados ? "bg-amber-500" : "bg-gray-300")} />
+                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", !excluirCancelados ? "bg-amber-500" : "bg-muted-foreground/40")} />
                     Cancelados
                   </button>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">
                     {getPeriodoLabel()}
                   </span>
                 </div>
                 {hasActiveFilters && (
                   <button onClick={handleClearFilters}
-                    className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors">
+                    className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors font-medium">
                     <X size={12} />
                     Limpar
                   </button>
@@ -498,16 +500,16 @@ export default function Dashboard() {
             </div>
           ) : (
             /* ── Desktop ─────────────────────────────────── */
-            <div className="flex items-center gap-3 px-4 py-2.5">
+            <div className="flex items-center gap-2">
               {/* Segmented control de período */}
-              <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+              <div className="flex items-center gap-1.5">
                 {periodos.map(p => (
                   <button key={p.value} onClick={() => handlePeriodoClick(p.value)}
                     className={cn(
-                      "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                      "px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border",
                       periodo === p.value
-                        ? "bg-white shadow-sm text-gray-900 font-semibold"
-                        : "text-gray-500 hover:text-gray-700"
+                        ? "bg-foreground text-background border-transparent shadow-md"
+                        : "bg-background text-muted-foreground border-border/50 shadow-sm hover:border-border hover:text-foreground"
                     )}>
                     {p.label}
                   </button>
@@ -518,10 +520,10 @@ export default function Dashboard() {
               <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                 <PopoverTrigger asChild>
                   <button className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all",
+                    "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-semibold transition-all ml-1",
                     periodo === "personalizado"
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                      : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                      ? "bg-primary text-primary-foreground border-primary shadow-md"
+                      : "bg-background text-muted-foreground border-border/50 shadow-sm hover:border-border hover:text-foreground"
                   )}>
                     <CalendarIcon size={13} />
                     {periodo === "personalizado" && dateRange.from && dateRange.to ? (
@@ -541,44 +543,46 @@ export default function Dashboard() {
               </Popover>
 
               {/* Divisor */}
-              <div className="w-px h-5 bg-gray-200 shrink-0" />
+              <div className="w-px h-6 bg-border mx-2 shrink-0" />
 
               {/* Toggle cancelados — chip estilo */}
               <button
                 onClick={() => setExcluirCancelados(v => !v)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all",
+                  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-semibold transition-all",
                   !excluirCancelados
-                    ? "bg-amber-50 border-amber-300 text-amber-700 shadow-sm"
-                    : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300"
+                    ? "bg-amber-100 border-amber-300 text-amber-800 shadow-sm"
+                    : "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted"
                 )}>
                 <span className={cn(
                   "w-2 h-2 rounded-full transition-colors",
-                  !excluirCancelados ? "bg-amber-500" : "bg-gray-300"
+                  !excluirCancelados ? "bg-amber-500" : "bg-muted-foreground/40"
                 )} />
                 Incluir cancelados
               </button>
 
-              {/* Exibindo — texto compacto */}
-              <span className="text-xs text-muted-foreground ml-1 hidden xl:block">
-                Exibindo: <span className="font-medium text-foreground">{getPeriodoLabel()}</span>
-              </span>
+              <div className="flex-1 flex items-center justify-end gap-3">
+                {/* Exibindo — texto compacto */}
+                <span className="text-[11px] text-muted-foreground hidden xl:block">
+                  Exibindo: <span className="font-bold text-foreground">{getPeriodoLabel()}</span>
+                </span>
 
-              {/* Limpar — só quando há filtros não-padrão */}
-              {hasActiveFilters && (
-                <button onClick={handleClearFilters}
-                  className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors">
-                  <X size={13} />
-                  Limpar filtros
-                </button>
-              )}
+                {/* Limpar — só quando há filtros não-padrão */}
+                {hasActiveFilters && (
+                  <button onClick={handleClearFilters}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive transition-colors">
+                    <X size={13} />
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
       </div>
 
       {/* KPI Cards - 2 columns on mobile */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {loading ? <>
           <KpiCardSkeleton />
           <KpiCardSkeleton />
@@ -587,54 +591,57 @@ export default function Dashboard() {
         </> : kpiCards.map(kpi => <Card 
             key={kpi.title} 
             className={cn(
-              "bg-white rounded-xl shadow-sm border border-gray-200 transition-all duration-200 relative overflow-hidden", 
-              kpi.clickable && "cursor-pointer hover:shadow-md active:scale-[0.98]"
+              "relative overflow-hidden rounded-2xl bg-card border border-border/60 shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] transition-all duration-250 flex flex-col group",
+              kpi.clickable && "cursor-pointer hover:shadow-[6px_6px_16px_hsl(var(--muted)/0.4),-3px_-3px_10px_hsl(var(--background))] hover:-translate-y-0.5 ring-2 ring-transparent hover:ring-indigo-500/20"
             )} 
             onClick={kpi.clickable ? kpi.onClick : undefined}
           >
-          {kpi.showBruto && <Badge variant="outline" className="absolute top-2 right-2 text-[8px] sm:text-[10px] bg-amber-50 text-amber-600 border-amber-200 px-1 py-0">
+          {/* Accent border bar */}
+          <div className={cn("absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl transition-opacity", kpi.bgColor.replace('bg-', 'bg-').replace('100', '500'), kpi.clickable && "group-hover:opacity-100 opacity-80")} />
+
+          {kpi.showBruto && <Badge variant="outline" className="absolute top-3 right-3 text-[9px] bg-amber-50 text-amber-600 border-amber-200/60 px-1.5 py-0 rounded font-bold uppercase tracking-wide">
             Bruto
           </Badge>}
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex flex-col gap-3">
+          <CardContent className="p-4 sm:p-5 flex-1 flex flex-col">
+            <div className="flex flex-col gap-3 flex-1">
               {/* Top Row: Icon and Variation */}
               <div className="flex items-center justify-between w-full">
-                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-indigo-600/10 flex items-center justify-center">
-                  <kpi.icon size={isMobile ? 18 : 22} className="text-indigo-600" />
+                <div className={cn("w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border", kpi.bgColor, kpi.color.replace('text-', 'border-').replace('600', '200'))}>
+                  <kpi.icon size={isMobile ? 18 : 22} className={kpi.color} />
                 </div>
-                <div className="flex flex-col items-end">
-                  <div className={`flex items-center gap-1 text-[10px] sm:text-xs font-bold ${(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? "text-emerald-600" : "text-red-500"}`}>
-                    {(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? <TrendingUp size={isMobile ? 12 : 14} /> : <TrendingDown size={isMobile ? 12 : 14} />}
+                <div className="flex flex-col items-end pt-1.5">
+                  <div className={`flex items-center gap-0.5 text-[10px] sm:text-[11px] font-bold px-1.5 py-0.5 rounded ${(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? "text-emerald-700 bg-emerald-50" : "text-red-600 bg-red-50"}`}>
+                    {(kpi.invertVariation ? !kpi.variation.isPositive : kpi.variation.isPositive) ? <ArrowUp size={10} strokeWidth={3} /> : <ArrowDown size={10} strokeWidth={3} />}
                     <span>{kpi.variation.value.toFixed(1)}%</span>
                   </div>
-                  <span className="text-[7px] sm:text-[9px] text-muted-foreground/60 uppercase font-medium">
+                  <span className="text-[9px] text-muted-foreground/60 uppercase font-bold mt-0.5">
                     vs. {anoPassado}
                   </span>
                 </div>
               </div>
 
               {/* Main Info Row */}
-              <div className="space-y-0.5">
-                <p className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight leading-none break-all">
+              <div className="space-y-1 mt-auto">
+                <p className={cn("text-xl sm:text-[26px] font-black tracking-tight leading-none tabular-nums break-all", kpi.color.includes('amber') || kpi.color.includes('emerald') || kpi.color.includes('blue') ? kpi.color : 'text-foreground')}>
                   {kpi.value}
                 </p>
-                <p className="text-[9px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest truncate">
+                <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate">
                   {kpi.title}
                 </p>
               </div>
 
               {/* Breakdown Tags (If any) */}
               {kpi.breakdown && (
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <div className="flex flex-wrap items-center gap-1.5 pt-1.5 mt-1 border-t border-border/40">
                   {kpi.breakdown
                     .filter((item: { label: string; value: number; colorClass: string }) => item.value >= 0)
                     .map((item: { label: string; value: number; colorClass: string }) => (
                       <span
                         key={item.label}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] sm:text-[10px] font-bold border border-transparent transition-colors shadow-sm ${item.colorClass}`}
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-colors shadow-sm ${item.colorClass} border-current/20`}
                       >
-                        <span className="opacity-70">{item.value}</span>
-                        <span className="uppercase tracking-tighter">{item.label}</span>
+                        <span className="opacity-90">{item.value}</span>
+                        <span className="uppercase tracking-wider">{item.label}</span>
                       </span>
                     ))}
                 </div>
@@ -655,41 +662,49 @@ export default function Dashboard() {
 
           return (
             <Card 
-              className={cn("rounded-xl shadow-sm border transition-all duration-200 relative overflow-hidden cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99]", rc.bg, rc.border)}
+              className={cn(
+                "relative overflow-hidden rounded-2xl bg-card border shadow-[4px_4px_12px_hsl(var(--muted)/0.35),-2px_-2px_8px_hsl(var(--background))] transition-all duration-250 flex flex-col group cursor-pointer hover:shadow-[6px_6px_16px_hsl(var(--muted)/0.4),-3px_-3px_10px_hsl(var(--background))] hover:-translate-y-0.5 ring-2 ring-transparent",
+                rc.bg, 
+                rc.border,
+                rc.label === 'Risco Alto' ? "hover:ring-red-500/20" : rc.label === 'Risco Médio' ? "hover:ring-amber-500/20" : "hover:ring-emerald-500/20"
+              )}
               onClick={() => navigate('/clientes?filter=top_pareto&sort=maior_historico')}
             >
-              <CardContent className="p-4 sm:p-5">
-                <div className="flex flex-col gap-3">
+              {/* Accent border bar */}
+              <div className={cn("absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl transition-opacity opacity-80 group-hover:opacity-100", rc.bar)} />
+
+              <CardContent className="p-4 sm:p-5 flex-1 flex flex-col">
+                <div className="flex flex-col gap-3 flex-1">
                   {/* Top row */}
                   <div className="flex items-center justify-between w-full">
-                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-white/70 flex items-center justify-center">
+                    <div className={cn("w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border", rc.labelClass, rc.border)}>
                       <ShieldAlert size={isMobile ? 18 : 22} className={rc.icon} />
                     </div>
-                    <span className={cn("text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full", rc.labelClass)}>
+                    <span className={cn("text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded border border-current/20", rc.labelClass)}>
                       {rc.label}
                     </span>
                   </div>
 
                   {/* Valor principal */}
-                  <div className="space-y-0.5">
-                    <p className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight leading-none">
+                  <div className="space-y-1 mt-auto">
+                    <p className={cn("text-xl sm:text-[26px] font-black tracking-tight leading-none tabular-nums", rc.icon)}>
                       {c.totalClientes === 0 ? '—' : `${c.percentualReceitaTop20.toFixed(0)}%`}
                     </p>
-                    <p className="text-[9px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                    <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                       Concentração 80/20
                     </p>
                   </div>
 
                   {/* Detalhes */}
                   {c.totalClientes > 0 && (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2 pt-1 border-t border-border/20 mt-1">
                       {/* Barra de concentração */}
-                      <div className="h-1.5 bg-white/60 rounded-full overflow-hidden">
-                        <div className={cn("h-full rounded-full transition-all", rc.bar)}
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className={cn("h-full rounded-full transition-all duration-500", rc.bar)}
                           style={{ width: `${Math.min(c.percentualReceitaTop20, 100)}%` }} />
                       </div>
-                      <p className="text-[9px] sm:text-[10px] text-slate-500 leading-snug">
-                        Top {c.top20pctClientes} de {c.totalClientes} clientes geram {c.percentualReceitaTop20.toFixed(0)}% da receita
+                      <p className="text-[9px] sm:text-[10px] font-medium text-muted-foreground leading-snug">
+                        Top <strong className="text-foreground">{c.top20pctClientes}</strong> de {c.totalClientes} clientes geram {c.percentualReceitaTop20.toFixed(0)}% da receita
                       </p>
                     </div>
                   )}

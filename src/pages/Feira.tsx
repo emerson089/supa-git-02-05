@@ -12,7 +12,9 @@ import { useCriarCargaFeira, useRegistrarRetornoFeira, useEditarCargaFeira, Tran
 import { useRecalcularEstoque } from '@/hooks/useRecalcularEstoque';
 import { useEstornarCarga } from '@/hooks/useEstornarCarga';
 import { useEditarRetornoCarga } from '@/hooks/useEditarRetornoCarga';
-import { PeriodoFeira, calcularPeriodo, useResumoFeiraPeriodo, useHistoricoAgrupado, useTodasCargasAtivas, useExcluirCargaFeira, useExcluirHistoricoCarga, TransferenciaComItensHistorico } from '@/hooks/useFeiraHistorico';
+import { PeriodoFeira, calcularPeriodo, useResumoComComparacao, useRankingModelosFeira, useAnaliseDiaSemana, useHistoricoAgrupado, useTodasCargasAtivas, useExcluirCargaFeira, useExcluirHistoricoCarga, TransferenciaComItensHistorico, ComparacaoKPI } from '@/hooks/useFeiraHistorico';
+import { RankingModelosFeira } from '@/components/feira/RankingModelosFeira';
+import { AnaliseDiaSemanaFeira } from '@/components/feira/AnaliseDiaSemanaFeira';
 import { FiltroPeriodo, salvarFiltroPeriodo, carregarFiltroPeriodo } from '@/components/feira/FiltroPeriodo';
 import { HistoricoAgrupado } from '@/components/feira/HistoricoAgrupado';
 import { DetalhesCargaModal } from '@/components/feira/DetalhesCargaModal';
@@ -39,7 +41,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Package, Plus, Package2, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle, FileText, TrendingUp } from 'lucide-react';
+import { Package, Plus, Package2, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle, FileText, TrendingUp, ArrowUp, ArrowDown } from 'lucide-react';
 import { LotImage } from '@/components/production/LotImage';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -122,11 +124,18 @@ export default function Feira() {
   // Estado do período - carregado do localStorage
   const [periodo, setPeriodo] = useState<PeriodoFeira>(() => carregarFiltroPeriodo());
 
-  // Hooks de histórico baseados no período
+  // Hooks de histórico baseados no período (com comparação ao período anterior)
   const {
-    resumo,
+    comparacao,
     isLoading: isLoadingResumo
-  } = useResumoFeiraPeriodo(periodo.inicio, periodo.fim);
+  } = useResumoComComparacao(periodo.inicio, periodo.fim);
+  const resumo = comparacao.atual;
+
+  // Ranking de modelos na feira
+  const { ranking: rankingModelos, isLoading: isLoadingRanking } = useRankingModelosFeira(periodo.inicio, periodo.fim);
+
+  // Análise por dia da semana
+  const { analise: analiseDias, isLoading: isLoadingAnaliseDias } = useAnaliseDiaSemana(periodo.inicio, periodo.fim);
   const {
     historico,
     isLoading: isLoadingHistorico
@@ -869,81 +878,137 @@ export default function Feira() {
           />
 
           {/* Resumo do Período */}
-          <div className={cn("grid gap-3 overflow-hidden", isMobile ? "grid-cols-2" : "grid-cols-5")}>
-            <Card className="overflow-hidden bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/50">
-              <CardContent className={cn("p-4", isMobile && "p-3")}>
-                <div className="flex items-center gap-3">
-                  <div className={cn("p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50", isMobile && "p-1.5")}>
-                    <Truck className={cn("h-5 w-5 text-blue-600", isMobile && "h-4 w-4")} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground truncate">Carga</p>
-                    <div className="flex items-baseline gap-1.5 flex-wrap">
-                      <p className={cn("font-bold text-blue-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalCarga} pç</p>
-                      <p className="text-xs font-medium text-blue-600/60">{resumo.totalModelos} mod</p>
+          {(() => {
+            const Delta = ({ kpi, invert = false }: { kpi: ComparacaoKPI; invert?: boolean }) => {
+              if (kpi.semDados || kpi.anterior === 0) return null;
+              const up = invert ? kpi.variacao < 0 : kpi.variacao > 0;
+              const down = invert ? kpi.variacao > 0 : kpi.variacao < 0;
+              const neutral = kpi.variacao === 0;
+              if (neutral) return null;
+              return (
+                <span className={cn(
+                  "inline-flex items-center gap-0.5 text-[10px] font-bold",
+                  up ? "text-emerald-600" : down ? "text-red-500" : "text-muted-foreground"
+                )}>
+                  {up ? <ArrowUp size={9} /> : <ArrowDown size={9} />}
+                  {Math.abs(kpi.variacao).toFixed(0)}%
+                </span>
+              );
+            };
+
+            const taxaColor = resumo.taxaVenda >= 80 ? "text-emerald-600" : resumo.taxaVenda >= 50 ? "text-amber-600" : "text-red-600";
+            const taxaBg = resumo.taxaVenda >= 80 ? "bg-emerald-50/50 dark:bg-emerald-950/20" : resumo.taxaVenda >= 50 ? "bg-amber-50/50 dark:bg-amber-950/20" : "bg-red-50/50 dark:bg-red-950/20";
+            const taxaIcon = resumo.taxaVenda >= 80 ? "bg-emerald-100 dark:bg-emerald-900/50" : resumo.taxaVenda >= 50 ? "bg-amber-100 dark:bg-amber-900/50" : "bg-red-100 dark:bg-red-900/50";
+
+            return (
+              <div className={cn("grid gap-3 overflow-hidden", isMobile ? "grid-cols-2" : "grid-cols-5")}>
+                {/* Carga */}
+                <Card className="overflow-hidden bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/50">
+                  <CardContent className={cn("p-4", isMobile && "p-3")}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn("p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 shrink-0", isMobile && "p-1.5")}>
+                        <Truck className={cn("h-5 w-5 text-blue-600", isMobile && "h-4 w-4")} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-muted-foreground truncate">Carga</p>
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                          <p className={cn("font-bold text-blue-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalCarga} pç</p>
+                          <p className="text-xs font-medium text-blue-600/60">{resumo.totalModelos} mod</p>
+                        </div>
+                        <Delta kpi={comparacao.carga} />
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="overflow-hidden bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/50">
-              <CardContent className={cn("p-4", isMobile && "p-3")}>
-                <div className="flex items-center gap-3">
-                  <div className={cn("p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50", isMobile && "p-1.5")}>
-                    <RotateCcw className={cn("h-5 w-5 text-amber-600", isMobile && "h-4 w-4")} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground truncate">Retorno</p>
-                    <p className={cn("font-bold text-amber-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalRetorno}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="overflow-hidden bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50">
-              <CardContent className={cn("p-4", isMobile && "p-3")}>
-                <div className="flex items-center gap-3">
-                  <div className={cn("p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50", isMobile && "p-1.5")}>
-                    <ShoppingBag className={cn("h-5 w-5 text-emerald-600", isMobile && "h-4 w-4")} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground truncate">Vendido</p>
-                    <p className={cn("font-bold text-emerald-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalVendido}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="overflow-hidden bg-primary/5 border-primary/20">
-              <CardContent className={cn("p-4", isMobile && "p-3")}>
-                <div className="flex items-center gap-3">
-                  <div className={cn("p-2 rounded-lg bg-primary/10", isMobile && "p-1.5")}>
-                    <DollarSign className={cn("h-5 w-5 text-primary", isMobile && "h-4 w-4")} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground truncate">Valor</p>
-                    <p className={cn("font-bold text-primary", isMobile ? "text-lg" : "text-xl")}>
-                      {isMobile ? `${(resumo.valorVendido / 1000).toFixed(1)}k` : formatCurrency(resumo.valorVendido)}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            {/* 5th KPI: taxa de venda */}
-            <Card className={cn("overflow-hidden border-violet-200/50", resumo.taxaVenda >= 80 ? "bg-emerald-50/50 dark:bg-emerald-950/20" : resumo.taxaVenda >= 50 ? "bg-amber-50/50 dark:bg-amber-950/20" : "bg-red-50/50 dark:bg-red-950/20")}>
-              <CardContent className={cn("p-4", isMobile && "p-3")}>
-                <div className="flex items-center gap-3">
-                  <div className={cn("p-2 rounded-lg", isMobile && "p-1.5", resumo.taxaVenda >= 80 ? "bg-emerald-100 dark:bg-emerald-900/50" : resumo.taxaVenda >= 50 ? "bg-amber-100 dark:bg-amber-900/50" : "bg-red-100 dark:bg-red-900/50")}>
-                    <TrendingUp className={cn("h-5 w-5", isMobile && "h-4 w-4", resumo.taxaVenda >= 80 ? "text-emerald-600" : resumo.taxaVenda >= 50 ? "text-amber-600" : "text-red-600")} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground truncate">Taxa Venda</p>
-                    <p className={cn("font-bold", isMobile ? "text-lg" : "text-xl", resumo.taxaVenda >= 80 ? "text-emerald-600" : resumo.taxaVenda >= 50 ? "text-amber-600" : "text-red-600")}>
-                      {resumo.totalCarga === 0 ? '—' : `${resumo.taxaVenda}%`}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  </CardContent>
+                </Card>
+
+                {/* Retorno — para retorno, alta é negativa (mais retorno = pior) */}
+                <Card className="overflow-hidden bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/50">
+                  <CardContent className={cn("p-4", isMobile && "p-3")}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn("p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50 shrink-0", isMobile && "p-1.5")}>
+                        <RotateCcw className={cn("h-5 w-5 text-amber-600", isMobile && "h-4 w-4")} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-muted-foreground truncate">Retorno</p>
+                        <p className={cn("font-bold text-amber-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalRetorno}</p>
+                        <Delta kpi={comparacao.retorno} invert />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Vendido */}
+                <Card className="overflow-hidden bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50">
+                  <CardContent className={cn("p-4", isMobile && "p-3")}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn("p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 shrink-0", isMobile && "p-1.5")}>
+                        <ShoppingBag className={cn("h-5 w-5 text-emerald-600", isMobile && "h-4 w-4")} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-muted-foreground truncate">Vendido</p>
+                        <p className={cn("font-bold text-emerald-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalVendido}</p>
+                        <Delta kpi={comparacao.vendido} />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Valor */}
+                <Card className="overflow-hidden bg-primary/5 border-primary/20">
+                  <CardContent className={cn("p-4", isMobile && "p-3")}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn("p-2 rounded-lg bg-primary/10 shrink-0", isMobile && "p-1.5")}>
+                        <DollarSign className={cn("h-5 w-5 text-primary", isMobile && "h-4 w-4")} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-muted-foreground truncate">Valor</p>
+                        <p className={cn("font-bold text-primary", isMobile ? "text-lg" : "text-xl")}>
+                          {isMobile ? `${(resumo.valorVendido / 1000).toFixed(1)}k` : formatCurrency(resumo.valorVendido)}
+                        </p>
+                        <Delta kpi={comparacao.valor} />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Taxa Venda */}
+                <Card className={cn("overflow-hidden", taxaBg)}>
+                  <CardContent className={cn("p-4", isMobile && "p-3")}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn("p-2 rounded-lg shrink-0", isMobile && "p-1.5", taxaIcon)}>
+                        <TrendingUp className={cn("h-5 w-5", isMobile && "h-4 w-4", taxaColor)} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-muted-foreground truncate">Taxa Venda</p>
+                        <p className={cn("font-bold", isMobile ? "text-lg" : "text-xl", taxaColor)}>
+                          {resumo.totalCarga === 0 ? '—' : `${resumo.taxaVenda}%`}
+                        </p>
+                        <Delta kpi={comparacao.taxa} />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
+
+          {/* Ranking de modelos — visível apenas para quem pode ver histórico */}
+          <RoleGate requiredPermission="feira.view_history">
+            <RankingModelosFeira
+              topVendidos={rankingModelos.topVendidos}
+              topRetorno={rankingModelos.topRetorno}
+              isLoading={isLoadingRanking}
+              isMobile={isMobile}
+            />
+          </RoleGate>
+
+          {/* Análise por dia da semana */}
+          <RoleGate requiredPermission="feira.view_history">
+            <AnaliseDiaSemanaFeira
+              analise={analiseDias}
+              isLoading={isLoadingAnaliseDias}
+            />
+          </RoleGate>
 
           {/* Alerta de Cargas Ativas */}
           <CargasAtivasAlerta

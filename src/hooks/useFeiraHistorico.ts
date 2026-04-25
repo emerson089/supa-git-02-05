@@ -304,6 +304,241 @@ export function useResumoFeiraPeriodo(inicio: Date, fim: Date) {
   };
 }
 
+// Helper: calcula o período anterior equivalente em duração
+export function calcularPeriodoAnterior(inicio: Date, fim: Date): { inicio: Date; fim: Date } {
+  const duracaoMs = fim.getTime() - inicio.getTime();
+  return {
+    inicio: new Date(inicio.getTime() - duracaoMs - 1),
+    fim: new Date(inicio.getTime() - 1),
+  };
+}
+
+export interface ComparacaoKPI {
+  atual: number;
+  anterior: number;
+  delta: number;       // diferença absoluta
+  variacao: number;    // % de variação (-100 a +∞), null se anterior=0
+  semDados: boolean;   // true quando não há dados no período anterior
+}
+
+export interface ResumoComComparacao {
+  atual: ResumoFeiraPeriodo;
+  anterior: ResumoFeiraPeriodo;
+  carga: ComparacaoKPI;
+  retorno: ComparacaoKPI;
+  vendido: ComparacaoKPI;
+  valor: ComparacaoKPI;
+  taxa: ComparacaoKPI;
+}
+
+function calcularComparacao(atual: number, anterior: number): ComparacaoKPI {
+  const delta = atual - anterior;
+  const semDados = anterior === 0;
+  const variacao = semDados ? 0 : (delta / anterior) * 100;
+  return { atual, anterior, delta, variacao, semDados };
+}
+
+// Hook: resumo do período atual + período anterior equivalente para comparação
+export function useResumoComComparacao(inicio: Date, fim: Date) {
+  const periodoAnt = calcularPeriodoAnterior(inicio, fim);
+
+  const { resumo: atual, isLoading: loadingAtual } = useResumoFeiraPeriodo(inicio, fim);
+  const { resumo: anterior, isLoading: loadingAnterior } = useResumoFeiraPeriodo(
+    periodoAnt.inicio,
+    periodoAnt.fim
+  );
+
+  const comparacao = useMemo((): ResumoComComparacao => ({
+    atual,
+    anterior,
+    carga:   calcularComparacao(atual.totalCarga,   anterior.totalCarga),
+    retorno: calcularComparacao(atual.totalRetorno, anterior.totalRetorno),
+    vendido: calcularComparacao(atual.totalVendido, anterior.totalVendido),
+    valor:   calcularComparacao(atual.valorVendido, anterior.valorVendido),
+    taxa:    calcularComparacao(atual.taxaVenda,    anterior.taxaVenda),
+  }), [atual, anterior]);
+
+  return { comparacao, isLoading: loadingAtual || loadingAnterior };
+}
+
+export interface ModeloRankingFeira {
+  id: string;
+  nome: string;
+  imagemUrl: string | null;
+  enviado: number;
+  retornado: number;
+  vendido: number;
+  valor: number;
+  taxaRetorno: number;  // 0-100
+  taxaVenda: number;    // 0-100
+}
+
+export function useRankingModelosFeira(inicio: Date, fim: Date) {
+  const { data: cargas, isLoading } = useCargasPorPeriodo(inicio, fim);
+
+  const ranking = useMemo((): { topVendidos: ModeloRankingFeira[]; topRetorno: ModeloRankingFeira[] } => {
+    if (!cargas || cargas.length === 0) return { topVendidos: [], topRetorno: [] };
+
+    const grupos = new Map<string, ModeloRankingFeira>();
+
+    for (const carga of cargas) {
+      for (const item of carga.itens) {
+        const info = parseProductName(item.produtoNome || '', '');
+        const chave = item.modeloId || info.refBase || item.itemId;
+        const nome = info.nomeExibicao || item.produtoNome || 'Sem nome';
+
+        const enviado = Number(item.quantidadeEnviada) || 0;
+        const retornado = Number(item.quantidadeRetornada) || 0;
+        const vendido = Math.max(0, enviado - retornado);
+        const preco = Number(item.precoUnitario) || Number(item.produtoPreco) || 0;
+
+        if (!grupos.has(chave)) {
+          grupos.set(chave, {
+            id: chave,
+            nome,
+            imagemUrl: item.produtoImagem,
+            enviado: 0,
+            retornado: 0,
+            vendido: 0,
+            valor: 0,
+            taxaRetorno: 0,
+            taxaVenda: 0,
+          });
+        }
+
+        const g = grupos.get(chave)!;
+        g.enviado += enviado;
+        g.retornado += retornado;
+        g.vendido += vendido;
+        g.valor += vendido * preco;
+        if (!g.imagemUrl && item.produtoImagem) g.imagemUrl = item.produtoImagem;
+      }
+    }
+
+    const lista = Array.from(grupos.values()).map(g => ({
+      ...g,
+      taxaRetorno: g.enviado > 0 ? Math.round((g.retornado / g.enviado) * 100) : 0,
+      taxaVenda:   g.enviado > 0 ? Math.round((g.vendido   / g.enviado) * 100) : 0,
+    })).filter(g => g.enviado > 0);
+
+    return {
+      topVendidos: [...lista].sort((a, b) => b.vendido - a.vendido).slice(0, 10),
+      topRetorno:  [...lista]
+        .filter(g => g.retornado > 0)
+        .sort((a, b) => b.taxaRetorno - a.taxaRetorno)
+        .slice(0, 10),
+    };
+  }, [cargas]);
+
+  return { ranking, isLoading };
+}
+
+export interface DiaSemanaStats {
+  diaSemanaIndex: number;  // 1=Seg ... 6=Sáb (0=Dom excluído)
+  diaSemana: string;       // "Segunda-feira"
+  diaCurto: string;        // "Seg"
+  quantidadeFeiras: number;
+  totalEnviado: number;
+  totalRetornado: number;
+  totalVendido: number;
+  valorTotal: number;
+  mediaPorFeira: number;   // totalVendido / quantidadeFeiras
+  mediaValorPorFeira: number;
+  taxaVendaMedia: number;  // 0-100
+  isMelhorDia: boolean;
+}
+
+const DIA_CURTO: Record<number, string> = {
+  0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb',
+};
+const DIA_LONGO: Record<number, string> = {
+  0: 'Domingo', 1: 'Segunda-feira', 2: 'Terça-feira', 3: 'Quarta-feira',
+  4: 'Quinta-feira', 5: 'Sexta-feira', 6: 'Sábado',
+};
+
+export function useAnaliseDiaSemana(inicio: Date, fim: Date) {
+  const { data: cargas, isLoading } = useCargasPorPeriodo(inicio, fim);
+
+  const analise = useMemo((): DiaSemanaStats[] => {
+    if (!cargas || cargas.length === 0) return [];
+
+    // Acumular por dia da semana
+    const map = new Map<number, {
+      enviado: number; retornado: number; vendido: number;
+      valor: number; taxas: number[]; feiras: number;
+    }>();
+
+    for (const carga of cargas) {
+      const dataRef = getDataReferencia(carga);
+      const idx = dataRef.getDay(); // 0=Dom
+      const totais = calcularTotaisCarga(carga.itens);
+      const taxa = totais.enviado > 0 ? (totais.vendido / totais.enviado) * 100 : 0;
+
+      if (!map.has(idx)) {
+        map.set(idx, { enviado: 0, retornado: 0, vendido: 0, valor: 0, taxas: [], feiras: 0 });
+      }
+      const d = map.get(idx)!;
+      d.feiras++;
+      d.enviado += totais.enviado;
+      d.retornado += totais.retornado;
+      d.vendido += totais.vendido;
+      d.valor += totais.valor;
+      d.taxas.push(taxa);
+    }
+
+    // Montar array ordenado Seg → Sáb (exclui Domingo se não houver dados)
+    const dias: DiaSemanaStats[] = [];
+    for (let i = 1; i <= 6; i++) {
+      const d = map.get(i);
+      if (!d) continue;
+      dias.push({
+        diaSemanaIndex: i,
+        diaSemana: DIA_LONGO[i],
+        diaCurto: DIA_CURTO[i],
+        quantidadeFeiras: d.feiras,
+        totalEnviado: d.enviado,
+        totalRetornado: d.retornado,
+        totalVendido: d.vendido,
+        valorTotal: d.valor,
+        mediaPorFeira: d.feiras > 0 ? Math.round(d.vendido / d.feiras) : 0,
+        mediaValorPorFeira: d.feiras > 0 ? d.valor / d.feiras : 0,
+        taxaVendaMedia: d.taxas.length > 0
+          ? Math.round(d.taxas.reduce((s, t) => s + t, 0) / d.taxas.length)
+          : 0,
+        isMelhorDia: false,
+      });
+    }
+    // Também adiciona Domingo se houver dados
+    if (map.has(0)) {
+      const d = map.get(0)!;
+      dias.unshift({
+        diaSemanaIndex: 0,
+        diaSemana: DIA_LONGO[0],
+        diaCurto: DIA_CURTO[0],
+        quantidadeFeiras: d.feiras,
+        totalEnviado: d.enviado,
+        totalRetornado: d.retornado,
+        totalVendido: d.vendido,
+        valorTotal: d.valor,
+        mediaPorFeira: d.feiras > 0 ? Math.round(d.vendido / d.feiras) : 0,
+        mediaValorPorFeira: d.feiras > 0 ? d.valor / d.feiras : 0,
+        taxaVendaMedia: d.taxas.length > 0
+          ? Math.round(d.taxas.reduce((s, t) => s + t, 0) / d.taxas.length)
+          : 0,
+        isMelhorDia: false,
+      });
+    }
+
+    if (dias.length === 0) return [];
+
+    // Marca o melhor dia pela média de vendas por feira
+    const maxMedia = Math.max(...dias.map(d => d.mediaPorFeira));
+    return dias.map(d => ({ ...d, isMelhorDia: d.mediaPorFeira === maxMedia && maxMedia > 0 }));
+  }, [cargas]);
+
+  return { analise, isLoading };
+}
+
 // Hook: histórico agrupado por data
 export function useHistoricoAgrupado(inicio: Date, fim: Date) {
   const { data: cargas, isLoading } = useCargasPorPeriodo(inicio, fim);
