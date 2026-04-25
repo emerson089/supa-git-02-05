@@ -131,8 +131,8 @@ export function generatePedidoPDF(
 
   const tableData = groupedItens.map((item) => [
     item.nomeExibicao,
-    Object.keys(item.tamanhosComQtd ?? {}).length > 0
-      ? Object.entries(item.tamanhosComQtd).map(([t, q]) => `${q}× ${t}`).join(', ')
+    (item.tamanhosComQtd ?? []).length > 0
+      ? item.tamanhosComQtd.map(({ tamanho, quantidade }: { tamanho: string; quantidade: number }) => `${quantidade}× ${tamanho}`).join(', ')
       : item.tamanhos.join(', ') || '-',
     item.quantidadeTotal.toString(),
     formatCurrency(item.valorUnitario),

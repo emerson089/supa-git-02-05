@@ -24,7 +24,7 @@ import { Banknote, Package, AlertCircle, Factory, TrendingUp, TrendingDown, Cale
 import { useDashboardData, Periodo, DateRange, STATUS_COLORS, MetaYoY, TopModelo, StatusPedido, TopModelosCoverage, PrevisaoMensal, MetaAutomatica, FaturamentoDiaSemana, ConcentracaoVendas } from "@/hooks/useDashboardData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { format, startOfMonth, getYear, subDays, subMonths, startOfYear } from "date-fns";
+import { format, startOfMonth, getYear, subDays, subMonths, startOfYear, startOfWeek, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { TendenciaVendasChart } from "@/components/dashboard/TendenciaVendasChart";
 import { RecebimentosTrendChart } from "@/components/dashboard/RecebimentosTrendChart";
@@ -179,6 +179,9 @@ export default function Dashboard() {
     label: "Hoje",
     value: "hoje"
   }, {
+    label: "Esta sem.",
+    value: "esta_semana"
+  }, {
     label: "30 dias",
     value: "30dias"
   }, {
@@ -279,6 +282,11 @@ export default function Dashboard() {
         from = startOfMonth(now);
         to = now;
         break;
+      case 'esta_semana': {
+        from = startOfWeek(now, { weekStartsOn: 1 });
+        to = addDays(from, 5);
+        break;
+      }
       case 'personalizado':
         if (dateRange.from && dateRange.to) {
           from = dateRange.from;
@@ -303,6 +311,11 @@ export default function Dashboard() {
     switch (periodo) {
       case 'hoje':
         return 'Hoje';
+      case 'esta_semana': {
+        const seg = startOfWeek(new Date(), { weekStartsOn: 1 });
+        const sab = addDays(seg, 5);
+        return `Esta semana (${format(seg, 'dd/MM')} – ${format(sab, 'dd/MM')})`;
+      }
       case '30dias':
         return 'Últimos 30 dias';
       case '90dias':
@@ -315,7 +328,6 @@ export default function Dashboard() {
         return `${format(startOfMonth(new Date()), "dd/MM")} - ${format(new Date(), "dd/MM")} (Mês atual)`;
       case 'personalizado':
         if (dateRange.from && dateRange.to) {
-          // Se cruza anos, mostrar ano completo
           if (getYear(dateRange.from) !== getYear(dateRange.to)) {
             return `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}`;
           }
@@ -458,20 +470,20 @@ export default function Dashboard() {
                 </Popover>
               </div>
               {/* Linha 2: toggle + limpar + exibindo */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
                   <button
                     onClick={() => setExcluirCancelados(v => !v)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all",
+                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all shrink-0",
                       !excluirCancelados
                         ? "bg-amber-50 border-amber-300 text-amber-700"
                         : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"
                     )}>
-                    <span className={cn("w-1.5 h-1.5 rounded-full", !excluirCancelados ? "bg-amber-500" : "bg-gray-300")} />
+                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", !excluirCancelados ? "bg-amber-500" : "bg-gray-300")} />
                     Cancelados
                   </button>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
                     {getPeriodoLabel()}
                   </span>
                 </div>
@@ -829,7 +841,7 @@ export default function Dashboard() {
                       const pct = totalPedidos > 0 ? (status.count / totalPedidos) * 100 : 0;
                       const isCritical = ['INCOMPLETO', 'PENDENTE'].includes(status.status);
                       return (
-                        <button key={status.status} onClick={() => navigate(`/pedidos-criados?status=${status.status}`)} className="w-full text-left group">
+                        <button key={status.status} onClick={() => navigate(`/pedidos/criados?status=${status.status}`)} className="w-full text-left group">
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-1.5 min-w-0">
                               <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: status.color }} />
@@ -852,7 +864,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 {totalPendentes > 0 ? (
-                  <button onClick={() => navigate('/pedidos-criados?status=PENDENTE,INCOMPLETO,PEND. ENTREGA')}
+                  <button onClick={() => navigate('/pedidos/criados?status=PENDENTE,INCOMPLETO,PEND. ENTREGA')}
                     className="w-full flex items-center justify-between px-5 py-2.5 bg-amber-50 border-t border-amber-100 text-xs text-amber-700 hover:bg-amber-100 transition-colors">
                     <span className="flex items-center gap-1.5">
                       <AlertTriangle size={13} />
@@ -1169,7 +1181,7 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold">Top 10 Modelos</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Mais vendidos nesta semana (atualizado automaticamente)
+              Mais vendidos no período selecionado (atualizado automaticamente)
             </p>
           </CardHeader>
           <CardContent>

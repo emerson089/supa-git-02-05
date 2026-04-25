@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { 
@@ -120,35 +120,36 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
 
   return (
     <Dialog open={!!carga} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl rounded-[32px] bg-slate-50 dark:bg-slate-950">
+      <DialogContent className="max-w-4xl w-[95vw] sm:w-full max-h-[90dvh] overflow-hidden flex flex-col p-0 border-none shadow-2xl rounded-[24px] sm:rounded-[32px] bg-slate-50 dark:bg-slate-950">
         {/* Header Pro Max */}
-        <DialogHeader className="px-8 pt-8 pb-6 border-b bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 shrink-0 relative overflow-hidden">
+        <DialogHeader className="px-4 sm:px-8 pt-6 sm:pt-8 pb-4 sm:pb-6 border-b bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 shrink-0 relative overflow-hidden">
           {/* Elementos decorativos de fundo */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-400/10 rounded-full -ml-10 -mb-10 blur-2xl pointer-events-none" />
           
-          <div className="flex flex-col gap-4 relative z-10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-xl">
-                  <Truck className="h-7 w-7 text-white" />
+          <div className="flex flex-col gap-3 relative z-10">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 sm:h-14 sm:w-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-xl shrink-0">
+                  <Truck className="h-5 w-5 sm:h-7 sm:w-7 text-white" />
                 </div>
-                <div>
-                  <DialogTitle className="text-2xl font-black text-white tracking-tight leading-none">
+                <div className="min-w-0">
+                  <DialogTitle className="text-lg sm:text-2xl font-black text-white tracking-tight leading-none truncate">
                     {carga.observacoes ? `"${carga.observacoes}"` : 'Detalhes da Carga'}
                   </DialogTitle>
-                  <p className="text-indigo-100/70 text-[10px] font-bold uppercase tracking-[0.2em] mt-1.5 flex items-center gap-2">
-                    Carga #ID-{carga.id.slice(0, 8).toUpperCase()} <span className="h-1 w-1 rounded-full bg-indigo-300/40" /> {carga.itens.length} SKUs Identificados
+                  <p className="text-indigo-100/70 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.15em] mt-1 flex items-center gap-1">
+                    #{carga.id.slice(0, 8).toUpperCase()} <span className="h-1 w-1 rounded-full bg-indigo-300/40" /> {carga.itens.length} SKUs
                   </p>
                 </div>
               </div>
-              <Badge className={cn("px-4 py-1.5 rounded-full font-bold text-xs border backdrop-blur-md", statusConfig.className)}>
-                <StatusIcon className="h-3.5 w-3.5 mr-2" />
-                {statusConfig.label}
+              <Badge className={cn("px-2 sm:px-4 py-1 sm:py-1.5 rounded-full font-bold text-[10px] sm:text-xs border backdrop-blur-md shrink-0", statusConfig.className)}>
+                <StatusIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">{statusConfig.label}</span>
+                <span className="sm:hidden">{statusConfig.label.split(' ')[0]}</span>
               </Badge>
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-8 gap-y-3 pt-2">
+            <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-3 pt-1">
               <div className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
                   <MapPin className="h-4 w-4 text-indigo-200" />
@@ -185,10 +186,10 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1">
-          <div className="p-8 space-y-8">
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">
             {/* Dashboard de Métricas */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
               <MetricCard 
                 icon={Package} 
                 label="Enviado" 
@@ -237,7 +238,40 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
                 <Badge variant="outline" className="rounded-lg text-[10px] font-bold text-slate-500">{groupedItens.length} Modelos</Badge>
               </div>
 
-              <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-sm overflow-hidden">
+              {/* Mobile: card list */}
+              <div className="sm:hidden space-y-2">
+                {groupedItens.map((group, idx) => {
+                  const temProblema = group.retornado > group.enviado;
+                  return (
+                    <div key={idx} className={cn(
+                      "rounded-2xl border p-3 flex gap-3 bg-white dark:bg-slate-900/50",
+                      temProblema ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/10' : 'border-slate-200 dark:border-slate-800'
+                    )}>
+                      <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0">
+                        <LotImage src={group.imagemUrl} alt={group.nomeBase} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-900 dark:text-slate-100 text-sm leading-none mb-1 truncate">{group.nomeExibicao}</p>
+                        {group.tamanhos.length > 0 && (
+                          <p className="text-[10px] text-slate-400 mb-2">Tam: {group.tamanhos.join(', ')}</p>
+                        )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-black bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-lg">Env: {group.enviado}</span>
+                          <span className="text-[10px] font-black bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-lg">Ret: {group.retornado}</span>
+                          <span className="text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-lg">Vend: {group.vendido}</span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-black text-slate-900 dark:text-slate-100">{formatCurrency(group.subtotal)}</p>
+                        <p className="text-[10px] text-slate-400">{formatCurrency(group.valorUnitario)}/un</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden sm:block rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-sm overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50/50 border-b border-slate-200 dark:border-slate-800">
@@ -260,11 +294,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
                         )}>
                           <TableCell className="py-3 pl-6">
                             <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">
-                              <LotImage 
-                                src={group.imagemUrl} 
-                                alt={group.nomeBase} 
-                                className="w-full h-full object-cover"
-                              />
+                              <LotImage src={group.imagemUrl} alt={group.nomeBase} className="w-full h-full object-cover" />
                             </div>
                           </TableCell>
                           <TableCell>
@@ -306,7 +336,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
             </div>
 
             {/* Divergências e Notas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               {temDivergencia && (
                 <div className="p-5 rounded-3xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/50 flex gap-4">
                   <div className="h-10 w-10 rounded-2xl bg-red-500/10 flex items-center justify-center shrink-0">
@@ -336,11 +366,11 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
               )}
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Footer Pro Max */}
         {isEmAndamento && (onExcluirCarga || onRegistrarRetorno || onEditarCarga) && (
-          <DialogFooter className="px-8 py-6 border-t bg-white dark:bg-slate-950 flex flex-row items-center justify-between shrink-0">
+          <DialogFooter className="px-4 sm:px-8 py-4 sm:py-6 border-t bg-white dark:bg-slate-950 flex flex-row items-center justify-between shrink-0 gap-2">
             <div className="flex gap-3">
               {onExcluirCarga && (
                 <Button

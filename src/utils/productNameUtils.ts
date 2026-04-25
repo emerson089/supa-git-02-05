@@ -18,30 +18,48 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
   const currentName = (nome || "").trim();
 
   // 1. Extrair o código do modelo da referência
-  // Usa o último grupo de 3+ dígitos (antes de sufixo de tamanho opcional como "-34", "-36")
-  // Ex: "SA2604-540" → "540", "SH2604-481-34" → "481", "481-34" → "481"
+  // Busca por um grupo de 3+ dígitos, opcionalmente seguido por um separador e tamanho
+  // ou apenas uma letra de tamanho (P/M/G) no final
+  // Ex: "SA2604-540" → "540", "SH2604-481-34" → "481", "Bermuda 963 P" → "963"
   let numeros = "";
-  const match3PlusRef = currentRef.match(/(\d{3,})(?:[-—–:/]\d{1,2})?$/);
-  const match3PlusName = currentName.match(/(\d{3,})(?:[-—–:/]\d{1,2})?$/);
+  
+  // Tenta encontrar o padrão padrão: [número 3+][separador opcional][tamanho opcional][fim ou espaço]
+  const pattern = /(\d{3,})(?:\s*[-—–:/]\s*(?:P|M|G|GG|G1|G2|G3|G4|G5|XG|XGG|PEÇAS|\d{1,2}))?\s*$/i;
+  const match3PlusRef = currentRef.match(pattern);
+  const match3PlusName = currentName.match(pattern);
 
   if (match3PlusRef) {
     numeros = match3PlusRef[1];
   } else if (match3PlusName) {
     numeros = match3PlusName[1];
   } else {
-    // Fallback: se não houver 3 dígitos, tenta o último grupo numérico disponível
-    const numMatchRef = currentRef.match(/(\d+)$/);
-    const numMatchName = currentName.match(/(\d+)$/);
-    numeros = numMatchRef ? numMatchRef[1] : (numMatchName ? numMatchName[1] : "");
+    // Tenta encontrar apenas os dígitos em qualquer lugar perto do final, ignorando letras soltas
+    const loosePattern = /(\d{3,})(?:\s*[P|M|G|GG|XG])?\s*$/i;
+    const looseMatchRef = currentRef.match(loosePattern);
+    const looseMatchName = currentName.match(loosePattern);
+    
+    if (looseMatchRef) {
+      numeros = looseMatchRef[1];
+    } else if (looseMatchName) {
+      numeros = looseMatchName[1];
+    } else {
+      // Fallback final: último grupo numérico de qualquer tamanho
+      const numMatchRef = currentRef.match(/(\d+)\D*$/);
+      const numMatchName = currentName.match(/(\d+)\D*$/);
+      numeros = numMatchRef ? numMatchRef[1] : (numMatchName ? numMatchName[1] : "");
+    }
   }
 
   // 2. Tentar extrair o tamanho (P, M, G, etc ou 2 dígitos no final)
   const sizePattern = /[-—–:/]\s*(P|M|G|GG|G1|G2|G3|G4|G5|XG|XGG|PEÇAS|\d{2})$/i;
-  let sizeMatch = currentRef.match(sizePattern);
+  // Novo: tamanho sem separador (ex: "963P")
+  const looseSizePattern = /(?:\d{3,})\s*(P|M|G|GG|XG)$/i;
+
+  let sizeMatch = currentRef.match(sizePattern) || currentName.match(sizePattern);
   if (!sizeMatch) {
-    sizeMatch = currentName.match(sizePattern);
+    sizeMatch = currentRef.match(looseSizePattern) || currentName.match(looseSizePattern);
   }
-  let tamanho = sizeMatch ? sizeMatch[1].toUpperCase() : null;
+  let tamanho = sizeMatch ? (sizeMatch[1] || "").toUpperCase() : null;
 
   // Ajuste: Se pegamos um tamanho de 2 dígitos como "número de referência", 
   // e existe uma referência de 3 dígitos antes, corrigimos.
@@ -73,6 +91,12 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
     
     // Também remove tamanhos comuns no final que podem ter sobrado
     nomeBase = nomeBase.replace(/\s*[-—–:/\\|]\s*(P|M|G|GG|G1|G2|G3|G4|G5|XG|XGG|PEÇAS|\d{2})$/i, "").trim();
+
+    // Remove números de 3+ dígitos sozinhos no final (ex: "Bermuda 963")
+    if (numeros && numeros.length >= 3) {
+      const specificNumPattern = new RegExp(`\\s*${numeros}\\s*(?:[P|M|G|GG|XG])?\\s*$`, 'i');
+      nomeBase = nomeBase.replace(specificNumPattern, "").trim();
+    }
   } while (nomeBase !== lastNome);
 
   // Limpeza final de separadores residuais
@@ -97,10 +121,11 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
   refBase = refBase.trim().toUpperCase() || 'SEM-REF';
 
   let nomeExibicao: string;
-  if (nomeBase && nomeBase.toUpperCase() !== numDisplay) {
+  if (nomeBase && nomeBase.toUpperCase() !== numDisplay && !nomeBase.toUpperCase().includes(numDisplay)) {
     nomeExibicao = numDisplay ? `${nomeBase} - ${numDisplay}` : nomeBase;
   } else {
-    const fallbackNome = currentName.trim() || currentRef.trim();
+    const fallbackNome = nomeBase || currentName.trim() || currentRef.trim();
+    // Se o fallback já contém o número, não repete
     nomeExibicao = numDisplay && !fallbackNome.includes(numDisplay)
       ? `${fallbackNome} - ${numDisplay}`.trim()
       : fallbackNome || numDisplay || 'Sem nome';

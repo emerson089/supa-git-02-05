@@ -16,6 +16,7 @@ import {
   DollarSign,
   Tag,
   Bus,
+  Receipt,
   LucideIcon
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -40,12 +41,12 @@ const drawerNavItems: DrawerNavItem[] = [
   { label: 'Pedidos Criados', icon: FileText, path: '/pedidos/criados', roles: ['admin', 'gerente'] },
   { label: 'Novo Pedido', icon: ShoppingCart, path: '/pedidos/novo', roles: ['admin', 'gerente'] },
   { label: 'Clientes', icon: Users, path: '/clientes', roles: ['admin', 'gerente'] },
+  { label: 'Comprovantes', icon: Receipt, path: '/comprovantes', roles: ['admin', 'gerente'] },
 ];
 
 const drawerOperationsItems: DrawerNavItem[] = [
   { label: 'Estoque', icon: Warehouse, path: '/estoque', roles: ['admin', 'gerente'] },
   { label: 'Feira', icon: Store, path: '/feira', roles: ['admin', 'gerente', 'vendedor'] },
-  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente'] },
   { label: 'Produção', icon: Factory, path: '/producao', roles: ['admin', 'gerente'] },
 ];
 
@@ -95,8 +96,8 @@ export function MobileDrawer() {
           <Menu size={24} />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-[280px] p-0">
-        <SheetHeader className="p-4 pb-2">
+      <SheetContent side="left" className="w-[280px] p-0 flex flex-col max-h-screen">
+        <SheetHeader className="p-4 pb-2 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl neu-button flex items-center justify-center text-primary">
               <Package size={20} />
@@ -110,10 +111,10 @@ export function MobileDrawer() {
           </div>
         </SheetHeader>
 
-        <Separator className="my-2" />
+        <Separator className="my-2 flex-shrink-0" />
 
         {/* User Profile */}
-        <div className="p-4 pt-2">
+        <div className="p-4 pt-2 flex-shrink-0">
           <div className="p-3 rounded-xl neu-card flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-primary text-sm font-bold flex-shrink-0">
               {userInitial}
@@ -127,7 +128,10 @@ export function MobileDrawer() {
           </div>
         </div>
 
-        <Separator className="my-2" />
+        <Separator className="my-2 flex-shrink-0" />
+
+        {/* Scrollable Navigation Area */}
+        <div className="flex-1 overflow-y-auto pb-safe custom-scrollbar">
 
         {/* Main Navigation */}
         {filterByRole(drawerNavItems).length > 0 && (
@@ -216,6 +220,7 @@ export function MobileDrawer() {
             <span className="text-sm">Sair</span>
           </button>
         </nav>
+        </div>
       </SheetContent>
     </Sheet>
   );

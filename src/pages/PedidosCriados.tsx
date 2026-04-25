@@ -1536,8 +1536,8 @@ Qualquer dúvida é só chamar! 😊`;
                         <div className="min-w-0">
                           <p className="font-semibold text-foreground text-sm leading-snug">{group.nomeExibicao}</p>
                           <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                            {Object.keys(group.tamanhosComQtd ?? {}).length > 0
-                              ? `${Object.entries(group.tamanhosComQtd).map(([t, q]) => `${q}×${t}`).join(' · ')} · `
+                            {(group.tamanhosComQtd ?? []).length > 0
+                              ? `${group.tamanhosComQtd.map(({ tamanho, quantidade }: { tamanho: string; quantidade: number }) => `${quantidade}×${tamanho}`).join(' · ')} · `
                               : ''}
                             {group.quantidadeTotal} peça{group.quantidadeTotal !== 1 ? 's' : ''} · {formatCurrency(group.valorUnitario)}
                           </p>

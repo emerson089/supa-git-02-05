@@ -158,6 +158,14 @@ export default function Estoque() {
   // Hook de Modelos Padronizados
   const { modelosPadronizados, modelosPadronizadosMap } = useModelosPadronizados();
 
+  // Contagem de modelos com problemas de integridade
+  const integridadeProblemas = (() => {
+    const padSemImagem = modelosPadronizados.filter(m => !m.imagemUrl).length;
+    const padSemPreco = modelosPadronizados.filter(m => !m.precoUnitario).length;
+    const manuais = itens.filter(i => i.tipo === 'acabado' && i.categoria === 'Modelo Manual').length;
+    return { padSemImagem, padSemPreco, manuais, total: padSemImagem + padSemPreco + manuais };
+  })();
+
   // Mapear tipo de tab para tipo de estoque
   const tipoEstoque = activeTab === 'materia_prima' ? 'materia-prima' : 'acabado';
 
@@ -179,8 +187,10 @@ export default function Estoque() {
     data: metrics
   } = useEstoqueMetrics(tipoEstoque, search);
 
-  // Vendas da semana atual por produto_id
-  const { data: vendasSemanaMap } = useVendasSemana();
+  // Vendas da semana atual e anterior por produto_id
+  const { data: vendasSemanaData } = useVendasSemana();
+  const vendasSemanaMap = vendasSemanaData?.semanaAtual;
+  const vendasAnteriorMap = vendasSemanaData?.semanaAnterior;
 
   // Helper para atualizar URL params (persistência)
   const updateParams = (updates: Record<string, string | undefined>) => {
@@ -840,6 +850,27 @@ export default function Estoque() {
           </Button>
         </div>
 
+        {/* Banner de integridade — só na aba de produto acabado */}
+        {activeTab === 'produto_acabado' && integridadeProblemas.total > 0 && (
+          <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/50">
+            <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+            <span className="text-sm font-medium text-amber-800 dark:text-amber-300 flex-1">
+              {integridadeProblemas.manuais > 0 && (
+                <span>{integridadeProblemas.manuais} modelo{integridadeProblemas.manuais > 1 ? 's' : ''} legado{integridadeProblemas.manuais > 1 ? 's' : ''}</span>
+              )}
+              {integridadeProblemas.manuais > 0 && (integridadeProblemas.padSemImagem > 0 || integridadeProblemas.padSemPreco > 0) && ' · '}
+              {integridadeProblemas.padSemImagem > 0 && (
+                <span>{integridadeProblemas.padSemImagem} sem imagem</span>
+              )}
+              {integridadeProblemas.padSemImagem > 0 && integridadeProblemas.padSemPreco > 0 && ' · '}
+              {integridadeProblemas.padSemPreco > 0 && (
+                <span>{integridadeProblemas.padSemPreco} sem preço</span>
+              )}
+              <span className="text-amber-600 dark:text-amber-400"> — Verifique os cards com badges de atenção.</span>
+            </span>
+          </div>
+        )}
+
         <Tabs value={activeTab} onValueChange={v => handleTabChange(v as 'materia_prima' | 'produto_acabado')}>
           {/* Mobile: Scrollable tabs */}
 
@@ -891,10 +922,11 @@ export default function Estoque() {
                     const modeloCompleto = modelosPadronizadosMap.get(item.id);
                     if (!modeloCompleto) return null; // Fallback se não bater no hook ainda
                     
-                    // Somar vendas da semana de todas as variações deste modelo
-                    const vendasSemanasAgrupadas = modeloCompleto.variacoes?.reduce((acc, v) => {
-                       return acc + (vendasSemanaMap?.get(v.id) || 0);
-                    }, 0) || 0;
+                    // Somar vendas da semana atual e anterior de todas as variações
+                    const vendasSemanaAtual = modeloCompleto.variacoes?.reduce((acc, v) =>
+                      acc + (vendasSemanaMap?.get(v.id) || 0), 0) || 0;
+                    const vendasSemanaAnterior = modeloCompleto.variacoes?.reduce((acc, v) =>
+                      acc + (vendasAnteriorMap?.get(v.id) || 0), 0) || 0;
 
                     if (isMobile) {
                         return (
@@ -903,7 +935,8 @@ export default function Estoque() {
                             modelo={modeloCompleto}
                             onVerDetalhes={m => setModeloDetalhes(m)}
                             onImageUpdate={handleProductImageUpdate}
-                            vendasSemana={vendasSemanasAgrupadas}
+                            vendasSemana={vendasSemanaAtual}
+                            vendasSemanaAnterior={vendasSemanaAnterior}
                           />
                         );
                     }
@@ -914,16 +947,20 @@ export default function Estoque() {
                         modelo={modeloCompleto}
                         onVerDetalhes={m => setModeloDetalhes(m)}
                         onImageUpdate={handleProductImageUpdate}
-                        vendasSemana={vendasSemanasAgrupadas}
+                        vendasSemana={vendasSemanaAtual}
+                        vendasSemanaAnterior={vendasSemanaAnterior}
                       />
                     );
                 }
 
                 // Se não for Padronizado, é Manual antigo
+                const vAtual = vendasSemanaMap?.get(item.id) || 0;
+                const vAnterior = vendasAnteriorMap?.get(item.id) || 0;
+
                 if (isMobile) {
                   return (
-                    <MobileProductCard 
-                      key={item.id} 
+                    <MobileProductCard
+                      key={item.id}
                       item={{
                         id: item.id,
                         nome: item.nome,
@@ -934,38 +971,40 @@ export default function Estoque() {
                         localizacao: item.localizacao,
                         tipo: item.tipo,
                         quantidadeInicial: item.quantidadeInicial
-                      }} 
-                      editingPriceId={editingPriceId} 
-                      editingPrice={editingPriceValue.toString()} 
+                      }}
+                      editingPriceId={editingPriceId}
+                      editingPrice={editingPriceValue.toString()}
                       onEditPrice={(id, price) => {
                         setEditingPriceId(id);
                         setEditingPriceValue(price);
-                      }} 
-                      onSavePrice={handleSavePrice} 
-                      onCancelEditPrice={handleCancelEditPrice} 
-                      onPriceChange={v => setEditingPriceValue(Number(v))} 
-                      onEdit={handleOpenModal} 
-                      onDelete={handleDeleteClick} 
-                      onImageUpdate={handleProductImageUpdate} 
-                      vendasSemana={vendasSemanaMap?.get(item.id) || 0} 
+                      }}
+                      onSavePrice={handleSavePrice}
+                      onCancelEditPrice={handleCancelEditPrice}
+                      onPriceChange={v => setEditingPriceValue(Number(v))}
+                      onEdit={handleOpenModal}
+                      onDelete={handleDeleteClick}
+                      onImageUpdate={handleProductImageUpdate}
+                      vendasSemana={vAtual}
+                      vendasSemanaAnterior={vAnterior}
                     />
                   );
                 }
 
                 return (
-                  <ProductCard 
-                    key={item.id} 
-                    item={item} 
-                    editingPriceId={editingPriceId} 
-                    editingPriceValue={editingPriceValue} 
-                    onEditPrice={handleStartEditPrice} 
-                    onSavePrice={handleSavePrice} 
-                    onCancelEditPrice={handleCancelEditPrice} 
-                    onPriceValueChange={setEditingPriceValue} 
-                    onEdit={handleOpenModal} 
-                    onDelete={handleDeleteClick} 
-                    onImageUpdate={handleProductImageUpdate} 
-                    vendasSemana={vendasSemanaMap?.get(item.id) || 0} 
+                  <ProductCard
+                    key={item.id}
+                    item={item}
+                    editingPriceId={editingPriceId}
+                    editingPriceValue={editingPriceValue}
+                    onEditPrice={handleStartEditPrice}
+                    onSavePrice={handleSavePrice}
+                    onCancelEditPrice={handleCancelEditPrice}
+                    onPriceValueChange={setEditingPriceValue}
+                    onEdit={handleOpenModal}
+                    onDelete={handleDeleteClick}
+                    onImageUpdate={handleProductImageUpdate}
+                    vendasSemana={vAtual}
+                    vendasSemanaAnterior={vAnterior}
                   />
                 );
               })}

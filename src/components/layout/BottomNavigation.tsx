@@ -14,6 +14,10 @@ import {
   HelpCircle,
   UserPlus,
   LogOut,
+  DollarSign,
+  Tag,
+  Bus,
+  Receipt,
   LucideIcon
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -42,25 +46,15 @@ interface QuickActionType {
 const leftNavItems: NavItemType[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['admin', 'gerente'] },
   { label: 'Vendas', icon: ShoppingCart, path: '/pedidos/criados', roles: ['admin', 'gerente'] },
-  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['vendedor'] },
 ];
 
 const rightNavItems: NavItemType[] = [
-  { label: 'Feira', icon: Store, path: '/feira', roles: ['admin', 'gerente', 'vendedor'] },
-];
-
-const moreMenuItems: NavItemType[] = [
   { label: 'Estoque', icon: Warehouse, path: '/estoque', roles: ['admin', 'gerente'] },
-  { label: 'Transferências', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente'] },
-  { label: 'Clientes', icon: Users, path: '/clientes', roles: ['admin', 'gerente'] },
-  { label: 'Produção', icon: Factory, path: '/producao', roles: ['admin', 'gerente'] },
-  { label: 'Configurações', icon: Settings, path: '/configuracoes/usuarios', roles: ['admin'] },
-  { label: 'Ajuda', icon: HelpCircle, path: '/ajuda' },
+  { label: 'Feira', icon: Store, path: '/feira', roles: ['admin', 'gerente', 'vendedor'] },
 ];
 
 const quickActions: QuickActionType[] = [
   { label: 'Novo Pedido', icon: ShoppingCart, path: '/pedidos/novo', roles: ['admin', 'gerente'] },
-  { label: 'Nova Transferência', icon: ArrowLeftRight, path: '/transferencias', roles: ['admin', 'gerente', 'vendedor'] },
   { label: 'Nova Carga (Feira)', icon: Store, path: '/feira', roles: ['admin', 'gerente', 'vendedor'] },
   { label: 'Novo Cliente', icon: UserPlus, path: '/clientes', roles: ['admin', 'gerente'] },
 ];
@@ -114,7 +108,6 @@ export function BottomNavigation() {
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const { role } = useRole();
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
   // Save current URL when leaving pages with params
@@ -133,7 +126,6 @@ export function BottomNavigation() {
 
   const visibleLeftItems = filterByRole(leftNavItems);
   const visibleRightItems = filterByRole(rightNavItems);
-  const visibleMoreItems = filterByRole(moreMenuItems);
   const visibleQuickActions = filterByRole(quickActions);
 
   const isActive = (path: string) => {
@@ -210,19 +202,6 @@ export function BottomNavigation() {
             />
           ))}
 
-          {/* More Menu Button */}
-          <button
-            onClick={() => setMoreMenuOpen(true)}
-            className={cn(
-              "flex flex-col items-center justify-center flex-1 h-full min-w-[60px] min-h-[44px] gap-1 transition-colors rounded-lg",
-              moreMenuOpen
-                ? "text-primary"
-                : "text-muted-foreground active:text-foreground"
-            )}
-          >
-            <MoreHorizontal size={22} strokeWidth={2} />
-            <span className="text-[10px] font-medium">Mais</span>
-          </button>
         </div>
       </nav>
 
@@ -249,50 +228,7 @@ export function BottomNavigation() {
         </SheetContent>
       </Sheet>
 
-      {/* More Menu Sheet */}
-      <Sheet open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[80vh] flex flex-col">
-          <SheetHeader className="pb-2 flex-shrink-0">
-            <SheetTitle className="text-left">Mais opções</SheetTitle>
-          </SheetHeader>
-
-          {/* Scrollable menu items */}
-          <div className="flex-1 overflow-y-auto py-2 space-y-1">
-            {visibleMoreItems.map((item) => {
-              const active = isActive(item.path);
-              return (
-                <button
-                  key={item.label}
-                  onClick={() => handleNavigate(item.path)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all min-h-[48px]",
-                    active
-                      ? "bg-primary/10 text-primary font-semibold"
-                      : "hover:bg-muted/50 text-foreground"
-                  )}
-                >
-                  <item.icon size={20} />
-                  <span className="text-sm">{item.label}</span>
-                  {active && (
-                    <div className="ml-auto w-2 h-2 rounded-full bg-primary" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Logout button - always visible at bottom */}
-          <div className="flex-shrink-0 pt-2 border-t border-border pb-safe">
-            <button
-              onClick={handleSignOut}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all min-h-[48px] hover:bg-destructive/10 text-destructive"
-            >
-              <LogOut size={20} />
-              <span className="text-sm">Sair</span>
-            </button>
-          </div>
-        </SheetContent>
-      </Sheet>
+      {/* End */}
     </>
   );
 }

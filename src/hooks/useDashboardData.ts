@@ -5,10 +5,10 @@ import { fetchAllRows } from "@/lib/supabase-utils";
 import { parseProductName } from "@/utils/productNameUtils";
 import { equivalentPrevious } from "@/utils/comparativePeriods";
 import { getSupabaseUtcRangeSP, toSP } from "@/utils/dateTz";
-import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, startOfYear, getWeek, endOfMonth, subYears, getMonth, getYear, subMonths, getDate, getDaysInMonth, getDay } from "date-fns";
+import { startOfDay, subDays, startOfMonth, format, parseISO, differenceInDays, endOfDay, startOfWeek, addDays, startOfYear, getWeek, endOfMonth, subYears, getMonth, getYear, subMonths, getDate, getDaysInMonth, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export type Periodo = "hoje" | "30dias" | "90dias" | "ano_atual" | "12meses" | "mes" | "personalizado";
+export type Periodo = "hoje" | "30dias" | "90dias" | "ano_atual" | "12meses" | "mes" | "esta_semana" | "personalizado";
 
 export interface DateRange {
   from: Date | undefined;
@@ -260,6 +260,14 @@ function getDateRange(periodo: Periodo, dateRange?: DateRange) {
       startDateAnterior = startOfDay(subMonths(now, 24));
       endDateAnterior = startOfDay(subMonths(now, 12));
       break;
+    case "esta_semana": {
+      const inicioSemana = startOfWeek(now, { weekStartsOn: 1 }); // Segunda
+      const fimSemana = addDays(inicioSemana, 5); // Sábado
+      startDate = startOfDay(inicioSemana);
+      startDateAnterior = startOfDay(subDays(inicioSemana, 7));
+      endDateAnterior = startOfDay(subDays(fimSemana, 7));
+      break;
+    }
     case "mes":
     default:
       startDate = startOfMonth(now);
@@ -456,8 +464,8 @@ async function fetchDashboardData(
       .order("quantidade", { ascending: true })
       .limit(10),
 
-    fetchAllRows<any>(() =>
-      supabase
+    fetchAllRows<any>(() => {
+      let query = supabase
         .from("pedido_itens")
         .select(`
           pedido_id, 
@@ -468,11 +476,21 @@ async function fetchDashboardData(
           estoque_itens(nome, imagem_url)
         `)
         .eq("pedidos.user_id", userId)
-        .in("pedidos.status_pagamento", ["PAGO", "CONCLUIDO", "PEND. ENTREGA"])
-        .gte("pedidos.created_at", startDateTopModelos)
-        .lte("pedidos.created_at", now.toISOString())
-        .order("pedido_id", { ascending: true })
-    ).then(data => ({ data, error: null })),
+        .gte("pedidos.created_at", startDate)
+        .lte("pedidos.created_at", endDate);
+
+      // Aplicar filtro de status de venda (PAGO, CONCLUIDO ou PEND. ENTREGA)
+      if (!excluirCancelados) {
+        // Bruto: incluir também os que tiveram pagamento cancelado/estornado
+        query = query.in("pedidos.status_pagamento", ["PAGO", "CONCLUIDO", "PEND. ENTREGA", ...STATUS_CANCELADOS]);
+      } else {
+        // Líquido: apenas concluídos/pagos de fato e ignorar pedidos cancelados
+        query = query.in("pedidos.status_pagamento", ["PAGO", "CONCLUIDO", "PEND. ENTREGA"]);
+        query = query.not("pedidos.status_pedido", "in", `(${STATUS_CANCELADOS.join(',')})`);
+      }
+
+      return query.order("pedido_id", { ascending: true });
+    }).then(data => ({ data, error: null })),
 
     supabase
       .from("producao")
@@ -547,12 +565,16 @@ async function fetchDashboardData(
     ? pedidosYoYData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
     : pedidosYoYData;
 
-  const pedidosPagos = pedidosSemCancelados.filter(p =>
-    (p.status_pagamento || "").toUpperCase() === "PAGO"
-  );
-  const pedidosYoYPagos = pedidosYoYSemCancelados.filter(p =>
-    (p.status_pagamento || "").toUpperCase() === "PAGO"
-  );
+  const pedidosPagos = pedidosSemCancelados.filter(p => {
+    const status = (p.status_pagamento || "").toUpperCase();
+    if (!excluirCancelados && STATUS_CANCELADOS.includes(status)) return true;
+    return ["PAGO", "CONCLUIDO", "PEND. ENTREGA"].includes(status);
+  });
+  const pedidosYoYPagos = pedidosYoYSemCancelados.filter(p => {
+    const status = (p.status_pagamento || "").toUpperCase();
+    if (!excluirCancelados && STATUS_CANCELADOS.includes(status)) return true;
+    return ["PAGO", "CONCLUIDO", "PEND. ENTREGA"].includes(status);
+  });
 
   const faturamento = pedidosPagos.reduce((sum, p) => sum + (p.valor_total || 0), 0);
   const faturamentoYoY = pedidosYoYPagos.reduce((sum, p) => sum + (p.valor_total || 0), 0);
@@ -685,8 +707,10 @@ async function fetchDashboardData(
     const normalizedNome = rawNome.replace(/\s*—\s*/g, ' - ');
 
     // Extrair refBase (referência sem tamanho) para agrupamento
-    const infoRef = parseProductName(normalizedNome, normalizedNome);
-    const chave = (infoRef.refBase || normalizedNome).toLowerCase().trim();
+    // Preferimos usar o nome do estoque se disponível, pois é mais estável que o nome no pedido
+    const nomeParaChave = (estoqueNome && estoqueNome.length > 3) ? estoqueNome : normalizedNome;
+    const infoRef = parseProductName(nomeParaChave, nomeParaChave);
+    const chave = (infoRef.refBase || nomeParaChave).toLowerCase().trim();
 
     // Montar nome de exibição
     let displayNome: string;
@@ -716,14 +740,13 @@ async function fetchDashboardData(
   const pedidoIdsComItens = new Set(pedidoItensFiltrados.map((item: any) => item.pedido_id));
 
   // Calculate total paid orders IN THIS WEEK precisely for the coverage denominator
-  const totalPedidosPagosNaSemana = pedidosSemCancelados.filter(p => {
-    const isPago = ["PAGO", "CONCLUIDO"].includes((p.status_pagamento || "").toUpperCase());
-    const isEstaSemana = p.created_at >= startDateTopModelos;
-    return isPago && isEstaSemana;
+  const totalPedidosPagosNoPeriodo = pedidosSemCancelados.filter(p => {
+    const isVendido = ["PAGO", "CONCLUIDO", "PEND. ENTREGA"].includes((p.status_pagamento || "").toUpperCase());
+    return isVendido;
   }).length;
 
   const pedidosComItens = pedidoIdsComItens.size;
-  const coverage = totalPedidosPagosNaSemana > 0 ? pedidosComItens / totalPedidosPagosNaSemana : 0;
+  const coverage = totalPedidosPagosNoPeriodo > 0 ? pedidosComItens / totalPedidosPagosNoPeriodo : 0;
   // If we somehow get more items than orders due to timing/cache, cap at 1.0 (100%)
   const finalCoverage = Math.min(coverage, 1);
 
@@ -977,7 +1000,7 @@ async function fetchDashboardData(
     topModelos,
     topModelosCoverage: {
       pedidosComItens,
-      totalPedidos: totalPedidosPagosNaSemana,
+      totalPedidos: totalPedidosPagosNoPeriodo,
       coverage: finalCoverage,
     },
     statusPedidos,
