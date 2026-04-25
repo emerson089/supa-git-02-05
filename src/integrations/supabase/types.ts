@@ -1413,26 +1413,53 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_curva_mes: {
-        Args: { p_mes: number; p_user_id: string }
-        Returns: {
-          dia: number
-          faturamento_acumulado: number
-          percentual_acumulado: number
-        }[]
-      }
+      get_curva_mes:
+        | {
+            Args: { p_mes: number; p_user_id: string }
+            Returns: {
+              dia: number
+              faturamento_acumulado: number
+              percentual_acumulado: number
+            }[]
+          }
+        | {
+            Args: {
+              p_excluir_cancelados?: boolean
+              p_mes: number
+              p_user_id: string
+            }
+            Returns: {
+              dia: number
+              faturamento_acumulado: number
+              percentual_acumulado: number
+            }[]
+          }
       get_faturamento_periodo: {
         Args: { p_fim: string; p_inicio: string; p_user_id: string }
         Returns: number
       }
-      get_media_mes_anos_anteriores: {
-        Args: { p_limite_anos?: number; p_mes: number; p_user_id: string }
-        Returns: {
-          anos_usados: number[]
-          faturamentos_por_ano: Json
-          media_faturamento: number
-        }[]
-      }
+      get_media_mes_anos_anteriores:
+        | {
+            Args: { p_limite_anos?: number; p_mes: number; p_user_id: string }
+            Returns: {
+              anos_usados: number[]
+              faturamentos_por_ano: Json
+              media_faturamento: number
+            }[]
+          }
+        | {
+            Args: {
+              p_excluir_cancelados?: boolean
+              p_limite_anos?: number
+              p_mes: number
+              p_user_id: string
+            }
+            Returns: {
+              anos_usados: number[]
+              faturamentos_por_ano: Json
+              media_faturamento: number
+            }[]
+          }
       get_my_profile: {
         Args: never
         Returns: {

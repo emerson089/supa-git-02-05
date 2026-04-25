@@ -192,7 +192,7 @@ export function useSalesTrendChart(opts: {
 
       if (!isBefore(dStart, startOfDaySP(prevRange.start)) && !isAfter(dStart, startOfDaySP(prevRange.end))) {
         const daysDiff = differenceInDays(dStart, startOfDaySP(prevRange.start));
-        if (result[daysDiff] && result[daysDiff]._isPrevValid) {
+        if (result[daysDiff] && (result[daysDiff] as any)._isPrevValid) {
           result[daysDiff].anterior = (result[daysDiff].anterior || 0) + (p.valor_total || 0);
           result[daysDiff].pedidosAnterior += 1;
           result[daysDiff].pecasAnterior += p.total_pecas || 0;

@@ -137,7 +137,6 @@ export function BottomNavigation() {
   const handleNavigate = useCallback((targetPath: string) => {
     // Evita navegação redundante se já estivermos no exato mesmo caminho
     if (location.pathname === targetPath && !location.search) {
-      setMoreMenuOpen(false);
       setQuickActionsOpen(false);
       return;
     }
@@ -145,7 +144,6 @@ export function BottomNavigation() {
     // Se estivermos em uma página com parâmetros e clicarmos no mesmo item raiz,
     // mantemos os parâmetros atuais em vez de resetar
     if (location.pathname.startsWith(targetPath) && PAGES_WITH_PARAMS.some(p => targetPath.startsWith(p))) {
-      setMoreMenuOpen(false);
       setQuickActionsOpen(false);
       return;
     }
@@ -157,7 +155,6 @@ export function BottomNavigation() {
     } else {
       navigate(targetPath);
     }
-    setMoreMenuOpen(false);
     setQuickActionsOpen(false);
   }, [location.pathname, location.search, navigate]);
 
@@ -165,7 +162,6 @@ export function BottomNavigation() {
     await signOut();
     toast.success('Sessão encerrada');
     navigate('/auth');
-    setMoreMenuOpen(false);
   };
 
   return (
