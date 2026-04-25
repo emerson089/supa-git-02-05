@@ -89,12 +89,12 @@ export function bucketKeySP(d: Date | string, granularity: 'year' | 'month' | 'w
 
 export function isoWeekStartSP(d: Date | string): Date {
   const spDate = toSP(d);
-  return startOfWeek(spDate, { weekStarts: 1 });
+  return startOfWeek(spDate, { weekStartsOn: 1 });
 }
 
 export function isoWeekEndSP(d: Date | string): Date {
   const spDate = toSP(d);
-  return endOfWeek(spDate, { weekStarts: 1 });
+  return endOfWeek(spDate, { weekStartsOn: 1 });
 }
 
 export function startOfYearSP(d: Date | string): Date {

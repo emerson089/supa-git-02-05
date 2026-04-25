@@ -155,7 +155,7 @@ export function useRecebimentosTrendChart(opts: {
 
       if (!isBefore(dStart, startOfDaySP(prevRange.start)) && !isAfter(dStart, startOfDaySP(prevRange.end))) {
         const daysDiff = differenceInDays(dStart, startOfDaySP(prevRange.start));
-        if (result[daysDiff] && result[daysDiff]._isPrevValid) {
+        if (result[daysDiff] && (result[daysDiff] as any)._isPrevValid) {
           result[daysDiff].anterior = (result[daysDiff].anterior || 0) + (c.valor || 0);
           result[daysDiff].qtdAnterior += 1;
         }

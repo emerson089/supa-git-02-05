@@ -1,51 +1,48 @@
+## Corrigir os 4 erros de build que estão impedindo o app de compilar
 
+São apenas correções pontuais — nenhuma mudança de comportamento, nenhuma alteração de banco de dados, nenhuma migração SQL. O objetivo é só destravar o build.
 
-## Persistir itens da carga (Feira) entre fechamentos do modal e reloads
+---
 
-### Problema
-Hoje, ao adicionar produtos na **Nova Carga para Feira**, os itens ficam em memória (`useState`). Fechar o modal **mantém** a seleção, mas qualquer **F5**, troca de aba do navegador ou navegação para outra rota **apaga tudo**.
+### 1. `src/utils/dateTz.ts` — propriedade errada do date-fns
+**Erros:** linhas 92 e 97 usam `{ weekStarts: 1 }`, mas o nome correto da opção do `date-fns` é `weekStartsOn`.
 
-### Como vai funcionar
-- Ao adicionar/alterar/remover qualquer item da carga em montagem, o estado é **automaticamente salvo no `localStorage`** do navegador (por usuário).
-- Ao abrir a página `/feira` novamente — mesmo após F5, fechar o navegador, ou voltar de outra tela — os itens e o **título da carga** são **restaurados exatamente como estavam**.
-- Ao clicar em **Criar Carga** com sucesso → o rascunho é **limpo do localStorage** (já é limpo da memória hoje).
-- Indicador visual sutil: se houver rascunho salvo, o botão **"+ Nova Carga"** mostra um badge pequeno com a quantidade de itens em rascunho (ex: `3`), pra ficar claro que tem trabalho em andamento.
-- Botão **"Limpar rascunho"** dentro do modal (canto, discreto) para descartar manualmente quando quiser começar do zero.
+**Correção:**
+- Linha 92: `startOfWeek(spDate, { weekStarts: 1 })` → `startOfWeek(spDate, { weekStartsOn: 1 })`
+- Linha 97: `endOfWeek(spDate, { weekStarts: 1 })` → `endOfWeek(spDate, { weekStartsOn: 1 })`
 
-### Mudanças técnicas
+Isso mantém a semana ISO (segunda a domingo) como já estava planejado.
 
-**1. `src/pages/Feira.tsx`**
-- Chave do storage: `feira-nova-carga-draft-{user.id}` (escopo por usuário; evita misturar entre contas no mesmo dispositivo).
-- Estrutura salva:
-  ```ts
-  { itensCarga: ItemCarga[]; tituloCarga: string; savedAt: string }
-  ```
-- **Inicialização**: `useState(() => loadDraft())` para `itensCarga` e `tituloCarga` — hidrata do localStorage no primeiro render.
-- **Persistência**: um `useEffect([itensCarga, tituloCarga, user?.id])` grava no localStorage (ou remove a chave se `itensCarga.length === 0` E título vazio).
-- **Limpeza pós-criação**: dentro do `onSuccess` de `criarCarga`, além de `setItensCarga([])` e `setTituloCarga('')`, remover explicitamente a chave do localStorage.
-- **Validação de rascunho ao carregar**: filtrar itens cujo `itemId` não exista mais em `produtos` (ex: produto deletado entre sessões), mostrar toast informativo se algum for descartado: `"X itens do rascunho foram removidos (produtos não disponíveis)"`.
-- **TTL opcional**: descartar rascunhos com mais de 7 dias (evita lixo eterno).
+---
 
-**2. Indicador visual no botão "Nova Carga"**
-- Se `itensCarga.length > 0` E modal fechado → badge com a contagem ao lado do ícone (igual padrão do FAB carrinho mobile, mas pequeno no botão desktop).
+### 2. `src/components/layout/BottomNavigation.tsx` — referências a estado removido
+**Erros:** linhas 140, 148, 160 e 168 chamam `setMoreMenuOpen(false)`, mas esse `useState` não existe mais no componente (só sobrou `setQuickActionsOpen`). O "More menu" foi descontinuado e essas chamadas ficaram órfãs.
 
-**3. Botão "Limpar rascunho"**
-- Dentro do modal Nova Carga, no header (perto do "Por Grade"), aparece só quando `itensCarga.length > 0`: ícone trash + texto curto. Confirmação simples via `confirm()` ou toast com action `Desfazer`.
+**Correção:** Remover as 4 chamadas `setMoreMenuOpen(false)` — as chamadas `setQuickActionsOpen(false)` ao lado já dão conta do fechamento. Não há perda de funcionalidade, porque o menu correspondente já não existe na UI.
 
-**4. Nada muda em**
-- `NovaCargaStepProdutos.tsx`, `NovaCargaBottomSheet.tsx`, `NovaCargaBottomBar.tsx` (continuam recebendo as mesmas props)
-- Banco de dados (rascunho é 100% local no navegador — não sincroniza entre dispositivos, igual o padrão de "carrinho de compras")
-- Fluxo de criação da carga (`useCriarCarga`)
+---
 
-### Detalhes técnicos
-- Helpers `loadDraft(userId)` / `saveDraft(userId, data)` / `clearDraft(userId)` no topo de `Feira.tsx` (poderiam ir para `src/utils/feiraDraft.ts` se preferir, mas como é uso único, manter local é mais simples).
-- Try/catch em todas operações de localStorage (quota cheia, modo privado).
-- Não persistir `buscaProduto` (campo de busca volátil — sempre limpa).
+### 3. `src/hooks/useSalesTrendChart.ts` — leitura de campo interno sem cast
+**Erro:** linha 195 acessa `result[daysDiff]._isPrevValid`, mas `_isPrevValid` não existe no tipo `TrendDataPoint`. O campo é empurrado no objeto com `as any` (linha 177) e depois removido no `map` final (linha 217), então é só um campo interno temporário — falta o cast na leitura.
 
-### Como validar
-1. Abrir Nova Carga, adicionar 3 produtos, fechar o modal → reabrir: itens permanecem ✅ (já funciona)
-2. Adicionar 3 produtos → **F5** na página → reabrir Nova Carga: **itens ainda lá** ✅ (novo)
-3. Adicionar produtos → navegar para `/estoque` e voltar para `/feira` → reabrir: itens permanecem ✅
-4. Criar a carga → reabrir Nova Carga: vazia ✅
-5. Adicionar produtos, deletar um deles em outra aba/usuário admin, F5: rascunho carrega só os válidos + toast informativo ✅
+**Correção:** Trocar `result[daysDiff]._isPrevValid` por `(result[daysDiff] as any)._isPrevValid`.
 
+---
+
+### 4. `src/hooks/useRecebimentosTrendChart.ts` — mesma situação do hook acima
+**Erro:** linha 158 com o mesmo padrão.
+
+**Correção:** Trocar `result[daysDiff]._isPrevValid` por `(result[daysDiff] as any)._isPrevValid`.
+
+---
+
+### Validação
+- Build do projeto deve passar (`tsc` sem erros).
+- Comportamento visual do gráfico Tendência de Vendas e Recebimentos Confirmados deve continuar idêntico.
+- Bottom navigation no mobile deve continuar abrindo/fechando o menu de Ações Rápidas normalmente.
+- Cálculos de semana (ISO segunda → domingo) devem funcionar corretamente após a correção do `weekStartsOn`.
+
+### Observações
+- **Nenhuma migração SQL.** Nenhuma mudança em RPCs, tabelas, RLS, edge functions ou storage.
+- **Nenhuma mudança de UX.** Os 4 ajustes são puramente de tipagem / referência morta.
+- O plano maior do "Tendência de Vendas — Ano/Mês/Semana" continua intacto e independente; estas correções só destravam o que já foi escrito para que o app volte a rodar.
