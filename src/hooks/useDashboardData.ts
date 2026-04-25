@@ -148,6 +148,16 @@ interface DashboardData {
   previsaoMensal: PrevisaoMensal;
   metaAutomatica: MetaAutomatica;
   faturamentoDiaSemana: FaturamentoDiaSemana[];
+  concentracaoVendas: ConcentracaoVendas;
+}
+
+export interface ConcentracaoVendas {
+  totalClientes: number;              // Qtd de clientes distintos no período
+  top20pctClientes: number;           // Qtd de clientes no top 20%
+  percentualReceitaTop20: number;     // % da receita vinda do top 20%
+  risco: 'alto' | 'medio' | 'baixo'; // Nível de concentração
+  topCliente: string | null;          // Nome do maior cliente
+  topClientePct: number;              // % do maior cliente sozinho
 }
 
 // Ordem padrão das etapas de produção (alinhado com STAGES em production-data.ts)
@@ -362,6 +372,14 @@ const DASHBOARD_DEFAULTS: DashboardData = {
     statusMeta: 'abaixo',
   },
   faturamentoDiaSemana: [],
+  concentracaoVendas: {
+    totalClientes: 0,
+    top20pctClientes: 0,
+    percentualReceitaTop20: 0,
+    risco: 'baixo' as const,
+    topCliente: null,
+    topClientePct: 0,
+  },
 };
 
 async function fetchDashboardData(
@@ -414,7 +432,7 @@ async function fetchDashboardData(
     fetchAllRows<any>(() =>
       supabase
         .from("pedidos")
-        .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at, paid_at")
+        .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at, paid_at, cliente_nome")
         .eq("user_id", userId)
         .gte("created_at", startDate)
         .lte("created_at", endDate)
@@ -980,6 +998,36 @@ async function fetchDashboardData(
     previsaoMensal,
     metaAutomatica,
     faturamentoDiaSemana,
+    concentracaoVendas: (() => {
+      // Agrupa faturamento pago por cliente
+      const porCliente: Record<string, number> = {};
+      for (const p of pedidosPagos) {
+        const nome = (p.cliente_nome || 'Sem nome').trim();
+        porCliente[nome] = (porCliente[nome] || 0) + Number(p.valor_total || 0);
+      }
+      const clientes = Object.entries(porCliente)
+        .map(([nome, total]) => ({ nome, total }))
+        .sort((a, b) => b.total - a.total);
+      const totalClientes = clientes.length;
+      if (totalClientes === 0) {
+        return { totalClientes: 0, top20pctClientes: 0, percentualReceitaTop20: 0, risco: 'baixo' as const, topCliente: null, topClientePct: 0 };
+      }
+      const totalReceita = clientes.reduce((s, c) => s + c.total, 0);
+      const top20n = Math.max(1, Math.ceil(totalClientes * 0.2));
+      const receitaTop20 = clientes.slice(0, top20n).reduce((s, c) => s + c.total, 0);
+      const percentualReceitaTop20 = totalReceita > 0 ? (receitaTop20 / totalReceita) * 100 : 0;
+      const topClientePct = totalReceita > 0 ? (clientes[0].total / totalReceita) * 100 : 0;
+      const risco: 'alto' | 'medio' | 'baixo' =
+        percentualReceitaTop20 >= 80 ? 'alto' : percentualReceitaTop20 >= 60 ? 'medio' : 'baixo';
+      return {
+        totalClientes,
+        top20pctClientes: top20n,
+        percentualReceitaTop20,
+        risco,
+        topCliente: clientes[0]?.nome ?? null,
+        topClientePct,
+      };
+    })(),
   };
 }
 

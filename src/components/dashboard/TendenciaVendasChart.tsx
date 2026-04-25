@@ -84,11 +84,11 @@ export function TendenciaVendasChart({ mode, setMode, salesTrend }: TendenciaVen
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-[10px] sm:text-xs text-muted-foreground">
+            <span className="flex items-center gap-1 shrink-0">
               <span className="w-2 h-2 rounded-full bg-primary/40" /> {currentLabel}
             </span>
-            <span className="flex items-center gap-1 ml-2">
+            <span className="flex items-center gap-1 shrink-0">
               <span className="w-2 h-2 rounded-full bg-slate-300" /> {previousLabel}
             </span>
           </div>

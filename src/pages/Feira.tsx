@@ -21,9 +21,7 @@ import { ExcluirCargaModal } from '@/components/feira/ExcluirCargaModal';
 import { ExcluirHistoricoModal } from '@/components/feira/ExcluirHistoricoModal';
 import { EstornarCargaModal } from '@/components/feira/EstornarCargaModal';
 import { EditarRetornoCargaModal } from '@/components/feira/EditarRetornoCargaModal';
-import { NovaCargaStepProdutos } from '@/components/feira/NovaCargaStepProdutos';
-import { NovaCargaBottomSheet } from '@/components/feira/NovaCargaBottomSheet';
-import { NovaCargaBottomBar } from '@/components/feira/NovaCargaBottomBar';
+import { NovaCargaFeiraModal } from '@/components/feira/NovaCargaFeiraModal';
 import { EditarCargaModal } from '@/components/feira/EditarCargaModal';
 import { AddGradeCargaModal } from '@/components/feira/AddGradeCargaModal';
 import { RetornoEmMassaModal } from '@/components/feira/RetornoEmMassaModal';
@@ -48,7 +46,7 @@ import { cn } from '@/lib/utils';
 import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { generateCargaPDF } from '@/utils/generateCargaPDF';
-import { groupItensByModel, parseProductName } from '@/utils/productNameUtils';
+import { groupItensByModel } from '@/utils/productNameUtils';
 import { loadFeiraDraft, saveFeiraDraft, clearFeiraDraft } from '@/utils/feiraDraft';
 
 /** Distribui o retorno total de um modelo proporcionalmente entre seus tamanhos */
@@ -72,6 +70,7 @@ function distribuirRetornoProporcional(
 interface ItemCarga {
   itemId: string;
   nome: string;
+  referencia: string;
   quantidade: number;
   precoUnitario: number;
   disponivelCentral: number;
@@ -156,7 +155,6 @@ export default function Feira() {
     return draft?.tituloCarga ?? '';
   });
   const draftValidatedRef = useRef(false);
-  const [buscaProduto, setBuscaProduto] = useState('');
   const [showAddGrade, setShowAddGrade] = useState(false);
   const [showRetornoEmMassa, setShowRetornoEmMassa] = useState(false);
   const [retornoEmMassaLoading, setRetornoEmMassaLoading] = useState(false);
@@ -164,7 +162,7 @@ export default function Feira() {
     itemId: string;
     quantidadeRetornada: number;
   }[]>([]);
-  const [isRefetchingEstoque, setIsRefetchingEstoque] = useState(false);
+
   const [inputRetornoValues, setInputRetornoValues] = useState<Record<string, string>>({});
 
   // Estados para busca e persistência no modal de retorno
@@ -189,38 +187,20 @@ export default function Feira() {
   const [locaisCreationFailed, setLocaisCreationFailed] = useState(false);
   const locaisCreationAttempted = useRef(false);
 
-  // Filtrar produtos em tempo real
-  const produtosFiltrados = useMemo(() => {
-    if (!buscaProduto.trim()) return produtosAcabados;
-    const termo = buscaProduto.toLowerCase().trim();
-    return produtosAcabados.filter(p => p.nome.toLowerCase().includes(termo));
-  }, [produtosAcabados, buscaProduto]);
-
   // Cargas ativas de HOJE (para mostrar na seção principal quando filtro = hoje)
   const cargasAtivasHoje = useMemo(() => (todasCargasAtivas || []).filter(c => isToday(new Date(c.dataSaida))), [todasCargasAtivas]);
 
   // Fechar modal - manter itens selecionados para persistência
   const handleCloseNovaCarga = () => {
     setShowNovaCarga(false);
-    // Não limpa itensCarga e tituloCarga para persistir ao reabrir
-    setBuscaProduto('');
   };
 
   // Abrir modal - mantém itens selecionados e refetch de estoque
-  const handleOpenNovaCarga = async () => {
-    // Não limpa itensCarga para manter seleção anterior
-    setBuscaProduto('');
+  const handleOpenNovaCarga = () => {
     setShowNovaCarga(true);
-    setIsRefetchingEstoque(true);
-    try {
-      await Promise.all([queryClient.refetchQueries({
-        queryKey: ['estoque-por-local']
-      }), queryClient.refetchQueries({
-        queryKey: ['estoque-locais']
-      })]);
-    } finally {
-      setIsRefetchingEstoque(false);
-    }
+    // Refetch silencioso para garantir estoque atualizado
+    queryClient.refetchQueries({ queryKey: ['estoque-por-local'] });
+    queryClient.refetchQueries({ queryKey: ['estoque-locais'] });
   };
 
   // Salvar período no localStorage quando mudar
@@ -289,6 +269,7 @@ export default function Feira() {
   const handleAddItemCarga = (produto: {
     id: string;
     nome: string;
+    referencia?: string;
     precoUnitario: number | null;
     imagemUrl?: string | null;
   }, quantidade: number = 1): boolean => {
@@ -308,6 +289,7 @@ export default function Feira() {
     setItensCarga(prev => [...prev, {
       itemId: produto.id,
       nome: produto.nome,
+      referencia: produto.referencia || produto.nome,
       quantidade: qtdFinal,
       precoUnitario: produto.precoUnitario || 0,
       disponivelCentral: disponivel,
@@ -562,7 +544,85 @@ export default function Feira() {
     }
   };
 
-  const handleSendWhatsAppResumo = async (resumo: { titulo: string; enviado: number; retornado: number; vendido: number; valorTotal: number; isCorrecao?: boolean; isEdicao?: boolean }) => {
+  const handleSalvarEdicaoCarga = (transferenciaId: string, itens: any[], observacoes: string) => {
+    editarCarga.mutate({
+      transferenciaId,
+      itens,
+      observacoes
+    }, {
+      onSuccess: () => {
+        toast.success('Carga atualizada com sucesso!');
+        
+        // Notificar WhatsApp sobre a edição com detalhes das mudanças (Opção C)
+        if (cargaEditar) {
+          const totalEnviadoAntigo = cargaEditar.itens.reduce((sum, i) => sum + (i.quantidadeEnviada || 0), 0);
+          const totalEnviadoNovo = itens.reduce((sum, i) => sum + (i.quantidade || i.quantidadeEnviada || 0), 0);
+          const deltaEnviado = totalEnviadoNovo - totalEnviadoAntigo;
+
+          const totalRetornado = cargaEditar.itens?.reduce((s, i) => s + (i.quantidadeRetornada || 0), 0) || 0;
+          const totalVendido = totalEnviadoNovo - totalRetornado;
+          
+          const valorTotal = itens.reduce((sum, i) => {
+            const ret = cargaEditar.itens?.find(it => it.itemId === i.itemId)?.quantidadeRetornada || 0;
+            const vend = (i.quantidade || i.quantidadeEnviada || 0) - ret;
+            const preco = i.precoUnitario || i.produtoPreco || 0;
+            return sum + (vend * preco);
+          }, 0);
+
+          // Calcular o que mudou item por item
+          const mudancas: string[] = [];
+          const oldItemsMap = new Map(cargaEditar.itens.map(i => [i.itemId, { nome: i.produtoNome, qtd: i.quantidadeEnviada }]));
+          const newItemsMap = new Map(itens.map(i => [i.itemId, { nome: i.nome || i.produtoNome, qtd: i.quantidade || i.quantidadeEnviada }]));
+
+          // Itens adicionados ou aumentados
+          newItemsMap.forEach((val, id) => {
+            const old = oldItemsMap.get(id);
+            const diff = val.qtd - (old?.qtd || 0);
+            if (diff > 0) {
+              mudancas.push(`➕ ${diff}x ${val.nome}`);
+            } else if (diff < 0) {
+              mudancas.push(`➖ ${Math.abs(diff)}x ${val.nome}`);
+            }
+          });
+
+          // Itens removidos completamente
+          oldItemsMap.forEach((val, id) => {
+            if (!newItemsMap.has(id)) {
+              mudancas.push(`❌ Removido: ${val.nome} (${val.qtd} un)`);
+            }
+          });
+
+          handleSendWhatsAppResumo({
+            titulo: observacoes || cargaEditar.observacoes || 'Carga Sem Título',
+            enviado: totalEnviadoNovo,
+            retornado: totalRetornado,
+            vendido: totalVendido,
+            valorTotal,
+            isEdicao: true,
+            deltaEnviado,
+            detalhesMudanca: mudancas.length > 0 ? mudancas.join('\n') : undefined
+          });
+        }
+        
+        setCargaEditar(null);
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Erro ao editar carga');
+      }
+    });
+  };
+
+  const handleSendWhatsAppResumo = async (resumo: { 
+    titulo: string; 
+    enviado: number; 
+    retornado: number; 
+    vendido: number; 
+    valorTotal: number; 
+    isCorrecao?: boolean; 
+    isEdicao?: boolean;
+    deltaEnviado?: number;
+    detalhesMudanca?: string;
+  }) => {
     const metadata = user?.user_metadata || {};
     const adminNumbers = (metadata.notification_numbers || []) as string[];
     const notifyOnOrderGlobal = metadata.notify_on_order !== false;
@@ -576,7 +636,19 @@ export default function Feira() {
       if (resumo.isCorrecao) tituloPrefix = '📝 CORREÇÃO DE RETORNO';
       if (resumo.isEdicao) tituloPrefix = '✏️ EDIÇÃO DE CARGA';
 
-      const mensagem = `${tituloPrefix}: ${resumo.titulo.toUpperCase()}\n\n📦 Enviado : ${resumo.enviado}\n🔄 Retorno : ${resumo.retornado}\n✅ Vendido : ${resumo.vendido}\n📈 % Vendido : ${porcVenda}%\n💰 Valor total : ${valorFormatado}\n\n---------------------------\n📅 ${resumo.isCorrecao || resumo.isEdicao ? 'Atualizado em' : 'Finalizado em'}: ${dataHora}`;
+      let enviadoStr = `${resumo.enviado}`;
+      if (resumo.isEdicao && resumo.deltaEnviado !== undefined && resumo.deltaEnviado !== 0) {
+        const sinal = resumo.deltaEnviado > 0 ? '+' : '';
+        enviadoStr += ` (${sinal}${resumo.deltaEnviado})`;
+      }
+
+      let mensagem = `${tituloPrefix}: ${resumo.titulo.toUpperCase()}\n\n📦 Enviado : ${enviadoStr}\n🔄 Retorno : ${resumo.retornado}\n✅ Vendido : ${resumo.vendido}\n📈 % Vendido : ${porcVenda}%\n💰 Valor total : ${valorFormatado}`;
+
+      if (resumo.isEdicao && resumo.detalhesMudanca) {
+        mensagem += `\n\n**O QUE MUDOU NESTA EDIÇÃO:**\n${resumo.detalhesMudanca}`;
+      }
+
+      mensagem += `\n\n---------------------------\n📅 ${resumo.isCorrecao || resumo.isEdicao ? 'Atualizado em' : 'Finalizado em'}: ${dataHora}`;
 
       adminNumbers.forEach(async (adminPhone) => {
         try {
@@ -609,7 +681,7 @@ export default function Feira() {
   const itensRetornoFiltrados = useMemo(() => {
     if (!buscaRetorno.trim()) return gruposRetorno;
     const termo = buscaRetorno.toLowerCase().trim();
-    return gruposRetorno.filter(g => g.nomeBase.toLowerCase().includes(termo));
+    return gruposRetorno.filter(g => g.nomeExibicao.toLowerCase().includes(termo));
   }, [gruposRetorno, buscaRetorno]);
 
   // Validação: todos os grupos devem ter um valor preenchido (incluindo "0" explícito)
@@ -630,42 +702,6 @@ export default function Feira() {
   }, [gruposRetorno, inputRetornoValues]);
   const totalCarga = itensCarga.reduce((sum, i) => sum + i.quantidade, 0);
   const valorCarga = itensCarga.reduce((sum, i) => sum + i.quantidade * i.precoUnitario, 0);
-
-  // Grupos de modelos para o browser de produtos no Dialog Desktop
-  const SIZE_ORDER_DESKTOP: Record<string, number> = { PP: 1, P: 2, M: 3, G: 4, GG: 5, XG: 6, XGG: 7, G1: 8, G2: 9, G3: 10, G4: 11, G5: 12 };
-  const modeloGroupsDesktop = useMemo(() => {
-    const groups: Record<string, { key: string; nomeExibicao: string; valorUnitario: number; imagemUrl: string | null; skus: { id: string; tamanho: string | null; disponivel: number; produto: typeof produtosFiltrados[0] }[]; totalEmCarga: number }> = {};
-    for (const produto of produtosFiltrados) {
-      const info = parseProductName(produto.nome, produto.id);
-      const preco = produto.precoUnitario || 0;
-      // Só agrupa quando há tamanho real; sem tamanho cada SKU é entrada própria
-      const key = info.tamanho ? `${info.refBase}-${preco}` : `solo-${produto.id}`;
-      if (!groups[key]) {
-        groups[key] = { key, nomeExibicao: info.nomeExibicao, valorUnitario: preco, imagemUrl: produto.imagemUrl ?? null, skus: [], totalEmCarga: 0 };
-      }
-      const disponivel = getDisponivelCentral(produto.id);
-      const emCarga = itensCarga.find(i => i.itemId === produto.id);
-      groups[key].skus.push({ id: produto.id, tamanho: info.tamanho ?? null, disponivel, produto });
-      groups[key].totalEmCarga += emCarga?.quantidade || 0;
-    }
-    return Object.values(groups)
-      .map(g => ({
-        ...g,
-        skus: [...g.skus].sort((a, b) => {
-          if (!a.tamanho || !b.tamanho) return 0;
-          const an = parseInt(a.tamanho), bn = parseInt(b.tamanho);
-          if (!isNaN(an) && !isNaN(bn)) return an - bn;
-          if (!isNaN(an)) return -1;
-          if (!isNaN(bn)) return 1;
-          return (SIZE_ORDER_DESKTOP[a.tamanho] ?? 99) - (SIZE_ORDER_DESKTOP[b.tamanho] ?? 99);
-        })
-      }))
-      .sort((a, b) => {
-        if (a.totalEmCarga > 0 && b.totalEmCarga === 0) return -1;
-        if (a.totalEmCarga === 0 && b.totalEmCarga > 0) return 1;
-        return a.nomeExibicao.localeCompare(b.nomeExibicao);
-      });
-  }, [produtosFiltrados, itensCarga, getDisponivelCentral]);
 
   // Handler para excluir carga (apenas em_andamento)
   const handleExcluirCarga = (carga: TransferenciaComItensHistorico) => {
@@ -712,45 +748,6 @@ export default function Feira() {
     setCargaCorrigirRetorno(carga);
   };
 
-  // Handler para salvar correção de retorno
-  const handleSalvarEdicaoCarga = (transferenciaId: string, itens: any[], observacoes: string) => {
-    editarCarga.mutate({
-      transferenciaId,
-      itens,
-      observacoes
-    }, {
-      onSuccess: () => {
-        toast.success('Carga atualizada com sucesso!');
-        
-        // Notificar WhatsApp sobre a edição
-        if (cargaEditar) {
-          const totalEnviado = itens.reduce((sum, i) => sum + (i.quantidade || i.quantidadeEnviada || 0), 0);
-          const totalRetornado = cargaEditar.itens?.reduce((s, i) => s + (i.quantidadeRetornada || 0), 0) || 0;
-          const totalVendido = totalEnviado - totalRetornado;
-          const valorTotal = itens.reduce((sum, i) => {
-            const ret = cargaEditar.itens?.find(it => it.itemId === i.itemId)?.quantidadeRetornada || 0;
-            const vend = (i.quantidade || i.quantidadeEnviada || 0) - ret;
-            const preco = i.precoUnitario || i.produtoPreco || 0;
-            return sum + (vend * preco);
-          }, 0);
-
-          handleSendWhatsAppResumo({
-            titulo: observacoes || cargaEditar.observacoes || 'Carga Sem Título',
-            enviado: totalEnviado,
-            retornado: totalRetornado,
-            vendido: totalVendido,
-            valorTotal,
-            isEdicao: true
-          });
-        }
-        
-        setCargaEditar(null);
-      },
-      onError: (error: any) => {
-        toast.error(error.message || 'Erro ao editar carga');
-      }
-    });
-  };
   const handleRecalcularEstoque = async () => {
     try {
       const result = await recalcularEstoque.mutateAsync();
@@ -1140,299 +1137,23 @@ export default function Feira() {
       </DialogContent>
     </Dialog>
 
-    {/* Modal Nova Carga - Mobile uses new components, Desktop uses Dialog */}
-    {isMobile ? <Sheet open={showNovaCarga} onOpenChange={open => !open && handleCloseNovaCarga()}>
-      <SheetContent side="bottom" className="h-[95vh] flex flex-col p-0 rounded-t-2xl [&>button]:hidden relative">
-        <NovaCargaStepProdutos
-          produtos={produtosFiltrados}
-          itensCarga={itensCarga}
-          isLoading={isRefetchingEstoque}
-          buscaProduto={buscaProduto}
-          onBuscaChange={setBuscaProduto}
-          onAddItem={handleAddItemCarga}
-          onUpdateQtd={handleSetQuantidadeCarga}
-          onRemoveItem={handleRemoveItemCarga}
-          onClose={handleCloseNovaCarga}
-          getDisponivelCentral={getDisponivelCentral}
-          formatCurrency={formatCurrency}
-          titulo={tituloCarga}
-          onTituloChange={setTituloCarga}
-          onOpenGrade={() => setShowAddGrade(true)}
-        />
-
-        {/* FAB do carrinho - agora dentro do Sheet */}
-        <NovaCargaBottomSheet itensCarga={itensCarga} onUpdateQtd={handleSetQuantidadeCarga} onRemoveItem={handleRemoveItemCarga} onCriarCarga={handleCriarCarga} isPending={criarCarga.isPending} formatCurrency={formatCurrency} titulo={tituloCarga} />
-
-        {/* Bottom Bar fixa - agora dentro do Sheet */}
-        <NovaCargaBottomBar qtdItens={itensCarga.length} totalPecas={totalCarga} valorTotal={formatCurrency(valorCarga)} onCriarCarga={handleCriarCarga} isPending={criarCarga.isPending} disabled={itensCarga.length === 0} />
-      </SheetContent>
-    </Sheet> : <Dialog open={showNovaCarga} onOpenChange={open => !open && handleCloseNovaCarga()}>
-      <DialogContent className="max-w-5xl h-[88vh] overflow-hidden flex flex-col p-0 gap-0">
-        {/* Header */}
-        <DialogHeader className="px-5 pt-4 pb-3 border-b shrink-0">
-          <div className="flex items-center justify-between gap-3 mr-6">
-            <DialogTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5 text-primary" />
-              Nova Carga para Feira
-            </DialogTitle>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowAddGrade(true)}
-                className="h-8 gap-1.5 border-primary/30 text-primary hover:bg-primary/5 font-medium text-xs">
-                <Package2 size={13} />
-                Por Grade
-              </Button>
-              {(itensCarga.length > 0 || tituloCarga.trim()) && (
-                <Button variant="ghost" size="sm" onClick={handleLimparRascunho}
-                  className="h-8 gap-1.5 text-muted-foreground hover:text-destructive text-xs">
-                  <Trash2 size={13} />
-                  Limpar rascunho
-                </Button>
-              )}
-            </div>
-          </div>
-        </DialogHeader>
-
-        {/* Corpo: duas colunas */}
-        <div className="flex-1 min-h-0 flex overflow-hidden">
-
-          {/* Coluna esquerda — browser de produtos */}
-          <div className="flex-1 min-w-0 flex flex-col border-r overflow-hidden">
-            {/* Busca */}
-            <div className="px-4 py-2.5 border-b bg-muted/20 shrink-0">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar modelo ou referência..." value={buscaProduto}
-                  onChange={e => setBuscaProduto(e.target.value)} autoFocus
-                  className="pl-9 pr-8 h-9 bg-background" />
-                {buscaProduto && (
-                  <Button variant="ghost" size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                    onClick={() => setBuscaProduto('')}>
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            </div>
-            {/* Contagem */}
-            <div className="px-4 py-1.5 text-xs text-muted-foreground border-b bg-muted/10 shrink-0 flex items-center gap-2">
-              <span>{modeloGroupsDesktop.length} modelo{modeloGroupsDesktop.length !== 1 ? 's' : ''}</span>
-              {modeloGroupsDesktop.filter(g => g.totalEmCarga > 0).length > 0 && (
-                <>
-                  <span>·</span>
-                  <span className="text-primary font-medium">
-                    {modeloGroupsDesktop.filter(g => g.totalEmCarga > 0).length} selecionado{modeloGroupsDesktop.filter(g => g.totalEmCarga > 0).length !== 1 ? 's' : ''}
-                  </span>
-                </>
-              )}
-            </div>
-            {/* Lista agrupada */}
-            <ScrollArea className="flex-1">
-              {isRefetchingEstoque ? (
-                <div className="flex items-center justify-center py-16">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : modeloGroupsDesktop.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                  <Package className="h-12 w-12 mb-3 opacity-30" />
-                  <p className="text-sm font-medium">Nenhum modelo encontrado</p>
-                  {buscaProduto && <p className="text-xs mt-1 opacity-70">Tente outro termo de busca</p>}
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {modeloGroupsDesktop.map(grupo => {
-                    const emCarga = grupo.totalEmCarga > 0;
-                    return (
-                      <div key={grupo.key} className={cn("px-4 py-3", emCarga && "bg-emerald-50/60 dark:bg-emerald-950/20")}>
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted flex-shrink-0 border">
-                            <LotImage src={grupo.imagemUrl} alt={grupo.nomeExibicao} className="w-full h-full object-cover" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2 mb-1.5">
-                              <p className="text-sm font-semibold line-clamp-1 leading-snug">{grupo.nomeExibicao}</p>
-                              <span className="text-xs text-muted-foreground shrink-0 mt-0.5">{formatCurrency(grupo.valorUnitario)}</span>
-                            </div>
-                            {grupo.skus[0]?.tamanho ? (
-                              /* COM tamanho: chips de tamanho */
-                              <div className="flex flex-wrap gap-1.5">
-                                {grupo.skus.map(sku => {
-                                  const item = itensCarga.find(i => i.itemId === sku.id);
-                                  const qtd = item?.quantidade || 0;
-                                  const semEstoque = sku.disponivel <= 0;
-                                  if (qtd > 0) {
-                                    return (
-                                      <div key={sku.id}
-                                        className="inline-flex items-center bg-primary text-primary-foreground rounded-lg text-xs font-semibold overflow-hidden">
-                                        <span className="pl-2.5 pr-1 py-1 leading-none">{sku.tamanho}</span>
-                                        <span className="pr-1 py-1 opacity-60 leading-none">·</span>
-                                        <span className="pr-1.5 py-1 leading-none tabular-nums">{qtd}</span>
-                                        <button className="w-6 h-full flex items-center justify-center hover:bg-white/20 transition-colors"
-                                          onClick={() => { if (qtd <= 1) handleRemoveItemCarga(sku.id); else handleSetQuantidadeCarga(sku.id, qtd - 1); }}>
-                                          <Minus size={10} />
-                                        </button>
-                                        <button className="w-6 h-full flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-40"
-                                          onClick={() => { if (qtd < sku.disponivel) handleSetQuantidadeCarga(sku.id, qtd + 1); }}
-                                          disabled={qtd >= sku.disponivel}>
-                                          <Plus size={10} />
-                                        </button>
-                                      </div>
-                                    );
-                                  }
-                                  return (
-                                    <button key={sku.id} disabled={semEstoque}
-                                      onClick={() => !semEstoque && handleAddItemCarga(sku.produto)}
-                                      className={cn(
-                                        "inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium transition-colors leading-none",
-                                        semEstoque
-                                          ? "border-border/50 text-muted-foreground/40 cursor-not-allowed bg-muted/20"
-                                          : "border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 hover:border-primary/60 cursor-pointer"
-                                      )}>
-                                      <span>{sku.tamanho}</span>
-                                      {!semEstoque && <span className="text-[10px] opacity-60 tabular-nums">{sku.disponivel}</span>}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              /* SEM tamanho (solo): botão Adicionar / controles inline */
-                              (() => {
-                                const sku = grupo.skus[0];
-                                if (!sku) return null;
-                                const item = itensCarga.find(i => i.itemId === sku.id);
-                                const qtd = item?.quantidade || 0;
-                                const semEstoque = sku.disponivel <= 0;
-                                return (
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className={cn("text-xs font-medium", semEstoque ? "text-muted-foreground/50" : "text-emerald-600")}>
-                                      {semEstoque ? 'Sem estoque' : `Disp: ${sku.disponivel}`}
-                                    </span>
-                                    {!semEstoque && qtd === 0 && (
-                                      <button onClick={() => handleAddItemCarga(sku.produto)}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 text-xs font-medium transition-colors">
-                                        <Plus size={11} />
-                                        Adicionar
-                                      </button>
-                                    )}
-                                    {qtd > 0 && (
-                                      <div className="inline-flex items-center bg-primary text-primary-foreground rounded-lg text-xs font-semibold overflow-hidden">
-                                        <span className="pl-2.5 pr-1.5 py-1 leading-none tabular-nums">{qtd} pç</span>
-                                        <button className="w-6 h-full flex items-center justify-center hover:bg-white/20 transition-colors"
-                                          onClick={() => { if (qtd <= 1) handleRemoveItemCarga(sku.id); else handleSetQuantidadeCarga(sku.id, qtd - 1); }}>
-                                          <Minus size={10} />
-                                        </button>
-                                        <button className="w-6 h-full flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-40"
-                                          onClick={() => { if (qtd < sku.disponivel) handleSetQuantidadeCarga(sku.id, qtd + 1); }}
-                                          disabled={qtd >= sku.disponivel}>
-                                          <Plus size={10} />
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </ScrollArea>
-          </div>
-
-          {/* Coluna direita — carrinho */}
-          <div className="w-72 xl:w-80 shrink-0 flex flex-col bg-muted/5">
-            {/* Título da carga */}
-            <div className="px-4 py-3 border-b shrink-0">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5 block">
-                Nome da carga (opcional)
-              </label>
-              <Input placeholder="Ex: Alfaiataria, Jeans..." value={tituloCarga}
-                onChange={e => setTituloCarga(e.target.value)} className="h-9 bg-background text-sm" />
-            </div>
-
-            {/* Cabeçalho carrinho */}
-            <div className="px-4 py-2 border-b shrink-0 flex items-center justify-between">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Selecionados
-              </span>
-              {itensCarga.length > 0 && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {itensCarga.length} sku · {totalCarga} pç
-                </span>
-              )}
-            </div>
-
-            {/* Lista do carrinho */}
-            {itensCarga.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground px-4">
-                <Package className="h-10 w-10 mb-3 opacity-20" />
-                <p className="text-sm font-medium text-center">Nenhum item adicionado</p>
-                <p className="text-xs mt-1 opacity-70 text-center">Clique nos tamanhos à esquerda para adicionar</p>
-              </div>
-            ) : (
-              <ScrollArea className="flex-1">
-                <div className="p-2 space-y-1.5">
-                  {itensCarga.map(item => (
-                    <div key={item.itemId} className="flex items-center gap-2 p-2 rounded-lg border bg-card">
-                      <div className="w-8 h-8 rounded overflow-hidden bg-muted flex-shrink-0 border">
-                        <LotImage src={item.imagemUrl} alt={item.nome} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold truncate leading-tight">
-                          {parseProductName(item.nome, item.itemId).nomeExibicao}
-                        </p>
-                        <p className="text-xs text-muted-foreground tabular-nums">
-                          {formatCurrency(item.precoUnitario)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                          onClick={() => {
-                            if (item.quantidade <= 1) handleRemoveItemCarga(item.itemId);
-                            else handleSetQuantidadeCarga(item.itemId, item.quantidade - 1);
-                          }}>
-                          {item.quantidade <= 1 ? <X size={11} /> : <Minus size={11} />}
-                        </Button>
-                        <span className="w-6 text-center text-xs font-bold tabular-nums">{item.quantidade}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6"
-                          onClick={() => handleSetQuantidadeCarga(item.itemId, item.quantidade + 1)}
-                          disabled={item.quantidade >= item.disponivelCentral}>
-                          <Plus size={11} />
-                        </Button>
-                      </div>
-                      <span className="text-xs font-bold text-primary tabular-nums w-14 text-right shrink-0">
-                        {formatCurrency(item.precoUnitario * item.quantidade)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-
-            {/* Footer com total e ação */}
-            <div className="border-t p-3 space-y-2.5 shrink-0 bg-muted/10">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Total</span>
-                <span className="text-lg font-bold text-primary tabular-nums">{formatCurrency(valorCarga)}</span>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 h-9" onClick={handleCloseNovaCarga}>
-                  Cancelar
-                </Button>
-                <Button className="flex-1 h-9 gap-1.5" onClick={handleCriarCarga}
-                  disabled={itensCarga.length === 0 || criarCarga.isPending}>
-                  {criarCarga.isPending
-                    ? <><Loader2 className="h-4 w-4 animate-spin" />Criando...</>
-                    : <><Truck className="h-4 w-4" />Criar Carga</>}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>}
+    {/* Modal Nova Carga */}
+    <NovaCargaFeiraModal
+      open={showNovaCarga}
+      onClose={handleCloseNovaCarga}
+      itensCarga={itensCarga}
+      onAddItems={handleAddGradeItems}
+      onUpdateQtd={handleSetQuantidadeCarga}
+      onRemoveItem={handleRemoveItemCarga}
+      onCriarCarga={handleCriarCarga}
+      getDisponivelCentral={getDisponivelCentral}
+      formatCurrency={formatCurrency}
+      titulo={tituloCarga}
+      onTituloChange={setTituloCarga}
+      totalCarga={totalCarga}
+      valorCarga={valorCarga}
+      isPending={criarCarga.isPending}
+    />
 
     {/* Modal Retorno */}
     <Dialog open={showRetorno} onOpenChange={open => {

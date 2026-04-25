@@ -202,7 +202,7 @@ async function fetchAllClientesMinimal(userId: string) {
  * or highest total purchased for 'maior_historico' sorting).
  */
 export function useClientesCRMFilter(
-  filtroStatus: 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | 'novos' | null,
+  filtroStatus: 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | 'novos' | 'top_pareto' | null,
   ordenacao?: 'nome' | 'recente' | 'maior_historico'
 ) {
   const { user } = useAuth();
@@ -283,6 +283,16 @@ export function useClientesCRMFilter(
       const matchingClients: ClienteWithPendingDate[] = [];
       const hoje = new Date();
 
+      // For Pareto: Calculate the threshold for top 20% revenue
+      let paretoThreshold = Infinity;
+      if (filtroStatus === 'top_pareto') {
+        const revenues = Array.from(statsMap.values())
+          .map(s => s.totalComprado)
+          .sort((a, b) => b - a);
+        const top20n = Math.max(1, Math.ceil(allClientes.length * 0.2));
+        paretoThreshold = revenues[top20n - 1] || 0;
+      }
+
       for (const [clienteId, stats] of statsMap) {
         const diasDesdeUltimaCompra = stats.ultimaCompra
           ? differenceInDays(hoje, stats.ultimaCompra)
@@ -308,6 +318,9 @@ export function useClientesCRMFilter(
             break;
           case 'novos':
             matches = differenceInDays(hoje, stats.createdAt) < 7;
+            break;
+          case 'top_pareto':
+            matches = stats.totalComprado >= paretoThreshold && stats.totalComprado > 0;
             break;
         }
 

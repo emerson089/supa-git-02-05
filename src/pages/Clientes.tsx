@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, memo, useEffect } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw, ChevronLeft, ChevronRight, ChevronsUpDown, Check, CheckCircle2, PhoneCall, MessageCircle, MessageSquarePlus, Send, Loader2 } from 'lucide-react';
 import { useExcursoesAtivas } from '@/hooks/useExcursoes';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -48,7 +49,7 @@ const emptyCliente = {
   excursao: ''
 };
 type Ordenacao = 'nome' | 'recente' | 'maior_historico';
-type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | 'novos';
+type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | 'novos' | 'top_pareto';
 const PAGE_SIZE = 24;
 function formatCurrency(value: number): string {
   return value.toLocaleString('pt-BR', {
@@ -393,6 +394,8 @@ const ClienteCard = memo(function ClienteCard({
 });
 export default function Clientes() {
   const isMobile = useIsMobile();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     user
   } = useAuth();
@@ -411,6 +414,33 @@ export default function Clientes() {
   const [busca, setBusca] = useState(savedState?.busca || '');
   const [ordenacao, setOrdenacao] = useState<Ordenacao>(savedState?.ordenacao || 'nome');
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>(savedState?.filtroStatus || 'todos');
+
+  // Handle navigation from Dashboard (Pareto card) or URL params
+  useEffect(() => {
+    const filterParam = searchParams.get('filter') as FiltroStatus;
+    const sortParam = searchParams.get('sort') as Ordenacao;
+    
+    if (filterParam) {
+      setFiltroStatus(filterParam);
+      if (sortParam) setOrdenacao(sortParam);
+      setCurrentPage(0);
+      
+      // Clear params from URL without refreshing to keep it clean
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('filter');
+      newParams.delete('sort');
+      setSearchParams(newParams, { replace: true });
+    } else {
+      // Fallback to location state if anyone still uses it
+      const state = location.state as { filter?: FiltroStatus; ordenacao?: Ordenacao };
+      if (state?.filter) {
+        setFiltroStatus(state.filter);
+        if (state.ordenacao) setOrdenacao(state.ordenacao);
+        setCurrentPage(0);
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [searchParams, location.state]);
 
   // Contact markers
   const { contatosMap, marcarContato, getContato } = useClienteContatos();
@@ -744,13 +774,15 @@ export default function Clientes() {
           <SelectContent>
             <SelectItem value="nome">Nome (A-Z)</SelectItem>
             <SelectItem value="recente">Cadastro (Mais Recente)</SelectItem>
+            <SelectItem value="maior_historico">Maior Faturamento</SelectItem>
           </SelectContent>
         </Select>
 
         <div className="flex gap-2 pb-2 overflow-x-auto no-scrollbar scroll-smooth">
-          {(['todos', 'novos', 'vip', 'frequente', 'risco', 'pendente', 'sem_compras'] as FiltroStatus[]).map(filtro => <Button key={filtro} size="sm" variant={filtroStatus === filtro ? 'default' : 'outline'} onClick={() => handleFiltroChange(filtro)} className={cn("rounded-xl h-9 px-3 whitespace-nowrap text-xs sm:text-sm flex-shrink-0 transition-all", filtroStatus === filtro ? "bg-primary text-primary-foreground shadow-md" : "border-border hover:bg-muted/50", (filtro === 'pendente' || filtro === 'novos') && filtroStatus !== filtro && "border-yellow-400/50 text-yellow-700 bg-yellow-50/30")}>
+          {(['todos', 'novos', 'top_pareto', 'vip', 'frequente', 'risco', 'pendente', 'sem_compras'] as FiltroStatus[]).map(filtro => <Button key={filtro} size="sm" variant={filtroStatus === filtro ? 'default' : 'outline'} onClick={() => handleFiltroChange(filtro)} className={cn("rounded-xl h-9 px-3 whitespace-nowrap text-xs sm:text-sm flex-shrink-0 transition-all", filtroStatus === filtro ? "bg-primary text-primary-foreground shadow-md" : "border-border hover:bg-muted/50", (filtro === 'pendente' || filtro === 'novos' || filtro === 'top_pareto') && filtroStatus !== filtro && "border-yellow-400/50 text-yellow-700 bg-yellow-50/30")}>
             {filtro === 'todos' && 'Todos'}
             {filtro === 'novos' && '🎈 Novos'}
+            {filtro === 'top_pareto' && '🎯 80/20'}
             {filtro === 'vip' && '⭐ VIP'}
             {filtro === 'frequente' && '🔵 Frequentes'}
             {filtro === 'risco' && '⚠️ Risco'}
