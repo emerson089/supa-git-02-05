@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.discover-group-id]
 verify_jwt = false
+
+[functions.cobranca-pendentes]
+verify_jwt = false
