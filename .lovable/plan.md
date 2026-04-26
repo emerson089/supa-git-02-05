@@ -1,48 +1,68 @@
-## Corrigir os 4 erros de build que estão impedindo o app de compilar
+# Plano: Reativar Cobranças Automáticas
 
-São apenas correções pontuais — nenhuma mudança de comportamento, nenhuma alteração de banco de dados, nenhuma migração SQL. O objetivo é só destravar o build.
+## Diagnóstico (resumo)
+A funcionalidade está completamente quebrada porque a migration de infra **nunca foi aplicada** ao banco. Faltam:
+- Tabelas `templates_cobranca` e `cobrancas_enviadas`
+- Colunas `excluir_cobranca_automatica` em `clientes` e `pedidos`
+- Extensão `pg_cron` e os 3 jobs agendados
+- Declaração de `cobranca-pendentes` no `supabase/config.toml` (precisa de `verify_jwt = false` para o cron chamar)
+- O bloco DO $$ da migration original tentava ler GUCs `app.settings.*` que não existem no Supabase gerenciado → cron jamais foi criado mesmo se a migration tivesse rodado
 
----
+## Etapa 1 — Migration única (substitui a anterior, que está obsoleta)
 
-### 1. `src/utils/dateTz.ts` — propriedade errada do date-fns
-**Erros:** linhas 92 e 97 usam `{ weekStarts: 1 }`, mas o nome correto da opção do `date-fns` é `weekStartsOn`.
+Criar nova migration `*_cobrancas_automaticas_v2.sql` com:
 
-**Correção:**
-- Linha 92: `startOfWeek(spDate, { weekStarts: 1 })` → `startOfWeek(spDate, { weekStartsOn: 1 })`
-- Linha 97: `endOfWeek(spDate, { weekStarts: 1 })` → `endOfWeek(spDate, { weekStartsOn: 1 })`
+1. **Extensões**: `CREATE EXTENSION IF NOT EXISTS pg_cron;` e `pg_net;`
+2. **Colunas de exclusão**:
+   - `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS excluir_cobranca_automatica BOOLEAN NOT NULL DEFAULT false;`
+   - `ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS excluir_cobranca_automatica BOOLEAN NOT NULL DEFAULT false;`
+3. **Tabela `templates_cobranca`** com RLS `auth.uid() = user_id` e UNIQUE(user_id, tentativa)
+4. **Tabela `cobrancas_enviadas`** com:
+   - FK em pedido_id ON DELETE CASCADE
+   - UNIQUE(pedido_id, tentativa) para evitar reenvio
+   - RLS: SELECT para `authenticated` (true), ALL para `service_role`
+5. **Cron jobs** — agendados com URL hardcoded do projeto e `SUPABASE_ANON_KEY` no Authorization (segue a `external-api-access-policy`):
+   - `cobranca-quarta-14h` → cron `0 17 * * 3` (14h BRT) → POST `{tentativa:1}`
+   - `cobranca-quinta-9h` → cron `0 12 * * 4` (9h BRT) → POST `{tentativa:2}`
+   - `cobranca-quinta-15h` → cron `0 18 * * 4` (15h BRT) → POST `{tentativa:3}`
+   - Antes de criar, fazer `cron.unschedule` defensivo dos mesmos nomes para idempotência
 
-Isso mantém a semana ISO (segunda a domingo) como já estava planejado.
+## Etapa 2 — Declarar a Edge Function
 
----
+Adicionar ao `supabase/config.toml`:
+```toml
+[functions.cobranca-pendentes]
+verify_jwt = false
+```
+Necessário porque o cron interno chama a função sem sessão de usuário; o controle de acesso real é feito pela `service_role_key` que a função usa internamente para escrever no banco.
 
-### 2. `src/components/layout/BottomNavigation.tsx` — referências a estado removido
-**Erros:** linhas 140, 148, 160 e 168 chamam `setMoreMenuOpen(false)`, mas esse `useState` não existe mais no componente (só sobrou `setQuickActionsOpen`). O "More menu" foi descontinuado e essas chamadas ficaram órfãs.
+## Etapa 3 — Corrigir TypeScript em `src/pages/ConfigCobrancas.tsx`
 
-**Correção:** Remover as 4 chamadas `setMoreMenuOpen(false)` — as chamadas `setQuickActionsOpen(false)` ao lado já dão conta do fechamento. Não há perda de funcionalidade, porque o menu correspondente já não existe na UI.
+Após a migration rodar, o `types.ts` será regenerado automaticamente e os 6 erros somem sozinhos. Não precisa cast `as any` — vai funcionar nativo. Apenas verificar:
+- `setHistorico(data ?? [])` na linha 166 — vai aceitar pois o tipo `cobrancas_enviadas` agora existe
+- `setClientes(data ?? [])` na linha 179 — idem para a coluna `excluir_cobranca_automatica`
+- `.update({ excluir_cobranca_automatica: valor })` na linha 190 — idem
 
----
+## Etapa 4 — Não tocar (fora de escopo)
 
-### 3. `src/hooks/useSalesTrendChart.ts` — leitura de campo interno sem cast
-**Erro:** linha 195 acessa `result[daysDiff]._isPrevValid`, mas `_isPrevValid` não existe no tipo `TrendDataPoint`. O campo é empurrado no objeto com `as any` (linha 177) e depois removido no `map` final (linha 217), então é só um campo interno temporário — falta o cast na leitura.
+- `useMassSending.ts` usa `blacklist` e `campanhas_historico` — pertencem ao módulo de **transmissão de catálogo**, não cobrança. Já estão com `as any` e o build não reclama. Fica para outro ticket.
+- `cobranca-pendentes/index.ts` — código está correto, não precisa alterar.
 
-**Correção:** Trocar `result[daysDiff]._isPrevValid` por `(result[daysDiff] as any)._isPrevValid`.
+## Etapa 5 — QA pós-deploy
 
----
+1. Abrir `/configuracoes/cobrancas` → confirmar que carrega sem erros e que os 3 templates padrão aparecem editáveis
+2. Salvar 1 template → verificar registro em `templates_cobranca` via DB
+3. Marcar 1 cliente como excluído → verificar `clientes.excluir_cobranca_automatica = true`
+4. Botão "Disparar agora" da 1ª cobrança → confirmar que invoca a function, retorna `{enviados, falhas}` e popula `cobrancas_enviadas`
+5. `SELECT jobname, schedule, active FROM cron.job WHERE jobname LIKE 'cobranca-%'` → deve retornar 3 linhas ativas
+6. Confirmar que reenviar a mesma tentativa para o mesmo pedido **não duplica** (constraint UNIQUE + lógica `idsJaEnviados` na função)
 
-### 4. `src/hooks/useRecebimentosTrendChart.ts` — mesma situação do hook acima
-**Erro:** linha 158 com o mesmo padrão.
+## Riscos
+- **pg_cron em managed Supabase**: a extensão é suportada mas só pode ser instalada no schema `pg_catalog`/`extensions` em projetos com plan adequado. Se falhar, alternativa é usar Supabase Cron (UI) — preciso confirmar disponibilidade ao rodar a migration.
+- **Z-API**: a função depende dos 3 secrets `ZAPI_INSTANCE_ID`, `ZAPI_TOKEN`, `ZAPI_CLIENT_TOKEN` (já configurados, confirmado).
+- **Volume**: o loop tem `setTimeout 2s` entre envios — para 50 pedidos, leva ~100s, próximo do timeout default de edge function (150s). Aceitável para o volume atual; monitorar.
 
-**Correção:** Trocar `result[daysDiff]._isPrevValid` por `(result[daysDiff] as any)._isPrevValid`.
-
----
-
-### Validação
-- Build do projeto deve passar (`tsc` sem erros).
-- Comportamento visual do gráfico Tendência de Vendas e Recebimentos Confirmados deve continuar idêntico.
-- Bottom navigation no mobile deve continuar abrindo/fechando o menu de Ações Rápidas normalmente.
-- Cálculos de semana (ISO segunda → domingo) devem funcionar corretamente após a correção do `weekStartsOn`.
-
-### Observações
-- **Nenhuma migração SQL.** Nenhuma mudança em RPCs, tabelas, RLS, edge functions ou storage.
-- **Nenhuma mudança de UX.** Os 4 ajustes são puramente de tipagem / referência morta.
-- O plano maior do "Tendência de Vendas — Ano/Mês/Semana" continua intacto e independente; estas correções só destravam o que já foi escrito para que o app volte a rodar.
+## Arquivos tocados
+- `supabase/migrations/{timestamp}_cobrancas_automaticas_v2.sql` (novo)
+- `supabase/config.toml` (adicionar bloco)
+- Nenhum arquivo TS precisa edição manual — `types.ts` é regenerado automaticamente
