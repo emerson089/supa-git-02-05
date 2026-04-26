@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { 
-  Play, Pause, Loader2, CheckCircle2, AlertTriangle, Send, 
-  Search, Filter, Calendar, Clock, Eye, ShieldCheck, 
-  UserCheck, Smartphone, Info, Eraser, Trash2, ChevronDown, ChevronUp,
-  Mail, FileText
+import {
+  Play, Pause, Loader2, CheckCircle2, AlertTriangle, Send,
+  Filter, Clock, ShieldCheck,
+  Smartphone, Info, Eraser, ChevronDown, ChevronUp,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,9 +30,7 @@ import { useCatalogos } from '@/hooks/useCatalogos';
 import { useClienteContatos } from '@/hooks/useClienteContatos';
 import { useMassSending } from '@/hooks/useMassSending';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -67,25 +65,21 @@ interface TransmissaoManagerModalProps {
 }
 
 const normalizePhoneE164 = (raw: string): { valid: boolean; phone: string } => {
-  let digits = raw.replace(/\D/g, '');
-  digits = digits.replace(/^0+/, '');
+  const digits = raw.replace(/\D/g, '').replace(/^0+/, '');
 
-  // Caso especial: 11 dígitos começando com 55 (55 + DDD + 7 dígitos)
-  if (digits.length === 11 && digits.startsWith('55')) {
-    digits = digits.slice(0, 4) + '9' + digits.slice(4);
+  // Já no formato E.164 completo: 55 + DDD(2) + 9dig(mobile=13) ou 8dig(fixo=12)
+  if (digits.startsWith('55') && (digits.length === 13 || digits.length === 12)) {
+    return { valid: true, phone: digits };
   }
 
-  // Caso especial: 9 dígitos sem o 55 (DDD + 7 dígitos)
-  if (digits.length === 9 && !digits.startsWith('55')) {
-    digits = digits.slice(0, 2) + '9' + digits.slice(2);
-  }
-
+  // Sem prefixo 55: DDD(2) + 9dig = 11 (celular) ou DDD(2) + 8dig = 10 (fixo)
   if (!digits.startsWith('55')) {
-    digits = '55' + digits;
+    if (digits.length === 11 || digits.length === 10) {
+      return { valid: true, phone: '55' + digits };
+    }
   }
-  
-  if (digits.length < 12 || digits.length > 13) return { valid: false, phone: '' };
-  return { valid: true, phone: digits };
+
+  return { valid: false, phone: '' };
 };
 
 const gerarSaudacao = (nome: string): string => {
@@ -125,13 +119,6 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const [filterCategoria, setFilterCategoria] = useState('todos');
   const [filterValorMin, setFilterValorMin] = useState('');
   const [filterExcursao, setFilterExcursao] = useState('');
-
-  // Agendamento
-  const [isAgendado, setIsAgendado] = useState(false);
-  const [agendamentoData, setAgendamentoData] = useState('');
-  const [agendamentoHoraInicio, setAgendamentoHoraInicio] = useState('08:00');
-  const [agendamentoHoraFim, setAgendamentoHoraFim] = useState('18:00');
-  const [horarioComercial, setHorarioComercial] = useState(true);
 
   // Preview e Segurança
   const [showPreview, setShowPreview] = useState(false);
@@ -284,11 +271,6 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const handleStart = () => {
     if (total === 0) { toast.error('Nenhum cliente disponível na lista filtrada.'); return; }
     if (!selectedCatalogoId) { toast.error('Selecione um catálogo.'); return; }
-    
-    if (isAgendado && !agendamentoData) {
-        toast.error('Selecione uma data para o agendamento.');
-        return;
-    }
 
     if (hasPersistedData) {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -311,11 +293,6 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   };
 
   const executeStart = async () => {
-    if (isAgendado) {
-        toast.info('Agendamento de envios ainda não está disponível. Envie agora.');
-        return;
-    }
-
     setStatus('running');
     processNext(0);
   };
@@ -359,16 +336,24 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     }
 
     const cliente = clientesFinais[index];
-    
-    // Verificar Blacklist
-    const blocked = await isBlacklisted(cliente.telefone || '');
+
+    // Verificar opt_out (LGPD)
+    if ((cliente as any).opt_out === true) {
+      logMessage(`PULADO: ${cliente.nome?.split(' ')[0]} optou por não receber mensagens`, 'error');
+      agendarProximo(index + 1);
+      return;
+    }
+
+    // Normalizar telefone antes de qualquer verificação
+    const phoneResult = normalizePhoneE164(cliente.telefone || '');
+
+    // Verificar Blacklist com telefone normalizado
+    const blocked = phoneResult.valid ? await isBlacklisted(phoneResult.phone) : false;
     if (blocked) {
       logMessage(`PULADO: ${cliente.nome?.split(' ')[0]} está na Blacklist`, 'error');
       agendarProximo(index + 1);
       return;
     }
-
-    const phoneResult = normalizePhoneE164(cliente.telefone || '');
 
     if (!phoneResult.valid) {
       logMessage(`Telefone inválido: ${cliente.nome?.split(' ')[0]}`, 'error');
@@ -639,38 +624,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                 </div>
               </Card>
 
-              {/* Seção 3: Agendamento */}
-              <Card className="p-4 border-none bg-orange-50 dark:bg-orange-950/20 rounded-2xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} className="text-orange-600" />
-                    <h4 className="font-bold text-sm text-orange-900 dark:text-orange-300">Agendar para Depois?</h4>
-                  </div>
-                  <Switch checked={isAgendado} onCheckedChange={setIsAgendado} />
-                </div>
-
-                {isAgendado && (
-                  <div className="grid grid-cols-2 gap-3 animate-in fade-in zoom-in-95 duration-200">
-                    <div className="space-y-1">
-                        <Label className="text-[10px]">Data do Envio</Label>
-                        <Input type="date" value={agendamentoData} onChange={e => setAgendamentoData(e.target.value)} className="h-9 text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-[10px]">Janela de Horário</Label>
-                        <div className="flex items-center gap-2">
-                          <Input type="time" value={agendamentoHoraInicio} onChange={e => setAgendamentoHoraInicio(e.target.value)} className="h-9 text-xs" />
-                          <Input type="time" value={agendamentoHoraFim} onChange={e => setAgendamentoHoraFim(e.target.value)} className="h-9 text-xs" />
-                        </div>
-                    </div>
-                    <div className="col-span-2 flex items-center gap-2 mt-1">
-                      <Checkbox id="comercial" checked={horarioComercial} onCheckedChange={(v) => setHorarioComercial(!!v)} />
-                      <Label htmlFor="comercial" className="text-xs text-muted-foreground">Pausar fora do horário comercial (08h - 18h)</Label>
-                    </div>
-                  </div>
-                )}
-              </Card>
-
-              {/* Seção 4: Preview Mockup */}
+              {/* Seção 3: Preview Mockup */}
               <div className="flex justify-center py-2">
                 <Button variant="outline" size="sm" className="rounded-xl border-primary/20 bg-primary/5 text-primary font-bold gap-2 h-10 px-6" onClick={() => setShowPreview(true)}>
                     <Smartphone size={16} /> Ver Prévia no Celular
@@ -753,7 +707,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
               </Button>
               <Button onClick={handleStart} className="h-12 rounded-2xl flex-[2] bg-primary hover:bg-primary/90 text-white font-black shadow-xl shadow-primary/20">
                 <Play size={18} className="mr-2 fill-current" />
-                {isAgendado ? 'Agendar Disparo' : 'Iniciar Agora'}
+                Iniciar Agora
               </Button>
             </>
           )}
@@ -861,12 +815,6 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                                 <span className="text-muted-foreground font-medium uppercase tracking-widest text-[10px]">Velocidade</span>
                                 <span className="font-bold capitalize">{velocidade.replace('_', ' ')}</span>
                              </div>
-                             {isAgendado && (
-                                <div className="flex justify-between text-xs text-orange-600 font-bold">
-                                    <span className="uppercase tracking-widest text-[10px]">Agendado para</span>
-                                    <span>{agendamentoData} {agendamentoHoraInicio}</span>
-                                </div>
-                             )}
                         </div>
 
                         <div className="space-y-2">
@@ -882,12 +830,12 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
                     <div className="flex gap-3">
                         <Button variant="ghost" className="flex-1 rounded-xl h-12 font-bold" onClick={() => setStatus('idle')}>Cancelar</Button>
-                        <Button 
-                            className="flex-2 rounded-xl h-12 bg-primary font-black shadow-lg shadow-primary/20" 
+                        <Button
+                            className="flex-2 rounded-xl h-12 bg-primary font-black shadow-lg shadow-primary/20"
                             disabled={confirmText.toUpperCase() !== 'CONFIRMAR'}
                             onClick={executeStart}
                         >
-                            {isAgendado ? 'AGENDAR AGORA' : 'INICIAR DISPARO'}
+                            INICIAR DISPARO
                         </Button>
                     </div>
                 </DialogContent>
