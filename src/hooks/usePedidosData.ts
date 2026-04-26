@@ -63,6 +63,7 @@ export interface PedidoInsert {
   estorno_realizado?: boolean;
   notificado_separado?: boolean;
   notificado_no_carro?: boolean;
+  excluir_cobranca_automatica?: boolean;
   itens: Array<{
     produto_id?: string | null;
     produto_nome: string;

@@ -30,7 +30,7 @@ import { statusPagamentoOptions, statusPedidoOptions, statusEntregaOptions } fro
 import { StatusMultiSelect } from '@/components/pedidos/StatusMultiSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Plus, Eye, EyeOff, Trash2, ShoppingBag, DollarSign, Package, MapPin, Phone, Bus, MoreHorizontal, ArrowUpDown, FileText, Pencil, Calendar as CalendarIcon, X, Download, Upload, Loader2, RefreshCw } from 'lucide-react';
+import { Search, Plus, Eye, EyeOff, Trash2, ShoppingBag, DollarSign, Package, MapPin, Phone, Bus, MoreHorizontal, ArrowUpDown, FileText, Pencil, Calendar as CalendarIcon, X, Download, Upload, Loader2, RefreshCw, BellOff, Bell } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay, parse, subDays, startOfWeek, addDays, isValid } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -588,6 +588,12 @@ Qualquer dúvida é só chamar! 😊`;
       currency: 'BRL'
     }).format(value);
   };
+  const handleToggleCobranca = (pedido: PedidoPaginatedDB) => {
+    const novoValor = !pedido.excluir_cobranca_automatica;
+    updatePedidoMutate({ id: pedido.id, data: { excluir_cobranca_automatica: novoValor } });
+    toast.success(novoValor ? 'Pedido excluído das cobranças automáticas' : 'Pedido incluído nas cobranças automáticas');
+  };
+
   const handleDelete = async () => {
     if (!deleteId) return;
 
@@ -1283,6 +1289,12 @@ Qualquer dúvida é só chamar! 😊`;
                             <DropdownMenuItem onClick={() => generatePDF(pedido)} className="gap-2 cursor-pointer">
                               <FileText className="h-4 w-4" />
                               Gerar PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleToggleCobranca(pedido)} className="gap-2 cursor-pointer">
+                              {pedido.excluir_cobranca_automatica
+                                ? <><Bell className="h-4 w-4" /> Incluir na cobrança auto.</>
+                                : <><BellOff className="h-4 w-4" /> Excluir da cobrança auto.</>
+                              }
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setDeleteId(pedido.id)} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
                               <Trash2 className="h-4 w-4" />

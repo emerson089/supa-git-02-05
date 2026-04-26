@@ -123,6 +123,12 @@ const bottomNavGroups: NavItem[] = [
     roles: ['admin', 'gerente']
   },
   {
+    label: 'Cobranças Auto.',
+    icon: <Receipt size={18} />,
+    path: '/configuracoes/cobrancas',
+    roles: ['admin', 'gerente']
+  },
+  {
     label: 'Ajuda',
     icon: <HelpCircle size={18} />,
     path: '/ajuda'

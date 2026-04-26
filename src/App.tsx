@@ -24,6 +24,7 @@ import ConfigExcursoes from "./pages/ConfigExcursoes";
 import ConfigCustosPadrao from "./pages/ConfigCustosPadrao";
 import ConfigCatalogo from "./pages/ConfigCatalogo";
 import ConfigNotificacoes from "./pages/ConfigNotificacoes";
+import ConfigCobrancas from "./pages/ConfigCobrancas";
 import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 import PecasEmConserto from "./pages/PecasEmConserto";
@@ -106,6 +107,14 @@ function App() {
                       element={
                         <ProtectedRoute allowedRoles={['admin', 'gerente']}>
                           <ConfigNotificacoes />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/cobrancas"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <ConfigCobrancas />
                         </ProtectedRoute>
                       }
                     />

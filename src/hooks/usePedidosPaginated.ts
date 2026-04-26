@@ -26,6 +26,7 @@ export interface PedidoPaginatedDB {
   estorno_realizado: boolean | null;
   notificado_separado: boolean | null;
   notificado_no_carro: boolean | null;
+  excluir_cobranca_automatica: boolean | null;
   created_at: string;
   updated_at: string;
   paid_at: string | null;
