@@ -140,6 +140,7 @@ export type Database = {
           cidade: string
           created_at: string
           estado: string
+          excluir_cobranca_automatica: boolean
           excursao: string
           id: string
           nome: string
@@ -151,6 +152,7 @@ export type Database = {
           cidade?: string
           created_at?: string
           estado?: string
+          excluir_cobranca_automatica?: boolean
           excursao?: string
           id?: string
           nome: string
@@ -162,6 +164,7 @@ export type Database = {
           cidade?: string
           created_at?: string
           estado?: string
+          excluir_cobranca_automatica?: boolean
           excursao?: string
           id?: string
           nome?: string
@@ -170,6 +173,53 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      cobrancas_enviadas: {
+        Row: {
+          cliente_nome: string
+          enviado_at: string
+          erro: string | null
+          id: string
+          mensagem: string
+          pedido_id: string
+          status: string
+          telefone: string
+          tentativa: number
+          valor_total: number
+        }
+        Insert: {
+          cliente_nome: string
+          enviado_at?: string
+          erro?: string | null
+          id?: string
+          mensagem?: string
+          pedido_id: string
+          status?: string
+          telefone: string
+          tentativa: number
+          valor_total?: number
+        }
+        Update: {
+          cliente_nome?: string
+          enviado_at?: string
+          erro?: string | null
+          id?: string
+          mensagem?: string
+          pedido_id?: string
+          status?: string
+          telefone?: string
+          tentativa?: number
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobrancas_enviadas_pedido_id_fkey"
+            columns: ["pedido_id"]
+            isOneToOne: false
+            referencedRelation: "pedidos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       comprovantes: {
         Row: {
@@ -814,6 +864,7 @@ export type Database = {
           desconto: number | null
           estado: string | null
           estorno_realizado: boolean | null
+          excluir_cobranca_automatica: boolean
           excursao: string | null
           excursao_id: string | null
           forma_pagamento: string | null
@@ -843,6 +894,7 @@ export type Database = {
           desconto?: number | null
           estado?: string | null
           estorno_realizado?: boolean | null
+          excluir_cobranca_automatica?: boolean
           excursao?: string | null
           excursao_id?: string | null
           forma_pagamento?: string | null
@@ -872,6 +924,7 @@ export type Database = {
           desconto?: number | null
           estado?: string | null
           estorno_realizado?: boolean | null
+          excluir_cobranca_automatica?: boolean
           excursao?: string | null
           excursao_id?: string | null
           forma_pagamento?: string | null
@@ -1186,6 +1239,36 @@ export type Database = {
           id?: string
           new_role?: string
           old_role?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      templates_cobranca: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          mensagem: string
+          tentativa: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          mensagem: string
+          tentativa: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          mensagem?: string
+          tentativa?: number
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
