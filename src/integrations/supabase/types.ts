@@ -668,6 +668,7 @@ export type Database = {
           id: string
           localizacao: string | null
           nome: string
+          origem: string | null
           taxa: number
           updated_at: string | null
           user_id: string
@@ -679,6 +680,7 @@ export type Database = {
           id?: string
           localizacao?: string | null
           nome: string
+          origem?: string | null
           taxa?: number
           updated_at?: string | null
           user_id: string
@@ -690,6 +692,7 @@ export type Database = {
           id?: string
           localizacao?: string | null
           nome?: string
+          origem?: string | null
           taxa?: number
           updated_at?: string | null
           user_id?: string

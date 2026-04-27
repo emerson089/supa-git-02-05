@@ -1,120 +1,41 @@
+## Diagnóstico
 
-## Objetivo
+A Z-API está conectada e o webhook "Ao receber" aponta corretamente pra `webhook-comprovantes`. Mas no painel da Z-API existe uma configuração separada e obrigatória pra receber **mensagens de grupo** — ela não está visível no print atual e provavelmente está desligada.
 
-Sair da lógica atual (1 ou 2 grupos hardcoded em secrets) e suportar **N grupos cadastráveis** pelo painel. Cada grupo terá:
-- ID do grupo WhatsApp (ex: `120363402446093422-group`)
-- Nome amigável (ex: "Confirmação de Pagamento 1")
-- Ícone/emoji + cor (para diferenciar visualmente)
-- Categorização padrão (Jeans / Alfaiataria / Não classificado / "perguntar via legenda J/A")
-- Toggle ativo/inativo
+Sintoma confirma a teoria: nos eventos brutos recebidos, só apareceram mensagens privadas. Nenhum evento do grupo `120363402446093422-group` chegou na função.
 
-E na aba **Comprovantes**, separar tudo por grupo com filtros e cards de totais por grupo.
+## O que vou fazer
 
----
+### 1. Limpeza de duplicidade no banco
 
-## Diagnóstico do problema atual
+A tabela `grupos_comprovantes` está com cada grupo cadastrado 2x (problema do seed). Migration pra remover duplicatas e adicionar UNIQUE constraint em `group_whatsapp_id` pra impedir que aconteça de novo.
 
-A mensagem do grupo "Confirmação de pagamento 💰" (ID `120363402446093422-group`) não chegou no banco porque, mesmo com o secret `WHATSAPP_GROUP_ID_PAGAMENTOS` configurado, **olhando os logs recentes da edge function `webhook-comprovantes` só aparecem mensagens do grupo Feira (`120363043122353365-group`)**. Ou seja: o webhook da Z-API para o grupo de Pagamentos provavelmente **não está disparando para a URL da função** — a Z-API só envia eventos para grupos que estejam ativos na configuração dela, ou o grupo precisa receber ao menos uma mensagem após o webhook estar configurado.
+### 2. Edge function `zapi-config-grupos` (one-shot)
 
-Então além de refatorar para N grupos, precisamos validar/garantir que o webhook da Z-API está recebendo eventos do novo grupo. A nova arquitetura facilita isso porque vamos logar **TODA** mensagem que chega (mesmo de grupos não cadastrados) numa tabela de descoberta — assim o usuário vê na hora se a Z-API está mandando ou não.
+Cria uma função simples que chama o endpoint da Z-API `update-every-webhook` com `notifyReceivedGroups: true`. Quando você clicar num botão "Ativar notificações de grupo na Z-API" na tela de Comprovantes, a configuração é ativada automaticamente — sem precisar mexer no painel da Z-API.
 
----
+### 3. Botão de diagnóstico na tela `/comprovantes`
 
-## O que vai mudar
+Dentro do modal "Gerenciar Grupos" adiciono uma seção:
+- **Botão "Ativar notificações de grupo (Z-API)"** → chama a função do passo 2
+- **Lista de "Eventos recentes recebidos (últimos 10 min)"** → puxa de `webhook_eventos_brutos` mostrando: hora, tipo (texto/imagem/doc), nome do chat, ID do grupo. Botão refresh.
+- Assim você manda mensagem no grupo, atualiza, e vê na hora se chegou.
 
-### 1. Banco de dados (migração)
+### 4. Validação de membro do grupo
 
-**Nova tabela `grupos_comprovantes`:**
-```
-id uuid PK
-user_id uuid
-group_whatsapp_id text  -- ex "120363402446093422-group"
-nome text               -- "Confirmação de Pagamento 1"
-emoji text              -- "💰"
-cor text                -- "emerald" | "blue" | "purple" | ...
-categoria_padrao comprovante_categoria  -- default 'nao_classificado'
-pedir_legenda_ja boolean default false   -- se true, usa lógica J/A da legenda
-ativo boolean default true
-created_at, updated_at
-UNIQUE (user_id, group_whatsapp_id)
-```
-Com RLS: usuário gerencia os próprios; admin/gerente leem tudo.
+Esse passo é manual seu: confirmar que o número WhatsApp da instância Delookii é participante do grupo "Confirmação de Pagamento 💰". Se não for, adicionar.
 
-**Nova tabela `webhook_eventos_brutos` (para descoberta/diagnóstico):**
-```
-id uuid PK
-group_whatsapp_id text
-sender text
-chat_name text
-message_type text  -- 'image' | 'document' | 'text' | ...
-caption text
-payload jsonb
-created_at timestamptz
-```
-Mantém só os últimos 7 dias (ou últimos 200 registros) — serve pra você descobrir o ID de um grupo novo só de mandar uma mensagem nele.
+## Fluxo de teste depois de implementado
 
-### 2. Edge Function `webhook-comprovantes`
+1. Aperta o botão "Ativar notificações de grupo (Z-API)" → toast confirma sucesso
+2. Confirma que a instância Delookii está no grupo de Pagamento
+3. Manda uma foto no grupo
+4. Atualiza a lista de eventos brutos no modal → deve aparecer linha com `message_type: image` e `group_whatsapp_id: 120363402446093422-group`
+5. Em alguns segundos, o comprovante aparece na tabela já processado pela IA, com cor 💰 do grupo Pagamento
+6. Você responde no grupo confirmando o registro
 
-Refatorar para:
-1. Toda chamada → grava em `webhook_eventos_brutos` (sempre, mesmo se não autorizado).
-2. Buscar `grupos_comprovantes` ativos no banco em vez de ler secret.
-3. Se `groupHost` não está cadastrado → retorna 200 com `{ok: true, grupo_nao_cadastrado: true}` (sem 401, pra Z-API não retentar) e segue o jogo.
-4. Se cadastrado → processa imagem/PDF como hoje, mas:
-   - Se `pedir_legenda_ja=true` → usa detector J/A da legenda (fluxo Feira atual).
-   - Senão → usa `categoria_padrao` do grupo.
-5. Mensagem de retorno por WhatsApp inclui o nome amigável do grupo: "✅ Comprovante registrado em *Confirmação de Pagamento 1*".
-6. Remover dependência dos secrets `WHATSAPP_GROUP_ID` e `WHATSAPP_GROUP_ID_PAGAMENTOS` (ficam só como fallback durante a migração — vamos seedar a tabela com eles).
+## Observação
 
-### 3. Nova página/seção: **Configuração de Grupos**
+Não preciso mexer na lógica de processamento da IA — ela já está pronta e testada. O bloqueio é puramente de configuração da Z-API.
 
-Acessível em `/config/grupos-comprovantes` (admin) ou aba dentro de Comprovantes:
-- Lista de grupos cadastrados (cards) com nome, emoji, ID, categoria padrão, status ativo.
-- Botão "Adicionar Grupo" → modal com:
-  - Nome amigável
-  - Group ID (com helper "Mande qualquer mensagem no grupo do WhatsApp e ele aparecerá aqui na lista de IDs descobertos")
-  - **Seletor de "IDs descobertos recentemente"** — puxa de `webhook_eventos_brutos` os group_ids dos últimos 7 dias que ainda não estão cadastrados. Clicou, preencheu.
-  - Emoji (campo livre + sugestões)
-  - Cor (palette: emerald, blue, purple, amber, rose, sky, indigo)
-  - Categoria padrão (radio: Jeans / Alfaiataria / Não classificado / "Perguntar via legenda J/A")
-  - Toggle ativo
-- Editar / excluir / ativar-desativar
-
-### 4. Aba **Comprovantes** — UI
-
-- **Cards de totais no topo**: virar **cards por grupo** (1 card por grupo cadastrado ativo) com nome, emoji, valor total e quantidade no período. Os cards Jeans/Alfaiataria/Não classificado/Validado continuam abaixo como visão agregada.
-- **Filtro "Grupo / Origem"** já existe (linha 242 do `Comprovantes.tsx`) — agora popula direto da tabela `grupos_comprovantes` com os nomes amigáveis (não mais string-matching de ID).
-- **Coluna "Origem"** na tabela exibe nome amigável + emoji + cor do grupo (chip colorido).
-- **Tabs opcionais por grupo** acima da tabela (visão "todos" + 1 tab por grupo) — atalho rápido vs. dropdown.
-
-### 5. Hook `useGruposComprovantes`
-
-Novo hook React Query que faz CRUD de `grupos_comprovantes`. Usado na página de configuração e em `Comprovantes.tsx` para popular filtros/cards.
-
----
-
-## Resumo técnico
-
-| Item | Mudança |
-|---|---|
-| Migração SQL | Cria tabelas `grupos_comprovantes`, `webhook_eventos_brutos` + RLS + seed inicial dos 2 IDs atuais |
-| Edge function | `webhook-comprovantes`: passa a ler grupos do DB, loga eventos brutos, suporta categoria por grupo |
-| Frontend novo | `/config/grupos-comprovantes` (lista + modal CRUD), hook `useGruposComprovantes` |
-| Frontend alterado | `Comprovantes.tsx`: cards por grupo, chip de origem, filtro populado do DB; `useComprovantes.ts`: já aceita filtro `grupo` |
-| Secrets | Remover dependência de `WHATSAPP_GROUP_ID` / `WHATSAPP_GROUP_ID_PAGAMENTOS` (ficam só pra seed) |
-| Diagnóstico | Tela mostra "IDs descobertos" pra você cadastrar grupo novo só mandando mensagem nele |
-
----
-
-## Dúvidas antes de executar
-
-1. **Onde colocar a configuração de grupos?**
-   - (a) Página própria em `/config/grupos-comprovantes` no menu Configurações
-   - (b) Aba "Configurar Grupos" dentro da própria tela `/comprovantes`
-   - (c) Botão "⚙️ Grupos" no header da tela Comprovantes que abre um drawer
-
-2. **Nos cards de totais do topo da aba Comprovantes**, prefere:
-   - (a) Manter o layout atual (Jeans / Alfaiataria / Pendente / Validado) e adicionar **1 linha extra de cards por grupo** abaixo
-   - (b) Substituir os cards atuais por **cards por grupo** e mostrar Jeans/Alfaiataria só nos grupos que usam categorização J/A
-   - (c) Layout em 2 colunas: à esquerda agregado (Jeans/Alfaiataria/Pendente), à direita cards por grupo
-
-Aprove o plano (e responda as 2 dúvidas) que eu executo tudo numa tacada só.
+Aprova pra eu executar os passos 1, 2 e 3? Passo 4 fica com você no celular.
