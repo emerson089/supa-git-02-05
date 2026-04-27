@@ -9,13 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, Bus, Upload, Search, Download, Copy, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, Bus, Upload, Search, Download, Copy, Check, Merge } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { cn } from '@/lib/utils';
 import { useExcursoes, useAddExcursao, useUpdateExcursao, useDeleteExcursao, useDeleteMultipleExcursoes, Excursao } from '@/hooks/useExcursoes';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ImportExcursoesCSVModal } from '@/components/excursoes/ImportExcursoesCSVModal';
+import { MesclarExcursoesModal } from '@/components/excursoes/MesclarExcursoesModal';
 
 const DRAFT_KEY = 'df_excursao_draft';
 
@@ -29,6 +30,7 @@ const ConfigExcursoes = () => {
 
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showMesclarModal, setShowMesclarModal] = useState(false);
   const [editingExcursao, setEditingExcursao] = useState<Excursao | null>(null);
   const [formData, setFormData] = useState({ nome: '', taxa: '', contato: '', localizacao: '', origem: '' });
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
@@ -326,6 +328,10 @@ const ConfigExcursoes = () => {
                   <Upload size={18} />
                   Importar CSV
                 </Button>
+                <Button variant="outline" onClick={() => setShowMesclarModal(true)} className="gap-2">
+                  <Merge size={18} />
+                  Mesclar
+                </Button>
                 <Button onClick={handleOpenNew} className="gap-2">
                   <Plus size={18} />
                   Nova
@@ -528,9 +534,16 @@ const ConfigExcursoes = () => {
       </Dialog>
 
       {/* Modal Importar CSV */}
-      <ImportExcursoesCSVModal 
-        open={showImportModal} 
-        onOpenChange={setShowImportModal} 
+      <ImportExcursoesCSVModal
+        open={showImportModal}
+        onOpenChange={setShowImportModal}
+      />
+
+      {/* Modal Mesclar Excursões */}
+      <MesclarExcursoesModal
+        open={showMesclarModal}
+        onOpenChange={setShowMesclarModal}
+        excursoes={excursoes ?? []}
       />
 
       {/* Modal Confirmar Exclusão em Massa */}
