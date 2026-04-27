@@ -282,7 +282,7 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
           `📊 *Total do dia neste grupo: ${valFormat(totalGeral)}*`;
       } else {
         // Formato solicitado para o grupo de Confirmação de Pagamento
-        msg = `✅ *Confirmação de Pagamento v2*\n\n` +
+        msg = `✅ *Confirmação de Pagamento*\n\n` +
           listaPagamentos.join('\n') +
           `\n\n📊 *Total: ${valFormat(totalGeral)}*`;
       }
