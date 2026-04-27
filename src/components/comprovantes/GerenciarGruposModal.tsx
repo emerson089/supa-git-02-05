@@ -236,6 +236,119 @@ export function GerenciarGruposModal({ isOpen, onClose }: GerenciarGruposModalPr
                     </div>
                   </div>
                 )}
+
+                {/* ── Painel de diagnóstico Z-API ── */}
+                <div className="mt-6 border-t pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Wifi className="h-4 w-4 text-primary" />
+                      <h3 className="text-sm font-semibold">Diagnóstico Z-API</h3>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 mb-3">
+                    <div className="flex items-start gap-2 mb-2">
+                      <Zap className="h-4 w-4 text-primary mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold">Não está recebendo mensagens de grupo?</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Por padrão a Z-API <strong>não envia</strong> webhooks de grupos. Clique abaixo pra ativar.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={ativarZapi}
+                      disabled={configurandoZapi}
+                      size="sm"
+                      className="w-full gap-2"
+                    >
+                      {configurandoZapi ? (
+                        <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Configurando...</>
+                      ) : (
+                        <><Zap className="h-3.5 w-3.5" /> Ativar notificações de grupo (Z-API)</>
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      Eventos recebidos no webhook (últimos 30 min)
+                    </p>
+                    <Button
+                      onClick={() => refetchEventos()}
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 gap-1"
+                      disabled={fetchingEventos}
+                    >
+                      <RefreshCw className={cn("h-3 w-3", fetchingEventos && "animate-spin")} />
+                      <span className="text-[11px]">Atualizar</span>
+                    </Button>
+                  </div>
+
+                  {eventosRecentes.length === 0 ? (
+                    <div className="p-4 rounded-lg border bg-muted/20 text-center">
+                      <p className="text-xs text-muted-foreground">
+                        Nenhum evento nos últimos 30 min.
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Mande uma mensagem em qualquer grupo do WhatsApp e clique em "Atualizar".
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1 max-h-64 overflow-y-auto">
+                      {eventosRecentes.map(ev => {
+                        const Icon = ev.message_type === 'image' ? FileImage
+                          : ev.message_type === 'document' ? FileText
+                          : MessageSquare;
+                        const grupoCadastrado = grupos.find(g => g.group_whatsapp_id === ev.group_whatsapp_id);
+                        return (
+                          <div
+                            key={ev.id}
+                            className={cn(
+                              "p-2 rounded-lg border text-[11px] flex items-start gap-2",
+                              grupoCadastrado ? "bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200/50 dark:border-emerald-900/30" : "bg-card"
+                            )}
+                          >
+                            <Icon className={cn(
+                              "h-3.5 w-3.5 mt-0.5 flex-shrink-0",
+                              ev.message_type === 'image' ? "text-blue-500" :
+                              ev.message_type === 'document' ? "text-purple-500" :
+                              "text-muted-foreground"
+                            )} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold truncate">
+                                  {ev.chat_name || 'Sem nome'}
+                                </span>
+                                {grupoCadastrado ? (
+                                  <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                                    {grupoCadastrado.emoji} cadastrado
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[9px] h-4 px-1 text-amber-700 dark:text-amber-400">
+                                    não cadastrado
+                                  </Badge>
+                                )}
+                                <span className="text-[10px] text-muted-foreground ml-auto">
+                                  {format(new Date(ev.created_at), 'HH:mm:ss')}
+                                </span>
+                              </div>
+                              <p className="text-[10px] font-mono text-muted-foreground truncate">
+                                {ev.message_type} · {ev.group_whatsapp_id}
+                              </p>
+                              {ev.caption && (
+                                <p className="text-[10px] text-muted-foreground italic truncate">
+                                  "{ev.caption}"
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </ScrollArea>
           ) : (
