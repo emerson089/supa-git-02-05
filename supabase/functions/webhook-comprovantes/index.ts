@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractText, getDocumentProxy } from 'https://esm.sh/unpdf@0.10.0';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,12 +104,27 @@ async function processComprovante(
     const arrayBuffer = await imageResponse.arrayBuffer();
     const base64Content = arrayBufferToBase64(arrayBuffer);
 
-    // 2. OpenAI Vision
+    // 2. OpenAI Vision / Text
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openAiKey) throw new Error("OPENAI_API_KEY não configurada");
 
+    let pdfText = "";
+    if (isDocument) {
+      try {
+        console.log("[PDF] Iniciando extração de texto...");
+        const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer));
+        const { text } = await extractText(pdf, { mergePages: true });
+        pdfText = text;
+        console.log("[PDF] Texto extraído com sucesso. Tamanho:", pdfText.length);
+      } catch (e) {
+        console.error("[PDF] Falha na extração de texto:", e);
+        // Fallback: Tentamos enviar os primeiros bytes como string caso seja um PDF simples
+        pdfText = new TextDecoder().decode(arrayBuffer.slice(0, 2000));
+      }
+    }
+
     const promptText = `
-Analise este ${isDocument ? 'documento PDF' : 'imagem de comprovante'} de pagamento bancário brasileiro. Extraia as seguintes informações e retorne APENAS um JSON válido sem markdown:
+Analise este ${isDocument ? 'conteúdo de texto extraído de um PDF' : 'imagem de comprovante'} de pagamento bancário brasileiro. Extraia as seguintes informações e retorne APENAS um JSON válido sem markdown:
 {
   "valor": (número decimal, ex: 150.50),
   "data_pagamento": (formato ISO 8601, ex: 2025-04-16T14:30:00),
@@ -142,7 +158,7 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
             content: [
               { type: "text", text: promptText },
               isDocument
-                ? { type: "text", text: `[Arquivo PDF Base64]: ${base64Content.substring(0, 1000)}...` }
+                ? { type: "text", text: `[CONTEÚDO DO PDF]:\n${pdfText}` }
                 : { type: "image_url", image_url: { url: `data:${contentType};base64,${base64Content}` } }
             ]
           }
