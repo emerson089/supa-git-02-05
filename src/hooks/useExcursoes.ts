@@ -9,6 +9,7 @@ export interface Excursao {
   taxa: number;
   contato?: string | null;
   localizacao?: string | null;
+  origem?: string | null;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -19,6 +20,7 @@ export interface ExcursaoInsert {
   taxa: number;
   contato?: string;
   localizacao?: string;
+  origem?: string;
   ativo?: boolean;
 }
 
@@ -27,6 +29,7 @@ export interface ExcursaoUpdate {
   taxa?: number;
   contato?: string;
   localizacao?: string;
+  origem?: string;
   ativo?: boolean;
 }
 

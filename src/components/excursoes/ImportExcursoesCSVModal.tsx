@@ -24,7 +24,7 @@ export function ImportExcursoesCSVModal({ open, onOpenChange }: ImportExcursoesC
   const [step, setStep] = useState<Step>('upload');
   const [parsedData, setParsedData] = useState<ExcursaoParseResult[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
-  const [result, setResult] = useState<{ inserted: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ inserted: number; updated: number } | null>(null);
   
   const batchImport = useExcursoesBatchImport();
   
@@ -80,7 +80,7 @@ export function ImportExcursoesCSVModal({ open, onOpenChange }: ImportExcursoesC
       const result = await batchImport.mutateAsync(parsedData);
       setResult(result);
       setStep('done');
-      toast.success(`${result.inserted} excursões importadas!`);
+      toast.success(`${result.inserted} criadas, ${result.updated} atualizadas!`);
     } catch (error) {
       toast.error('Erro ao importar excursões');
       setStep('preview');
@@ -122,19 +122,21 @@ export function ImportExcursoesCSVModal({ open, onOpenChange }: ImportExcursoesC
             onChange={handleFileSelect}
           />
           
-          <div className="bg-muted/50 rounded-lg p-4 text-sm">
-            <p className="font-medium text-foreground mb-2 flex items-center gap-2">
+          <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-3">
+            <p className="font-medium text-foreground flex items-center gap-2">
               <FileSpreadsheet size={16} />
-              Formato esperado:
+              Formatos aceitos:
             </p>
-            <ul className="text-muted-foreground space-y-1 text-xs">
-              <li>• <code className="bg-muted px-1 rounded">EXCURSAO</code> → Nome da excursão</li>
-              <li>• <code className="bg-muted px-1 rounded">CONTATO</code> → WhatsApp/Telefone</li>
-              <li>• <code className="bg-muted px-1 rounded">LOCALIZACAO</code> → Ponto/Cidade</li>
-              <li>• <code className="bg-muted px-1 rounded">VALOR COBRADO EXCURSAO</code> → Taxa (R$ 10,00)</li>
-            </ul>
-            <p className="text-xs text-muted-foreground mt-3 italic">
-              Duplicatas serão agrupadas automaticamente
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Moda Center (novo)</p>
+              <code className="block text-xs bg-muted px-2 py-1 rounded">Nome, Origem, Destino, Telefone</code>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Formato antigo</p>
+              <code className="block text-xs bg-muted px-2 py-1 rounded">Nome; Contato; Localização; Taxa</code>
+            </div>
+            <p className="text-xs text-muted-foreground italic">
+              Excursões já existentes serão atualizadas (nome, contato, origem, destino). A taxa é sempre preservada.
             </p>
           </div>
         </>
@@ -173,23 +175,21 @@ export function ImportExcursoesCSVModal({ open, onOpenChange }: ImportExcursoesC
               <thead className="bg-muted/50 sticky top-0">
                 <tr>
                   <th className="text-left p-3 font-medium">Nome</th>
-                  <th className="text-left p-3 font-medium">Contato</th>
-                  <th className="text-left p-3 font-medium">Local</th>
+                  <th className="text-left p-3 font-medium">Origem</th>
+                  <th className="text-left p-3 font-medium">Destino</th>
+                  <th className="text-left p-3 font-medium">Telefone</th>
                   <th className="text-right p-3 font-medium">Taxa</th>
-                  <th className="text-center p-3 font-medium text-muted-foreground text-xs">Qtd</th>
                 </tr>
               </thead>
               <tbody>
                 {parsedData.map((exc, i) => (
                   <tr key={i} className="border-t">
-                    <td className="p-3">{exc.nome}</td>
-                    <td className="p-3 text-xs text-muted-foreground">{exc.contato || '-'}</td>
+                    <td className="p-3 font-medium">{exc.nome}</td>
+                    <td className="p-3 text-xs text-muted-foreground">{exc.origem || '-'}</td>
                     <td className="p-3 text-xs text-muted-foreground">{exc.localizacao || '-'}</td>
-                    <td className="p-3 text-right text-emerald-600 font-medium">
-                      {formatCurrency(exc.taxa)}
-                    </td>
-                    <td className="p-3 text-center text-muted-foreground text-xs">
-                      {exc.occurrences}x
+                    <td className="p-3 text-xs text-muted-foreground">{exc.contato || '-'}</td>
+                    <td className="p-3 text-right text-emerald-600 font-medium text-xs">
+                      {exc.taxa > 0 ? formatCurrency(exc.taxa) : <span className="text-amber-500">Definir</span>}
                     </td>
                   </tr>
                 ))}
@@ -221,9 +221,13 @@ export function ImportExcursoesCSVModal({ open, onOpenChange }: ImportExcursoesC
           <div>
             <p className="text-lg font-medium text-foreground">Importação concluída!</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {result.inserted} excursões importadas
-              {result.skipped > 0 && `, ${result.skipped} já existentes`}
+              {result.inserted} novas criadas · {result.updated} atualizadas
             </p>
+            {result.inserted > 0 && (
+              <p className="text-xs text-amber-600 mt-2">
+                Lembre de definir a taxa para as novas excursões criadas.
+              </p>
+            )}
           </div>
           <Button onClick={handleClose} className="mt-4">
             Fechar

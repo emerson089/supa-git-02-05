@@ -1,250 +1,203 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { ExcursaoCSVRowSchema, sanitizeString, safeParseNumber } from '@/lib/csv-validation-schemas';
 
 export interface ExcursaoParseResult {
   nome: string;
   contato: string;
   localizacao: string;
+  origem: string;
   taxa: number;
   occurrences: number;
 }
 
-/**
- * Normaliza o nome da excursão para comparação (lowercase, remove acentos e espaços extras)
- */
 function normalizeForComparison(nome: string): string {
   return nome
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-/**
- * Capitaliza a primeira letra de cada palavra
- */
-function capitalizeWords(nome: string): string {
-  return nome
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-}
-
-/**
- * Parser robusto de linha CSV que trata campos entre aspas
- */
 function parseCSVLine(line: string, separator: string): string[] {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
-  
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === separator && !inQuotes) {
+    if (char === '"') { inQuotes = !inQuotes; }
+    else if (char === separator && !inQuotes) {
       result.push(current.trim().replace(/^"|"$/g, ''));
       current = '';
-    } else {
-      current += char;
-    }
+    } else { current += char; }
   }
   result.push(current.trim().replace(/^"|"$/g, ''));
-  
   return result;
 }
 
-/**
- * Detecta o separador do CSV (vírgula ou ponto-e-vírgula)
- */
 function detectSeparator(headerLine: string): string {
   const commaCount = (headerLine.match(/,/g) || []).length;
   const semicolonCount = (headerLine.match(/;/g) || []).length;
   return semicolonCount > commaCount ? ';' : ',';
 }
 
-/**
- * Converte valor no formato "10,00" ou "R$ 10,00" para número
- */
 function parseValorBRL(valor: string): number {
   if (!valor) return 0;
-  
-  // Remove "R$", espaços, aspas e converte vírgula para ponto
   const cleaned = valor
     .replace(/R\$\s*/gi, '')
     .replace(/"/g, '')
     .replace(/\s/g, '')
-    .replace(/\./g, '') // Remove separador de milhar
-    .replace(',', '.'); // Converte decimal
-  
-  return safeParseNumber(cleaned);
+    .replace(/\./g, '')
+    .replace(',', '.');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
 }
 
 /**
- * Parseia o CSV e agrupa excursões duplicadas
+ * Parser que suporta dois formatos:
+ * Formato antigo: Nome;Contato;Localização;Taxa
+ * Formato novo (Moda Center): Nome,Origem,Destino,Telefone
  */
 export function parseExcursoesCSV(csvContent: string): {
   excursoes: ExcursaoParseResult[];
   errors: string[];
 } {
-  const lines = csvContent.split('\n').filter(line => line.trim());
+  const lines = csvContent.split('\n').filter(l => l.trim());
   const errors: string[] = [];
-  
-  if (lines.length < 2) {
-    return { excursoes: [], errors: ['Arquivo vazio ou sem dados'] };
-  }
-  
-  // Detecta separador automaticamente
+
+  if (lines.length < 2) return { excursoes: [], errors: ['Arquivo vazio ou sem dados'] };
+
   const separator = detectSeparator(lines[0]);
-  
-  // Detecta cabeçalho
   const headerCols = parseCSVLine(lines[0], separator);
-  const header = headerCols.map(h => sanitizeString(h).toUpperCase());
-  
-  // Procura por colunas de excursão e valor
-  const excursaoIdx = header.findIndex(h => h.includes('EXCURSAO') || h.includes('EXCURSÃO') || h === 'NOME');
-  const contatoIdx = header.findIndex(h => h.includes('CONTATO') || h === 'WHATSAPP' || h === 'TELEFONE');
-  const localizacaoIdx = header.findIndex(h => h.includes('LOCALIZACAO') || h.includes('LOCALIZAÇÃO') || h === 'LOCAL' || h === 'ORIGEM');
-  const valorIdx = header.findIndex(h => 
-    (h.includes('VALOR') && (h.includes('EXCURSAO') || h.includes('EXCURSÃO'))) ||
-    h.includes('TAXA') ||
-    h === 'VALOR'
-  );
-  
-  if (excursaoIdx === -1) {
-    return { excursoes: [], errors: ['Coluna EXCURSAO não encontrada'] };
-  }
-  
-  // Mapa para agrupar por nome normalizado
-  const grouped = new Map<string, { 
-    nomeOriginal: string; 
+  const header = headerCols.map(h => h.trim().replace(/^"|"$/g, '').toUpperCase());
+
+  const nomeIdx = header.findIndex(h => h === 'NOME' || h.includes('EXCURSAO') || h.includes('EXCURSÃO'));
+  const contatoIdx = header.findIndex(h => h === 'TELEFONE' || h === 'CONTATO' || h === 'WHATSAPP');
+  const destinoIdx = header.findIndex(h => h === 'DESTINO' || h.includes('LOCALIZA'));
+  const origemIdx = header.findIndex(h => h === 'ORIGEM');
+  const taxaIdx = header.findIndex(h => h === 'TAXA' || h === 'VALOR');
+
+  if (nomeIdx === -1) return { excursoes: [], errors: ['Coluna NOME não encontrada no cabeçalho'] };
+
+  const grouped = new Map<string, {
+    nomeOriginal: string;
     contato: string;
     localizacao: string;
-    taxas: number[]; 
+    origem: string;
+    taxas: number[];
     count: number;
   }>();
-  
-  // Processa linhas (pula cabeçalho)
+
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCSVLine(lines[i], separator);
-    const nomeRaw = sanitizeString(cols[excursaoIdx] || '');
-    
+    const nomeRaw = (cols[nomeIdx] || '').trim();
     if (!nomeRaw) continue;
-    
-    const nomeNormalizado = normalizeForComparison(nomeRaw);
-    const taxa = valorIdx !== -1 ? parseValorBRL(cols[valorIdx] || '') : 0;
-    const contato = contatoIdx !== -1 ? sanitizeString(cols[contatoIdx] || '') : '';
-    const localizacao = localizacaoIdx !== -1 ? sanitizeString(cols[localizacaoIdx] || '') : '';
-    
-    if (grouped.has(nomeNormalizado)) {
-      const existing = grouped.get(nomeNormalizado)!;
-      existing.taxas.push(taxa);
-      // Se o contato/localização estiver vazio no existente mas não no novo, atualiza
-      if (!existing.contato && contato) existing.contato = contato;
-      if (!existing.localizacao && localizacao) existing.localizacao = localizacao;
-      existing.count++;
+
+    const nomeNorm = normalizeForComparison(nomeRaw);
+    const contato = contatoIdx !== -1 ? (cols[contatoIdx] || '').trim() : '';
+    const localizacao = destinoIdx !== -1 ? (cols[destinoIdx] || '').trim() : '';
+    const origem = origemIdx !== -1 ? (cols[origemIdx] || '').trim() : '';
+    const taxa = taxaIdx !== -1 ? parseValorBRL(cols[taxaIdx] || '') : 0;
+
+    if (grouped.has(nomeNorm)) {
+      const ex = grouped.get(nomeNorm)!;
+      ex.taxas.push(taxa);
+      if (!ex.contato && contato) ex.contato = contato;
+      if (!ex.localizacao && localizacao) ex.localizacao = localizacao;
+      if (!ex.origem && origem) ex.origem = origem;
+      ex.count++;
     } else {
-      grouped.set(nomeNormalizado, {
-        nomeOriginal: capitalizeWords(nomeRaw),
-        contato,
-        localizacao,
-        taxas: [taxa],
-        count: 1,
-      });
+      grouped.set(nomeNorm, { nomeOriginal: nomeRaw, contato, localizacao, origem, taxas: [taxa], count: 1 });
     }
   }
-  
-  // Converte para array e calcula taxa mais comum
+
   const excursoes: ExcursaoParseResult[] = [];
-  
   grouped.forEach((data) => {
-    // Usa a taxa mais frequente (moda)
     const taxaCount = new Map<number, number>();
     data.taxas.forEach(t => taxaCount.set(t, (taxaCount.get(t) || 0) + 1));
-    
-    let taxaMaisComum = 0;
-    let maxCount = 0;
-    taxaCount.forEach((count, taxa) => {
-      if (count > maxCount) {
-        maxCount = count;
-        taxaMaisComum = taxa;
-      }
-    });
-    
-    // Valida com Zod
-    const validation = ExcursaoCSVRowSchema.safeParse({
-      nome: data.nomeOriginal,
-      contato: data.contato,
-      localizacao: data.localizacao,
-      taxa: taxaMaisComum,
-    });
-    
-    if (validation.success) {
+    let taxaMaisComum = 0; let maxCount = 0;
+    taxaCount.forEach((count, taxa) => { if (count > maxCount) { maxCount = count; taxaMaisComum = taxa; } });
+
+    if (data.nomeOriginal.trim()) {
       excursoes.push({
-        nome: validation.data.nome,
-        contato: validation.data.contato || '',
-        localizacao: validation.data.localizacao || '',
-        taxa: validation.data.taxa,
+        nome: data.nomeOriginal,
+        contato: data.contato,
+        localizacao: data.localizacao,
+        origem: data.origem,
+        taxa: taxaMaisComum,
         occurrences: data.count,
       });
     } else {
-      errors.push(`"${data.nomeOriginal}": ${validation.error.errors.map(e => e.message).join(', ')}`);
+      errors.push(`Linha ignorada: nome vazio`);
     }
   });
-  
-  // Ordena por nome
+
   excursoes.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  
   return { excursoes, errors };
 }
 
 export function useExcursoesBatchImport() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  
+
   return useMutation({
     mutationFn: async (excursoes: ExcursaoParseResult[]) => {
       if (!user) throw new Error('Usuário não autenticado');
-      
-      // Busca excursões existentes para evitar duplicatas
+
       const { data: existentes } = await supabase
         .from('excursoes')
-        .select('nome');
-      
-      const nomesExistentes = new Set(
-        (existentes || []).map(e => normalizeForComparison(e.nome))
+        .select('id, nome, taxa')
+        .eq('user_id', user.id);
+
+      const mapaExistentes = new Map(
+        (existentes || []).map(e => [normalizeForComparison(e.nome), e])
       );
-      
-      // Filtra apenas novas
-      const novas = excursoes.filter(
-        e => !nomesExistentes.has(normalizeForComparison(e.nome))
-      );
-      
-      if (novas.length === 0) {
-        return { inserted: 0, skipped: excursoes.length };
+
+      const paraInserir: ExcursaoParseResult[] = [];
+      const paraAtualizar: { id: string; nome: string; contato: string; localizacao: string; origem: string }[] = [];
+
+      for (const exc of excursoes) {
+        const norm = normalizeForComparison(exc.nome);
+        const existente = mapaExistentes.get(norm);
+        if (existente) {
+          // Atualiza nome (casing do CSV), contato, localizacao, origem — mantém taxa
+          paraAtualizar.push({
+            id: existente.id,
+            nome: exc.nome,
+            contato: exc.contato,
+            localizacao: exc.localizacao,
+            origem: exc.origem,
+          });
+        } else {
+          paraInserir.push(exc);
+        }
       }
-      
-      // Insere em lote
-      const { error } = await supabase
-        .from('excursoes')
-        .insert(
-          novas.map(e => ({
+
+      if (paraInserir.length > 0) {
+        const { error } = await supabase.from('excursoes').insert(
+          paraInserir.map(e => ({
             nome: e.nome,
             contato: e.contato,
             localizacao: e.localizacao,
-            taxa: e.taxa,
+            origem: e.origem,
+            taxa: e.taxa, // 0 para o novo CSV sem taxa
             user_id: user.id,
             ativo: true,
           }))
         );
-      
-      if (error) throw error;
-      
-      return { inserted: novas.length, skipped: excursoes.length - novas.length };
+        if (error) throw error;
+      }
+
+      for (const item of paraAtualizar) {
+        const { error } = await supabase
+          .from('excursoes')
+          .update({ nome: item.nome, contato: item.contato, localizacao: item.localizacao, origem: item.origem })
+          .eq('id', item.id);
+        if (error) throw error;
+      }
+
+      return { inserted: paraInserir.length, updated: paraAtualizar.length };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['excursoes'] });

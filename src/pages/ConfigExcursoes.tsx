@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, Bus, Upload, Search, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, Bus, Upload, Search, Download, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { cn } from '@/lib/utils';
@@ -30,7 +30,8 @@ const ConfigExcursoes = () => {
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingExcursao, setEditingExcursao] = useState<Excursao | null>(null);
-  const [formData, setFormData] = useState({ nome: '', taxa: '', contato: '', localizacao: '' });
+  const [formData, setFormData] = useState({ nome: '', taxa: '', contato: '', localizacao: '', origem: '' });
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteMultipleConfirm, setShowDeleteMultipleConfirm] = useState(false);
@@ -66,23 +67,55 @@ const ConfigExcursoes = () => {
       if (draft) {
         setFormData(JSON.parse(draft));
       } else {
-        setFormData({ nome: '', taxa: '', contato: '', localizacao: '' });
+        setFormData({ nome: '', taxa: '', contato: '', localizacao: '', origem: '' });
       }
     } catch (e) {
-      setFormData({ nome: '', taxa: '', contato: '', localizacao: '' });
+      setFormData({ nome: '', taxa: '', contato: '', localizacao: '', origem: '' });
     }
     setShowModal(true);
   };
 
   const handleOpenEdit = (excursao: Excursao) => {
     setEditingExcursao(excursao);
-    setFormData({ 
-      nome: excursao.nome, 
+    setFormData({
+      nome: excursao.nome,
       taxa: excursao.taxa.toString(),
       contato: excursao.contato || '',
-      localizacao: excursao.localizacao || ''
+      localizacao: excursao.localizacao || '',
+      origem: excursao.origem || '',
     });
     setShowModal(true);
+  };
+
+  const handleCopyPhone = (phone: string) => {
+    navigator.clipboard.writeText(phone.replace(/\D/g, '')).then(() => {
+      setCopiedPhone(phone);
+      setTimeout(() => setCopiedPhone(null), 2000);
+    });
+  };
+
+  // Renderiza telefones clicáveis — separa múltiplos por "/"
+  const renderPhones = (contato: string) => {
+    const phones = contato.split('/').map(p => p.trim()).filter(Boolean);
+    return (
+      <div className="flex flex-wrap gap-1">
+        {phones.map((phone, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => handleCopyPhone(phone)}
+            title="Clique para copiar"
+            className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors group"
+          >
+            {copiedPhone === phone
+              ? <Check size={11} className="text-emerald-500" />
+              : <Copy size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+            }
+            <span className="underline-offset-2 hover:underline">{phone}</span>
+          </button>
+        ))}
+      </div>
+    );
   };
 
   const handleSave = async () => {
@@ -101,20 +134,22 @@ const ConfigExcursoes = () => {
       if (editingExcursao) {
         await updateExcursao.mutateAsync({
           id: editingExcursao.id,
-          data: { 
-            nome: formData.nome.trim(), 
+          data: {
+            nome: formData.nome.trim(),
             taxa,
             contato: formData.contato.trim(),
-            localizacao: formData.localizacao.trim()
+            localizacao: formData.localizacao.trim(),
+            origem: formData.origem.trim(),
           },
         });
         toast.success('Excursão atualizada com sucesso!');
       } else {
-        await addExcursao.mutateAsync({ 
-          nome: formData.nome.trim(), 
+        await addExcursao.mutateAsync({
+          nome: formData.nome.trim(),
           taxa,
           contato: formData.contato.trim(),
-          localizacao: formData.localizacao.trim()
+          localizacao: formData.localizacao.trim(),
+          origem: formData.origem.trim(),
         });
         toast.success('Excursão cadastrada com sucesso!');
         localStorage.removeItem(DRAFT_KEY);
@@ -182,13 +217,13 @@ const ConfigExcursoes = () => {
       return;
     }
 
-    // Estrutura solicitada: Nome;Contato;Localização;Taxa
-    const header = ['Nome', 'Contato', 'Localizacao', 'Taxa'];
+    const header = ['Nome', 'Origem', 'Destino', 'Telefone', 'Taxa'];
     const rows = filteredExcursoes.map(e => [
       e.nome,
-      e.contato || '',
+      e.origem || '',
       e.localizacao || '',
-      e.taxa.toFixed(2)
+      e.contato || '',
+      e.taxa.toFixed(2),
     ]);
 
     const csvContent = [
@@ -338,15 +373,21 @@ const ConfigExcursoes = () => {
                           <p className="text-sm text-muted-foreground">
                             Taxa: <span className="font-semibold text-emerald-600">{formatCurrency(excursao.taxa)}</span>
                           </p>
-                          {excursao.contato && (
-                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                              <span className="opacity-70">Contato:</span> {excursao.contato}
+                          {excursao.origem && (
+                            <p className="text-sm text-muted-foreground">
+                              <span className="opacity-70">Origem:</span> {excursao.origem}
                             </p>
                           )}
                           {excursao.localizacao && (
-                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                              <span className="opacity-70">Local:</span> {excursao.localizacao}
+                            <p className="text-sm text-muted-foreground">
+                              <span className="opacity-70">Destino:</span> {excursao.localizacao}
                             </p>
+                          )}
+                          {excursao.contato && (
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <span className="opacity-70">Tel:</span>
+                              {renderPhones(excursao.contato)}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -426,12 +467,22 @@ const ConfigExcursoes = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="localizacao">Localização/Ponto</Label>
+              <Label htmlFor="origem">Origem (cidade)</Label>
+              <Input
+                id="origem"
+                value={formData.origem}
+                onChange={(e) => setFormData((prev) => ({ ...prev, origem: e.target.value }))}
+                placeholder="Ex: Recife - PE"
+                className="h-12 rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="localizacao">Destino/Vaga no Moda Center</Label>
               <Input
                 id="localizacao"
                 value={formData.localizacao}
                 onChange={(e) => setFormData((prev) => ({ ...prev, localizacao: e.target.value }))}
-                placeholder="Ex: Setor Verde - Vaga 79"
+                placeholder="Ex: Vaga 79 - Lateral do Setor Verde"
                 className="h-12 rounded-xl"
               />
             </div>
