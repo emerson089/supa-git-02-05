@@ -83,30 +83,34 @@ async function processComprovante(
   grupo: string,
   caption: string | null,
   fullBody: any,
+  isDocument: boolean = false
 ) {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
+  const pagamentosGroupId = Deno.env.get("WHATSAPP_GROUP_ID_PAGAMENTOS");
+  const isPagamentosGroup = grupo === pagamentosGroupId;
+
   try {
     const categoria = detectarCategoria(caption);
 
-    // 1. Baixar imagem e converter para base64
+    // 1. Baixar imagem/PDF e converter para base64
     const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) {
-      throw new Error(`Falha ao baixar imagem: ${imageResponse.statusText}`);
+      throw new Error(`Falha ao baixar arquivo: ${imageResponse.statusText}`);
     }
-    const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+    const contentType = imageResponse.headers.get("content-type") || (isDocument ? "application/pdf" : "image/jpeg");
     const arrayBuffer = await imageResponse.arrayBuffer();
-    const base64Image = arrayBufferToBase64(arrayBuffer);
+    const base64Content = arrayBufferToBase64(arrayBuffer);
     
     // 2. Chamar OpenAI GPT-4o Vision
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openAiKey) throw new Error("OPENAI_API_KEY não configurada");
 
     const promptText = `
-Analise esta imagem de comprovante de pagamento bancário brasileiro. Extraia as seguintes informações e retorne APENAS um JSON válido sem markdown:
+Analise este ${isDocument ? 'documento PDF' : 'imagem de comprovante'} de pagamento bancário brasileiro. Extraia as seguintes informações e retorne APENAS um JSON válido sem markdown:
 {
   "valor": (número decimal, ex: 150.50),
   "data_pagamento": (formato ISO 8601, ex: 2025-04-16T14:30:00),
@@ -139,7 +143,9 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
             role: "user",
             content: [
               { type: "text", text: promptText },
-              { type: "image_url", image_url: { url: `data:${contentType};base64,${base64Image}` } }
+              isDocument 
+                ? { type: "text", text: `[Arquivo PDF Base64]: ${base64Content.substring(0, 1000)}... (Nota: GPT-4o Vision processa melhor imagens, se possível extraia do contexto textual)` }
+                : { type: "image_url", image_url: { url: `data:${contentType};base64,${base64Content}` } }
             ]
           }
         ],
@@ -155,7 +161,6 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
     let extrato;
     try {
       extrato = JSON.parse(aiData.choices[0].message.content);
-      // Aplicar limpeza no nome do pagador retornado pela IA
       extrato.nome_pagador = limparNomePagador(extrato.nome_pagador);
     } catch(e) {
       throw new Error(`Falha ao fazer parse do JSON retornado pela IA`);
@@ -181,21 +186,7 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
       }
     }
 
-    // Fallback URL Hash
-    const urlHash = imageUrl.split('?')[0];
-    const { data: duplicateUrl } = await supabase
-        .from('comprovantes')
-        .select('id')
-        .ilike('imagem_url', `${urlHash}%`)
-        .limit(1)
-        .maybeSingle();
-
-    if (duplicateUrl) {
-      await enviarMensagemZApi(fullBody.phone, "⚠️ *A imagem deste comprovante já consta no sistema.*");
-      return; 
-    }
-
-    // 4. Inserção no Supabase com regra de quarentena
+    // 4. Inserção no Supabase
     let statusFinal = 'confirmado';
     if (!extrato.valor || typeof extrato.valor !== 'number' || extrato.valor === 0) {
       statusFinal = 'pendente_revisao';
@@ -211,7 +202,7 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
       imagem_url: imageUrl,
       dados_brutos: extrato,
       status: statusFinal,
-      categoria,
+      categoria: isPagamentosGroup ? 'nao_classificado' : categoria,
       grupo_whatsapp: grupo,
       numero_remetente: remetente,
       observacoes: extrato.observacoes || null
@@ -219,63 +210,58 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
 
     if (insertError) throw insertError;
 
-    // 5. Responder com resumo e totais segmentados do dia
+    // 5. Responder com resumo
     if (statusFinal === 'pendente_revisao') {
-      const aviso = categoria === 'nao_classificado'
-        ? "⚠️ *Não consegui ler este comprovante com clareza* e a *categoria não foi informada* (envie a foto com a legenda *J* para Jeans ou *A* para Alfaiataria). Foi salvo para revisão manual."
-        : `⚠️ *Não consegui ler este comprovante com clareza.* Categoria: *${rotuloCategoria(categoria)}*. Foi salvo para revisão manual.`;
+      const aviso = "⚠️ *Não consegui ler este comprovante com clareza.* Foi salvo para revisão manual.";
       await enviarMensagemZApi(fullBody.phone, aviso);
     } else {
       const startOfDayDate = new Date();
       startOfDayDate.setHours(0,0,0,0);
+      
+      // Totais do dia apenas para o grupo específico
       const { data: somaData } = await supabase
         .from('comprovantes')
         .select('valor, categoria')
         .eq('status', 'confirmado')
+        .eq('grupo_whatsapp', grupo)
         .gte('created_at', startOfDayDate.toISOString());
 
       let totalJeans = 0;
       let totalAlfaiataria = 0;
-      let totalNaoClass = 0;
+      let totalGeral = 0;
+      
       if (somaData) {
-        for (const row of somaData as Array<{ valor: number | null; categoria: Categoria }>) {
+        for (const row of somaData as Array<{ valor: number | null; categoria: string }>) {
           const v = Number(row.valor) || 0;
+          totalGeral += v;
           if (row.categoria === 'jeans') totalJeans += v;
           else if (row.categoria === 'alfaiataria') totalAlfaiataria += v;
-          else totalNaoClass += v;
         }
       }
-      const totalDia = totalJeans + totalAlfaiataria + totalNaoClass;
 
       const dataFmt = extrato.data_pagamento
         ? new Date(extrato.data_pagamento).toLocaleDateString('pt-BR')
         : 'Não lida';
 
-      const linhaNaoClass = totalNaoClass > 0
-        ? `\nTotal não classificado : ${valFormat(totalNaoClass)}`
-        : '';
+      let msg = `✅ *Comprovante registrado!*\n\n` +
+                `💰 Valor: ${valFormat(extrato.valor)}\n` +
+                `👤 Pagador: ${extrato.nome_pagador || 'Não lido'}\n` +
+                `🏦 Banco: ${extrato.banco_origem || 'Não lido'}\n` +
+                `📅 Data: ${dataFmt}\n\n`;
 
-      const avisoCategoria = categoria === 'nao_classificado'
-        ? `\n\n⚠️ Categoria não informada — envie a próxima foto com a legenda *J* (Jeans) ou *A* (Alfaiataria), ou corrija na tela de Comprovantes.`
-        : '';
-
-      const msg =
-        `✅ *Comprovante registrado!*\n\n` +
-        `💰 Valor: ${valFormat(extrato.valor)}\n` +
-        `👤 Pagador: ${extrato.nome_pagador || 'Não lido'}\n` +
-        `🏦 Banco: ${extrato.banco_origem || 'Não lido'}\n` +
-        `📅 Data: ${dataFmt}\n\n` +
-        `Total jeans : ${valFormat(totalJeans)}\n` +
-        `Total alfaiataria : ${valFormat(totalAlfaiataria)}${linhaNaoClass}\n` +
-        `📊 *Total do dia: ${valFormat(totalDia)}*` +
-        avisoCategoria;
+      if (isPagamentosGroup) {
+        msg += `📊 *Total recebido hoje (neste grupo): ${valFormat(totalGeral)}*`;
+      } else {
+        msg += `Total jeans : ${valFormat(totalJeans)}\n` +
+               `Total alfaiataria : ${valFormat(totalAlfaiataria)}\n` +
+               `📊 *Total do dia: ${valFormat(totalGeral)}*`;
+      }
 
       await enviarMensagemZApi(fullBody.phone, msg);
     }
   } catch (err: any) {
     console.error("Erro processamento:", err);
-    const message = err instanceof Error ? err.message : String(err);
-    await enviarMensagemZApi(fullBody.phone, `⚠️ Erro ao processar comprovante: ${message}`);
+    await enviarMensagemZApi(fullBody.phone, `⚠️ Erro ao processar comprovante: ${err.message}`);
   }
 }
 
@@ -320,52 +306,60 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
 
-    // [DEBUG TEMP] Log de descoberta de Group ID — remover depois de capturar
-    const debugGroupHost = body?.phone || "Private";
-    const debugSender = body?.participantPhone || body?.author || "Desconhecido";
-    const debugText =
-      body?.text?.message ||
-      body?.image?.caption ||
-      body?.caption ||
-      (body?.document ? "[documento]" : null) ||
-      (body?.image ? "[imagem sem legenda]" : "[sem texto]");
-    console.log("[GROUP-ID-DISCOVERY]", JSON.stringify({
-      groupHost: debugGroupHost,
-      sender: debugSender,
-      text: debugText,
-      isGroup: body?.isGroup ?? null,
-      chatName: body?.chatName ?? null,
-    }));
-
-    // Ignora PDFs e outros documentos — só processa imagens de comprovante
-    if (body?.document) {
-      return new Response(JSON.stringify({ ok: true, message: "Documento ignorado" }), { status: 200 });
-    }
-
-    const imageUrl = body?.image?.imageUrl || body?.url;
+    const isDocument = !!(body?.document?.documentUrl || body?.document?.url);
+    const imageUrl = body?.image?.imageUrl || body?.url || body?.document?.documentUrl || body?.document?.url;
 
     if (!imageUrl) {
-      return new Response(JSON.stringify({ ok: true, message: "Ignorado (sem imagem) — groupHost capturado em log" }), { status: 200 });
+      return new Response(JSON.stringify({ ok: true, message: "Tipo de mensagem não suportado ou sem URL" }), { status: 200 });
     }
 
-    // Extrai a legenda da imagem (Z-API: image.caption). Fallback para outros campos comuns.
+    // Extrai a legenda da imagem ou nome do documento
     const caption: string | null =
       body?.image?.caption ||
       body?.caption ||
+      body?.document?.fileName ||
       body?.text?.message ||
       null;
 
     const groupHost = body?.phone || "Private"; 
     const sender = body?.participantPhone || body?.author || "Desconhecido";
 
-    // Filtro de Grupo
-    const authorizedGroupId = Deno.env.get("WHATSAPP_GROUP_ID");
-    if (authorizedGroupId && groupHost !== authorizedGroupId) {
-      return new Response(JSON.stringify({ ok: true, message: "Grupo não autorizado" }), { status: 200 });
+    // ── Filtro de Grupos e Autorização ────────────────────────
+    const feiraGroupId = Deno.env.get("WHATSAPP_GROUP_ID");
+    const pagamentosGroupId = Deno.env.get("WHATSAPP_GROUP_ID_PAGAMENTOS");
+    
+    const authorizedIds = [feiraGroupId, pagamentosGroupId].filter(Boolean);
+    
+    if (groupHost !== "Private" && !authorizedIds.includes(groupHost)) {
+      console.log(`[Discovery] Grupo não autorizado detectado: ${groupHost}`);
+      
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+
+      // Capturar o nome do grupo se o Z-API enviar (ex: groupName ou chatName)
+      const groupName = body?.groupName || body?.chatName || "Grupo Desconhecido";
+
+      await supabase.from('comprovantes').insert({
+        valor: 0,
+        imagem_url: 'LOG_DESCOBERTA',
+        status: 'pendente_revisao',
+        grupo_whatsapp: groupHost,
+        observacoes: `ID_DESCOBERTO: ${groupHost} | Nome: ${groupName} | Favor adicionar este ID à variável WHATSAPP_GROUP_ID_PAGAMENTOS.`,
+        numero_remetente: sender
+      });
+
+      return new Response(JSON.stringify({ ok: true, message: "Grupo não autorizado - Log de descoberta salvo" }), { status: 200 });
+    }
+
+    // Regra: PDF só é aceito no grupo de Pagamentos
+    if (isDocument && groupHost !== pagamentosGroupId) {
+       return new Response(JSON.stringify({ ok: true, message: "PDF não autorizado para este grupo" }), { status: 200 });
     }
 
     // Processamento assíncrono
-    processComprovante(imageUrl, sender, groupHost, caption, body).catch(e => console.error(e));
+    processComprovante(imageUrl, sender, groupHost, caption, body, isDocument).catch(e => console.error(e));
 
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders });
   } catch (error: any) {

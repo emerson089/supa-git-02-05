@@ -36,6 +36,7 @@ export default function Comprovantes() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoriaFilter, setCategoriaFilter] = useState<ComprovanteCategoria | 'all'>('all');
   const [periodoFilter, setPeriodoFilter] = useState<string>('hoje');
+  const [grupoFilter, setGrupoFilter] = useState<string>('all');
   
   const [selectedComprovante, setSelectedComprovante] = useState<Comprovante | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,6 +60,7 @@ export default function Comprovantes() {
     searchTerm,
     status: statusFilter !== 'all' ? [statusFilter] : undefined,
     categoria: categoriaFilter,
+    grupo: grupoFilter,
     startDate: start,
     endDate: end,
   };
@@ -236,6 +238,24 @@ export default function Comprovantes() {
                   <SelectItem value="rejeitado">Rejeitados</SelectItem>
                 </SelectContent>
               </Select>
+
+              <Select value={grupoFilter} onValueChange={setGrupoFilter}>
+                <SelectTrigger className="w-full md:w-[220px] h-9 border-border/50 bg-background/50 font-semibold rounded-xl text-xs">
+                  <SelectValue placeholder="Grupo / Origem" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Grupos</SelectItem>
+                  {/* Mapeamento de nomes amigáveis para os grupos conhecidos */}
+                  {Array.from(new Set(comprovantes.map(c => c.grupo_whatsapp))).filter(Boolean).map(id => {
+                    let label = id;
+                    if (id === 'LOG_DESCOBERTA') label = '🔍 Logs de Descoberta';
+                    else if (id?.includes('120363402446093422')) label = '💰 Confirmação de Pagamento';
+                    else if (id?.includes('g.us')) label = '🏟️ Feira - Delookii';
+                    
+                    return <SelectItem key={id} value={id!}>{label}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Content Table */}
@@ -246,6 +266,7 @@ export default function Comprovantes() {
                     <TableRow className="bg-zinc-50 dark:bg-zinc-950/50">
                       <TableHead>Data/Hora</TableHead>
                       <TableHead>Pagador</TableHead>
+                      <TableHead>Origem</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead>Valor</TableHead>
                       <TableHead>Recebimento via</TableHead>
@@ -260,6 +281,7 @@ export default function Comprovantes() {
                           <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                           <TableCell><Skeleton className="h-6 w-24 rounded-full" /></TableCell>
+                          <TableCell><Skeleton className="h-6 w-24 rounded-full" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                           <TableCell><Skeleton className="h-6 w-24 rounded-full" /></TableCell>
@@ -268,7 +290,7 @@ export default function Comprovantes() {
                       ))
                     ) : comprovantes.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-10 text-zinc-500">
+                        <TableCell colSpan={8} className="text-center py-10 text-zinc-500">
                           Nenhum comprovante recebido ou encontrado nos filtros atuais.
                         </TableCell>
                       </TableRow>
@@ -286,6 +308,17 @@ export default function Comprovantes() {
                               <span>{comp.nome_pagador || 'Não identificado'}</span>
                               <div className="text-xs text-muted-foreground">{comp.banco_origem}</div>
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="text-[10px] font-medium py-0 h-5 px-1.5 whitespace-nowrap overflow-hidden max-w-[120px] truncate border-none bg-zinc-100 text-zinc-600">
+                              {(() => {
+                                const id = comp.grupo_whatsapp;
+                                if (id === 'LOG_DESCOBERTA') return 'DESCOBERTA';
+                                if (id?.includes('120363402446093422')) return '💰 PAGAMENTO';
+                                if (id?.includes('g.us')) return '🏟️ FEIRA';
+                                return id?.split('@')[0] || 'N/A';
+                              })()}
+                            </Badge>
                           </TableCell>
                           <TableCell>
                             <CategoriaBadge categoria={comp.categoria} />

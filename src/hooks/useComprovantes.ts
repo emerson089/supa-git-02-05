@@ -14,6 +14,7 @@ interface FiltrosComprovante {
   banco?: string;
   searchTerm?: string;
   categoria?: ComprovanteCategoria | 'all';
+  grupo?: string;
 }
 
 export function useComprovantes(filtros: FiltrosComprovante) {
@@ -40,6 +41,9 @@ export function useComprovantes(filtros: FiltrosComprovante) {
       }
       if (filtros.categoria && filtros.categoria !== 'all') {
         q = q.eq('categoria', filtros.categoria);
+      }
+      if (filtros.grupo && filtros.grupo !== 'all') {
+        q = q.eq('grupo_whatsapp', filtros.grupo);
       }
       if (filtros.banco) {
         q = q.ilike('banco_origem', `%${filtros.banco}%`);

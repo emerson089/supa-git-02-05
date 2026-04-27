@@ -52,17 +52,30 @@ export function ComprovanteModal({ isOpen, onClose, comprovante, onSave, isSavin
         {/* Lado Esquerdo - Imagem do Comprovante */}
         <div className="w-full sm:w-1/2 bg-zinc-100 dark:bg-zinc-900 border-r border-border p-4 flex flex-col">
           <DialogHeader className="sm:text-left mb-4 px-2">
-            <DialogTitle>Visualizador da Imagem</DialogTitle>
+            <DialogTitle>Visualizador do Arquivo</DialogTitle>
           </DialogHeader>
           <ScrollArea className="flex-1 bg-white dark:bg-zinc-950 border rounded-lg overflow-hidden flex items-center justify-center p-2 relative h-[40vh] sm:h-full">
-            <a href={comprovante.imagem_url} target="_blank" rel="noreferrer" className="absolute top-2 right-2 p-2 bg-black/50 text-white rounded hover:bg-black/80 transition z-10" title="Abrir em Nova Guia">
-              <ExternalLink size={16} />
+            <a href={comprovante.imagem_url} target="_blank" rel="noreferrer" className="absolute top-2 right-2 p-2 bg-black/50 text-white rounded hover:bg-black/80 transition z-10 flex items-center gap-2 text-xs font-bold" title="Abrir em Nova Guia">
+              <ExternalLink size={14} /> {comprovante.imagem_url.toLowerCase().includes('.pdf') ? 'Baixar PDF' : 'Abrir Original'}
             </a>
-            <img 
-              src={comprovante.imagem_url} 
-              alt="Comprovante" 
-              className="max-w-full h-auto object-contain max-h-[60vh] sm:max-h-[80vh] m-auto block"
-            />
+            
+            {comprovante.imagem_url.toLowerCase().includes('.pdf') ? (
+              <div className="flex flex-col items-center justify-center gap-4 text-zinc-400">
+                <div className="w-20 h-20 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center border border-red-200">
+                  <FileText size={48} />
+                </div>
+                <div className="text-center px-4">
+                  <p className="font-bold text-zinc-700 dark:text-zinc-300">Documento PDF</p>
+                  <p className="text-xs">Clique no botão acima para visualizar ou baixar o arquivo original.</p>
+                </div>
+              </div>
+            ) : (
+              <img 
+                src={comprovante.imagem_url} 
+                alt="Comprovante" 
+                className="max-w-full h-auto object-contain max-h-[60vh] sm:max-h-[80vh] m-auto block"
+              />
+            )}
           </ScrollArea>
         </div>
 
