@@ -25,6 +25,7 @@ interface MobileModeloPadronizadoCardProps {
     vendasSemanaAnterior?: number;
     modoAuditoria?: boolean;
     conferidoHoje?: boolean;
+    onAuditSuccess?: () => void;
 }
 
 function HeroImage({ imagemUrl, nome, onImageClick, statusColor }: { imagemUrl?: string; nome: string; onImageClick?: () => void; statusColor: string }) {

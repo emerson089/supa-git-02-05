@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Comprovante } from '@/hooks/useComprovantes';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, ExternalLink } from 'lucide-react';
+import { Loader2, ExternalLink, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ComprovanteModalProps {
