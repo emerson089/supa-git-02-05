@@ -382,6 +382,11 @@ export default function Comprovantes() {
           isSaving={isUpdating}
         />
 
+        <GerenciarGruposModal 
+          isOpen={showGruposModal}
+          onClose={() => setShowGruposModal(false)}
+        />
+
         <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
