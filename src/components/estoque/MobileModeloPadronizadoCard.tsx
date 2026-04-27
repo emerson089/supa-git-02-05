@@ -58,7 +58,8 @@ export function MobileModeloPadronizadoCard({
     vendasSemana = 0, 
     vendasSemanaAnterior = 0,
     modoAuditoria = false,
-    conferidoHoje = false 
+    conferidoHoje = false,
+    onAuditSuccess
 }: MobileModeloPadronizadoCardProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
