@@ -7,13 +7,15 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Trash2, Pencil, Search, Loader2, AlertCircle, MessageCircle } from 'lucide-react';
-import { useGruposComprovantes, useEventosBrutosNaoCadastrados, GrupoComprovante, CORES_GRUPO, getCorClasses, ComprovanteCategoria } from '@/hooks/useGruposComprovantes';
+import { Plus, Trash2, Pencil, Search, Loader2, AlertCircle, MessageCircle, Zap, RefreshCw, FileImage, FileText, MessageSquare, Wifi } from 'lucide-react';
+import { useGruposComprovantes, useEventosBrutosNaoCadastrados, useEventosBrutosRecentes, GrupoComprovante, CORES_GRUPO, getCorClasses, ComprovanteCategoria } from '@/hooks/useGruposComprovantes';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface GerenciarGruposModalProps {
   isOpen: boolean;
@@ -47,11 +49,31 @@ const EMOJIS_SUGESTAO = ['💰', '💬', '🏟️', '👖', '👔', '🛍️', '
 export function GerenciarGruposModal({ isOpen, onClose }: GerenciarGruposModalProps) {
   const { grupos, loading, createGrupo, updateGrupo, deleteGrupo, isCreating, isUpdating } = useGruposComprovantes();
   const { data: descobertos = [] } = useEventosBrutosNaoCadastrados();
+  const { data: eventosRecentes = [], refetch: refetchEventos, isFetching: fetchingEventos } = useEventosBrutosRecentes(30);
 
   const [editando, setEditando] = useState<GrupoComprovante | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(FORM_INICIAL);
   const [confirmDelete, setConfirmDelete] = useState<GrupoComprovante | null>(null);
+  const [configurandoZapi, setConfigurandoZapi] = useState(false);
+
+  const ativarZapi = async () => {
+    setConfigurandoZapi(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('zapi-config-grupos');
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success('Z-API configurada!', {
+        description: 'Notificações de grupo ativadas. Mande uma mensagem no grupo agora pra testar.',
+      });
+      setTimeout(() => refetchEventos(), 2000);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      toast.error('Falha ao configurar Z-API', { description: msg });
+    } finally {
+      setConfigurandoZapi(false);
+    }
+  };
 
   const abrirNovo = () => {
     setEditando(null);
