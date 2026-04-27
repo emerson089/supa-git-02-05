@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Play, Pause, Loader2, CheckCircle2, AlertTriangle, Send,
   Filter, Clock, ShieldCheck,
@@ -31,20 +31,30 @@ import { useClienteContatos } from '@/hooks/useClienteContatos';
 import { useMassSending } from '@/hooks/useMassSending';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 const SAUDACOES = [
-  'Olá', 'Oii', 'Oie', 'Opa', 'Olaa', 'Oiii', 'E aí', 'Fala', 'Oi',
-  'Bom dia', 'Boa tarde', 'Boa noite', 'Oiie', 'Opaa', 'Hey', 'Salve',
-  'Oi, passando para te mandar...',
-];
-
-const SUFIXOS = [
-  ', tudo bem?', ', tudo certo?', ', como vai?',
-  ', tudo bom?', '! Tudo tranquilo?', '! Como está?',
-  ', beleza?', '! Tudo certo por aí?',
+  'Oi, {nome}! Tô passando aqui pra te mandar uma novidade 😍',
+  'Oii {nome}! Olha o que chegou pra você 👀',
+  'Oie {nome}! Separei uma coisa especial pra você 🥰',
+  'Ei {nome}, que bom te encontrar por aqui! Dá uma olhada nisso 😊',
+  'Oi {nome}! Vim te mostrar as novidades da Delooki 🔥',
+  'Oie {nome}! Você vai amar o que tenho pra te mostrar 😍',
+  'Oi {nome}! Vim te mandar o catálogo novinho em folha 🥰',
+  'Opa {nome}! Vim te dar uma novidade hoje 😊',
+  'Ei {nome}! Vim rapidinho te mostrar nosso novo catálogo 👀',
+  'Oi {nome}, tô com saudade! Olha essa coleção nova 🔥',
+  'Oii {nome}! Acho que você vai gostar muito disso 🥰',
+  'Ei {nome}, vim te contar uma novidade boa 😊',
+  'Oi {nome}! Tava pensando em você e vim te mandar isso 🥰',
+  'Oie {nome}! Chegou coisa boa aqui, dá uma olhada 👀',
+  'Oi {nome}! Tem coisa nova na Delooki e precisava te mostrar 🔥',
+  'Salve {nome}! Tenho uma surpresinha linda pra você 😍',
+  'Oi {nome}! Sabia que ia te animar ver isso aqui 🥰',
+  'Oii {nome}! Nossa coleção chegou e você precisa ver 👗',
+  'Ei {nome}! Chegou o tão esperado catálogo novo 🔥',
+  'Oi {nome}, passando com novidade boa por aqui! Dá uma olhadinha 😊',
 ];
 
 const STORAGE_KEY = 'transmissao_progresso';
@@ -84,8 +94,7 @@ const normalizePhoneE164 = (raw: string): { valid: boolean; phone: string } => {
 
 const gerarSaudacao = (nome: string): string => {
   const saudacao = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
-  const sufixo = SUFIXOS[Math.floor(Math.random() * SUFIXOS.length)];
-  return `${saudacao} ${nome}${sufixo}`;
+  return saudacao.replace('{nome}', nome);
 };
 
 export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = ({
@@ -246,11 +255,10 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   // Substituição de Variáveis
   const formatMessage = (template: string, cliente: ClientePaginatedDB) => {
     let msg = template || '';
-    const saudacaoAleatoria = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
-    
-    // Fallbacks inteligentes
+    const primeiroNome = cliente.nome?.split(' ')[0] || 'Cliente';
+
     const substitutionMap: Record<string, string> = {
-      '{nome}': cliente.nome?.split(' ')[0] || 'Cliente',
+      '{nome}': primeiroNome,
       '{cidade}': cliente.cidade || 'sua região',
       '{estado}': cliente.estado || 'seu estado',
       '{excursao}': cliente.excursao || 'sua excursão',
@@ -261,8 +269,11 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
       msg = msg.split(tag).join(val);
     });
 
-    if (!msg.includes('{nome}')) {
-      msg = `${saudacaoAleatoria} ${cliente.nome?.split(' ')[0] || 'Cliente'}! ${msg}`;
+    // Se a mensagem do catálogo não tem {nome}, adiciona saudação com contexto no topo
+    if (!template.includes('{nome}')) {
+      const saudacao = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
+      const saudacaoComNome = saudacao.replace('{nome}', primeiroNome);
+      msg = `${saudacaoComNome}\n\n${msg}`;
     }
 
     return msg;
