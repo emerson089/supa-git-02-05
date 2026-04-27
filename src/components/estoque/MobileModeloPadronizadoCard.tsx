@@ -10,6 +10,12 @@ import { toast } from 'sonner';
 import { ModeloPadronizado, TAMANHOS_LETRAS, TAMANHOS_NUMERICOS, useModelosPadronizados } from '@/hooks/useModelosPadronizados';
 import { EditarModeloPadronizadoModal } from './EditarModeloPadronizadoModal';
 import { parseProductName } from '@/utils/productNameUtils';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useUpdateItem, useAddMovimentacao } from '@/hooks/useEstoqueData';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
+import { Check } from 'lucide-react';
 
 interface MobileModeloPadronizadoCardProps {
     modelo: ModeloPadronizado;
@@ -17,6 +23,8 @@ interface MobileModeloPadronizadoCardProps {
     onImageUpdate?: (productId: string, file: File) => void;
     vendasSemana?: number;
     vendasSemanaAnterior?: number;
+    modoAuditoria?: boolean;
+    conferidoHoje?: boolean;
 }
 
 function HeroImage({ imagemUrl, nome, onImageClick, statusColor }: { imagemUrl?: string; nome: string; onImageClick?: () => void; statusColor: string }) {
@@ -42,11 +50,26 @@ function HeroImage({ imagemUrl, nome, onImageClick, statusColor }: { imagemUrl?:
     );
 }
 
-export function MobileModeloPadronizadoCard({ modelo, onVerDetalhes, onImageUpdate, vendasSemana = 0, vendasSemanaAnterior = 0 }: MobileModeloPadronizadoCardProps) {
+export function MobileModeloPadronizadoCard({ 
+    modelo, 
+    onVerDetalhes, 
+    onImageUpdate, 
+    vendasSemana = 0, 
+    vendasSemanaAnterior = 0,
+    modoAuditoria = false,
+    conferidoHoje = false 
+}: MobileModeloPadronizadoCardProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [showEdit, setShowEdit] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [pendingChanges, setPendingChanges] = useState<Record<string, { qtd: number; qtdIni: number }>>({});
+
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
+    const { mutateAsync: updateItem } = useUpdateItem();
+    const { mutateAsync: addMovimentacao } = useAddMovimentacao();
     const { excluirModeloPadronizado } = useModelosPadronizados();
 
     const { meta, variacoes: variacoesRaw, nome, precoUnitario } = modelo;
@@ -91,6 +114,62 @@ export function MobileModeloPadronizadoCard({ modelo, onVerDetalhes, onImageUpda
         }
     };
 
+    const handleFieldChange = (id: string, field: 'qtd' | 'qtdIni', value: string) => {
+        const numValue = parseInt(value, 10) || 0;
+        const currentVar = variacoes.find(v => v.id === id);
+        if (!currentVar) return;
+
+        setPendingChanges(prev => {
+            const existing = prev[id] || { 
+                qtd: currentVar.quantidade, 
+                qtdIni: currentVar.quantidadeInicial ?? currentVar.quantidade 
+            };
+            return {
+                ...prev,
+                [id]: { ...existing, [field]: numValue }
+            };
+        });
+    };
+
+    const saveChanges = async () => {
+        const ids = Object.keys(pendingChanges);
+        if (ids.length === 0) return;
+        setSaving(true);
+        try {
+            const promises = ids.map(async (id) => {
+                const changes = pendingChanges[id];
+                const original = variacoes.find(v => v.id === id);
+                if (!original) return;
+
+                const diff = changes.qtd - original.quantidade;
+                const changedQtdIni = changes.qtdIni !== (original.quantidadeInicial ?? original.quantidade);
+
+                if (diff !== 0 || changedQtdIni) {
+                    await updateItem({ id, quantidade: changes.qtd, quantidadeInicial: changes.qtdIni });
+                    if (diff !== 0) {
+                        await addMovimentacao({
+                            itemId: id,
+                            tipo: diff > 0 ? 'entrada' : 'saida',
+                            quantidade: Math.abs(diff),
+                            motivo: `Auditoria de Segunda (Mobile) - Tam ${original.tamanho}`,
+                            producaoId: null
+                        });
+                    }
+                }
+            });
+            await Promise.all(promises);
+            if (onAuditSuccess) onAuditSuccess();
+            toast.success(`Estoque de "${meta.referencia}" atualizado!`);
+            setPendingChanges({});
+            queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
+            queryClient.invalidateQueries({ queryKey: ['estoque-itens'] });
+        } catch (err) {
+            toast.error('Erro ao salvar alterações.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <>
             <Card className="p-3 bg-white dark:bg-card border border-gray-100 dark:border-gray-800 shadow-xl shadow-gray-200/20 dark:shadow-none rounded-[2rem] flex flex-col gap-4 overflow-hidden">
@@ -101,96 +180,147 @@ export function MobileModeloPadronizadoCard({ modelo, onVerDetalhes, onImageUpda
                 <div className="px-1 space-y-4">
                     {/* Identificação */}
                     <div className="space-y-1">
-                        <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 tracking-tight leading-none uppercase">
-                            {parseProductName(nome, meta.referencia).nomeExibicao}
-                        </h3>
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-slate-500">{meta.referencia}</span>
-                            <span className="text-xs text-slate-400">{modelo.categoria || 'Calça'}</span>
-                        </div>
-                        {(!modelo.imagemUrl || !precoUnitario) && (
-                            <div className="flex flex-wrap gap-1 pt-0.5">
-                                {!modelo.imagemUrl && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 uppercase tracking-wide">Sem imagem</span>}
-                                {!precoUnitario && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-red-50 text-red-500 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50 uppercase tracking-wide">Sem preço</span>}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Tamanhos */}
-                    <div className="flex flex-wrap gap-2">
-                        {variacoes.map(v => (
-                            <div key={v.id} className={cn("px-3 py-1.5 rounded-lg border text-sm font-bold transition-all", v.quantidade > 0 ? "border-emerald-200 bg-emerald-50/50 text-emerald-700 dark:border-emerald-900/30 dark:bg-emerald-900/20 dark:text-emerald-400" : "border-gray-200 bg-gray-50 text-gray-400 opacity-60")}>
-                                {v.tamanho}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Quantidade + Preço */}
-                    <div className="grid grid-cols-2 gap-4 border-t border-gray-100 dark:border-gray-800 pt-4">
-                        <div className="space-y-1">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantidade</p>
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-xl font-black text-slate-800 dark:text-white">{totalPecas}</span>
-                                <span className="text-xs font-medium text-slate-400">peças</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Preço de Venda</p>
-                            <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">R$ {(precoUnitario ?? 0).toFixed(2)}</p>
-                        </div>
-                    </div>
-
-                    {/* Métricas de performance */}
-                    <div className="space-y-3 border-t border-gray-100 dark:border-gray-800 pt-4">
-                        {/* Vendas Semana + Tendência */}
-                        <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vendas Semana</p>
-                            <div className="flex items-center gap-1.5">
-                                <span className={cn("text-sm font-black", vendasSemana > 0 ? "text-blue-600 dark:text-blue-400" : "text-slate-400")}>
-                                    {vendasSemana} pçs
-                                </span>
-                                {tendencia !== null && (
-                                    <span className={cn("flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-lg", tendencia > 0 ? "text-emerald-600 bg-emerald-50" : tendencia < 0 ? "text-red-500 bg-red-50" : "text-slate-400 bg-slate-50")}>
-                                        {tendencia > 0 ? <ArrowUp size={9} /> : <ArrowDown size={9} />}
-                                        {tendencia > 0 ? '+' : ''}{tendencia.toFixed(0)}%
+                        <div className="flex items-start justify-between">
+                            <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 tracking-tight leading-none uppercase flex-1">
+                                {parseProductName(nome, meta.referencia).nomeExibicao}
+                            </h3>
+                            <div className="flex gap-1 items-center">
+                                {conferidoHoje && (
+                                    <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                                        <Check size={10} strokeWidth={3} />
+                                        OK
                                     </span>
+                                )}
+                                {modoAuditoria && (
+                                    <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">Audit</span>
                                 )}
                             </div>
                         </div>
-
-                        {/* Giro do Lote */}
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giro do Lote</p>
-                                <span className={cn("text-[11px] font-black", giroTextColor)}>{taxaGiro.toFixed(0)}%</span>
-                            </div>
-                            <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                                <div className={cn("h-full rounded-full transition-all", giroColor)} style={{ width: `${taxaGiro}%` }} />
-                            </div>
-                        </div>
-
-                        {/* Cobertura */}
-                        <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cobertura</p>
-                            <span className={cn("text-[11px] font-black", coberturaColor)}>
-                                {cobertura === null ? '—' : cobertura === 1 ? '1 semana' : `${cobertura} semanas`}
-                            </span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-500">{meta.referencia}</span>
+                            {!modoAuditoria && <span className="text-xs text-slate-400">{modelo.categoria || 'Calça'}</span>}
                         </div>
                     </div>
 
-                    {/* Ações */}
-                    <div className="flex gap-2 pt-2 pb-1">
-                        <Button variant="outline" className="flex-1 h-12 rounded-2xl border-purple-100 bg-purple-50/30 text-purple-700 font-bold hover:bg-purple-100 transition-all gap-2" onClick={() => onVerDetalhes(modelo)}>
-                            <Eye className="h-4 w-4" />
-                            Ver Detalhes
-                        </Button>
-                        <Button variant="outline" size="icon" className="h-12 w-12 rounded-2xl bg-slate-50 border-slate-200 text-slate-600 hover:text-blue-600 transition-all shrink-0" onClick={() => setShowEdit(true)}>
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" className="h-12 w-12 rounded-2xl bg-slate-50 border-slate-200 text-slate-600 hover:text-red-600 transition-all shrink-0" onClick={() => setShowConfirmDelete(true)}>
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </div>
+                    {modoAuditoria ? (
+                        /* — Audit Mode View (Mobile) — */
+                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                            <div className="grid grid-cols-3 gap-2">
+                                {variacoes.map(v => {
+                                    const pending = pendingChanges[v.id];
+                                    const val = pending ? pending.qtd : v.quantidade;
+                                    const isChanged = !!pending;
+                                    return (
+                                        <div key={v.id} className="space-y-1">
+                                            <Label className="text-[10px] font-black text-center block text-slate-400">{v.tamanho}</Label>
+                                            <Input
+                                                type="number"
+                                                className={cn(
+                                                    "h-10 text-center font-black text-sm rounded-xl transition-all",
+                                                    isChanged ? "border-amber-500 bg-amber-50 shadow-sm" : "border-gray-100 bg-gray-50/50"
+                                                )}
+                                                value={val}
+                                                onChange={e => handleFieldChange(v.id, 'qtd', e.target.value)}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            
+                            <Button 
+                                onClick={saveChanges}
+                                disabled={saving || Object.keys(pendingChanges).length === 0}
+                                className={cn(
+                                    "w-full h-12 rounded-2xl font-bold text-sm gap-2 transition-all shadow-lg",
+                                    Object.keys(pendingChanges).length > 0 
+                                        ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20" 
+                                        : "bg-slate-100 text-slate-400 shadow-none opacity-50"
+                                )}
+                            >
+                                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                {saving ? "Salvando..." : "Confirmar Contagem"}
+                            </Button>
+                        </div>
+                    ) : (
+                        /* — Normal Mode View — */
+                        <>
+                            {/* Tamanhos */}
+                            <div className="flex flex-wrap gap-2">
+                                {variacoes.map(v => (
+                                    <div key={v.id} className={cn("px-3 py-1.5 rounded-lg border text-sm font-bold transition-all", v.quantidade > 0 ? "border-emerald-200 bg-emerald-50/50 text-emerald-700 dark:border-emerald-900/30 dark:bg-emerald-900/20 dark:text-emerald-400" : "border-gray-200 bg-gray-50 text-gray-400 opacity-60")}>
+                                        {v.tamanho}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Quantidade + Preço */}
+                            <div className="grid grid-cols-2 gap-4 border-t border-gray-100 dark:border-gray-800 pt-4">
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantidade</p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-xl font-black text-slate-800 dark:text-white">{totalPecas}</span>
+                                        <span className="text-xs font-medium text-slate-400">peças</span>
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Preço de Venda</p>
+                                    <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">R$ {(precoUnitario ?? 0).toFixed(2)}</p>
+                                </div>
+                            </div>
+
+                            {/* Métricas de performance */}
+                            <div className="space-y-3 border-t border-gray-100 dark:border-gray-800 pt-4">
+                                {/* Vendas Semana + Tendência */}
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vendas Semana</p>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className={cn("text-sm font-black", vendasSemana > 0 ? "text-blue-600 dark:text-blue-400" : "text-slate-400")}>
+                                            {vendasSemana} pçs
+                                        </span>
+                                        {tendencia !== null && (
+                                            <span className={cn("flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-lg", tendencia > 0 ? "text-emerald-600 bg-emerald-50" : tendencia < 0 ? "text-red-500 bg-red-50" : "text-slate-400 bg-slate-50")}>
+                                                {tendencia > 0 ? <ArrowUp size={9} /> : <ArrowDown size={9} />}
+                                                {tendencia > 0 ? '+' : ''}{tendencia.toFixed(0)}%
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Giro do Lote */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giro do Lote</p>
+                                        <span className={cn("text-[11px] font-black", giroTextColor)}>{taxaGiro.toFixed(0)}%</span>
+                                    </div>
+                                    <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                        <div className={cn("h-full rounded-full transition-all", giroColor)} style={{ width: `${taxaGiro}%` }} />
+                                    </div>
+                                </div>
+
+                                {/* Cobertura */}
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cobertura</p>
+                                    <span className={cn("text-[11px] font-black", coberturaColor)}>
+                                        {cobertura === null ? '—' : cobertura === 1 ? '1 semana' : `${cobertura} semanas`}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Ações */}
+                            <div className="flex gap-2 pt-2 pb-1">
+                                <Button variant="outline" className="flex-1 h-12 rounded-2xl border-purple-100 bg-purple-50/30 text-purple-700 font-bold hover:bg-purple-100 transition-all gap-2" onClick={() => onVerDetalhes(modelo)}>
+                                    <Eye className="h-4 w-4" />
+                                    Ver Detalhes
+                                </Button>
+                                <Button variant="outline" size="icon" className="h-12 w-12 rounded-2xl bg-slate-50 border-slate-200 text-slate-600 hover:text-blue-600 transition-all shrink-0" onClick={() => setShowEdit(true)}>
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="outline" size="icon" className="h-12 w-12 rounded-2xl bg-slate-50 border-slate-200 text-slate-600 hover:text-red-600 transition-all shrink-0" onClick={() => setShowConfirmDelete(true)}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </Card>
 

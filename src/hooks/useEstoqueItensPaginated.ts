@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 export type TipoEstoque = 'materia-prima' | 'acabado';
-export type FiltroRapido = 'todos' | 'esgotado' | 'baixo';
+export type FiltroRapido = 'todos' | 'esgotado' | 'baixo' | 'pendentes';
 
 export interface ItemEstoquePaginated {
   id: string;
@@ -136,7 +136,7 @@ export function useEstoqueItensPaginated(params: EstoquePaginatedParams) {
         dataQuery = dataQuery.or(`nome.ilike.%${debouncedSearch}%,categoria.ilike.%${debouncedSearch}%`);
       }
 
-      // For quantity-based filters, we need to fetch all and filter
+      // For quantity-based filters or audit-based filters, we need to fetch all and filter
       // For 'todos', we can use proper pagination
       if (params.filtroRapido === 'todos' || !params.filtroRapido) {
         // Get count first
@@ -251,6 +251,42 @@ export function useEstoqueItensPaginated(params: EstoquePaginatedParams) {
           items = items.filter(item => item.quantidade <= 0);
         } else if (params.filtroRapido === 'baixo') {
           items = items.filter(item => item.quantidade > 0 && item.quantidade <= 20);
+        } else if (params.filtroRapido === 'pendentes') {
+          // Buscar IDs de itens que tiveram auditoria hoje
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          const { data: auditMovableIds } = await supabase
+            .from('estoque_movimentacoes')
+            .select('item_id')
+            .gte('created_at', today.toISOString())
+            .like('motivo', '%Auditoria%');
+            
+          const auditedIds = new Set(auditMovableIds?.map(m => m.item_id) || []);
+          
+          // Se for modelo padronizado, verificamos se ALGUMA variação foi auditada
+          // Se for manual, verificamos o próprio ID
+          const auditedParentIds = new Set<string>();
+          
+          // Precisamos carregar variações para fazer esse mapeamento de pendentes
+          const { data: variationsForAudit } = await supabase
+            .from('estoque_itens')
+            .select('id, localizacao')
+            .eq('categoria', 'Variação Padronizada');
+            
+          variationsForAudit?.forEach(v => {
+            if (auditedIds.has(v.id)) {
+               try {
+                 const loc = JSON.parse(v.localizacao || '{}');
+                 if (loc.modeloId) auditedParentIds.add(loc.modeloId);
+               } catch(e) {}
+            }
+          });
+          
+          // Também adicionamos os IDs manuais que foram auditados
+          auditedIds.forEach(id => auditedParentIds.add(id));
+
+          items = items.filter(item => !auditedParentIds.has(item.id));
         }
         
         const totalCount = items.length;

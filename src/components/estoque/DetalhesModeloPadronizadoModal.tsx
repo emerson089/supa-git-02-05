@@ -74,18 +74,14 @@ function getStockColor(qtd: number) {
 export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props) {
     const [showEtiquetas, setShowEtiquetas] = useState(false);
     const [localVariacoes, setLocalVariacoes] = useState<VariacaoModelo[]>([]);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editingQtd, setEditingQtd] = useState('');
-    const [editingQtdIni, setEditingQtdIni] = useState('');
     const [saving, setSaving] = useState(false);
     const [qtdGrade, setQtdGrade] = useState('');
-    const [applyingGrade, setApplyingGrade] = useState(false);
     const [addingSize, setAddingSize] = useState(false);
     const [newSize, setNewSize] = useState('');
     const [newSizeQtd, setNewSizeQtd] = useState('');
     const [reposicaoMode, setReposicaoMode] = useState(false);
     const [reposicaoQtd, setReposicaoQtd] = useState<Record<string, string>>({});
-    const [savingReposicao, setSavingReposicao] = useState(false);
+    const [pendingChanges, setPendingChanges] = useState<Record<string, { qtd: number; qtdIni: number }>>({});
 
     const { user } = useAuth();
     const queryClient = useQueryClient();
@@ -100,57 +96,77 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                 (a, b) => ORDEM.indexOf(a.tamanho) - ORDEM.indexOf(b.tamanho)
             );
             setLocalVariacoes(sorted);
-            setEditingId(null);
+            setPendingChanges({});
         }
-    }, [modelo?.id]);
+    }, [modelo?.id, modelo?.variacoes]);
 
     if (!modelo) return null;
     const { meta, nome, precoUnitario } = modelo;
 
-    const totalPecas = localVariacoes.reduce((s, v) => s + v.quantidade, 0);
-    const totalProduzidoRaw = localVariacoes.reduce((s, v) => s + (v.quantidadeInicial ?? v.quantidade), 0);
-    const totalProduzido = Math.max(totalProduzidoRaw, totalPecas);
+    const totalPecas = localVariacoes.reduce((s, v) => {
+        const pending = pendingChanges[v.id];
+        return s + (pending ? pending.qtd : v.quantidade);
+    }, 0);
 
-    const startEdit = (v: VariacaoModelo) => {
-        setEditingId(v.id);
-        setEditingQtd(String(v.quantidade));
-        setEditingQtdIni(String(v.quantidadeInicial ?? v.quantidade));
+    const handleFieldChange = (id: string, field: 'qtd' | 'qtdIni', value: string) => {
+        const numValue = parseInt(value, 10) || 0;
+        const currentVar = localVariacoes.find(v => v.id === id);
+        if (!currentVar) return;
+
+        setPendingChanges(prev => {
+            const existing = prev[id] || { 
+                qtd: currentVar.quantidade, 
+                qtdIni: currentVar.quantidadeInicial ?? currentVar.quantidade 
+            };
+            return {
+                ...prev,
+                [id]: { ...existing, [field]: numValue }
+            };
+        });
     };
 
-    const cancelEdit = () => {
-        setEditingId(null);
-        setEditingQtd('');
-        setEditingQtdIni('');
-    };
+    const hasChanges = Object.keys(pendingChanges).length > 0;
 
-    const saveEdit = async (v: VariacaoModelo) => {
-        const novaQtd = parseInt(editingQtd, 10);
-        const novaQtdIni = parseInt(editingQtdIni, 10);
-        if (isNaN(novaQtd) || novaQtd < 0) return;
-        if (isNaN(novaQtdIni) || novaQtdIni < 0) return;
-
-        const diff = novaQtd - v.quantidade;
-        if (diff === 0 && novaQtdIni === v.quantidadeInicial) {
-            setEditingId(null);
-            return;
-        }
-
+    const saveAllChanges = async () => {
+        if (!hasChanges) return;
         setSaving(true);
+        
         try {
-            await updateItem({ id: v.id, quantidade: novaQtd, quantidadeInicial: novaQtdIni });
-            await addMovimentacao({
-                itemId: v.id,
-                tipo: diff > 0 ? 'entrada' : 'saida',
-                quantidade: Math.abs(diff),
-                motivo: `Ajuste manual (Individual) - Tam ${v.tamanho}`,
-                producaoId: null
+            const promises = Object.entries(pendingChanges).map(async ([id, changes]) => {
+                const original = localVariacoes.find(v => v.id === id);
+                if (!original) return;
+
+                const diff = changes.qtd - original.quantidade;
+                const changedQtdIni = changes.qtdIni !== (original.quantidadeInicial ?? original.quantidade);
+
+                if (diff !== 0 || changedQtdIni) {
+                    await updateItem({ 
+                        id, 
+                        quantidade: changes.qtd, 
+                        quantidadeInicial: changes.qtdIni 
+                    });
+
+                    // Só gera log se a quantidade física mudou
+                    if (diff !== 0) {
+                        await addMovimentacao({
+                            itemId: id,
+                            tipo: diff > 0 ? 'entrada' : 'saida',
+                            quantidade: Math.abs(diff),
+                            motivo: `Auditoria de Segunda - Tam ${original.tamanho}`,
+                            producaoId: null
+                        });
+                    }
+                }
             });
 
-            setLocalVariacoes(prev =>
-                prev.map(lv => lv.id === v.id ? { ...lv, quantidade: novaQtd, quantidadeInicial: novaQtdIni } : lv)
-            );
-            setEditingId(null);
+            await Promise.all(promises);
+            toast.success('Estoque atualizado com sucesso!');
+            setPendingChanges({});
             queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
+            onClose(); // Fecha após salvar com sucesso para dar foco à lista
+        } catch (err) {
+            toast.error('Erro ao salvar algumas alterações.');
+            console.error(err);
         } finally {
             setSaving(false);
         }
@@ -160,85 +176,48 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
         const valorGrade = parseInt(qtdGrade, 10);
         if (isNaN(valorGrade) || valorGrade < 0) return;
 
-        setApplyingGrade(true);
-        try {
-            for (const v of localVariacoes) {
-                const diff = valorGrade - v.quantidade;
-                if (diff !== 0) {
-                    // Se é entrada (diff > 0), soma também no histórico para manter Giro correto
-                    const qtdIniAtual = v.quantidadeInicial || v.quantidade;
-                    const novaQtdIni = diff > 0 ? qtdIniAtual + diff : qtdIniAtual;
-
-                    await updateItem({ id: v.id, quantidade: valorGrade, quantidadeInicial: novaQtdIni });
-                    await addMovimentacao({
-                        itemId: v.id,
-                        tipo: diff > 0 ? 'entrada' : 'saida',
-                        quantidade: Math.abs(diff),
-                        motivo: `Ajuste manual (Grade) - Tam ${v.tamanho}`,
-                        producaoId: null
-                    });
-                }
-            }
-
-            setLocalVariacoes(prev => prev.map(v => {
-                const diff = valorGrade - v.quantidade;
-                if (diff === 0) return v;
-                const qtdIniAtual = v.quantidadeInicial || v.quantidade;
-                return { ...v, quantidade: valorGrade, quantidadeInicial: diff > 0 ? qtdIniAtual + diff : qtdIniAtual };
-            }));
-            setQtdGrade('');
-            queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
-        } finally {
-            setApplyingGrade(false);
-        }
+        const newPending = { ...pendingChanges };
+        localVariacoes.forEach(v => {
+            const currentQtdIni = pendingChanges[v.id]?.qtdIni ?? (v.quantidadeInicial || v.quantidade);
+            const diff = valorGrade - v.quantidade;
+            // Se for entrada, sugere aumentar o histórico também
+            const suggestedQtdIni = diff > 0 ? currentQtdIni + diff : currentQtdIni;
+            
+            newPending[v.id] = {
+                qtd: valorGrade,
+                qtdIni: suggestedQtdIni
+            };
+        });
+        
+        setPendingChanges(newPending);
+        setQtdGrade('');
+        toast.info('Grade aplicada! Não esqueça de Salvar Alterações.');
     };
 
     const handleReposicao = async () => {
-        const entradas = localVariacoes.map(v => ({
-            variacao: v,
-            chegaram: parseInt(reposicaoQtd[v.id] || '0', 10) || 0,
-        })).filter(e => e.chegaram > 0);
+        const newPending = { ...pendingChanges };
+        Object.entries(reposicaoQtd).forEach(([id, val]) => {
+            const chegaram = parseInt(val, 10) || 0;
+            if (chegaram <= 0) return;
+            
+            const v = localVariacoes.find(varItem => varItem.id === id);
+            if (!v) return;
 
-        if (entradas.length === 0) {
-            toast.error('Informe a quantidade chegada em pelo menos um tamanho.');
-            return;
-        }
+            const current = newPending[id] || { 
+                qtd: v.quantidade, 
+                qtdIni: v.quantidadeInicial ?? v.quantidade 
+            };
 
-        setSavingReposicao(true);
-        try {
-            for (const { variacao: v, chegaram } of entradas) {
-                const novaQtd = v.quantidade + chegaram;
-                const novaQtdIni = (v.quantidadeInicial || v.quantidade) + chegaram;
-                await updateItem({ id: v.id, quantidade: novaQtd, quantidadeInicial: novaQtdIni });
-                await addMovimentacao({
-                    itemId: v.id,
-                    tipo: 'entrada',
-                    quantidade: chegaram,
-                    motivo: `Reposição de estoque - Tam ${v.tamanho}`,
-                    producaoId: null,
-                });
-            }
+            newPending[id] = {
+                qtd: current.qtd + chegaram,
+                qtdIni: current.qtdIni + chegaram
+            };
+        });
 
-            setLocalVariacoes(prev => prev.map(v => {
-                const chegaram = parseInt(reposicaoQtd[v.id] || '0', 10) || 0;
-                if (!chegaram) return v;
-                return {
-                    ...v,
-                    quantidade: v.quantidade + chegaram,
-                    quantidadeInicial: (v.quantidadeInicial || v.quantidade) + chegaram,
-                };
-            }));
-
-            const totalChegou = entradas.reduce((s, e) => s + e.chegaram, 0);
-            toast.success(`Reposição registrada: +${totalChegou} peças em ${entradas.length} tamanho(s).`);
-            setReposicaoMode(false);
-            setReposicaoQtd({});
-            queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
-        } catch {
-            toast.error('Erro ao registrar reposição.');
-        } finally {
-            setSavingReposicao(false);
-        }
+        setPendingChanges(newPending);
+        setReposicaoMode(false);
+        setReposicaoQtd({});
+        toast.success('Reposição adicionada à lista de alterações.');
     };
 
     const handleAddSize = async () => {
@@ -249,7 +228,6 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
         try {
             const novaVar = await adicionarVariacao(modelo.id, newSize.trim().toUpperCase(), qtd);
             
-            // Adicionar movimentação de entrada inicial
             if (qtd > 0) {
                 await addMovimentacao({
                     itemId: novaVar.id,
@@ -260,23 +238,10 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                 });
             }
 
-            toast.success(`Tamanho ${newSize} adicionado com sucesso!`);
+            toast.success(`Tamanho ${newSize} adicionado!`);
             setAddingSize(false);
             setNewSize('');
             setNewSizeQtd('');
-            
-            // Recarregar variações
-            const ORDEM = [...TAMANHOS_LETRAS, ...TAMANHOS_NUMERICOS] as string[];
-            const novasVars = [...localVariacoes, { 
-                ...novaVar, 
-                tamanho: newSize.trim().toUpperCase(), 
-                referencia: `${meta.referencia}-${newSize.trim().toUpperCase()}`,
-                modeloId: modelo.id 
-            } as VariacaoModelo].sort(
-                (a, b) => ORDEM.indexOf(a.tamanho) - ORDEM.indexOf(b.tamanho)
-            );
-            setLocalVariacoes(novasVars);
-            
             queryClient.invalidateQueries({ queryKey: ['modelos-padronizados', user?.id] });
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : 'Erro ao adicionar tamanho');
@@ -288,7 +253,7 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
     return (
         <>
             <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-                <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0 rounded-2xl sm:rounded-3xl border-0 shadow-2xl">
+                <DialogContent className="sm:max-w-3xl max-h-[95vh] flex flex-col overflow-hidden p-0 rounded-2xl sm:rounded-3xl border-0 shadow-2xl">
                     <DialogHeader className="px-5 sm:px-8 pt-6 pb-5 border-b border-border bg-gradient-to-br from-purple-500/5 via-indigo-500/5 to-transparent">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
                             <div className="flex-1 min-w-0 space-y-2">
@@ -297,33 +262,43 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                 </DialogTitle>
                             </div>
                             
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full sm:w-auto h-10 sm:h-9 gap-2 shrink-0 border-indigo-200 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl font-bold shadow-sm"
-                                onClick={() => setShowEtiquetas(true)}
-                            >
-                                <Printer className="h-4 w-4" />
-                                <span className="sm:text-xs">Imprimir Etiquetas</span>
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                {hasChanges && (
+                                    <Button
+                                        onClick={saveAllChanges}
+                                        disabled={saving}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-6 rounded-xl shadow-lg shadow-emerald-500/20 gap-2 animate-in zoom-in duration-300"
+                                    >
+                                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                        Salvar Alterações
+                                    </Button>
+                                )}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-10 sm:h-9 gap-2 border-indigo-200 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl font-bold"
+                                    onClick={() => setShowEtiquetas(true)}
+                                >
+                                    <Printer className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Etiquetas</span>
+                                </Button>
+                            </div>
                         </div>
                     </DialogHeader>
 
                     <ScrollArea className="flex-1 overflow-auto">
                         <div className="px-6 py-4 space-y-6">
                             {/* Imagem + Dados principais */}
-                            <div className="grid grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <ModeloImage imagemUrl={modelo.imagemUrl} nome={nome} />
 
                                 <div className="space-y-3">
-                                    {/* Tipo */}
                                     <div className="flex items-center gap-2 text-sm">
                                         <Shirt className="h-4 w-4 text-muted-foreground" />
                                         <span className="text-muted-foreground">Tipo:</span>
                                         <span className="font-semibold">{TIPO_GARMENT_LABELS[meta.tipo]}</span>
                                     </div>
 
-                                    {/* Preço */}
                                     <div className="flex items-center gap-2 text-sm">
                                         <DollarSign className="h-4 w-4 text-emerald-600" />
                                         <span className="text-muted-foreground">Venda:</span>
@@ -332,62 +307,16 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                         </span>
                                     </div>
 
-                                    {/* Custo */}
-                                    {meta.custoProducao > 0 && (
-                                        <div className="flex items-center gap-2 text-sm">
-                                            <Tag className="h-4 w-4 text-muted-foreground" />
-                                            <span className="text-muted-foreground">Custo:</span>
-                                            <span className="font-semibold">R$ {meta.custoProducao.toFixed(2)}</span>
-                                        </div>
-                                    )}
-
-                                    {/* Coleção */}
-                                    {meta.colecao && (
-                                        <div className="flex items-center gap-2 text-sm">
-                                            <Palette className="h-4 w-4 text-muted-foreground" />
-                                            <span className="text-muted-foreground">Coleção:</span>
-                                            <span className="font-semibold">{meta.colecao}</span>
-                                        </div>
-                                    )}
-
-                                    {/* Composição */}
-                                    {meta.composicao && (
-                                        <div className="flex items-start gap-2 text-sm">
-                                            <Layers className="h-4 w-4 text-muted-foreground mt-0.5" />
-                                            <div>
-                                                <span className="text-muted-foreground">Composição:</span>
-                                                <p className="font-semibold text-xs mt-0.5">{meta.composicao}</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Total e Desempenho */}
                                     <div className="mt-4 p-4 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 shadow-sm space-y-4">
-                                        <div>
-                                            <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold mb-1 opacity-70">Estoque Atual</p>
-                                            <p className="text-3xl font-black text-primary leading-none tracking-tight">
-                                                {totalPecas} <span className="text-xs font-bold opacity-60 uppercase">pçs</span>
-                                            </p>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-primary/10">
+                                        <div className="flex justify-between items-end">
                                             <div>
-                                                <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-1">Volume Total</p>
-                                                <p className="text-lg font-black text-foreground/80">
-                                                    {totalProduzido}
+                                                <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold mb-1 opacity-70">Total em Estoque</p>
+                                                <p className="text-3xl font-black text-primary leading-none tracking-tight">
+                                                    {totalPecas} <span className="text-xs font-bold opacity-60 uppercase">pçs</span>
                                                 </p>
                                             </div>
-                                            <div>
-                                                <p className="text-[9px] text-emerald-600 uppercase tracking-widest font-bold mb-1">Vendas Totais</p>
-                                                <p className="text-lg font-black text-emerald-600">
-                                                    {Math.max(0, totalProduzido - totalPecas)}
-                                                </p>
-                                            </div>
+                                            {hasChanges && <Badge className="bg-amber-500 text-white border-0 animate-pulse">Alterações pendentes</Badge>}
                                         </div>
-                                        
-                                        <p className="text-[10px] text-muted-foreground italic">
-                                            Métricas agregadas de {localVariacoes.length} variação(ões)
-                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -399,251 +328,162 @@ export function DetalhesModeloPadronizadoModal({ modelo, open, onClose }: Props)
                                 <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 py-3 px-4 rounded-xl bg-primary/5 border border-primary/10 shadow-sm">
                                     <div className="space-y-1.5 flex-1 max-w-[280px]">
                                         <Label htmlFor="qtd-grade" className="text-[10px] uppercase font-bold text-primary tracking-widest">
-                                            QTD para TODAS as numerações
+                                            Zerar ou Igualar Grade Inteira
                                         </Label>
                                         <div className="flex gap-2">
                                             <Input
                                                 id="qtd-grade"
                                                 type="number"
                                                 min={0}
-                                                placeholder="Ex: 34"
+                                                placeholder="Ex: 50"
                                                 className="h-10 shadow-sm bg-background border-primary/20"
                                                 value={qtdGrade}
                                                 onChange={e => setQtdGrade(e.target.value)}
-                                                onKeyDown={e => e.key === 'Enter' && handleApplyGrade()}
                                             />
                                             <Button
                                                 size="sm"
-                                                className="gap-2 shrink-0 h-10 px-4"
+                                                variant="secondary"
+                                                className="gap-2 shrink-0 h-10 px-4 font-bold"
                                                 onClick={handleApplyGrade}
-                                                disabled={applyingGrade || !qtdGrade}
                                             >
-                                                {applyingGrade ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                                                 Aplicar
                                             </Button>
                                         </div>
                                     </div>
-                                    <div className="text-right hidden sm:block">
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-1 opacity-70">Total Atual</p>
-                                        <p className="text-3xl font-black text-primary leading-none tracking-tight">{totalPecas} <span className="text-sm font-bold opacity-50 uppercase">pçs</span></p>
-                                    </div>
+                                    {!reposicaoMode && (
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => { setReposicaoQtd({}); setReposicaoMode(true); }}
+                                            className="gap-2 h-10 border-emerald-200 text-emerald-700 font-bold rounded-xl"
+                                        >
+                                            <PackagePlus className="h-4 w-4" />
+                                            Adicionar Reposição
+                                        </Button>
+                                    )}
                                 </div>
 
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between px-1">
-                                        <h3 className="font-bold text-sm flex items-center gap-2">
-                                            <Tags className="h-4 w-4 text-primary" />
-                                            Estoque por Tamanho
-                                        </h3>
-                                        {!reposicaoMode && (
-                                            <button
-                                                onClick={() => { setReposicaoQtd({}); setReposicaoMode(true); }}
-                                                className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition-colors"
-                                            >
-                                                <PackagePlus className="h-3.5 w-3.5" />
-                                                Registrar Reposição
-                                            </button>
-                                        )}
+                                {/* Painel de Reposição */}
+                                {reposicaoMode && (
+                                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 dark:bg-emerald-950/20 p-4 space-y-4 animate-in fade-in slide-in-from-top-2">
+                                        <div className="flex items-center justify-between">
+                                            <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                                                <PackagePlus className="h-4 w-4" />
+                                                Chegou mercadoria nova?
+                                            </h4>
+                                            <Button variant="ghost" size="icon" onClick={() => setReposicaoMode(false)} className="h-8 w-8 text-emerald-600">
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            {localVariacoes.map(v => (
+                                                <div key={v.id} className="flex items-center gap-2 bg-white dark:bg-black/20 rounded-lg p-2 border border-emerald-100">
+                                                    <span className="font-black text-sm w-6">{v.tamanho}</span>
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="+0"
+                                                        value={reposicaoQtd[v.id] || ''}
+                                                        onChange={e => setReposicaoQtd(prev => ({ ...prev, [v.id]: e.target.value }))}
+                                                        className="h-8 text-center border-emerald-100"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={handleReposicao}>
+                                            Confirmar e Somar ao Atual
+                                        </Button>
                                     </div>
+                                )}
 
-                                    {/* Painel de Reposição */}
-                                    {reposicaoMode && (
-                                        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 dark:bg-emerald-950/20 dark:border-emerald-900/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <div className="px-4 py-3 bg-emerald-100/70 dark:bg-emerald-900/30 border-b border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <PackagePlus className="h-4 w-4 text-emerald-700" />
-                                                    <span className="text-sm font-bold text-emerald-800 dark:text-emerald-300">Registrar Reposição</span>
-                                                </div>
-                                                <button onClick={() => { setReposicaoMode(false); setReposicaoQtd({}); }} className="text-emerald-600 hover:text-emerald-800 transition-colors">
-                                                    <X className="h-4 w-4" />
-                                                </button>
-                                            </div>
-                                            <div className="p-4 space-y-3">
-                                                <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                                                    Informe quantas peças chegaram por tamanho. O sistema soma ao estoque atual e ao histórico automaticamente.
-                                                </p>
-                                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                                    {localVariacoes.map(v => (
-                                                        <div key={v.id} className="flex items-center gap-2 bg-white dark:bg-emerald-950/30 rounded-lg px-3 py-2 border border-emerald-200 dark:border-emerald-900/50">
-                                                            <span className="font-black text-sm text-emerald-800 dark:text-emerald-300 w-8 shrink-0">{v.tamanho}</span>
-                                                            <span className="text-xs text-emerald-600 shrink-0">+</span>
-                                                            <Input
-                                                                type="number"
-                                                                min={0}
-                                                                placeholder="0"
-                                                                value={reposicaoQtd[v.id] || ''}
-                                                                onChange={e => setReposicaoQtd(prev => ({ ...prev, [v.id]: e.target.value }))}
-                                                                className="h-7 text-sm font-bold text-center border-emerald-200 bg-transparent p-1"
-                                                            />
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <div className="flex gap-2 pt-1">
-                                                    <Button className="flex-1 h-10 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={handleReposicao} disabled={savingReposicao}>
-                                                        {savingReposicao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                                                        Confirmar Reposição
-                                                    </Button>
-                                                    <Button variant="outline" className="h-10 px-4 border-emerald-200 text-emerald-700" onClick={() => { setReposicaoMode(false); setReposicaoQtd({}); }} disabled={savingReposicao}>
-                                                        Cancelar
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div className="rounded-xl border border-border overflow-hidden bg-background shadow-sm">
-                                        <div className="p-4 bg-muted/20 border-b border-border">
-                                            {addingSize ? (
-                                                <div className="flex items-end gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                    <div className="space-y-1.5 flex-1">
-                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Novo Tamanho</Label>
-                                                        <Input 
-                                                            placeholder="Ex: 46" 
-                                                            className="h-9 shadow-sm"
-                                                            value={newSize}
-                                                            onChange={e => setNewSize(e.target.value)}
-                                                            autoFocus
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1.5 w-24">
-                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Qtd Inicial</Label>
-                                                        <Input 
-                                                            type="number" 
-                                                            placeholder="0" 
-                                                            className="h-9 shadow-sm"
-                                                            value={newSizeQtd}
-                                                            onChange={e => setNewSizeQtd(e.target.value)}
-                                                        />
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <Button size="sm" onClick={handleAddSize} disabled={saving} className="h-9">
-                                                            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                                                            Salvar
-                                                        </Button>
-                                                        <Button size="sm" variant="ghost" onClick={() => setAddingSize(false)} disabled={saving} className="h-9">
-                                                            Cancelar
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="sm" 
-                                                    onClick={() => setAddingSize(true)}
-                                                    className="w-full h-9 border border-dashed border-border hover:border-primary hover:bg-primary/5 text-muted-foreground hover:text-primary gap-2 font-bold"
-                                                >
-                                                    <Plus className="h-4 w-4" />
-                                                    Adicionar Numeração que faltou
-                                                </Button>
-                                            )}
-                                        </div>
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className="bg-muted/40 border-b border-border">
-                                                    <th className="text-left px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Tamanho</th>
-                                                    <th className="text-right px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Atual</th>
-                                                    <th className="text-right px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Histórico</th>
-                                                    <th className="text-right px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Status</th>
-                                                </tr>
-                                            </thead>
+                                <div className="rounded-xl border border-border overflow-hidden bg-background shadow-sm">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="bg-muted/40 border-b border-border">
+                                                <th className="text-left px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Tamanho</th>
+                                                <th className="text-center px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-primary">Estoque Atual (ATU)</th>
+                                                <th className="text-center px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Histórico (TOT)</th>
+                                                <th className="text-right px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Status</th>
+                                            </tr>
+                                        </thead>
                                         <tbody>
-                                            {localVariacoes.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={5} className="text-center py-8 text-muted-foreground">
-                                                        Nenhuma variação cadastrada
-                                                    </td>
-                                                </tr>
-                                            ) : (
-                                                localVariacoes.map((v, idx) => (
-                                                    <tr
-                                                        key={v.id}
-                                                        className={cn(
-                                                            'border-b border-border/50 last:border-0 transition-colors hover:bg-muted/20',
-                                                            idx % 2 === 0 ? 'bg-background' : 'bg-muted/10'
-                                                        )}
-                                                    >
+                                            {localVariacoes.map((v, idx) => {
+                                                const pending = pendingChanges[v.id];
+                                                const valQtd = pending ? pending.qtd : v.quantidade;
+                                                const valQtdIni = pending ? pending.qtdIni : (v.quantidadeInicial ?? v.quantidade);
+                                                const isChanged = !!pending;
+
+                                                return (
+                                                    <tr key={v.id} className={cn('border-b border-border/50 last:border-0 transition-colors', isChanged ? 'bg-amber-500/5' : idx % 2 === 0 ? 'bg-background' : 'bg-muted/10')}>
                                                         <td className="px-5 py-4">
                                                             <span className="font-black text-xl">{v.tamanho}</span>
                                                         </td>
-                                                        <td className="px-5 py-4 text-right">
-                                                            {editingId === v.id ? (
-                                                                <div className="flex items-center justify-end gap-1">
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <div className="flex items-center gap-1">
-                                                                            <Label className="text-[9px] uppercase opacity-50 w-8">Atu</Label>
-                                                                            <Input
-                                                                                type="number"
-                                                                                min={0}
-                                                                                className="w-16 h-7 text-right text-xs px-2 bg-background border-primary/20"
-                                                                                value={editingQtd}
-                                                                                onChange={e => setEditingQtd(e.target.value)}
-                                                                                onKeyDown={e => {
-                                                                                    if (e.key === 'Enter') saveEdit(v);
-                                                                                    if (e.key === 'Escape') cancelEdit();
-                                                                                }}
-                                                                                autoFocus
-                                                                                disabled={saving}
-                                                                            />
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1">
-                                                                            <Label className="text-[9px] uppercase opacity-50 w-8">Tot</Label>
-                                                                            <Input
-                                                                                type="number"
-                                                                                min={0}
-                                                                                className="w-16 h-7 text-right text-xs px-2 bg-primary/5 border-primary/20 font-bold"
-                                                                                value={editingQtdIni}
-                                                                                onChange={e => setEditingQtdIni(e.target.value)}
-                                                                                onKeyDown={e => {
-                                                                                    if (e.key === 'Enter') saveEdit(v);
-                                                                                    if (e.key === 'Escape') cancelEdit();
-                                                                                }}
-                                                                                disabled={saving}
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" onClick={() => saveEdit(v)} disabled={saving}>
-                                                                        {saving ? <span className="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin inline-block" /> : <Check className="h-3.5 w-3.5" />}
-                                                                    </Button>
-                                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={cancelEdit} disabled={saving}>
-                                                                        <X className="h-3.5 w-3.5" />
-                                                                    </Button>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="flex items-center justify-end gap-1 group/cell">
-                                                                    <span className="font-bold">{v.quantidade}</span>
-                                                                    <Button
-                                                                        size="icon"
-                                                                        variant="ghost"
-                                                                        className="h-6 w-6 opacity-0 group-hover/cell:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
-                                                                        onClick={() => startEdit(v)}
-                                                                    >
-                                                                        <Pencil className="h-3 w-3" />
-                                                                    </Button>
-                                                                </div>
-                                                            )}
+                                                        <td className="px-5 py-4">
+                                                            <div className="flex justify-center">
+                                                                <Input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    className={cn("w-20 h-10 text-center font-black text-lg rounded-xl border-2 transition-all", isChanged ? "border-amber-500 bg-white" : "border-transparent bg-muted/20 hover:bg-muted/40")}
+                                                                    value={valQtd}
+                                                                    onChange={e => handleFieldChange(v.id, 'qtd', e.target.value)}
+                                                                />
+                                                            </div>
                                                         </td>
-                                                        <td className="px-5 py-4 text-right">
-                                                            <div className="flex items-center justify-end gap-1 group/tot">
-                                                                <span className="text-xs font-medium text-primary bg-primary/5 px-2 py-0.5 rounded-full">
-                                                                    {v.quantidadeInicial || v.quantidade}
-                                                                </span>
+                                                        <td className="px-5 py-4">
+                                                            <div className="flex justify-center">
+                                                                <Input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    className={cn("w-20 h-9 text-center text-xs font-bold rounded-lg border transition-all", isChanged ? "border-amber-500/50 bg-white" : "border-transparent bg-primary/5")}
+                                                                    value={valQtdIni}
+                                                                    onChange={e => handleFieldChange(v.id, 'qtdIni', e.target.value)}
+                                                                />
                                                             </div>
                                                         </td>
                                                         <td className="px-5 py-4 text-right">
-                                                            <Badge className={cn('text-[10px] border font-bold uppercase', getStockColor(v.quantidade))}>
-                                                                {v.quantidade === 0 ? 'Esgotado' : v.quantidade <= 3 ? 'Baixo' : 'Em Dia'}
+                                                            <Badge className={cn('text-[10px] border font-bold uppercase', getStockColor(valQtd))}>
+                                                                {valQtd === 0 ? 'Esgotado' : valQtd <= 3 ? 'Baixo' : 'Em Dia'}
                                                             </Badge>
                                                         </td>
                                                     </tr>
-                                                ))
-                                            )}
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
+                                    
+                                    <div className="p-4 bg-muted/20 border-t border-border">
+                                        {addingSize ? (
+                                            <div className="flex items-end gap-3 animate-in fade-in slide-in-from-top-2">
+                                                <div className="space-y-1.5 flex-1">
+                                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Novo Tamanho</Label>
+                                                    <Input placeholder="Ex: 46" className="h-9" value={newSize} onChange={e => setNewSize(e.target.value)} autoFocus />
+                                                </div>
+                                                <div className="space-y-1.5 w-24">
+                                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Qtd Inicial</Label>
+                                                    <Input type="number" placeholder="0" className="h-9" value={newSizeQtd} onChange={e => setNewSizeQtd(e.target.value)} />
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" onClick={handleAddSize} disabled={saving} className="h-9 font-bold">Adicionar</Button>
+                                                    <Button size="sm" variant="ghost" onClick={() => setAddingSize(false)} className="h-9">Cancelar</Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <Button variant="ghost" size="sm" onClick={() => setAddingSize(true)} className="w-full h-9 border border-dashed border-border hover:border-primary text-muted-foreground hover:text-primary gap-2 font-bold">
+                                                <Plus className="h-4 w-4" /> Adicionar Numeração que faltou
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </ScrollArea>
+                    </ScrollArea>
+                    
+                    {hasChanges && (
+                        <div className="p-4 border-t border-border bg-amber-500/5 flex justify-center">
+                            <Button onClick={saveAllChanges} disabled={saving} className="w-full sm:w-80 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 rounded-2xl shadow-xl gap-2">
+                                {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
+                                Salvar Todas as Alterações
+                            </Button>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
 

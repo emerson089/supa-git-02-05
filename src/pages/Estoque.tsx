@@ -154,9 +154,13 @@ export default function Estoque() {
 
   // Modal de detalhes do Modelo Padronizado
   const [modeloDetalhes, setModeloDetalhes] = useState<ModeloPadronizado | null>(null);
+  
+  // Modo Auditoria (Fase 2)
+  const [modoAuditoria, setModoAuditoria] = useState(false);
+  const [idsModelosAuditadosHoje, setIdsModelosAuditadosHoje] = useState<Set<string>>(new Set());
 
   // Hook de Modelos Padronizados
-  const { modelosPadronizados, modelosPadronizadosMap } = useModelosPadronizados();
+  const { modelosPadronizados, modelosPadronizadosMap, variacoes: allVariacoes } = useModelosPadronizados();
 
   // Contagem de modelos com problemas de integridade
   const integridadeProblemas = (() => {
@@ -191,6 +195,52 @@ export default function Estoque() {
   const { data: vendasSemanaData } = useVendasSemana();
   const vendasSemanaMap = vendasSemanaData?.semanaAtual;
   const vendasAnteriorMap = vendasSemanaData?.semanaAnterior;
+
+  // Buscar modelos auditados hoje (Fase 3)
+  useEffect(() => {
+    const fetchAuditProgress = async () => {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const { data, error } = await supabase
+          .from('estoque_movimentacoes')
+          .select('item_id')
+          .gte('created_at', today.toISOString())
+          .like('motivo', '%Auditoria%');
+
+        if (error) throw error;
+
+        if (data) {
+          const itemIds = data.map(m => m.item_id);
+          const modeloIds = new Set<string>();
+          
+          // Mapear cada variação que teve movimento para o seu modelo pai
+          itemIds.forEach(itemId => {
+            const variacao = allVariacoes.find(v => v.id === itemId);
+            if (variacao) {
+              try {
+                const meta = JSON.parse(variacao.localizacao || '{}');
+                if (meta.modeloId) modeloIds.add(meta.modeloId);
+              } catch (e) {
+                // Fallback caso o JSON falhe
+                modeloIds.add(itemId);
+              }
+            } else {
+              // É um modelo manual ou o próprio ID do modelo
+              modeloIds.add(itemId);
+            }
+          });
+          
+          setIdsModelosAuditadosHoje(modeloIds);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar progresso da auditoria:', err);
+      }
+    };
+
+    fetchAuditProgress();
+  }, [allVariacoes, isRefreshing]); // Recarregar se o usuário der refresh manual
 
   // Helper para atualizar URL params (persistência)
   const updateParams = (updates: Record<string, string | undefined>) => {
@@ -1006,6 +1056,20 @@ export default function Estoque() {
                 Importar
               </Button>
               <Button
+                variant={modoAuditoria ? "default" : "outline"}
+                size="sm"
+                className={cn(
+                  "gap-1.5 h-8 text-xs shadow-[3px_3px_8px_hsl(var(--muted)/0.35),-1px_-1px_5px_hsl(var(--background))] border-0 transition-all font-bold",
+                  modoAuditoria 
+                    ? "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20" 
+                    : "bg-card hover:bg-muted/50 border-amber-200/50 text-amber-700"
+                )}
+                onClick={() => setModoAuditoria(!modoAuditoria)}
+              >
+                <PackageCheck size={14} className={cn(modoAuditoria && "animate-pulse")} />
+                {modoAuditoria ? "Sair da Auditoria" : "Modo Auditoria"}
+              </Button>
+              <Button
                 onClick={() => setShowNovoModeloPadronizadoModal(true)}
                 size="sm"
                 className="gap-1.5 h-8 text-xs bg-primary hover:bg-primary/90 shadow-[3px_3px_8px_hsl(var(--muted)/0.4),-1px_-1px_5px_hsl(var(--background))]"
@@ -1021,6 +1085,51 @@ export default function Estoque() {
           </div>
 
           <TabsContent value={activeTab} className="mt-0">
+            {/* ── Barra de Progresso da Auditoria (Fase 3) ────────────────── */}
+            {activeTab === 'produto_acabado' && (modoAuditoria || idsModelosAuditadosHoje.size > 0) && (
+              <div className="mt-4 mb-2 p-4 bg-white dark:bg-card border border-amber-100 dark:border-amber-900/30 rounded-2xl shadow-sm animate-in fade-in slide-in-from-top-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
+                        <PackageCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">Progresso do Ritual</h4>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {idsModelosAuditadosHoje.size} de {modelosPadronizados.length} modelos conferidos hoje
+                    </p>
+                  </div>
+                  
+                  <div className="flex-1 max-w-md space-y-2">
+                    <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200/50">
+                      <div 
+                        className="h-full bg-gradient-to-r from-amber-400 to-emerald-500 transition-all duration-1000 ease-out"
+                        style={{ width: `${Math.min(100, (idsModelosAuditadosHoje.size / (modelosPadronizados.length || 1)) * 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      <span>Início</span>
+                      <span>{Math.round((idsModelosAuditadosHoje.size / (modelosPadronizados.length || 1)) * 100)}% concluído</span>
+                      <span>Meta</span>
+                    </div>
+                  </div>
+
+                  {modoAuditoria && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-9 rounded-xl border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-all text-xs font-bold gap-2 shrink-0"
+                      onClick={() => updateParams({ filtro: idsModelosAuditadosHoje.size > 0 ? 'pendentes' : 'todos' })}
+                    >
+                      <Search size={14} />
+                      Ver Pendentes
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* ── Seção Única de Produtos Acabados ────────────────────────── */}
             <div className={cn("grid gap-3 pt-4", isMobile ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6")}>
               {itensFiltrados.filter(i =>
@@ -1042,6 +1151,9 @@ export default function Estoque() {
                           <MobileModeloPadronizadoCard
                             key={item.id}
                             modelo={modeloCompleto}
+                            modoAuditoria={modoAuditoria}
+                            conferidoHoje={idsModelosAuditadosHoje.has(item.id)}
+                            onAuditSuccess={() => setIsRefreshing(prev => !prev)}
                             onVerDetalhes={m => setModeloDetalhes(m)}
                             onImageUpdate={handleProductImageUpdate}
                             vendasSemana={vendasSemanaAtual}
@@ -1054,6 +1166,8 @@ export default function Estoque() {
                       <ModeloPadronizadoCard
                         key={item.id}
                         modelo={modeloCompleto}
+                        modoAuditoria={modoAuditoria}
+                        conferidoHoje={idsModelosAuditadosHoje.has(item.id)}
                         onVerDetalhes={m => setModeloDetalhes(m)}
                         onImageUpdate={handleProductImageUpdate}
                         vendasSemana={vendasSemanaAtual}
