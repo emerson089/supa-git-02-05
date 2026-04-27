@@ -114,6 +114,9 @@ const ClienteCard = memo(function ClienteCard({
   onMarcarContato,
   onWhatsAppEnviado,
   isPendenteFilter,
+  isSelectionMode,
+  isSelected,
+  onToggleSelect,
 }: {
   cliente: ClientePaginatedDB;
   stats: ClienteCRMBatchStats | undefined;
@@ -126,6 +129,9 @@ const ClienteCard = memo(function ClienteCard({
   onMarcarContato?: (clienteId: string, canal: CanalContato) => void;
   onWhatsAppEnviado?: () => void;
   isPendenteFilter?: boolean;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -177,114 +183,136 @@ const ClienteCard = memo(function ClienteCard({
   const statsForWhatsApp = stats ? { ...stats, clienteId: stats.clienteId } : undefined;
 
   return (
-    <div className={cn("neu-card p-4 sm:p-5 rounded-2xl hover:shadow-neu transition-all duration-200 group flex flex-col h-full", borderClass)}>
-      {/* Topo: Avatar, Nome, Data e Badges */}
+    <div
+      className={cn(
+        "neu-card p-4 sm:p-5 rounded-2xl transition-all duration-200 group flex flex-col h-full relative",
+        borderClass,
+        isSelectionMode ? "cursor-pointer select-none" : "hover:shadow-neu",
+        isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background bg-primary/5"
+      )}
+      onClick={isSelectionMode ? () => onToggleSelect?.(cliente.id) : undefined}
+    >
+      {/* Topo: Avatar (vira checkbox no modo seleção), Nome, Badges */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
-            <User size={24} className="text-muted-foreground" />
+
+          {/* Avatar → Checkbox (padrão Gmail) */}
+          <div
+            className={cn(
+              "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200",
+              isSelectionMode
+                ? isSelected
+                  ? "bg-primary shadow-md shadow-primary/30"
+                  : "bg-secondary border-2 border-dashed border-border"
+                : "bg-secondary"
+            )}
+          >
+            {isSelectionMode
+              ? isSelected
+                ? <Check size={22} className="text-primary-foreground" strokeWidth={3} />
+                : <User size={22} className="text-muted-foreground/40" />
+              : <User size={24} className="text-muted-foreground" />
+            }
           </div>
+
           <div className="flex-1 min-w-0 pr-2">
             <h3 className="font-semibold text-foreground text-lg truncate group-hover:text-primary transition-colors">
               {cliente.nome}
             </h3>
             <p className="text-sm text-muted-foreground truncate">
-              Cadastrado em {dataCadastro}
+              {isSelectionMode
+                ? isSelected ? 'Selecionado ✓' : 'Toque para selecionar'
+                : `Cadastrado em ${dataCadastro}`
+              }
             </p>
           </div>
         </div>
 
-        {/* Status Badges - Reposicionado da absolute para o fluxo natural */}
-        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {diasDesdeContato !== null && diasDesdeContato < 30 && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
-                <CheckCircle2 size={10} className="mr-1" />
-                {diasDesdeContato === 0 ? 'Hoje' : `Há ${diasDesdeContato}d`}
-              </Badge>
-            )}
-            {showPrioridade && prioridadeNivel === 'alta' && (
-              <Badge className="text-[10px] px-1.5 py-0 bg-destructive/10 text-destructive border-0">
-                Alta
-              </Badge>
-            )}
-            {showPrioridade && prioridadeNivel === 'media' && (
-              <Badge className="text-[10px] px-1.5 py-0 bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-400 border-0">
-                Média
-              </Badge>
-            )}
-            {isRisk && (
-              <div className="w-5 h-5 rounded-full bg-destructive/10 flex items-center justify-center" title="Histórico de cancelamentos">
-                <AlertTriangle size={12} className="text-destructive" />
-              </div>
-            )}
-            {isExVip && (
-              <Badge className="text-[10px] px-1.5 py-0.5 whitespace-nowrap bg-purple-600 hover:bg-purple-700 text-white border-0" title="Foi VIP no passado (> R$ 5.000)">
-                Ex-VIP
-              </Badge>
-            )}
-            {status && (
-              <Badge className={cn("text-[10px] px-1.5 py-0.5 whitespace-nowrap", isInativo ? inativoColorClass : status.color)}>
-                {status.label}
-              </Badge>
-            )}
-            {clienteForWhatsApp.isNovo && (
-              <Badge className="text-[10px] px-1.5 py-0.5 whitespace-nowrap bg-emerald-500 hover:bg-emerald-600 text-white border-0 shadow-sm animate-pulse">
-                NOVO
-              </Badge>
-            )}
+        {/* Badges — sempre visíveis, sem sobreposição */}
+        {!isSelectionMode && (
+          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              {diasDesdeContato !== null && diasDesdeContato < 30 && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle2 size={10} className="mr-1" />
+                  {diasDesdeContato === 0 ? 'Hoje' : `Há ${diasDesdeContato}d`}
+                </Badge>
+              )}
+              {isRisk && (
+                <div className="w-5 h-5 rounded-full bg-destructive/10 flex items-center justify-center" title="Histórico de cancelamentos">
+                  <AlertTriangle size={12} className="text-destructive" />
+                </div>
+              )}
+              {isExVip && (
+                <Badge className="text-[10px] px-1.5 py-0.5 whitespace-nowrap bg-amber-600 text-white border-0" title="Foi VIP no passado (> R$ 5.000)">
+                  Ex-VIP
+                </Badge>
+              )}
+              {status && (
+                <Badge className={cn("text-[10px] px-1.5 py-0.5 whitespace-nowrap", isInativo ? inativoColorClass : status.color)}>
+                  {status.label}
+                </Badge>
+              )}
+              {clienteForWhatsApp.isNovo && (
+                <Badge className="text-[10px] px-1.5 py-0.5 whitespace-nowrap bg-emerald-500 text-white border-0 shadow-sm animate-pulse">
+                  NOVO
+                </Badge>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* Ações: Div dedicada abaixo do nome com gap-4 */}
-      <div className="flex items-center gap-2 sm:gap-4 mb-5 border-b border-border/40 pb-4">
-        <div className="flex items-center">
-          <WhatsAppButton cliente={clienteForWhatsApp} stats={statsForWhatsApp} onContatoRegistrado={onWhatsAppEnviado} />
-        </div>
-        {cliente.telefone && (
-          <a
-            href={`tel:${cliente.telefone.replace(/\D/g, '')}`}
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 flex items-center justify-center transition-colors flex-shrink-0"
-            title="Ligar"
-          >
-            <PhoneCall size={14} className="text-blue-500" />
-          </a>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center transition-colors flex-shrink-0"
-              title="Marcar como contatado"
-            >
-              <CheckCircle2 size={14} className="text-emerald-500" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44">
-            <DropdownMenuItem onClick={() => onMarcarContato?.(cliente.id, 'whatsapp')} className="cursor-pointer">
-              <MessageCircle size={14} className="mr-2 text-[#25D366]" /> WhatsApp
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onMarcarContato?.(cliente.id, 'ligacao')} className="cursor-pointer">
-              <PhoneCall size={14} className="mr-2 text-blue-500" /> Ligação
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onMarcarContato?.(cliente.id, 'outro')} className="cursor-pointer">
-              <CheckCircle2 size={14} className="mr-2 text-muted-foreground" /> Outro
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <div className="flex-1" /> {/* Empurra os próximos pra direita */}
-
-        <button onClick={() => onEdit(cliente)} className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors flex-shrink-0">
-          <Pencil size={14} className="text-muted-foreground hover:text-primary" />
-        </button>
-        <button onClick={() => onDelete(cliente)} className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors flex-shrink-0">
-          <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
-        </button>
       </div>
 
-      {/* Botão de Feedback para Inativos */}
-      {isInativo && (
+      {/* Ações rápidas — escondidas no modo seleção */}
+      {!isSelectionMode && (
+        <div className="flex items-center gap-2 sm:gap-4 mb-5 border-b border-border/40 pb-4">
+          <div className="flex items-center">
+            <WhatsAppButton cliente={clienteForWhatsApp} stats={statsForWhatsApp} onContatoRegistrado={onWhatsAppEnviado} />
+          </div>
+          {cliente.telefone && (
+            <a
+              href={`tel:${cliente.telefone.replace(/\D/g, '')}`}
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 flex items-center justify-center transition-colors flex-shrink-0"
+              title="Ligar"
+            >
+              <PhoneCall size={14} className="text-blue-500" />
+            </a>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center transition-colors flex-shrink-0"
+                title="Marcar como contatado"
+              >
+                <CheckCircle2 size={14} className="text-emerald-500" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-44">
+              <DropdownMenuItem onClick={() => onMarcarContato?.(cliente.id, 'whatsapp')} className="cursor-pointer">
+                <MessageCircle size={14} className="mr-2 text-[#25D366]" /> WhatsApp
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onMarcarContato?.(cliente.id, 'ligacao')} className="cursor-pointer">
+                <PhoneCall size={14} className="mr-2 text-blue-500" /> Ligação
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onMarcarContato?.(cliente.id, 'outro')} className="cursor-pointer">
+                <CheckCircle2 size={14} className="mr-2 text-muted-foreground" /> Outro
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <div className="flex-1" />
+
+          <button onClick={() => onEdit(cliente)} className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors flex-shrink-0">
+            <Pencil size={14} className="text-muted-foreground hover:text-primary" />
+          </button>
+          <button onClick={() => onDelete(cliente)} className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors flex-shrink-0">
+            <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
+          </button>
+        </div>
+      )}
+
+      {/* Feedback — apenas fora do modo seleção */}
+      {!isSelectionMode && isInativo && (
         <div className="mb-4">
           <button
             onClick={() => setFeedbackOpen(true)}
@@ -295,6 +323,7 @@ const ClienteCard = memo(function ClienteCard({
           </button>
         </div>
       )}
+
 
       {/* Corpo (Info): Lista limpa com truncate garantido */}
       <div className="space-y-3 flex-1 mb-4">
@@ -465,6 +494,24 @@ export default function Clientes() {
   const [clienteToDelete, setClienteToDelete] = useState<ClientePaginatedDB | null>(null);
   const [excursaoPopoverOpen, setExcursaoPopoverOpen] = useState(false);
 
+  // Selection mode state
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleExitSelection = useCallback(() => {
+    setIsSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
   const { data: excursoesAtivas } = useExcursoesAtivas();
 
   const crmFilterStatus = filtroStatus !== 'todos' ? filtroStatus : null;
@@ -487,6 +534,15 @@ export default function Clientes() {
   });
 
   const rawClientes = paginatedData?.data || [];
+
+  // Select-all needs rawClientes so it must be declared after it
+  const handleSelectAll = useCallback(() => {
+    if (selectedIds.size === rawClientes.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(rawClientes.map(c => c.id)));
+    }
+  }, [rawClientes, selectedIds.size]);
 
   // Get IDs of visible clients for batch CRM stats
   const visibleClienteIds = useMemo(() => {
@@ -521,10 +577,6 @@ export default function Clientes() {
   }, []);
   const handleFiltroChange = useCallback((filtro: FiltroStatus) => {
     setFiltroStatus(filtro);
-    setCurrentPage(0);
-  }, []);
-  const handleOrdenacaoChange = useCallback((ord: Ordenacao) => {
-    setOrdenacao(ord);
     setCurrentPage(0);
   }, []);
   const handleOpenNew = useCallback(() => {
@@ -601,22 +653,51 @@ export default function Clientes() {
       }
     }
   };
+  const buildAndDownloadCSV = (clientes: ClientePaginatedDB[], filename: string) => {
+    const headers = ['Nome', 'Telefone', 'Cidade', 'Estado', 'Excursão', 'Data Cadastro', 'Hora Cadastro'];
+    const csvRows = [headers.join(','), ...clientes.map(c => {
+      const createdAt = new Date(c.created_at);
+      return [c.nome, c.telefone, c.cidade, c.estado, c.excursao, format(createdAt, 'dd/MM/yyyy'), format(createdAt, 'HH:mm:ss')]
+        .map(field => `"${(field || '').replace(/"/g, '""')}"`).join(',');
+    })];
+    const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportSelected = useCallback(() => {
+    const selected = rawClientes.filter(c => selectedIds.has(c.id));
+    if (selected.length === 0) {
+      toast.error('Nenhum cliente selecionado.');
+      return;
+    }
+    buildAndDownloadCSV(selected, `clientes_selecionados_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`);
+    toast.success(`${selected.length} cliente(s) exportado(s) com sucesso!`);
+  }, [rawClientes, selectedIds]);
+
   const handleExportCSV = async () => {
     if (!user?.id) {
       toast.error('Usuário não autenticado.');
       return;
     }
     try {
-      // Fetch all clients for export (paginated internally)
       let allClientes: ClientePaginatedDB[] = [];
       let from = 0;
       const batchSize = 1000;
       let hasMore = true;
       while (hasMore) {
-        const {
-          data,
-          error
-        } = await supabase.from('clientes').select('id, nome, telefone, cidade, estado, excursao, created_at, user_id').eq('user_id', user.id).order('nome').range(from, from + batchSize - 1);
+        const { data, error } = await supabase
+          .from('clientes')
+          .select('id, nome, telefone, cidade, estado, excursao, created_at, user_id')
+          .eq('user_id', user.id)
+          .order('nome')
+          .range(from, from + batchSize - 1);
         if (error) throw error;
         if (data && data.length > 0) {
           allClientes = [...allClientes, ...data];
@@ -630,23 +711,7 @@ export default function Clientes() {
         toast.error('Não há clientes para exportar.');
         return;
       }
-      const headers = ['Nome', 'Telefone', 'Cidade', 'Estado', 'Excursão', 'Data Cadastro', 'Hora Cadastro'];
-      const csvRows = [headers.join(','), ...allClientes.map(c => {
-        const createdAt = new Date(c.created_at);
-        return [c.nome, c.telefone, c.cidade, c.estado, c.excursao, format(createdAt, 'dd/MM/yyyy'), format(createdAt, 'HH:mm:ss')].map(field => `"${(field || '').replace(/"/g, '""')}"`).join(',');
-      })];
-      const csvContent = csvRows.join('\n');
-      const blob = new Blob(['\ufeff' + csvContent], {
-        type: 'text/csv;charset=utf-8;'
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `clientes_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      buildAndDownloadCSV(allClientes, `clientes_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`);
       toast.success('Lista de clientes exportada com sucesso!');
     } catch (error) {
       console.error('Export error:', error);
@@ -681,9 +746,21 @@ export default function Clientes() {
               <AlertTriangle size={18} />
               <span className="hidden sm:inline ml-2">Limpar</span>
             </Button>
-            <Button onClick={handleExportCSV} variant="outline" size="icon" className="h-10 w-10 sm:h-11 sm:w-auto sm:px-4 rounded-xl border-border bg-background hover:bg-muted/50 text-foreground transition-colors" title="Exportar">
+            <Button onClick={handleExportCSV} variant="outline" size="icon" className="h-10 w-10 sm:h-11 sm:w-auto sm:px-4 rounded-xl border-border bg-background hover:bg-muted/50 text-foreground transition-colors" title="Exportar todos">
               <Download size={18} />
               <span className="hidden sm:inline ml-2">Exportar</span>
+            </Button>
+            <Button
+              onClick={() => { setIsSelectionMode(v => !v); setSelectedIds(new Set()); }}
+              variant={isSelectionMode ? 'default' : 'outline'}
+              className={cn(
+                "h-10 px-4 sm:h-11 sm:px-5 rounded-xl transition-colors",
+                isSelectionMode && "bg-primary text-primary-foreground"
+              )}
+              title="Selecionar clientes"
+            >
+              <Check size={18} className="sm:mr-2" />
+              <span className="hidden sm:inline">{isSelectionMode ? 'Selecionando...' : 'Selecionar'}</span>
             </Button>
             <Button onClick={() => setImportModalOpen(true)} className="h-10 px-4 sm:h-11 sm:px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-lg">
               <FileSpreadsheet size={18} className="sm:mr-2" />
@@ -765,31 +842,33 @@ export default function Clientes() {
         </div>
       </div>
 
-      {/* Filters and Sorting */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <Select value={ordenacao} onValueChange={v => handleOrdenacaoChange(v as Ordenacao)}>
-          <SelectTrigger className="w-full sm:w-[200px] h-10 rounded-xl">
-            <SelectValue placeholder="Ordenar por" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="nome">Nome (A-Z)</SelectItem>
-            <SelectItem value="recente">Cadastro (Mais Recente)</SelectItem>
-            <SelectItem value="maior_historico">Maior Faturamento</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <div className="flex gap-2 pb-2 overflow-x-auto no-scrollbar scroll-smooth">
-          {(['todos', 'novos', 'top_pareto', 'vip', 'frequente', 'risco', 'pendente', 'sem_compras'] as FiltroStatus[]).map(filtro => <Button key={filtro} size="sm" variant={filtroStatus === filtro ? 'default' : 'outline'} onClick={() => handleFiltroChange(filtro)} className={cn("rounded-xl h-9 px-3 whitespace-nowrap text-xs sm:text-sm flex-shrink-0 transition-all", filtroStatus === filtro ? "bg-primary text-primary-foreground shadow-md" : "border-border hover:bg-muted/50", (filtro === 'pendente' || filtro === 'novos' || filtro === 'top_pareto') && filtroStatus !== filtro && "border-yellow-400/50 text-yellow-700 bg-yellow-50/30")}>
-            {filtro === 'todos' && 'Todos'}
-            {filtro === 'novos' && '🎈 Novos'}
-            {filtro === 'top_pareto' && '🎯 80/20'}
-            {filtro === 'vip' && '⭐ VIP'}
-            {filtro === 'frequente' && '🔵 Frequentes'}
-            {filtro === 'risco' && '⚠️ Risco'}
-            {filtro === 'pendente' && '🟡 Pendentes'}
-            {filtro === 'sem_compras' && '👤 Sem Compras'}
-          </Button>)}
-        </div>
+      {/* Filters Bar */}
+      <div className="flex gap-2 pb-2 mb-4 overflow-x-auto no-scrollbar scroll-smooth">
+        {([
+          { key: 'novos',     label: '🎈 Novos',      active: 'bg-emerald-500 text-white shadow-emerald-500/30',      inactive: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40' },
+          { key: 'vip',       label: '⭐ VIP',         active: 'bg-amber-500 text-white shadow-amber-500/30',          inactive: 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/40' },
+          { key: 'frequente', label: '🔵 Frequentes', active: 'bg-blue-500 text-white shadow-blue-500/30',            inactive: 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40' },
+          { key: 'risco',     label: '⚠️ Risco',       active: 'bg-rose-500 text-white shadow-rose-500/30',            inactive: 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/40' },
+          { key: 'pendente',  label: '🟡 Pendentes',  active: 'bg-orange-500 text-white shadow-orange-500/30',        inactive: 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/40' },
+        ] as { key: FiltroStatus; label: string; active: string; inactive: string }[]).map(f => (
+          <button
+            key={f.key}
+            onClick={() => handleFiltroChange(filtroStatus === f.key ? 'todos' : f.key)}
+            className={cn(
+              "inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-sm font-medium transition-all duration-200 flex-shrink-0",
+              filtroStatus === f.key
+                ? `${f.active} shadow-md`
+                : f.inactive
+            )}
+          >
+            {f.label}
+            {filtroStatus === f.key && (
+              <span className="w-4 h-4 rounded-full bg-white/30 flex items-center justify-center text-[10px] font-bold leading-none">
+                ✕
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Pagination Info */}
@@ -835,6 +914,9 @@ export default function Clientes() {
               onMarcarContato={marcarContato}
               onWhatsAppEnviado={() => marcarContato(cliente.id, 'whatsapp')}
               isPendenteFilter={filtroStatus === 'pendente'}
+              isSelectionMode={isSelectionMode}
+              isSelected={selectedIds.has(cliente.id)}
+              onToggleSelect={handleToggleSelect}
             />
           );
         })}
@@ -864,6 +946,50 @@ export default function Clientes() {
           <ChevronRight size={16} className="ml-1" />
         </Button>
       </div>}
+
+      {/* Floating Selection Action Bar */}
+      {isSelectionMode && (
+        <div className={cn(
+          "fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-3 px-4 py-3 sm:px-6",
+          "bg-background/95 backdrop-blur-sm border-t border-border shadow-2xl",
+          isMobile ? "pb-24" : "pb-4",
+          "transition-transform duration-300"
+        )}>
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <button
+              onClick={handleExitSelection}
+              className="w-8 h-8 rounded-lg bg-secondary hover:bg-muted flex items-center justify-center flex-shrink-0 transition-colors"
+              title="Cancelar seleção"
+            >
+              <span className="text-base leading-none text-muted-foreground">✕</span>
+            </button>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                {selectedIds.size === 0
+                  ? 'Nenhum selecionado'
+                  : `${selectedIds.size} cliente${selectedIds.size > 1 ? 's' : ''} selecionado${selectedIds.size > 1 ? 's' : ''}`}
+              </p>
+              <p className="text-xs text-muted-foreground">Clique nos cards para selecionar</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={handleSelectAll}
+              className="h-9 px-3 rounded-xl text-xs font-medium border border-border bg-background hover:bg-muted/60 text-foreground transition-colors"
+            >
+              {selectedIds.size === rawClientes.length ? 'Limpar' : 'Todos'}
+            </button>
+            <Button
+              onClick={handleExportSelected}
+              disabled={selectedIds.size === 0}
+              className="h-9 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              <Download size={15} className="mr-2" />
+              Exportar CSV
+            </Button>
+          </div>
+        </div>
+      )}
     </main>
 
     {/* Modal de Criar/Editar */}

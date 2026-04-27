@@ -440,7 +440,7 @@ async function fetchDashboardData(
     fetchAllRows<any>(() =>
       supabase
         .from("pedidos")
-        .select("valor_total, total_pecas, status_pagamento, status_pedido, created_at, paid_at, cliente_nome")
+        .select("id, valor_total, total_pecas, status_pagamento, status_pedido, created_at, paid_at, cliente_nome")
         .eq("user_id", userId)
         .gte("created_at", startDate)
         .lte("created_at", endDate)
@@ -450,7 +450,7 @@ async function fetchDashboardData(
     fetchAllRows<any>(() =>
       supabase
         .from("pedidos")
-        .select("valor_total, total_pecas, status_pagamento, status_pedido, paid_at")
+        .select("id, valor_total, total_pecas, status_pagamento, status_pedido, paid_at")
         .eq("user_id", userId)
         .gte("created_at", startDateYoY)
         .lte("created_at", endDateYoY)
@@ -557,13 +557,17 @@ async function fetchDashboardData(
   const pedidosAtualData = pedidosAtual.data || [];
   const pedidosYoYData = pedidosYoY.data || [];
 
+  // Deduplicate and filter current period
+  const uniquePedidosAtual = Array.from(new Map(pedidosAtualData.map(p => [p.id, p])).values());
   const pedidosSemCancelados = excluirCancelados
-    ? pedidosAtualData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
-    : pedidosAtualData;
+    ? uniquePedidosAtual.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
+    : uniquePedidosAtual;
 
+  // Deduplicate and filter YoY period
+  const uniquePedidosYoY = Array.from(new Map(pedidosYoYData.map(p => [p.id, p])).values());
   const pedidosYoYSemCancelados = excluirCancelados
-    ? pedidosYoYData.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
-    : pedidosYoYData;
+    ? uniquePedidosYoY.filter(p => !STATUS_CANCELADOS.includes((p.status_pedido || "").toUpperCase()))
+    : uniquePedidosYoY;
 
   const pedidosPagos = pedidosSemCancelados.filter(p => {
     const status = (p.status_pagamento || "").toUpperCase();
@@ -960,8 +964,9 @@ async function fetchDashboardData(
   );
 
   pedidosParaDiaSemana.forEach(p => {
-    const dataEfetiva = p.paid_at || p.created_at;
-    const dia = getDay(parseISO(dataEfetiva));
+    const dataEfetiva = p.created_at; // Use created_at to match Pedidos list
+    const date = parseISO(dataEfetiva);
+    const dia = getDay(date);
     diaSemanaMap[dia].valor += p.valor_total || 0;
     diaSemanaMap[dia].pedidos += 1;
     diaSemanaMap[dia].pecas += p.total_pecas || 0;
