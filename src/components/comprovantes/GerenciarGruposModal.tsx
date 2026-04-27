@@ -128,7 +128,7 @@ export function GerenciarGruposModal({ isOpen, onClose }: GerenciarGruposModalPr
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5 text-primary" />
@@ -169,12 +169,12 @@ export function GerenciarGruposModal({ isOpen, onClose }: GerenciarGruposModalPr
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-semibold text-sm truncate">{g.nome}</p>
+                              <p className="font-semibold text-sm">{g.nome}</p>
                               {!g.ativo && <Badge variant="outline" className="text-[10px]">Inativo</Badge>}
                               {g.pedir_legenda_ja && <Badge variant="secondary" className="text-[10px]">J/A na legenda</Badge>}
                               {!g.pedir_legenda_ja && <Badge variant="secondary" className="text-[10px]">Cat. fixa: {g.categoria_padrao}</Badge>}
                             </div>
-                            <p className="text-[11px] text-muted-foreground font-mono truncate">{g.group_whatsapp_id}</p>
+                            <p className="text-[11px] text-muted-foreground font-mono break-all">{g.group_whatsapp_id}</p>
                           </div>
                           <div className="flex gap-1">
                             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => abrirEditar(g)}>
@@ -216,7 +216,7 @@ export function GerenciarGruposModal({ isOpen, onClose }: GerenciarGruposModalPr
                           className="w-full text-left p-2 rounded-lg bg-white dark:bg-card hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors border border-amber-200 dark:border-amber-900/50"
                         >
                           <p className="text-xs font-semibold">{d.chat_name || 'Grupo sem nome'}</p>
-                          <p className="text-[10px] font-mono text-muted-foreground truncate">{d.group_whatsapp_id}</p>
+                          <p className="text-[10px] font-mono text-muted-foreground break-all">{d.group_whatsapp_id}</p>
                           <p className="text-[10px] text-muted-foreground mt-0.5">
                             {d.total} mensagem(ns) · última {formatDistanceToNow(new Date(d.ultima_msg), { locale: ptBR, addSuffix: true })}
                           </p>
@@ -296,7 +296,7 @@ export function GerenciarGruposModal({ isOpen, onClose }: GerenciarGruposModalPr
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-1 max-h-64 overflow-y-auto">
+                    <div className="space-y-1 max-h-[350px] overflow-y-auto">
                       {eventosRecentes.map(ev => {
                         const Icon = ev.message_type === 'image' ? FileImage
                           : ev.message_type === 'document' ? FileText
@@ -317,28 +317,30 @@ export function GerenciarGruposModal({ isOpen, onClose }: GerenciarGruposModalPr
                               "text-muted-foreground"
                             )} />
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-semibold truncate">
+                              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                <span className="font-semibold">
                                   {ev.chat_name || 'Sem nome'}
                                 </span>
-                                {grupoCadastrado ? (
-                                  <Badge variant="secondary" className="text-[9px] h-4 px-1">
-                                    {grupoCadastrado.emoji} cadastrado
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-[9px] h-4 px-1 text-amber-700 dark:text-amber-400">
-                                    não cadastrado
-                                  </Badge>
-                                )}
-                                <span className="text-[10px] text-muted-foreground ml-auto">
-                                  {format(new Date(ev.created_at), 'HH:mm:ss')}
-                                </span>
+                                <div className="flex items-center gap-1.5 ml-auto">
+                                  {grupoCadastrado ? (
+                                    <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                                      {grupoCadastrado.emoji} cadastrado
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[9px] h-4 px-1 text-amber-700 dark:text-amber-400">
+                                      não cadastrado
+                                    </Badge>
+                                  )}
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {format(new Date(ev.created_at), 'HH:mm:ss')}
+                                  </span>
+                                </div>
                               </div>
-                              <p className="text-[10px] font-mono text-muted-foreground truncate">
+                              <p className="text-[10px] font-mono text-muted-foreground break-all mt-0.5">
                                 {ev.message_type} · {ev.group_whatsapp_id}
                               </p>
                               {ev.caption && (
-                                <p className="text-[10px] text-muted-foreground italic truncate">
+                                <p className="text-[10px] text-zinc-600 dark:text-zinc-400 italic mt-1 leading-relaxed">
                                   "{ev.caption}"
                                 </p>
                               )}

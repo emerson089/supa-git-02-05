@@ -165,7 +165,7 @@ export function ComprovanteModal({ isOpen, onClose, comprovante, onSave, isSavin
 
             <div className="space-y-2">
               <Label>Extração Original da IA (Debug)</Label>
-              <pre className="text-xs bg-zinc-100 dark:bg-zinc-900 p-2 rounded max-h-24 overflow-y-auto text-zinc-600 dark:text-zinc-400">
+              <pre className="text-xs bg-zinc-100 dark:bg-zinc-900 p-2 rounded max-h-48 overflow-y-auto text-zinc-600 dark:text-zinc-400">
                 {JSON.stringify(comprovante.dados_brutos, null, 2)}
               </pre>
             </div>
