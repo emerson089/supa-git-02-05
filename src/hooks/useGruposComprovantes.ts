@@ -187,6 +187,30 @@ export function useEventosBrutosNaoCadastrados() {
 }
 
 /**
+ * Lista TODOS os eventos brutos recentes (cadastrados ou não) — pra diagnóstico.
+ */
+export function useEventosBrutosRecentes(limitMinutos: number = 30) {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['eventos-brutos-recentes', user?.id, limitMinutos],
+    queryFn: async () => {
+      const desde = new Date(Date.now() - limitMinutos * 60 * 1000).toISOString();
+      const { data, error } = await (supabase as any)
+        .from('webhook_eventos_brutos')
+        .select('id, group_whatsapp_id, sender, chat_name, message_type, caption, created_at')
+        .gte('created_at', desde)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data || []) as EventoBruto[];
+    },
+    enabled: !!user,
+    staleTime: 5_000,
+  });
+}
+
+/**
  * Mapa rápido group_whatsapp_id -> GrupoComprovante (para chips na tabela)
  */
 export function useGruposMap() {
