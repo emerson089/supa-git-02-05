@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Play, Pause, Loader2, CheckCircle2, AlertTriangle, Send,
   Filter, Clock, ShieldCheck,
@@ -62,9 +62,9 @@ const STORAGE_KEY = 'transmissao_progresso';
 type Velocidade = 'ultra_seguro' | 'normal' | 'rapido';
 
 const VELOCIDADES: Record<Velocidade, { min: number; max: number; label: string }> = {
-  ultra_seguro: { min: 15, max: 40, label: 'Ultra Seguro (15-40s)' },
-  normal: { min: 5, max: 10, label: 'Normal (5-10s)' },
-  rapido: { min: 1, max: 3, label: 'Rápido (1-3s)' },
+  ultra_seguro: { min: 40, max: 60, label: 'Ultra Seguro (40-60s)' },
+  normal: { min: 20, max: 30, label: 'Normal (20-30s)' },
+  rapido: { min: 5, max: 10, label: 'Rápido (5-10s)' },
 };
 
 interface TransmissaoManagerModalProps {
@@ -107,7 +107,8 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const { catalogos, loading: loadingCatalogos } = useCatalogos();
   const { marcarContato } = useClienteContatos();
   const { isBlacklisted, saveCampanhaHistorico } = useMassSending();
-  
+  const isProcessingRef = useRef(false);
+
   // States fundamentais
   const [selectedCatalogoId, setSelectedCatalogoId] = useState<string>('');
   const [velocidade, setVelocidade] = useState<Velocidade>('ultra_seguro');
@@ -322,60 +323,57 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   };
 
   const processNext = async (index: number) => {
+    if (isProcessingRef.current) return;
     if (status === 'paused' || status === 'idle') return;
-    if (index >= total) {
-      setStatus('completed');
-      logMessage('Transmissão concluída!', 'success');
-      localStorage.removeItem(STORAGE_KEY);
-      
-      // Salvar Histórico
-      await saveCampanhaHistorico({
-        nome_campanha: `Campanha ${new Date().toLocaleDateString('pt-BR')}`,
-        catalogo_id: selectedCatalogoId === 'all_active' ? null : selectedCatalogoId,
-        total_contatos: total,
-        sucessos,
-        falhas,
-        filtros_aplicados: {
-            cidade: filterCidade,
-            categoria: filterCategoria,
-            excursao: filterExcursao,
-            valor_min: filterValorMin
-        },
-        velocidade
-      });
-      return;
-    }
-
-    const cliente = clientesFinais[index];
-
-    // Verificar opt_out (LGPD)
-    if ((cliente as any).opt_out === true) {
-      logMessage(`PULADO: ${cliente.nome?.split(' ')[0]} optou por não receber mensagens`, 'error');
-      agendarProximo(index + 1);
-      return;
-    }
-
-    // Normalizar telefone antes de qualquer verificação
-    const phoneResult = normalizePhoneE164(cliente.telefone || '');
-
-    // Verificar Blacklist com telefone normalizado
-    const blocked = phoneResult.valid ? await isBlacklisted(phoneResult.phone) : false;
-    if (blocked) {
-      logMessage(`PULADO: ${cliente.nome?.split(' ')[0]} está na Blacklist`, 'error');
-      agendarProximo(index + 1);
-      return;
-    }
-
-    if (!phoneResult.valid) {
-      logMessage(`Telefone inválido: ${cliente.nome?.split(' ')[0]}`, 'error');
-      setFalhas(prev => prev + 1);
-      agendarProximo(index + 1);
-      return;
-    }
+    isProcessingRef.current = true;
 
     try {
-      if (!user?.id) throw new Error("Usuário não autenticado");
-      const catalogsToSend = selectedCatalogoId === 'all_active' 
+      if (index >= total) {
+        setStatus('completed');
+        logMessage('Transmissão concluída!', 'success');
+        localStorage.removeItem(STORAGE_KEY);
+        await saveCampanhaHistorico({
+          nome_campanha: `Campanha ${new Date().toLocaleDateString('pt-BR')}`,
+          catalogo_id: selectedCatalogoId === 'all_active' ? null : selectedCatalogoId,
+          total_contatos: total,
+          sucessos,
+          falhas,
+          filtros_aplicados: { cidade: filterCidade, categoria: filterCategoria, excursao: filterExcursao, valor_min: filterValorMin },
+          velocidade,
+        });
+        return;
+      }
+
+      const cliente = clientesFinais[index];
+      const primeiroNome = cliente.nome?.split(' ')[0] ?? 'Cliente';
+
+      // Verificar opt_out (LGPD)
+      if ((cliente as any).opt_out === true) {
+        logMessage(`PULADO: ${primeiroNome} optou por não receber mensagens`, 'error');
+        agendarProximo(index + 1);
+        return;
+      }
+
+      // Normalizar telefone
+      const phoneResult = normalizePhoneE164(cliente.telefone || '');
+
+      // Verificar Blacklist com telefone normalizado
+      const blocked = phoneResult.valid ? await isBlacklisted(phoneResult.phone) : false;
+      if (blocked) {
+        logMessage(`PULADO: ${primeiroNome} está na Blacklist`, 'error');
+        agendarProximo(index + 1);
+        return;
+      }
+
+      if (!phoneResult.valid) {
+        logMessage(`Telefone inválido: ${primeiroNome}`, 'error');
+        setFalhas(prev => prev + 1);
+        agendarProximo(index + 1);
+        return;
+      }
+
+      if (!user?.id) throw new Error('Usuário não autenticado');
+      const catalogsToSend = selectedCatalogoId === 'all_active'
         ? catalogos.filter(c => c.ativo)
         : catalogos.filter(c => c.id === selectedCatalogoId);
 
@@ -383,25 +381,17 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
         const { data: signedData, error: signedError } = await supabase.storage
           .from('lotes')
           .createSignedUrl(cat.file_path, 604800);
-
         if (signedError || !signedData?.signedUrl) continue;
 
         const caption = formatMessage(cat.mensagem, cliente);
-        const fileName = `${cat.nome.replace(/[^a-zA-Z0-9 ]/g, '')}.pdf`;
+        // Sem .pdf no final — a Z-API adiciona a extensão via o campo extension
+        const fileName = cat.nome.replace(/[^a-zA-Z0-9 ]/g, '').trim() || 'Catalogo';
 
         const { error } = await supabase.functions.invoke('send-whatsapp', {
-          body: {
-            type: 'document',
-            phone: phoneResult.phone,
-            documentUrl: signedData.signedUrl,
-            fileName,
-            caption,
-          },
+          body: { type: 'document', phone: phoneResult.phone, documentUrl: signedData.signedUrl, fileName, caption },
         });
-
         if (error) throw error;
 
-        // Registrar envio no banco (HEAD logic)
         await registrarEnvio(cliente.id, cat.id);
 
         if (catalogsToSend.length > 1 && catalogsToSend.indexOf(cat) < catalogsToSend.length - 1) {
@@ -410,29 +400,22 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
       }
 
       marcarContato(cliente.id, 'whatsapp');
-      logMessage(`Enviado para ${cliente.nome?.split(' ')[0]}`, 'success');
+      logMessage(`Enviado para ${primeiroNome}`, 'success');
       setSucessos(prev => {
         const next = prev + 1;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            currentIndex: index + 1,
-            sucessos: next,
-            falhas,
-            selectedCatalogoId
-        }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentIndex: index + 1, sucessos: next, falhas, selectedCatalogoId }));
         return next;
       });
     } catch (err) {
-      logMessage(`Falha ao enviar para ${cliente.nome?.split(' ')[0]}`, 'error');
+      const primeiroNome = clientesFinais[index]?.nome?.split(' ')[0] ?? 'Cliente';
+      logMessage(`Falha ao enviar para ${primeiroNome}`, 'error');
       setFalhas(prev => {
         const next = prev + 1;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            currentIndex: index + 1,
-            sucessos,
-            falhas: next,
-            selectedCatalogoId
-        }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentIndex: index + 1, sucessos, falhas: next, selectedCatalogoId }));
         return next;
       });
+    } finally {
+      isProcessingRef.current = false;
     }
 
     agendarProximo(index + 1);
