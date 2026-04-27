@@ -219,21 +219,32 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
 
       const { data: somaData } = await supabase
         .from('comprovantes')
-        .select('valor, categoria')
+        .select('valor, categoria, nome_pagador, created_at, data_pagamento')
         .eq('status', 'confirmado')
         .eq('grupo_whatsapp', grupoConfig.group_whatsapp_id)
-        .gte('created_at', startOfDayDate.toISOString());
+        .gte('created_at', startOfDayDate.toISOString())
+        .order('created_at', { ascending: true });
 
       let totalJeans = 0;
       let totalAlfaiataria = 0;
       let totalGeral = 0;
+      const listaPagamentos: string[] = [];
 
       if (somaData) {
-        for (const row of somaData as Array<{ valor: number | null; categoria: string }>) {
+        for (const row of somaData) {
           const v = Number(row.valor) || 0;
           totalGeral += v;
           if (row.categoria === 'jeans') totalJeans += v;
           else if (row.categoria === 'alfaiataria') totalAlfaiataria += v;
+
+          // Formatação para o novo grupo (Pagamentos)
+          const dataRef = row.data_pagamento ? new Date(row.data_pagamento) : new Date(row.created_at);
+          const horaFmt = dataRef.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          const dataFmt = dataRef.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+          
+          listaPagamentos.push(
+            `Pagador: *${row.nome_pagador || 'Não identificado'}* | valor R$: *${valFormat(v)}* | data/ hora: *${dataFmt} às ${horaFmt}*`
+          );
         }
       }
 
@@ -241,18 +252,23 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
         ? new Date(extrato.data_pagamento).toLocaleDateString('pt-BR')
         : 'Não lida';
 
-      let msg = `✅ *Comprovante registrado em ${grupoConfig.emoji} ${grupoConfig.nome}*\n\n` +
-        `💰 Valor: ${valFormat(extrato.valor)}\n` +
-        `👤 Pagador: ${extrato.nome_pagador || 'Não lido'}\n` +
-        `🏦 Banco: ${extrato.banco_origem || 'Não lido'}\n` +
-        `📅 Data: ${dataFmt}\n\n`;
-
+      let msg = "";
+      
       if (grupoConfig.pedir_legenda_ja) {
-        msg += `Total jeans: ${valFormat(totalJeans)}\n` +
+        // Formato para o grupo da Feira (Jeans/Alfaiataria)
+        msg = `✅ *Comprovante registrado em ${grupoConfig.emoji} ${grupoConfig.nome}*\n\n` +
+          `💰 Valor: ${valFormat(extrato.valor)}\n` +
+          `👤 Pagador: ${extrato.nome_pagador || 'Não lido'}\n` +
+          `🏦 Banco: ${extrato.banco_origem || 'Não lido'}\n` +
+          `📅 Data: ${dataFmt}\n\n` +
+          `Total jeans: ${valFormat(totalJeans)}\n` +
           `Total alfaiataria: ${valFormat(totalAlfaiataria)}\n` +
           `📊 *Total do dia neste grupo: ${valFormat(totalGeral)}*`;
       } else {
-        msg += `📊 *Total recebido hoje neste grupo: ${valFormat(totalGeral)}*`;
+        // Formato solicitado para o grupo de Confirmação de Pagamento
+        msg = `✅ *Confirmação de pagamento*\n\n` +
+          listaPagamentos.join('\n') +
+          `\n\n📊 *Total: ${valFormat(totalGeral)}*`;
       }
 
       await enviarMensagemZApi(fullBody.phone, msg);
