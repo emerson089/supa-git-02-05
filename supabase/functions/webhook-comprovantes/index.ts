@@ -331,26 +331,8 @@ Deno.serve(async (req) => {
     const authorizedIds = [feiraGroupId, pagamentosGroupId].filter(Boolean);
     
     if (groupHost !== "Private" && !authorizedIds.includes(groupHost)) {
-      console.log(`[Discovery] Grupo não autorizado detectado: ${groupHost}`);
-      
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
-
-      // Capturar o nome do grupo se o Z-API enviar (ex: groupName ou chatName)
-      const groupName = body?.groupName || body?.chatName || "Grupo Desconhecido";
-
-      await supabase.from('comprovantes').insert({
-        valor: 0,
-        imagem_url: 'LOG_DESCOBERTA',
-        status: 'pendente_revisao',
-        grupo_whatsapp: groupHost,
-        observacoes: `ID_DESCOBERTO: ${groupHost} | Nome: ${groupName} | Favor adicionar este ID à variável WHATSAPP_GROUP_ID_PAGAMENTOS.`,
-        numero_remetente: sender
-      });
-
-      return new Response(JSON.stringify({ ok: true, message: "Grupo não autorizado - Log de descoberta salvo" }), { status: 200 });
+      console.log(`[Auth] Grupo não autorizado: ${groupHost}`);
+      return new Response(JSON.stringify({ error: "Grupo não autorizado" }), { status: 401 });
     }
 
     // Regra: PDF só é aceito no grupo de Pagamentos
