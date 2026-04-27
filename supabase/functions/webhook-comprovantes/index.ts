@@ -319,6 +319,24 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
+
+    // [DEBUG TEMP] Log de descoberta de Group ID — remover depois de capturar
+    const debugGroupHost = body?.phone || "Private";
+    const debugSender = body?.participantPhone || body?.author || "Desconhecido";
+    const debugText =
+      body?.text?.message ||
+      body?.image?.caption ||
+      body?.caption ||
+      (body?.document ? "[documento]" : null) ||
+      (body?.image ? "[imagem sem legenda]" : "[sem texto]");
+    console.log("[GROUP-ID-DISCOVERY]", JSON.stringify({
+      groupHost: debugGroupHost,
+      sender: debugSender,
+      text: debugText,
+      isGroup: body?.isGroup ?? null,
+      chatName: body?.chatName ?? null,
+    }));
+
     // Ignora PDFs e outros documentos — só processa imagens de comprovante
     if (body?.document) {
       return new Response(JSON.stringify({ ok: true, message: "Documento ignorado" }), { status: 200 });
@@ -327,7 +345,7 @@ Deno.serve(async (req) => {
     const imageUrl = body?.image?.imageUrl || body?.url;
 
     if (!imageUrl) {
-      return new Response(JSON.stringify({ ok: true, message: "Ignorado" }), { status: 200 });
+      return new Response(JSON.stringify({ ok: true, message: "Ignorado (sem imagem) — groupHost capturado em log" }), { status: 200 });
     }
 
     // Extrai a legenda da imagem (Z-API: image.caption). Fallback para outros campos comuns.

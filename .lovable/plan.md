@@ -1,68 +1,42 @@
-# Plano: Reativar Cobranças Automáticas
+## Objetivo
 
-## Diagnóstico (resumo)
-A funcionalidade está completamente quebrada porque a migration de infra **nunca foi aplicada** ao banco. Faltam:
-- Tabelas `templates_cobranca` e `cobrancas_enviadas`
-- Colunas `excluir_cobranca_automatica` em `clientes` e `pedidos`
-- Extensão `pg_cron` e os 3 jobs agendados
-- Declaração de `cobranca-pendentes` no `supabase/config.toml` (precisa de `verify_jwt = false` para o cron chamar)
-- O bloco DO $$ da migration original tentava ler GUCs `app.settings.*` que não existem no Supabase gerenciado → cron jamais foi criado mesmo se a migration tivesse rodado
+Adicionar um log temporário no webhook `webhook-comprovantes` para capturar o ID do grupo de WhatsApp da próxima mensagem que chegar (texto ou imagem), permitindo descobrir o ID do "Grupo de confirmação de pagamento".
 
-## Etapa 1 — Migration única (substitui a anterior, que está obsoleta)
+## Por que isso é necessário
 
-Criar nova migration `*_cobrancas_automaticas_v2.sql` com:
+Atualmente o webhook descarta silenciosamente qualquer mensagem que não contenha imagem (`return Ignorado` antes de qualquer log). Por isso, a mensagem de texto "Grupo de confirmação de pagamento" que você enviou não deixou rastro nem nos logs nem no banco.
 
-1. **Extensões**: `CREATE EXTENSION IF NOT EXISTS pg_cron;` e `pg_net;`
-2. **Colunas de exclusão**:
-   - `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS excluir_cobranca_automatica BOOLEAN NOT NULL DEFAULT false;`
-   - `ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS excluir_cobranca_automatica BOOLEAN NOT NULL DEFAULT false;`
-3. **Tabela `templates_cobranca`** com RLS `auth.uid() = user_id` e UNIQUE(user_id, tentativa)
-4. **Tabela `cobrancas_enviadas`** com:
-   - FK em pedido_id ON DELETE CASCADE
-   - UNIQUE(pedido_id, tentativa) para evitar reenvio
-   - RLS: SELECT para `authenticated` (true), ALL para `service_role`
-5. **Cron jobs** — agendados com URL hardcoded do projeto e `SUPABASE_ANON_KEY` no Authorization (segue a `external-api-access-policy`):
-   - `cobranca-quarta-14h` → cron `0 17 * * 3` (14h BRT) → POST `{tentativa:1}`
-   - `cobranca-quinta-9h` → cron `0 12 * * 4` (9h BRT) → POST `{tentativa:2}`
-   - `cobranca-quinta-15h` → cron `0 18 * * 4` (15h BRT) → POST `{tentativa:3}`
-   - Antes de criar, fazer `cron.unschedule` defensivo dos mesmos nomes para idempotência
+## Mudanças
 
-## Etapa 2 — Declarar a Edge Function
+### 1. `supabase/functions/webhook-comprovantes/index.ts`
 
-Adicionar ao `supabase/config.toml`:
-```toml
-[functions.cobranca-pendentes]
-verify_jwt = false
+Adicionar um `console.log` no início do handler que captura `groupHost`, `sender`, `text` e `chatName` de **toda** requisição recebida — antes de qualquer filtro de documento/imagem. Essa instrumentação fica gravada nos logs da edge function e dura só até a captura.
+
+```ts
+// [DEBUG TEMP] Log de descoberta de Group ID
+const debugGroupHost = body?.phone || "Private";
+const debugSender   = body?.participantPhone || body?.author || "Desconhecido";
+const debugText     = body?.text?.message || body?.image?.caption || ...;
+console.log("[GROUP-ID-DISCOVERY]", JSON.stringify({
+  groupHost: debugGroupHost,
+  sender: debugSender,
+  text: debugText,
+  isGroup: body?.isGroup ?? null,
+  chatName: body?.chatName ?? null,
+}));
 ```
-Necessário porque o cron interno chama a função sem sessão de usuário; o controle de acesso real é feito pela `service_role_key` que a função usa internamente para escrever no banco.
 
-## Etapa 3 — Corrigir TypeScript em `src/pages/ConfigCobrancas.tsx`
+Nada mais muda — o resto da lógica (filtro de grupo autorizado, processamento OpenAI, etc.) segue idêntica.
 
-Após a migration rodar, o `types.ts` será regenerado automaticamente e os 6 erros somem sozinhos. Não precisa cast `as any` — vai funcionar nativo. Apenas verificar:
-- `setHistorico(data ?? [])` na linha 166 — vai aceitar pois o tipo `cobrancas_enviadas` agora existe
-- `setClientes(data ?? [])` na linha 179 — idem para a coluna `excluir_cobranca_automatica`
-- `.update({ excluir_cobranca_automatica: valor })` na linha 190 — idem
+### 2. Após a captura
 
-## Etapa 4 — Não tocar (fora de escopo)
+Assim que eu ler o ID nos logs e confirmar com você, faço uma segunda passagem para **remover** o bloco `[DEBUG TEMP]` para não poluir os logs em produção a longo prazo.
 
-- `useMassSending.ts` usa `blacklist` e `campanhas_historico` — pertencem ao módulo de **transmissão de catálogo**, não cobrança. Já estão com `as any` e o build não reclama. Fica para outro ticket.
-- `cobranca-pendentes/index.ts` — código está correto, não precisa alterar.
+## Próximos passos depois da aprovação
 
-## Etapa 5 — QA pós-deploy
-
-1. Abrir `/configuracoes/cobrancas` → confirmar que carrega sem erros e que os 3 templates padrão aparecem editáveis
-2. Salvar 1 template → verificar registro em `templates_cobranca` via DB
-3. Marcar 1 cliente como excluído → verificar `clientes.excluir_cobranca_automatica = true`
-4. Botão "Disparar agora" da 1ª cobrança → confirmar que invoca a function, retorna `{enviados, falhas}` e popula `cobrancas_enviadas`
-5. `SELECT jobname, schedule, active FROM cron.job WHERE jobname LIKE 'cobranca-%'` → deve retornar 3 linhas ativas
-6. Confirmar que reenviar a mesma tentativa para o mesmo pedido **não duplica** (constraint UNIQUE + lógica `idsJaEnviados` na função)
-
-## Riscos
-- **pg_cron em managed Supabase**: a extensão é suportada mas só pode ser instalada no schema `pg_catalog`/`extensions` em projetos com plan adequado. Se falhar, alternativa é usar Supabase Cron (UI) — preciso confirmar disponibilidade ao rodar a migration.
-- **Z-API**: a função depende dos 3 secrets `ZAPI_INSTANCE_ID`, `ZAPI_TOKEN`, `ZAPI_CLIENT_TOKEN` (já configurados, confirmado).
-- **Volume**: o loop tem `setTimeout 2s` entre envios — para 50 pedidos, leva ~100s, próximo do timeout default de edge function (150s). Aceitável para o volume atual; monitorar.
-
-## Arquivos tocados
-- `supabase/migrations/{timestamp}_cobrancas_automaticas_v2.sql` (novo)
-- `supabase/config.toml` (adicionar bloco)
-- Nenhum arquivo TS precisa edição manual — `types.ts` é regenerado automaticamente
+1. Aplico a mudança no webhook.
+2. Aguardo você reenviar uma mensagem qualquer no grupo (a "Grupo de confirmação de pagamento 1" que você acabou de enviar provavelmente já cairá na próxima execução).
+3. Leio os logs com `supabase--edge_function_logs` filtrando por `GROUP-ID-DISCOVERY`.
+4. Te informo o ID capturado.
+5. Pergunto se quer atualizar o secret `WHATSAPP_GROUP_ID` (caso seja um grupo novo) ou se era só pra confirmar.
+6. Removo o log de debug.
