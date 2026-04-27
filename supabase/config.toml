@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.cobranca-pendentes]
 verify_jwt = false
+
+[functions.zapi-config-grupos]
+verify_jwt = false
