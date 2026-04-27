@@ -696,6 +696,51 @@ export type Database = {
         }
         Relationships: []
       }
+      grupos_comprovantes: {
+        Row: {
+          aceita_pdf: boolean
+          ativo: boolean
+          categoria_padrao: Database["public"]["Enums"]["comprovante_categoria"]
+          cor: string
+          created_at: string
+          emoji: string
+          group_whatsapp_id: string
+          id: string
+          nome: string
+          pedir_legenda_ja: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          aceita_pdf?: boolean
+          ativo?: boolean
+          categoria_padrao?: Database["public"]["Enums"]["comprovante_categoria"]
+          cor?: string
+          created_at?: string
+          emoji?: string
+          group_whatsapp_id: string
+          id?: string
+          nome: string
+          pedir_legenda_ja?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          aceita_pdf?: boolean
+          ativo?: boolean
+          categoria_padrao?: Database["public"]["Enums"]["comprovante_categoria"]
+          cor?: string
+          created_at?: string
+          emoji?: string
+          group_whatsapp_id?: string
+          id?: string
+          nome?: string
+          pedir_legenda_ja?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       lote_custos_config: {
         Row: {
           created_at: string
@@ -1488,6 +1533,39 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      webhook_eventos_brutos: {
+        Row: {
+          caption: string | null
+          chat_name: string | null
+          created_at: string
+          group_whatsapp_id: string | null
+          id: string
+          message_type: string | null
+          payload: Json | null
+          sender: string | null
+        }
+        Insert: {
+          caption?: string | null
+          chat_name?: string | null
+          created_at?: string
+          group_whatsapp_id?: string | null
+          id?: string
+          message_type?: string | null
+          payload?: Json | null
+          sender?: string | null
+        }
+        Update: {
+          caption?: string | null
+          chat_name?: string | null
+          created_at?: string
+          group_whatsapp_id?: string | null
+          id?: string
+          message_type?: string | null
+          payload?: Json | null
+          sender?: string | null
         }
         Relationships: []
       }

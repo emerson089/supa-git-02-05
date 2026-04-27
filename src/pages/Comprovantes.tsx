@@ -8,10 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Eye, Filter, RefreshCw, FileText, AlertTriangle, Trash2, Shirt, Scissors, HelpCircle } from 'lucide-react';
+import { Search, Eye, Filter, RefreshCw, FileText, AlertTriangle, Trash2, Shirt, Scissors, HelpCircle, Settings2 } from 'lucide-react';
 import { format, startOfDay, startOfMonth, endOfMonth, endOfDay } from 'date-fns';
 import { useComprovantes, useTotaisCategoria, Comprovante, ComprovanteCategoria } from '@/hooks/useComprovantes';
 import { ComprovanteModal } from '@/components/comprovantes/ComprovanteModal';
+import { GerenciarGruposModal } from '@/components/comprovantes/GerenciarGruposModal';
+import { useGruposComprovantes, getCorClasses } from '@/hooks/useGruposComprovantes';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
@@ -41,6 +43,10 @@ export default function Comprovantes() {
   const [selectedComprovante, setSelectedComprovante] = useState<Comprovante | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [showGruposModal, setShowGruposModal] = useState(false);
+
+  const { grupos } = useGruposComprovantes();
+  const grupoMap = new Map(grupos.map(g => [g.group_whatsapp_id, g]));
 
   // Calcula datas com base no atalho
   const getDates = () => {
@@ -101,6 +107,9 @@ export default function Comprovantes() {
                 <p className="text-sm font-medium text-muted-foreground mt-0.5">Leitura automática de recibos integrados via Z-API · use legenda <strong>J</strong> (Jeans) ou <strong>A</strong> (Alfaiataria) ao enviar a foto</p>
               </div>
               <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowGruposModal(true)} className="gap-1.5 h-8 text-xs font-semibold shadow-[3px_3px_8px_hsl(var(--muted)/0.35),-1px_-1px_5px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
+                  <Settings2 className="h-3.5 w-3.5" /> Gerenciar Grupos
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-1.5 h-8 text-xs font-semibold shadow-[3px_3px_8px_hsl(var(--muted)/0.35),-1px_-1px_5px_hsl(var(--background))] border-0 bg-card hover:bg-muted/50">
                   <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} /> Atualizar
                 </Button>
@@ -245,15 +254,11 @@ export default function Comprovantes() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os Grupos</SelectItem>
-                  {/* Mapeamento de nomes amigáveis para os grupos conhecidos */}
-                  {Array.from(new Set(comprovantes.map(c => c.grupo_whatsapp))).filter(Boolean).map(id => {
-                    let label = id;
-                    if (id === 'LOG_DESCOBERTA') label = '🔍 Logs de Descoberta';
-                    else if (id?.includes('120363402446093422')) label = '💰 Confirmação de Pagamento';
-                    else if (id?.includes('g.us')) label = '🏟️ Feira - Delookii';
-                    
-                    return <SelectItem key={id} value={id!}>{label}</SelectItem>;
-                  })}
+                  {grupos.map(g => (
+                    <SelectItem key={g.id} value={g.group_whatsapp_id}>
+                      {g.emoji} {g.nome}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -310,15 +315,22 @@ export default function Comprovantes() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="secondary" className="text-[10px] font-medium py-0 h-5 px-1.5 whitespace-nowrap overflow-hidden max-w-[120px] truncate border-none bg-zinc-100 text-zinc-600">
-                              {(() => {
-                                const id = comp.grupo_whatsapp;
-                                if (id === 'LOG_DESCOBERTA') return 'DESCOBERTA';
-                                if (id?.includes('120363402446093422')) return '💰 PAGAMENTO';
-                                if (id?.includes('g.us')) return '🏟️ FEIRA';
-                                return id?.split('@')[0] || 'N/A';
-                              })()}
-                            </Badge>
+                            {(() => {
+                              const g = comp.grupo_whatsapp ? grupoMap.get(comp.grupo_whatsapp) : null;
+                              if (g) {
+                                const cor = getCorClasses(g.cor);
+                                return (
+                                  <Badge className={cn("text-[10px] font-medium py-0 h-5 px-1.5 whitespace-nowrap overflow-hidden max-w-[160px] truncate border", cor.chip)}>
+                                    {g.emoji} {g.nome}
+                                  </Badge>
+                                );
+                              }
+                              return (
+                                <Badge variant="secondary" className="text-[10px] font-medium py-0 h-5 px-1.5 whitespace-nowrap overflow-hidden max-w-[120px] truncate border-none bg-zinc-100 text-zinc-600">
+                                  {comp.grupo_whatsapp?.split('@')[0] || 'N/A'}
+                                </Badge>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <CategoriaBadge categoria={comp.categoria} />
