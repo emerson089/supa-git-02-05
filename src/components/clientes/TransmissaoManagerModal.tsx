@@ -630,6 +630,84 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                 </div>
               </Card>
 
+              {/* Seção 2.5: Saudações Aleatórias (configuráveis) */}
+              <Card className="p-4 border-none bg-secondary/30 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Send size={16} className="text-primary" />
+                    <h4 className="font-bold text-sm">Saudações Aleatórias</h4>
+                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      {saudacoesAtivas.length} ativas
+                    </span>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg" onClick={() => setShowSaudacoes(!showSaudacoes)}>
+                    {showSaudacoes ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </Button>
+                </div>
+
+                {showSaudacoes && (
+                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Uma linha = uma saudação. Use as tags <code className="bg-background px-1 rounded">{'{nome}'}</code>, <code className="bg-background px-1 rounded">{'{cidade}'}</code>, <code className="bg-background px-1 rounded">{'{estado}'}</code>, <code className="bg-background px-1 rounded">{'{excursao}'}</code>.
+                      A saudação só é adicionada quando a mensagem do catálogo <strong>não contém</strong> <code>{'{nome}'}</code>.
+                    </p>
+                    <Textarea
+                      value={saudacoesText}
+                      onChange={(e) => { setSaudacoesText(e.target.value); setSaudacoesDirty(true); }}
+                      placeholder="Oi {nome}! Olha que novidade..."
+                      className="min-h-[200px] text-xs font-mono leading-relaxed rounded-xl bg-background/70 resize-y"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 rounded-lg text-xs"
+                        disabled={!saudacoesDirty || savingSaudacoes}
+                        onClick={async () => {
+                          setSavingSaudacoes(true);
+                          const lista = saudacoesText.split('\n').map(s => s.trim()).filter(Boolean);
+                          const { error } = await savePerfilConfig({ saudacoes_personalizadas: lista });
+                          setSavingSaudacoes(false);
+                          if (error) {
+                            toast.error('Erro ao salvar saudações');
+                          } else {
+                            setSaudacoesDirty(false);
+                            toast.success(`${lista.length} saudações salvas`);
+                          }
+                        }}
+                      >
+                        {savingSaudacoes ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+                        Salvar saudações
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs"
+                        onClick={() => {
+                          setSaudacoesText(SAUDACOES_PADRAO.join('\n'));
+                          setSaudacoesDirty(true);
+                        }}
+                      >
+                        Restaurar padrão
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs text-destructive"
+                        onClick={() => {
+                          setSaudacoesText('');
+                          setSaudacoesDirty(true);
+                        }}
+                      >
+                        <Eraser size={12} className="mr-1" /> Limpar tudo
+                      </Button>
+                    </div>
+                    {saudacoesDirty && (
+                      <p className="text-[10px] text-amber-600 font-bold">Você tem alterações não salvas.</p>
+                    )}
+                  </div>
+                )}
+              </Card>
+
               {/* Seção 3: Preview Mockup */}
               <div className="flex justify-center py-2">
                 <Button variant="outline" size="sm" className="rounded-xl border-primary/20 bg-primary/5 text-primary font-bold gap-2 h-10 px-6" onClick={() => setShowPreview(true)}>
