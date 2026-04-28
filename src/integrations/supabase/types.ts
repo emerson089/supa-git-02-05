@@ -1081,18 +1081,21 @@ export type Database = {
         Row: {
           limite_diario_mensagens: number
           pausa_inteligente: boolean
+          saudacoes_personalizadas: string[]
           updated_at: string
           user_id: string
         }
         Insert: {
           limite_diario_mensagens?: number
           pausa_inteligente?: boolean
+          saudacoes_personalizadas?: string[]
           updated_at?: string
           user_id: string
         }
         Update: {
           limite_diario_mensagens?: number
           pausa_inteligente?: boolean
+          saudacoes_personalizadas?: string[]
           updated_at?: string
           user_id?: string
         }

@@ -32,30 +32,11 @@ import { useMassSending } from '@/hooks/useMassSending';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { SAUDACOES_PADRAO } from '@/lib/saudacoes-padrao';
 import { cn } from '@/lib/utils';
 
-const SAUDACOES = [
-  'Oi, {nome}! Tô passando aqui pra te mandar uma novidade 😍',
-  'Oii {nome}! Olha o que chegou pra você 👀',
-  'Oie {nome}! Separei uma coisa especial pra você 🥰',
-  'Ei {nome}, que bom te encontrar por aqui! Dá uma olhada nisso 😊',
-  'Oi {nome}! Vim te mostrar as novidades da Delooki 🔥',
-  'Oie {nome}! Você vai amar o que tenho pra te mostrar 😍',
-  'Oi {nome}! Vim te mandar o catálogo novinho em folha 🥰',
-  'Opa {nome}! Vim te dar uma novidade hoje 😊',
-  'Ei {nome}! Vim rapidinho te mostrar nosso novo catálogo 👀',
-  'Oi {nome}, tô com saudade! Olha essa coleção nova 🔥',
-  'Oii {nome}! Acho que você vai gostar muito disso 🥰',
-  'Ei {nome}, vim te contar uma novidade boa 😊',
-  'Oi {nome}! Tava pensando em você e vim te mandar isso 🥰',
-  'Oie {nome}! Chegou coisa boa aqui, dá uma olhada 👀',
-  'Oi {nome}! Tem coisa nova na Delooki e precisava te mostrar 🔥',
-  'Salve {nome}! Tenho uma surpresinha linda pra você 😍',
-  'Oi {nome}! Sabia que ia te animar ver isso aqui 🥰',
-  'Oii {nome}! Nossa coleção chegou e você precisa ver 👗',
-  'Ei {nome}! Chegou o tão esperado catálogo novo 🔥',
-  'Oi {nome}, passando com novidade boa por aqui! Dá uma olhadinha 😊',
-];
+// Saudações padrão movidas para src/lib/saudacoes-padrao.ts (totalmente editáveis pelo usuário)
 
 const STORAGE_KEY = 'transmissao_progresso';
 
@@ -92,11 +73,6 @@ const normalizePhoneE164 = (raw: string): { valid: boolean; phone: string } => {
   return { valid: false, phone: '' };
 };
 
-const gerarSaudacao = (nome: string): string => {
-  const saudacao = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
-  return saudacao.replace('{nome}', nome);
-};
-
 export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = ({
   open,
   onOpenChange,
@@ -106,7 +82,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const { user } = useAuth();
   const { catalogos, loading: loadingCatalogos } = useCatalogos();
   const { marcarContato } = useClienteContatos();
-  const { isBlacklisted, saveCampanhaHistorico } = useMassSending();
+  const { isBlacklisted, saveCampanhaHistorico, getPerfilConfig, savePerfilConfig } = useMassSending();
   const isProcessingRef = useRef(false);
 
   // States fundamentais
@@ -125,6 +101,16 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   
   // Segmentação Avançada
   const [showFilters, setShowFilters] = useState(false);
+
+  // Saudações Aleatórias (totalmente configuráveis)
+  const [showSaudacoes, setShowSaudacoes] = useState(false);
+  const [saudacoesText, setSaudacoesText] = useState<string>(SAUDACOES_PADRAO.join('\n'));
+  const [saudacoesDirty, setSaudacoesDirty] = useState(false);
+  const [savingSaudacoes, setSavingSaudacoes] = useState(false);
+  const saudacoesAtivas = useMemo(
+    () => saudacoesText.split('\n').map(s => s.trim()).filter(Boolean),
+    [saudacoesText]
+  );
   const [filterCidade, setFilterCidade] = useState('');
   const [filterCategoria, setFilterCategoria] = useState('todos');
   const [filterValorMin, setFilterValorMin] = useState('');
@@ -229,6 +215,24 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     }
   }, [open, status, total]);
 
+  // Carregar saudações personalizadas do banco quando o modal abrir
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const cfg: any = await getPerfilConfig();
+      if (cancelled) return;
+      const list: string[] | undefined = cfg?.saudacoes_personalizadas;
+      if (Array.isArray(list) && list.length > 0) {
+        setSaudacoesText(list.join('\n'));
+      } else {
+        setSaudacoesText(SAUDACOES_PADRAO.join('\n'));
+      }
+      setSaudacoesDirty(false);
+    })();
+    return () => { cancelled = true; };
+  }, [open, getPerfilConfig]);
+
   // Auto-select active catalog
   useEffect(() => {
     if (catalogos.length > 0 && !selectedCatalogoId) {
@@ -272,8 +276,9 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
     // Se a mensagem do catálogo não tem {nome}, adiciona saudação com contexto no topo
     if (!template.includes('{nome}')) {
-      const saudacao = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
-      const saudacaoComNome = saudacao.replace('{nome}', primeiroNome);
+      const pool = saudacoesAtivas.length > 0 ? saudacoesAtivas : SAUDACOES_PADRAO;
+      const saudacao = pool[Math.floor(Math.random() * pool.length)];
+      const saudacaoComNome = saudacao.replace(/\{nome\}/g, primeiroNome);
       msg = `${saudacaoComNome}\n\n${msg}`;
     }
 
@@ -623,6 +628,84 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                     Filtro: {getFiltroLabel()}
                   </p>
                 </div>
+              </Card>
+
+              {/* Seção 2.5: Saudações Aleatórias (configuráveis) */}
+              <Card className="p-4 border-none bg-secondary/30 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Send size={16} className="text-primary" />
+                    <h4 className="font-bold text-sm">Saudações Aleatórias</h4>
+                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      {saudacoesAtivas.length} ativas
+                    </span>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg" onClick={() => setShowSaudacoes(!showSaudacoes)}>
+                    {showSaudacoes ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </Button>
+                </div>
+
+                {showSaudacoes && (
+                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Uma linha = uma saudação. Use as tags <code className="bg-background px-1 rounded">{'{nome}'}</code>, <code className="bg-background px-1 rounded">{'{cidade}'}</code>, <code className="bg-background px-1 rounded">{'{estado}'}</code>, <code className="bg-background px-1 rounded">{'{excursao}'}</code>.
+                      A saudação só é adicionada quando a mensagem do catálogo <strong>não contém</strong> <code>{'{nome}'}</code>.
+                    </p>
+                    <Textarea
+                      value={saudacoesText}
+                      onChange={(e) => { setSaudacoesText(e.target.value); setSaudacoesDirty(true); }}
+                      placeholder="Oi {nome}! Olha que novidade..."
+                      className="min-h-[200px] text-xs font-mono leading-relaxed rounded-xl bg-background/70 resize-y"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 rounded-lg text-xs"
+                        disabled={!saudacoesDirty || savingSaudacoes}
+                        onClick={async () => {
+                          setSavingSaudacoes(true);
+                          const lista = saudacoesText.split('\n').map(s => s.trim()).filter(Boolean);
+                          const { error } = await savePerfilConfig({ saudacoes_personalizadas: lista });
+                          setSavingSaudacoes(false);
+                          if (error) {
+                            toast.error('Erro ao salvar saudações');
+                          } else {
+                            setSaudacoesDirty(false);
+                            toast.success(`${lista.length} saudações salvas`);
+                          }
+                        }}
+                      >
+                        {savingSaudacoes ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+                        Salvar saudações
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs"
+                        onClick={() => {
+                          setSaudacoesText(SAUDACOES_PADRAO.join('\n'));
+                          setSaudacoesDirty(true);
+                        }}
+                      >
+                        Restaurar padrão
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs text-destructive"
+                        onClick={() => {
+                          setSaudacoesText('');
+                          setSaudacoesDirty(true);
+                        }}
+                      >
+                        <Eraser size={12} className="mr-1" /> Limpar tudo
+                      </Button>
+                    </div>
+                    {saudacoesDirty && (
+                      <p className="text-[10px] text-amber-600 font-bold">Você tem alterações não salvas.</p>
+                    )}
+                  </div>
+                )}
               </Card>
 
               {/* Seção 3: Preview Mockup */}
