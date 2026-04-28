@@ -258,8 +258,9 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
     // Se a mensagem do catálogo não tem {nome}, adiciona saudação com contexto no topo
     if (!template.includes('{nome}')) {
-      const saudacao = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
-      const saudacaoComNome = saudacao.replace('{nome}', primeiroNome);
+      const pool = saudacoesAtivas.length > 0 ? saudacoesAtivas : SAUDACOES_PADRAO;
+      const saudacao = pool[Math.floor(Math.random() * pool.length)];
+      const saudacaoComNome = saudacao.replace(/\{nome\}/g, primeiroNome);
       msg = `${saudacaoComNome}\n\n${msg}`;
     }
 
