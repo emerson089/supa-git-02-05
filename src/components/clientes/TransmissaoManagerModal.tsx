@@ -101,6 +101,16 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   
   // Segmentação Avançada
   const [showFilters, setShowFilters] = useState(false);
+
+  // Saudações Aleatórias (totalmente configuráveis)
+  const [showSaudacoes, setShowSaudacoes] = useState(false);
+  const [saudacoesText, setSaudacoesText] = useState<string>(SAUDACOES_PADRAO.join('\n'));
+  const [saudacoesDirty, setSaudacoesDirty] = useState(false);
+  const [savingSaudacoes, setSavingSaudacoes] = useState(false);
+  const saudacoesAtivas = useMemo(
+    () => saudacoesText.split('\n').map(s => s.trim()).filter(Boolean),
+    [saudacoesText]
+  );
   const [filterCidade, setFilterCidade] = useState('');
   const [filterCategoria, setFilterCategoria] = useState('todos');
   const [filterValorMin, setFilterValorMin] = useState('');
