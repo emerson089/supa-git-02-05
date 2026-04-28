@@ -215,6 +215,24 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     }
   }, [open, status, total]);
 
+  // Carregar saudações personalizadas do banco quando o modal abrir
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const cfg: any = await getPerfilConfig();
+      if (cancelled) return;
+      const list: string[] | undefined = cfg?.saudacoes_personalizadas;
+      if (Array.isArray(list) && list.length > 0) {
+        setSaudacoesText(list.join('\n'));
+      } else {
+        setSaudacoesText(SAUDACOES_PADRAO.join('\n'));
+      }
+      setSaudacoesDirty(false);
+    })();
+    return () => { cancelled = true; };
+  }, [open, getPerfilConfig]);
+
   // Auto-select active catalog
   useEffect(() => {
     if (catalogos.length > 0 && !selectedCatalogoId) {
