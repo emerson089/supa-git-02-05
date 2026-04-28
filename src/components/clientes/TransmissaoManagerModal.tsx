@@ -32,6 +32,8 @@ import { useMassSending } from '@/hooks/useMassSending';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { SAUDACOES_PADRAO } from '@/lib/saudacoes-padrao';
 import { cn } from '@/lib/utils';
 
 const SAUDACOES = [
