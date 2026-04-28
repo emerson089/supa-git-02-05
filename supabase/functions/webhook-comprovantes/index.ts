@@ -259,7 +259,9 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
           const dataFmt = dataRef.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
           
           listaPagamentos.push(
-            `Pagador: *${row.nome_pagador || 'Não identificado'}* | valor R$: *${valFormat(v)}* | data/ hora: *${dataFmt} às ${horaFmt}*`
+            `👤 *Pagador:* ${row.nome_pagador || 'Não identificado'}\n` +
+            `💰 *Valor:* ${valFormat(v)}\n` +
+            `🕒 *Data:* ${dataFmt} às ${horaFmt}`
           );
         }
       }
@@ -282,9 +284,9 @@ IMPORTANTE SOBRE O CAMPO "nome_pagador":
           `📊 *Total do dia neste grupo: ${valFormat(totalGeral)}*`;
       } else {
         // Formato solicitado para o grupo de Confirmação de Pagamento
-        msg = `✅ *Confirmação de Pagamento*\n\n` +
-          listaPagamentos.join('\n') +
-          `\n\n📊 *Total: ${valFormat(totalGeral)}*`;
+        msg = `✅ *CONFIRMAÇÃO DE PAGAMENTO*\n\n` +
+          listaPagamentos.join('\n──────────────────\n') +
+          `\n──────────────────\n\n📊 *TOTAL DO DIA: ${valFormat(totalGeral)}*`;
       }
 
       await enviarMensagemZApi(fullBody.phone, msg);
