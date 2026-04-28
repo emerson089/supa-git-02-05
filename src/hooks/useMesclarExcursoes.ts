@@ -13,11 +13,12 @@ export function useMesclarExcursoes() {
   return useMutation({
     mutationFn: async ({ fonte, destino, copiarTaxa }: MesclarParams) => {
       // 1. Atualizar clientes: campo excursao (TEXT) de fonte.nome → destino.nome
-      const { count: clientesCount } = await supabase
+      const { data: clientesData } = await supabase
         .from('clientes')
         .update({ excursao: destino.nome })
         .eq('excursao', fonte.nome)
-        .select('*', { count: 'exact', head: true });
+        .select('id');
+      const clientesCount = clientesData?.length ?? 0;
 
       // 2. Atualizar pedidos: campo excursao (TEXT) de fonte.nome → destino.nome
       await supabase
@@ -26,11 +27,12 @@ export function useMesclarExcursoes() {
         .eq('excursao', fonte.nome);
 
       // 3. Atualizar pedidos: excursao_id (UUID FK) de fonte.id → destino.id
-      const { count: pedidosCount } = await supabase
+      const { data: pedidosData } = await supabase
         .from('pedidos')
         .update({ excursao_id: destino.id })
         .eq('excursao_id', fonte.id)
-        .select('*', { count: 'exact', head: true });
+        .select('id');
+      const pedidosCount = pedidosData?.length ?? 0;
 
       // 4. Copiar taxa se necessário
       if (copiarTaxa && fonte.taxa > 0) {
