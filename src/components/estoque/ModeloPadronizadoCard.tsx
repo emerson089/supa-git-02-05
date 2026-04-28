@@ -78,6 +78,7 @@ export function ModeloPadronizadoCard({
     const [deleting, setDeleting] = useState(false);
     const [saving, setSaving] = useState(false);
     const [pendingChanges, setPendingChanges] = useState<Record<string, { qtd: number; qtdIni: number }>>({});
+    const [qtdGrade, setQtdGrade] = useState('');
 
     const { user } = useAuth();
     const queryClient = useQueryClient();
@@ -146,6 +147,27 @@ export function ModeloPadronizadoCard({
                 [id]: { ...existing, [field]: numValue }
             };
         });
+    };
+
+    const handleApplyGrade = () => {
+        const valorGrade = parseInt(qtdGrade, 10);
+        if (isNaN(valorGrade) || valorGrade < 0) return;
+
+        const newPending = { ...pendingChanges };
+        variacoes.forEach(v => {
+            const currentQtdIni = pendingChanges[v.id]?.qtdIni ?? (v.quantidadeInicial || v.quantidade);
+            const diff = valorGrade - v.quantidade;
+            const suggestedQtdIni = diff > 0 ? currentQtdIni + diff : currentQtdIni;
+            
+            newPending[v.id] = {
+                qtd: valorGrade,
+                qtdIni: suggestedQtdIni
+            };
+        });
+        
+        setPendingChanges(newPending);
+        setQtdGrade('');
+        toast.info('Grade aplicada! Confirme para salvar.');
     };
 
     const saveChanges = async () => {
@@ -234,6 +256,27 @@ export function ModeloPadronizadoCard({
                     {modoAuditoria ? (
                         /* — Audit Mode View — */
                         <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                            <div className="flex gap-1.5 items-end">
+                                <div className="flex-1">
+                                    <Label className="text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Igualar Grade</Label>
+                                    <Input
+                                        type="number"
+                                        placeholder="Qtd"
+                                        className="h-8 text-xs font-bold"
+                                        value={qtdGrade}
+                                        onChange={e => setQtdGrade(e.target.value)}
+                                    />
+                                </div>
+                                <Button 
+                                    size="sm" 
+                                    variant="secondary" 
+                                    className="h-8 px-2 text-[10px] font-bold uppercase"
+                                    onClick={handleApplyGrade}
+                                >
+                                    Aplicar
+                                </Button>
+                            </div>
+
                             <div className="grid grid-cols-4 gap-1.5">
                                 {variacoes.map(v => {
                                     const pending = pendingChanges[v.id];
