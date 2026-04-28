@@ -91,17 +91,19 @@ export const useMassSending = () => {
     };
 
     const savePerfilConfig = async (config: {
-        limite_diario_mensagens: number;
-        pausa_inteligente: boolean;
+        limite_diario_mensagens?: number;
+        pausa_inteligente?: boolean;
+        saudacoes_personalizadas?: string[];
     }) => {
-        if (!user?.id) return;
+        if (!user?.id) return { error: null as any };
         const { error } = await supabase
             .from('perfil_configuracoes')
             .upsert(
-                { user_id: user.id, ...config },
+                { user_id: user.id, ...config } as any,
                 { onConflict: 'user_id' },
             );
         if (error) console.error('[perfil_configuracoes] save failed:', error);
+        return { error };
     };
 
     const saveCampanhaHistorico = async (dados: {
