@@ -95,6 +95,8 @@ Deno.serve(async (req) => {
       };
     }
 
+    console.log(`[send-whatsapp] -> ${type} to ${phone} (fileName=${fileName})`);
+
     const zapiResponse = await fetch(zapiUrl, {
       method: "POST",
       headers: {
@@ -107,7 +109,7 @@ Deno.serve(async (req) => {
     const zapiData = await zapiResponse.json();
 
     if (!zapiResponse.ok) {
-      console.error("Z-API error:", zapiData);
+      console.error(`[send-whatsapp] Z-API error (${zapiResponse.status}) for ${phone}:`, zapiData);
       return new Response(
         JSON.stringify({ error: "Erro ao enviar mensagem", details: zapiData }),
         {
@@ -116,6 +118,8 @@ Deno.serve(async (req) => {
         }
       );
     }
+
+    console.log(`[send-whatsapp] OK ${phone} messageId=${zapiData?.messageId ?? zapiData?.zaapId ?? 'n/a'}`);
 
     return new Response(JSON.stringify({ success: true, data: zapiData }), {
       status: 200,

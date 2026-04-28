@@ -311,16 +311,18 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
 
   const registrarEnvio = async (clienteId: string, catalogoId: string) => {
     if (!user?.id) return;
-    try {
-      await supabase.from('catalogo_envios').insert({
-        user_id: user.id,
-        cliente_id: clienteId,
-        catalogo_id: catalogoId,
-      });
-    } catch (err) {
-      console.error('Erro ao registrar envio:', err);
+    const { error } = await supabase.from('catalogo_envios').insert({
+      user_id: user.id,
+      cliente_id: clienteId,
+      catalogo_id: catalogoId,
+    });
+    if (error) {
+      // Não lança — só loga. Falha aqui não deve abortar a transmissão,
+      // mas precisa ficar visível pra diagnóstico.
+      console.error('[catalogo_envios] insert failed:', error, { clienteId, catalogoId });
     }
   };
+
 
   const processNext = async (index: number) => {
     if (isProcessingRef.current) return;

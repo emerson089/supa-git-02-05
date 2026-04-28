@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      blacklist: {
+        Row: {
+          created_at: string
+          id: string
+          motivo: string
+          origem: string
+          telefone: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          motivo?: string
+          origem?: string
+          telefone: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          motivo?: string
+          origem?: string
+          telefone?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      campanhas_historico: {
+        Row: {
+          catalogo_id: string | null
+          data_disparo: string
+          falhas: number
+          filtros_aplicados: Json
+          id: string
+          nome_campanha: string
+          sucessos: number
+          total_contatos: number
+          user_id: string
+          velocidade: string
+        }
+        Insert: {
+          catalogo_id?: string | null
+          data_disparo?: string
+          falhas?: number
+          filtros_aplicados?: Json
+          id?: string
+          nome_campanha: string
+          sucessos?: number
+          total_contatos?: number
+          user_id: string
+          velocidade?: string
+        }
+        Update: {
+          catalogo_id?: string | null
+          data_disparo?: string
+          falhas?: number
+          filtros_aplicados?: Json
+          id?: string
+          nome_campanha?: string
+          sucessos?: number
+          total_contatos?: number
+          user_id?: string
+          velocidade?: string
+        }
+        Relationships: []
+      }
       catalogo_envios: {
         Row: {
           catalogo_id: string
@@ -1010,6 +1076,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      perfil_configuracoes: {
+        Row: {
+          limite_diario_mensagens: number
+          pausa_inteligente: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          limite_diario_mensagens?: number
+          pausa_inteligente?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          limite_diario_mensagens?: number
+          pausa_inteligente?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       precos_por_local: {
         Row: {
