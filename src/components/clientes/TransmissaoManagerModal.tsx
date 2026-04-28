@@ -73,11 +73,6 @@ const normalizePhoneE164 = (raw: string): { valid: boolean; phone: string } => {
   return { valid: false, phone: '' };
 };
 
-const gerarSaudacao = (nome: string): string => {
-  const saudacao = SAUDACOES[Math.floor(Math.random() * SAUDACOES.length)];
-  return saudacao.replace('{nome}', nome);
-};
-
 export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = ({
   open,
   onOpenChange,
@@ -87,7 +82,7 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
   const { user } = useAuth();
   const { catalogos, loading: loadingCatalogos } = useCatalogos();
   const { marcarContato } = useClienteContatos();
-  const { isBlacklisted, saveCampanhaHistorico } = useMassSending();
+  const { isBlacklisted, saveCampanhaHistorico, getPerfilConfig, savePerfilConfig } = useMassSending();
   const isProcessingRef = useRef(false);
 
   // States fundamentais
