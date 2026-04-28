@@ -1,92 +1,68 @@
-## Diagnóstico
+## Objetivo
 
-A transmissão **está disparando mensagens** (a tela mostra "3 entregues / 0 falhas" e os envios para Ionara, Agenir e Paula apareceram nos logs), mas existem **dois bugs sérios de persistência** que comprometem o controle do disparo:
+Tornar a lista de **saudações aleatórias** totalmente configurável pelo usuário, com um campo dedicado dentro do modal de Envio em Massa (`TransmissaoManagerModal`), substituindo a lista hardcoded atual de 20 frases.
 
-### Bug 1 — Tabela `campanhas_historico` não existe
-O hook `useMassSending` chama `saveCampanhaHistorico` ao final da transmissão e também `getEnviosHojeCount` para mostrar "X enviados hoje". Verifiquei no banco:
-- Existem só `catalogos` e `catalogo_envios`.
-- `campanhas_historico`, `blacklist` e `perfil_configuracoes` **não existem**.
-- Resultado: toda chamada falha silenciosamente (`as any` esconde o erro), o "enviados hoje" sempre retorna 0, blacklist nunca bloqueia ninguém, e nenhum histórico é salvo.
+## Como vai funcionar (visão do usuário)
 
-### Bug 2 — Coluna errada em `catalogo_envios`
-O `useMassSending` e o filtro de "já receberam" assumem `created_at`, mas a coluna real é `enviado_em`. O insert via `supabase.from('catalogo_envios').insert(...)` funciona (default), mas qualquer query baseada em `created_at` quebra.
+Dentro do modal **Envio em Massa**, será adicionado um novo bloco recolhível chamado **"Saudações Aleatórias"** com:
 
-Confirmação adicional: `select count(*) from catalogo_envios where enviado_em >= now() - interval '1 hour'` retornou **0**. Ou seja, **mesmo com a UI mostrando "3 entregues", nenhum registro foi gravado em `catalogo_envios`**. O `registrarEnvio` em `TransmissaoManagerModal.tsx` está chamando `.insert(...)` sem `.select()` nem checagem — o erro está sendo engolido pelo `try/catch` que só faz `console.error`.
+- Um **textarea** editável onde cada **linha = uma saudação**.
+- Suporte a tags `{nome}`, `{cidade}`, `{estado}`, `{excursao}`.
+- Botões: **Salvar**, **Restaurar Padrão** (volta às 20 frases atuais) e **Adicionar Linha**.
+- Contador mostrando quantas saudações estão ativas.
+- Dica visual explicando que a saudação só é prefixada quando a mensagem do catálogo **não contém** `{nome}`.
 
-A causa mais provável do insert falhar: política de RLS na tabela `catalogo_envios` está bloqueando, ou falta a coluna esperada. Vou validar com `select * from catalogo_envios limit 1` durante a implementação.
+As saudações ficam salvas por usuário no banco e são carregadas automaticamente toda vez que o modal abrir. Se o usuário não tiver nenhuma personalizada, o sistema usa as 20 saudações padrão.
 
-### Bug 3 — Logs do `send-whatsapp` vazios
-Não há logs recentes do edge function `send-whatsapp` no period analisado, embora a UI mostre envios. Isso pode indicar:
-- Os logs ainda não foram indexados (delay de analytics), OU
-- A função está sendo chamada mas sem `console.log` no caminho de sucesso.
+## Onde aparece
 
-Vou verificar novamente após a correção e adicionar logs estruturados se necessário.
+- **Apenas no modal de Envio em Massa** (`TransmissaoManagerModal`), conforme solicitado.
+- O envio individual (botão de catálogo no card do cliente — `WhatsAppCatalogButton`) **continua usando sua lista curta atual** (sem alterações), pois o pedido é específico para a aba de envio em massa.
 
-## O que vamos fazer
+## Detalhes técnicos
 
-### 1. Criar as tabelas faltantes (migration)
+**1. Banco de dados (migration)**
 
-```text
-campanhas_historico
-  - id (uuid pk)
-  - user_id (uuid, ref auth.users)
-  - nome_campanha (text)
-  - catalogo_id (uuid null)
-  - total_contatos (int)
-  - sucessos (int)
-  - falhas (int)
-  - filtros_aplicados (jsonb)
-  - velocidade (text)
-  - data_disparo (timestamptz default now())
+Adicionar coluna `saudacoes_personalizadas` em `perfil_configuracoes`:
 
-blacklist
-  - id (uuid pk)
-  - user_id (uuid)
-  - telefone (text)
-  - motivo (text)
-  - origem (text)
-  - created_at (timestamptz default now())
-  - unique(user_id, telefone)
-
-perfil_configuracoes
-  - user_id (uuid pk)
-  - limite_diario_mensagens (int default 100)
-  - pausa_inteligente (bool default true)
-  - updated_at (timestamptz default now())
+```sql
+ALTER TABLE public.perfil_configuracoes
+ADD COLUMN IF NOT EXISTS saudacoes_personalizadas text[] NOT NULL DEFAULT '{}';
 ```
 
-Todas com RLS: o usuário autenticado só lê/escreve registros próprios (`user_id = auth.uid()`).
+A tabela já tem RLS por `user_id = auth.uid()`, então herda as políticas existentes.
 
-### 2. Corrigir referência de coluna em `catalogo_envios`
+**2. Hook `useMassSending.ts`**
 
-Em `useMassSending.ts` e qualquer query, trocar `created_at` por `enviado_em`. Validar que o `insert` em `registrarEnvio` (TransmissaoManagerModal.tsx linha 312-323) está realmente persistindo — se RLS estiver bloqueando, ajustar a policy para permitir insert quando `user_id = auth.uid()`.
+- Estender `getPerfilConfig` / `savePerfilConfig` para incluir `saudacoes_personalizadas: string[]`.
+- Adicionar helper `getSaudacoes()` que retorna o array salvo OU o `SAUDACOES_PADRAO` quando vazio.
 
-### 3. Tornar erros visíveis em vez de silenciosos
+**3. Componente `TransmissaoManagerModal.tsx`**
 
-- `registrarEnvio`: passar a checar `error` retornado pelo insert e logar com toast em modo debug.
-- `useMassSending`: trocar os `console.error` mudos por throws ou retornos tipados.
-- Adicionar um `console.log` de início/fim no `send-whatsapp` para facilitar diagnóstico via logs.
+- Extrair a constante `SAUDACOES` (linha 37) para `src/lib/saudacoes-padrao.ts` exportando `SAUDACOES_PADRAO`.
+- Adicionar estado `saudacoesCustom: string[]` carregado de `perfil_configuracoes` no `useEffect` de abertura do modal.
+- Substituir os dois pontos de uso (linhas 96 e 275) por uma função `pickSaudacao()` que sorteia a partir de `saudacoesCustom.length > 0 ? saudacoesCustom : SAUDACOES_PADRAO`.
+- Novo bloco UI (entre o card de "Velocidade" e o de "Filtros"):
+  - Header com chevron expand/collapse (mesmo padrão dos outros cards do modal).
+  - `Textarea` controlado: `value={saudacoesCustom.join('\n')}` → onChange faz `split('\n')` e filtra linhas vazias no save.
+  - Botões: **Salvar saudações** (chama `savePerfilConfig`), **Restaurar padrão** (preenche com `SAUDACOES_PADRAO`), **Limpar tudo**.
+  - Badge: `{count} saudações ativas`.
+  - Texto auxiliar: "Use `{nome}` para personalizar. A saudação só é adicionada quando a mensagem do catálogo não contém `{nome}`."
 
-### 4. Validar fim-a-fim
+**4. Persistência e UX**
 
-Depois das migrations e correções:
-- Disparar nova transmissão de teste pequena (3-5 contatos).
-- Verificar via SQL que `catalogo_envios` recebeu os registros.
-- Verificar que `campanhas_historico` recebeu o resumo.
-- Verificar logs do `send-whatsapp` (com novos `console.log`).
+- Salvar é manual (botão), não auto-save, para evitar gravar a cada tecla.
+- Toast de sucesso/erro no save.
+- Validação leve: ignorar linhas vazias; permitir lista vazia (que cai no padrão).
 
-## Por que isso importa
+## Arquivos afetados
 
-Hoje, mesmo que o WhatsApp esteja entregando os PDFs, **o sistema está cego**:
-- O contador "X enviados hoje" sempre mostra 0.
-- O filtro "não enviar de novo para quem já recebeu este catálogo" não funciona — todos os clientes seriam reenviados na próxima campanha.
-- A blacklist (LGPD/opt-out manual) é ignorada.
-- Não há histórico de campanhas para auditoria.
+- `supabase/migrations/<novo>.sql` — adiciona coluna `saudacoes_personalizadas`.
+- `src/lib/saudacoes-padrao.ts` — novo arquivo com `SAUDACOES_PADRAO`.
+- `src/hooks/useMassSending.ts` — tipos e helper de saudações.
+- `src/components/clientes/TransmissaoManagerModal.tsx` — nova UI + leitura/escrita + uso da lista dinâmica.
 
-## Resumo das mudanças
+## Fora do escopo
 
-1. Migration criando 3 tabelas com RLS.
-2. Patch em `src/hooks/useMassSending.ts` (coluna correta, melhor tratamento de erro).
-3. Patch em `src/components/clientes/TransmissaoManagerModal.tsx` (validar insert do `registrarEnvio`).
-4. Patch em `supabase/functions/send-whatsapp/index.ts` (logs de início/fim do envio).
-5. Re-deploy do `send-whatsapp` e teste de disparo controlado.
+- Não altera `WhatsAppCatalogButton` (envio individual).
+- Não cria página separada de configuração — o campo vive dentro do próprio modal de envio em massa, conforme pedido.
