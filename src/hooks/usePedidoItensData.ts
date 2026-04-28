@@ -37,6 +37,19 @@ async function syncPedidoTotals(
   pedidoId: string,
   precomputed?: PrecomputedTotals
 ): Promise<PrecomputedTotals> {
+  // 1. Primeiro, buscar as configurações de ajuste do pedido pai (desconto e taxa)
+  // Precisamos disso para garantir que o valor_total não seja sobrescrito pelo valor bruto
+  const { data: pedidoPai, error: paiError } = await supabase
+    .from('pedidos')
+    .select('desconto, taxa_excursao')
+    .eq('id', pedidoId)
+    .maybeSingle();
+
+  if (paiError) throw paiError;
+
+  const desconto = Number(pedidoPai?.desconto) || 0;
+  const taxaExcursao = Number(pedidoPai?.taxa_excursao) || 0;
+
   let totals: PrecomputedTotals;
 
   if (precomputed) {
@@ -49,9 +62,11 @@ async function syncPedidoTotals(
 
     if (itensError) throw itensError;
 
+    const valorItensBruto = (itens || []).reduce((sum, item) => sum + (item.quantidade * item.valor_unitario), 0);
+    
     totals = {
       total_pecas: (itens || []).reduce((sum, item) => sum + item.quantidade, 0),
-      valor_total: (itens || []).reduce((sum, item) => sum + (item.quantidade * item.valor_unitario), 0),
+      valor_total: valorItensBruto + taxaExcursao - desconto,
     };
   }
 

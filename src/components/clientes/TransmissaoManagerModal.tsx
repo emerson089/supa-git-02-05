@@ -458,11 +458,12 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     toast.info('Enviando teste...');
     try {
         const cat = catalogos.find(c => c.id === selectedCatalogoId) || catalogos.find(c => c.ativo);
-        if (!cat) throw new Error('Selecione um catálogo');
+        if (!cat) throw new Error('Selecione um catálogo antes de testar.');
         
-        const { data: signed } = await supabase.storage.from('lotes').createSignedUrl(cat.file_path, 3600);
+        const { data: signed, error: storageError } = await supabase.storage.from('lotes').createSignedUrl(cat.file_path, 3600);
+        if (storageError) throw new Error(`Erro no arquivo: ${storageError.message}`);
         
-        await supabase.functions.invoke('send-whatsapp', {
+        const { data, error: functionError } = await supabase.functions.invoke('send-whatsapp', {
             body: {
                 type: 'document',
                 phone: phone.phone,
@@ -480,9 +481,13 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                 } as ClientePaginatedDB)
             }
         });
+
+        if (functionError) throw new Error(functionError.message || 'Erro no servidor de envio');
+        
         toast.success('Teste enviado com sucesso!');
-    } catch (e) {
-        toast.error('Falha no teste.');
+    } catch (e: any) {
+        console.error('Erro no teste piloto:', e);
+        toast.error(e.message || 'Falha no teste.');
     }
   };
 
@@ -698,10 +703,19 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
         <DialogFooter className="p-6 bg-secondary/20 border-t border-border flex flex-col sm:flex-row gap-3">
           {status === 'idle' && (
             <>
-              <Button variant="outline" className="h-12 rounded-2xl flex-1 border-border font-bold text-muted-foreground" onClick={handleTestSend}>
+              <Button 
+                variant="outline" 
+                className="h-12 rounded-2xl flex-1 border-border font-bold text-muted-foreground" 
+                onClick={handleTestSend}
+                disabled={!selectedCatalogoId}
+              >
                 <Smartphone size={18} className="mr-2" /> Teste Piloto
               </Button>
-              <Button onClick={handleStart} className="h-12 rounded-2xl flex-[2] bg-primary hover:bg-primary/90 text-white font-black shadow-xl shadow-primary/20">
+              <Button 
+                onClick={handleStart} 
+                className="h-12 rounded-2xl flex-[2] bg-primary hover:bg-primary/90 text-white font-black shadow-xl shadow-primary/20"
+                disabled={!selectedCatalogoId || total === 0}
+              >
                 <Play size={18} className="mr-2 fill-current" />
                 Iniciar Agora
               </Button>
