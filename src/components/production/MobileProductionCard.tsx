@@ -82,7 +82,7 @@ export function MobileProductionCard({
   const stageProgress = ((currentStageIndex + 1) / STAGES.length) * 100;
   const currentStageLabel = STAGES[currentStageIndex]?.label || lot.processo_atual;
 
-  const { dias, corClasse, label: tempoLabel } = useTempoNaEtapa(lot.updated_at);
+  const { dias, corClasse, label: tempoLabel } = useTempoNaEtapa(lot.updated_at, lot.etapa_iniciada_em);
 
   return (
     <Card className={cn(

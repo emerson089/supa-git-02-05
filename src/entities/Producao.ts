@@ -32,6 +32,8 @@ export interface ProducaoData {
   pecas_com_defeito?: number | null;
   quantidade_aprovada?: number | null;
   status_defeitos?: StatusDefeitos | null;
+  // Timestamp preciso de quando o lote entrou na etapa atual
+  etapa_iniciada_em?: string | null;
 }
 
 export interface ProducaoInsert {
@@ -64,6 +66,7 @@ export interface ProducaoUpdate {
   pecas_com_defeito?: number | null;
   quantidade_aprovada?: number | null;
   status_defeitos?: StatusDefeitos | null;
+  etapa_iniciada_em?: string | null;
 }
 
 // Helper to convert database row to ProducaoData

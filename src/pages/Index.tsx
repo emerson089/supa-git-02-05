@@ -251,7 +251,11 @@ const Index = () => {
 
     try {
       // Update database with new stage + responsavel + quantidade
-      const updateData: Record<string, any> = { processo_atual: newStage };
+      // etapa_iniciada_em registra o momento exato da entrada na nova etapa
+      const updateData: Record<string, any> = {
+        processo_atual: newStage,
+        etapa_iniciada_em: new Date().toISOString(),
+      };
       if (data.responsavel) {
         updateData.responsavel = data.responsavel;
       }
@@ -384,8 +388,11 @@ const Index = () => {
         status_defeitos: data.pecas_com_defeito > 0 ? 'pendente_conserto' : null,
       }));
 
-      // Update stage
-      await callWithRetry(() => Producao.update(lot.id, { processo_atual: 'Vendas' }));
+      // Update stage + timestamp de entrada na etapa
+      await callWithRetry(() => Producao.update(lot.id, {
+        processo_atual: 'Vendas',
+        etapa_iniciada_em: new Date().toISOString(),
+      }));
 
       // Log
       const obsParts = [

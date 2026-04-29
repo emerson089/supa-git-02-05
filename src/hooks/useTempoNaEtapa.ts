@@ -10,11 +10,11 @@ interface TempoNaEtapaResult {
 
 /**
  * Hook para calcular quantos dias o lote está na etapa atual.
- * Usa o updated_at como referência da última movimentação.
+ * Usa etapa_iniciada_em quando disponível (preciso); fallback para updated_at.
  */
-export function useTempoNaEtapa(updatedAt: string): TempoNaEtapaResult {
+export function useTempoNaEtapa(updatedAt: string, etapaIniciadaEm?: string | null): TempoNaEtapaResult {
   return useMemo(() => {
-    const dataInicio = updatedAt;
+    const dataInicio = etapaIniciadaEm || updatedAt;
     const dias = differenceInDays(new Date(), new Date(dataInicio));
     
     // Define cor baseada nos dias

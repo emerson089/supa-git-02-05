@@ -85,7 +85,7 @@ export function ProductionCard({
 
   const { signedUrl } = useSignedUrl(lot.imagem_url);
   const { config } = useLoteCustos(lot.id);
-  const { dias, corClasse, label: tempoLabel } = useTempoNaEtapa(lot.updated_at);
+  const { dias, corClasse, label: tempoLabel } = useTempoNaEtapa(lot.updated_at, lot.etapa_iniciada_em);
   
   const handleDelete = () => {
     if (window.confirm(`Tem certeza que deseja excluir o lote ${lot.id_producao}?`)) {
@@ -242,6 +242,27 @@ export function ProductionCard({
             </span>
           )}
         </div>
+
+        {/* Custo de produção + margem */}
+        {lot.total_cost != null && lot.total_cost > 0 && (
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <DollarSign size={10} />
+              Custo: <span className="font-semibold text-foreground ml-0.5">
+                R$ {lot.total_cost.toFixed(2).replace('.', ',')}
+              </span>
+            </span>
+            {precoVenda > 0 && lot.unit_cost != null && lot.unit_cost > 0 && (() => {
+              const margem = ((precoVenda - lot.unit_cost) / precoVenda) * 100;
+              const cor = margem >= 40 ? 'text-emerald-600' : margem >= 20 ? 'text-amber-600' : 'text-red-500';
+              return (
+                <span className={`text-[10px] font-bold ${cor}`}>
+                  {margem.toFixed(0)}% margem
+                </span>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       {/* Stage Progress Bar */}
