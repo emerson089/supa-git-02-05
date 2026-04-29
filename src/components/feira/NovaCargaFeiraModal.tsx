@@ -158,13 +158,26 @@ export function NovaCargaFeiraModal({
 
   const gradeSizes: string[] = useMemo(() => {
     if (!selectedModel) return [];
+    
+    // Obter apenas tamanhos que possuem alguma unidade no estoque central
+    // Isso evita que tamanhos zerados "travem" a funcionalidade de adicionar grade completa
+    const tamanhosDisponiveis = selectedModel.variacoes
+      .filter(v => getDisponivelCentral(v.id) > 0)
+      .map(v => v.tamanho);
+
     const preDefinidas = selectedModel.meta.grades?.[0]?.itens;
     if (preDefinidas?.length) {
-      return preDefinidas.map(i => i.tamanho).sort(compararTamanhos);
+      // Se houver grade pré-definida, filtramos para manter apenas o que TEM estoque
+      // Isso permite que o usuário adicione "grades completas" do que está disponível
+      return preDefinidas
+        .map(i => i.tamanho)
+        .filter(t => tamanhosDisponiveis.includes(t))
+        .sort(compararTamanhos);
     }
-    // sem grades pré-definidas: usa todas as variações disponíveis como grade completa
-    return selectedModel.variacoes.map(v => v.tamanho).sort(compararTamanhos);
-  }, [selectedModel]);
+    
+    // Sem grades pré-definidas: a grade completa é o conjunto de tudo que tem estoque
+    return tamanhosDisponiveis.sort(compararTamanhos);
+  }, [selectedModel, getDisponivelCentral]);
 
   // Cálculo de estoque e totais
   const stats = useMemo(() => {
