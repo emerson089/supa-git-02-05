@@ -182,13 +182,19 @@ export default function Feira() {
   // Wrapper com fallback: quando não há registro em estoque_por_local (sincronização
   // incompleta), usa a quantidade de estoque_itens diretamente para evitar "Máximo: 0"
   const getDisponivelCentral = useCallback((itemId: string): number => {
-    const temRegistro = estoquePorLocal.some(e => e.itemId === itemId);
-    if (!temRegistro) {
+    const central = locais?.find(l => l.tipo === 'central');
+    const registroCentral = estoquePorLocal.find(e => e.itemId === itemId && e.localId === central?.id);
+    
+    // Se não existe registro específico NO CENTRAL, usamos o total do item como fallback
+    // (Isso lida com itens recém-criados ou sincronizações parciais)
+    if (!registroCentral) {
       const item = produtosAcabados.find(p => p.id === itemId);
       return item?.quantidade ?? 0;
     }
-    return _getDisponivelCentral(itemId);
-  }, [_getDisponivelCentral, estoquePorLocal, produtosAcabados]);
+    
+    // Se existe registro no central, usamos o valor real (quantidade - reservada)
+    return Math.max(0, registroCentral.quantidade - registroCentral.quantidadeReservada);
+  }, [estoquePorLocal, locais, produtosAcabados]);
 
   const periodoEhHoje = periodo.tipo === 'hoje';
 
