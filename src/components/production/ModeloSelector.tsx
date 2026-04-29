@@ -17,7 +17,8 @@ interface ModeloSelectorProps {
 
 function ModeloCard({ modelo, onSelect }: { modelo: ModeloZerado; onSelect: () => void }) {
   const { signedUrl, loading } = useSignedUrl(modelo.imagem_url);
-  const zerado = modelo.quantidade === 0;
+  const total = modelo.quantidadeTotal ?? modelo.quantidade;
+  const zerado = total === 0;
 
   return (
     <button
@@ -35,7 +36,7 @@ function ModeloCard({ modelo, onSelect }: { modelo: ModeloZerado; onSelect: () =
           ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
           : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
       )}>
-        {zerado ? 'Zerado' : `${modelo.quantidade} pçs`}
+        {zerado ? 'Zerado' : `${total} pçs`}
       </span>
 
       <div className="w-full aspect-square bg-muted rounded-md overflow-hidden mb-2 flex items-center justify-center">
