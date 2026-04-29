@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUsers } from '@/hooks/useUsers';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Table,
   TableBody,
@@ -52,12 +54,12 @@ import { UserLocationManager } from '@/components/usuarios/UserLocationManager';
 import { MobileUserCard } from '@/components/usuarios/MobileUserCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { 
-  Plus, 
-  MoreHorizontal, 
-  UserPlus, 
-  Shield, 
-  Ban, 
+import {
+  Plus,
+  MoreHorizontal,
+  UserPlus,
+  Shield,
+  Ban,
   CheckCircle,
   Key,
   Loader2,
@@ -66,6 +68,8 @@ import {
   Search,
   Trash2,
   MapPin,
+  AlertTriangle,
+  ShieldOff,
 } from 'lucide-react';
 import { AppRole, ROLE_DISPLAY_NAMES } from '@/types/roles';
 import { useRole } from '@/contexts/RoleContext';
@@ -74,7 +78,8 @@ import { ptBR } from 'date-fns/locale';
 
 export default function ConfigUsuarios() {
   const isMobile = useIsMobile();
-  const { profile: currentUserProfile } = useRole();
+  const navigate = useNavigate();
+  const { profile: currentUserProfile, isAdmin, role } = useRole();
   const { 
     users, 
     loading, 
@@ -108,6 +113,30 @@ export default function ConfigUsuarios() {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  // Guard: só admins podem acessar esta página
+  if (role !== null && !isAdmin) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        {!isMobile && <AppSidebar />}
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center space-y-4 max-w-sm">
+            <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+              <ShieldOff className="h-8 w-8 text-destructive" />
+            </div>
+            <h2 className="text-xl font-bold">Acesso Restrito</h2>
+            <p className="text-muted-foreground text-sm">
+              Apenas administradores podem gerenciar usuários.
+            </p>
+            <Button variant="outline" onClick={() => navigate(-1)}>
+              Voltar
+            </Button>
+          </div>
+        </main>
+        {isMobile && <BottomNavigation />}
+      </div>
+    );
+  }
 
   const filteredUsers = users.filter(user => {
     const query = searchQuery.toLowerCase();
@@ -332,10 +361,11 @@ export default function ConfigUsuarios() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Nome</TableHead>
+                        <TableHead>Usuário</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead>Role</TableHead>
+                        <TableHead>Perfil</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Criado em</TableHead>
                         <TableHead>Último Acesso</TableHead>
                         <TableHead className="w-[50px]"></TableHead>
                       </TableRow>
@@ -343,23 +373,40 @@ export default function ConfigUsuarios() {
                     <TableBody>
                       {filteredUsers.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                             {searchQuery ? 'Nenhum usuário encontrado' : 'Nenhum usuário cadastrado'}
                           </TableCell>
                         </TableRow>
                       ) : (
                         filteredUsers.map((user) => (
                           <TableRow key={user.id}>
-                            <TableCell className="font-medium">
-                              {user.nome || '-'}
-                              {user.user_id === currentUserProfile?.user_id && (
-                                <Badge variant="outline" className="ml-2 text-xs">Você</Badge>
-                              )}
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8 shrink-0">
+                                  <AvatarFallback className="text-xs font-bold bg-primary/10 text-primary">
+                                    {(user.nome || user.email).slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-medium text-sm">{user.nome || '-'}</span>
+                                    {user.user_id === currentUserProfile?.user_id && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">Você</Badge>
+                                    )}
+                                    {user.must_change_password && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 flex items-center gap-0.5">
+                                        <AlertTriangle className="h-2.5 w-2.5" />
+                                        Senha pendente
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             </TableCell>
-                            <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">{user.email}</TableCell>
                             <TableCell>
                               <Badge variant={getRoleBadgeVariant(user.role)}>
-                                {user.role ? ROLE_DISPLAY_NAMES[user.role] : 'Sem role'}
+                                {user.role ? ROLE_DISPLAY_NAMES[user.role] : 'Sem perfil'}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -367,8 +414,13 @@ export default function ConfigUsuarios() {
                                 {user.status === 'ativo' ? 'Ativo' : 'Inativo'}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {user.last_sign_in_at 
+                            <TableCell className="text-muted-foreground text-sm">
+                              {user.created_at
+                                ? format(new Date(user.created_at), "dd/MM/yyyy", { locale: ptBR })
+                                : '-'}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {user.last_sign_in_at
                                 ? format(new Date(user.last_sign_in_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
                                 : 'Nunca'}
                             </TableCell>
@@ -389,7 +441,7 @@ export default function ConfigUsuarios() {
                                     disabled={user.user_id === currentUserProfile?.user_id}
                                   >
                                     <Shield className="h-4 w-4 mr-2" />
-                                    Alterar Role
+                                    Alterar Perfil
                                   </DropdownMenuItem>
                                   {user.role === 'vendedor' && (
                                     <DropdownMenuItem
@@ -513,9 +565,9 @@ export default function ConfigUsuarios() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select 
-                value={newUserRole} 
+              <Label htmlFor="role">Perfil de acesso</Label>
+              <Select
+                value={newUserRole}
                 onValueChange={(value) => setNewUserRole(value as AppRole)}
                 disabled={submitting}
               >
@@ -546,15 +598,15 @@ export default function ConfigUsuarios() {
       <Dialog open={isEditingRole} onOpenChange={setIsEditingRole}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Alterar Role</DialogTitle>
+            <DialogTitle>Alterar Perfil</DialogTitle>
             <DialogDescription>
-              Altere o role do usuário {selectedUser?.nome || selectedUser?.email}. 
+              Altere o perfil de acesso de {selectedUser?.nome || selectedUser?.email}.
               O usuário será deslogado automaticamente.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Novo Role</Label>
+              <Label>Novo Perfil</Label>
               <Select 
                 value={newUserRole} 
                 onValueChange={(value) => setNewUserRole(value as AppRole)}
