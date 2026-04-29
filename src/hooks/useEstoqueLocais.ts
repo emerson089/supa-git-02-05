@@ -504,25 +504,41 @@ export function useSincronizarEstoqueInicial() {
 
       if (!itens || itens.length === 0) return;
 
-      // Para cada item, verificar se já existe em estoque_por_local
+      // Para cada item, garantir que o Central reflita o estoque real
       for (const item of itens) {
-        const { data: existing } = await supabase
-          .from('estoque_por_local')
-          .select('id')
-          .eq('item_id', item.id)
-          .eq('local_id', central.id)
-          .single();
+        const totalItem = Number(item.quantidade);
 
-        if (!existing) {
+        // Buscar todos os registros por local para este item
+        const { data: todosLocais } = await supabase
+          .from('estoque_por_local')
+          .select('id, local_id, quantidade')
+          .eq('item_id', item.id);
+
+        const somaLocais = (todosLocais || []).reduce((sum, e) => sum + Number(e.quantidade), 0);
+        const centralExisting = (todosLocais || []).find(e => e.local_id === central.id);
+
+        if (!centralExisting) {
+          // Nunca teve registro no Central: depositar a diferença (estoque não distribuído)
+          const naoDistribuido = Math.max(0, totalItem - somaLocais);
+          if (naoDistribuido > 0 || somaLocais === 0) {
+            await supabase
+              .from('estoque_por_local')
+              .insert({
+                user_id: user.id,
+                item_id: item.id,
+                local_id: central.id,
+                quantidade: naoDistribuido > 0 ? naoDistribuido : totalItem,
+                quantidade_reservada: 0,
+              });
+          }
+        } else if (somaLocais < totalItem) {
+          // Central existe mas soma dos locais ficou abaixo do total
+          // (reposição foi adicionada ao estoque_itens mas não distribuída)
+          const diferenca = totalItem - somaLocais;
           await supabase
             .from('estoque_por_local')
-            .insert({
-              user_id: user.id,
-              item_id: item.id,
-              local_id: central.id,
-              quantidade: Number(item.quantidade),
-              quantidade_reservada: 0,
-            });
+            .update({ quantidade: Number(centralExisting.quantidade) + diferenca })
+            .eq('id', centralExisting.id);
         }
       }
     },
