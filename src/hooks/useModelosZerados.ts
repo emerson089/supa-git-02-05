@@ -5,6 +5,7 @@ export interface ModeloZerado {
   id: string;
   nome: string;
   imagem_url: string | null;
+  quantidade: number;
 }
 
 export function useModelosZerados(search?: string) {
@@ -16,10 +17,10 @@ export function useModelosZerados(search?: string) {
 
       let query = supabase
         .from('estoque_itens')
-        .select('id, nome, imagem_url')
+        .select('id, nome, imagem_url, quantidade')
         .eq('user_id', user.id)
         .eq('tipo', 'acabado')
-        .eq('quantidade', 0)
+        .order('quantidade', { ascending: true })
         .order('nome');
 
       if (search && search.trim()) {

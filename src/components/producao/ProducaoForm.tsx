@@ -35,6 +35,8 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
   const [showSizePicker, setShowSizePicker] = useState(false);
   const [sizeRows, setSizeRows] = useState<Array<{ tamanho: string; quantidade: number; prioridade: boolean }>>([]);
 
+  const [selectedProdutoId, setSelectedProdutoId] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     id_producao: '',
     modelo_nome_cache: '',
@@ -98,6 +100,7 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
       imagem_url: modelo.imagemUrl,
     }));
     setSelectedModeloId(modelo.id);
+    setSelectedProdutoId(modelo.id);
     setSizeRows([]);
     toast.success('Modelo selecionado! Complete os demais campos.');
   };
@@ -203,7 +206,13 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
               : prefixParts.join(' | '))
           : formData.observacoes;
 
-        await onSave({ ...formData, quantidade: 0, observacoes: obsWithMeta, prioridade: 'normal' });
+        await onSave({
+          ...formData,
+          quantidade: totalPecas > 0 ? totalPecas : 0,
+          observacoes: obsWithMeta,
+          prioridade: 'normal',
+          ...(selectedProdutoId ? { produto_id: selectedProdutoId } : {}),
+        });
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao salvar. Tente novamente.';
@@ -549,24 +558,26 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="processo_atual">Etapa Atual</Label>
-          <Select
-            value={formData.processo_atual}
-            onValueChange={(value) => setFormData({ ...formData, processo_atual: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione a etapa" />
-            </SelectTrigger>
-            <SelectContent>
-              {STAGES.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id}>
-                  {stage.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {lote && (
+          <div className="space-y-2">
+            <Label htmlFor="processo_atual">Etapa Atual</Label>
+            <Select
+              value={formData.processo_atual}
+              onValueChange={(value) => setFormData({ ...formData, processo_atual: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a etapa" />
+              </SelectTrigger>
+              <SelectContent>
+                {STAGES.map((stage) => (
+                  <SelectItem key={stage.id} value={stage.id}>
+                    {stage.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="responsavel">Responsável</Label>
@@ -576,7 +587,7 @@ export default function ProducaoForm({ lote, onSave, onCancel }: ProducaoFormPro
             etapaAtual={formData.processo_atual}
           />
         </div>
-        </div>
+      </div>
 
       <div className="space-y-2">
         <Label>Imagem do Lote</Label>
