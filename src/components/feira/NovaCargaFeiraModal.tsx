@@ -156,10 +156,15 @@ export function NovaCargaFeiraModal({
     [modelos, selectedModelId]
   );
 
-  const gradeSizes: string[] = useMemo(
-    () => selectedModel?.meta.grades?.[0]?.itens.map(i => i.tamanho).sort(compararTamanhos) ?? [],
-    [selectedModel]
-  );
+  const gradeSizes: string[] = useMemo(() => {
+    if (!selectedModel) return [];
+    const preDefinidas = selectedModel.meta.grades?.[0]?.itens;
+    if (preDefinidas?.length) {
+      return preDefinidas.map(i => i.tamanho).sort(compararTamanhos);
+    }
+    // sem grades pré-definidas: usa todas as variações disponíveis como grade completa
+    return selectedModel.variacoes.map(v => v.tamanho).sort(compararTamanhos);
+  }, [selectedModel]);
 
   // Cálculo de estoque e totais
   const stats = useMemo(() => {
