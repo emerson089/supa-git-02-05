@@ -1,4 +1,4 @@
-import { Search, LayoutGrid, List, Plus, RefreshCw, Download, Upload, DollarSign, FileText, Image, ChevronDown, Filter, X } from 'lucide-react';
+import { Search, LayoutGrid, List, Plus, RefreshCw, Download, Upload, DollarSign, FileText, Image, ChevronDown, Filter, X, BarChart2 } from 'lucide-react';
 import { ViewMode } from '@/types/production';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -111,6 +111,9 @@ export function ProductionHeader({
             </button>
             <button onClick={() => onViewModeChange('list')} className={`p-2.5 rounded-lg transition-all duration-200 ${viewMode === 'list' ? 'text-primary bg-muted/50 shadow-inner' : 'text-muted-foreground hover:text-foreground'}`} title="Visualização Lista">
               <List size={18} />
+            </button>
+            <button onClick={() => onViewModeChange('metricas')} className={`p-2.5 rounded-lg transition-all duration-200 ${viewMode === 'metricas' ? 'text-primary bg-muted/50 shadow-inner' : 'text-muted-foreground hover:text-foreground'}`} title="Métricas e Throughput">
+              <BarChart2 size={18} />
             </button>
           </div>
 

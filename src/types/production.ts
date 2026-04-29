@@ -20,7 +20,7 @@ export interface Stage {
   bgColor: string;
 }
 
-export type ViewMode = 'kanban' | 'list';
+export type ViewMode = 'kanban' | 'list' | 'metricas';
 
 export interface ChecklistAprontamento {
   botao: boolean;

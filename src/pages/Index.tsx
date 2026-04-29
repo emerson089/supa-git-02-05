@@ -12,6 +12,7 @@ import { ProductionHeader } from '@/components/production/ProductionHeader';
 import { KanbanBoard } from '@/components/production/KanbanBoard';
 import { MobileKanban } from '@/components/production/MobileKanban';
 import { ListView } from '@/components/production/ListView';
+import { MetricasProducao } from '@/components/production/MetricasProducao';
 import { CustosLoteModal } from '@/components/production/CustosLoteModal';
 import { AprontamentoChecklist, isChecklistComplete } from '@/components/production/AprontamentoChecklist';
 import { ImportProducaoCSVModal } from '@/components/production/ImportProducaoCSVModal';
@@ -798,8 +799,10 @@ const Index = () => {
         />
 
         {/* Content Area */}
-        <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-6 pt-2">
-          {viewMode === 'kanban' ? (
+        <div className={`flex-1 p-4 sm:p-6 pt-2 ${viewMode === 'metricas' ? 'overflow-y-auto' : 'overflow-x-auto overflow-y-hidden'}`}>
+          {viewMode === 'metricas' ? (
+            <MetricasProducao />
+          ) : viewMode === 'kanban' ? (
             isMobile ? (
               <MobileKanban
                 lots={filteredLots}
@@ -812,8 +815,8 @@ const Index = () => {
                 onUpdateProgress={handleUpdateProgress}
               />
             ) : (
-              <KanbanBoard 
-                lots={filteredLots} 
+              <KanbanBoard
+                lots={filteredLots}
                 onMoveCard={moveCard}
                 onDragMove={handleDragMove}
                 onEditCard={handleEditCard}
