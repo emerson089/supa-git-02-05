@@ -36,7 +36,27 @@ const ConfigCatalogo = () => {
     getCampanhasHistorico, getPerfilConfig, savePerfilConfig,
   } = useMassSending();
 
-  const [activeTab, setActiveTab] = useState('gestao');
+  const STORAGE_KEY = 'envios-massa-estado';
+
+  const lerEstadoSalvo = () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const estadoSalvo = lerEstadoSalvo();
+
+  const [activeTab, setActiveTabRaw] = useState<string>(estadoSalvo?.activeTab || 'gestao');
+  const setActiveTab = (tab: string) => {
+    setActiveTabRaw(tab);
+    try {
+      const atual = lerEstadoSalvo() || {};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...atual, activeTab: tab }));
+    } catch {}
+  };
 
   // Formulário — colapsável
   const [formAberto, setFormAberto] = useState(false);
@@ -57,10 +77,24 @@ const ConfigCatalogo = () => {
   // Contadores por catálogo (quantos já receberam)
   const [enviosPorCatalogo, setEnviosPorCatalogo] = useState<Record<string, number>>({});
 
-  // Segmentação na página
+  // Segmentação na página — persistida no localStorage
   const [clientes, setClientes] = useState<any[]>([]);
-  const [filtroExcursao, setFiltroExcursao] = useState('');
-  const [filtroCategoria, setFiltroCategoria] = useState('todos');
+  const [filtroExcursao, setFiltroExcursaoRaw] = useState<string>(estadoSalvo?.filtroExcursao || '');
+  const setFiltroExcursao = (v: string) => {
+    setFiltroExcursaoRaw(v);
+    try {
+      const atual = lerEstadoSalvo() || {};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...atual, filtroExcursao: v }));
+    } catch {}
+  };
+  const [filtroCategoria, setFiltroCategoriaRaw] = useState<string>(estadoSalvo?.filtroCategoria || 'todos');
+  const setFiltroCategoria = (v: string) => {
+    setFiltroCategoriaRaw(v);
+    try {
+      const atual = lerEstadoSalvo() || {};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...atual, filtroCategoria: v }));
+    } catch {}
+  };
   const [excursoesDisponiveis, setExcursoesDisponiveis] = useState<string[]>([]);
 
   // Modal de transmissão
