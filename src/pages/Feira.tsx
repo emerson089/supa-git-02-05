@@ -39,7 +39,6 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Package, Plus, Package2, Truck, RotateCcw, ShoppingBag, DollarSign, Loader2, Minus, X, Check, Search, Trash2, RefreshCw, AlertTriangle, FileText, TrendingUp, ArrowUp, ArrowDown } from 'lucide-react';
@@ -932,8 +931,15 @@ export default function Feira() {
         </div>
       )}
 
-      <ScrollArea className="flex-1 bg-slate-50/50 dark:bg-background overflow-x-hidden">
-        <div className={cn("p-4 space-y-6", !isMobile && "p-6 space-y-6", isMobile && "pb-40")}>
+      {/* Mobile usa div simples — ScrollArea não respeita overflow-x-hidden em seu viewport interno */}
+      <div className={cn(
+        "flex-1 bg-slate-50/50 dark:bg-background",
+        isMobile ? "overflow-y-auto overflow-x-hidden w-full" : "overflow-hidden"
+      )}>
+        <div className={cn(
+          "space-y-6 w-full max-w-full",
+          isMobile ? "p-4 pb-40" : "p-6"
+        )}>
           {/* Desktop Filters (Keep here) */}
           {!isMobile && (
             <FiltroFeiraPro
@@ -1107,7 +1113,7 @@ export default function Feira() {
             <HistoricoAgrupado historico={historico} onVerDetalhes={carga => setCargaDetalhes(carga)} onExcluirCarga={handleExcluirCarga} onEstornarCarga={handleEstornarCarga} onExcluirHistorico={handleExcluirHistorico} onGerarPDF={handleOpenPDFOptions} onEditarRetorno={handleCorrigirRetorno} isLoading={isLoadingHistorico} />
           </RoleGate>
         </div>
-      </ScrollArea>
+      </div>
     </main>
 
     {isMobile && <BottomNavigation />}
