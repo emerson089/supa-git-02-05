@@ -104,14 +104,21 @@ export default function AlterarSenha() {
         return;
       }
 
-      toast.success('Senha alterada com sucesso!');
+      toast.success('Senha alterada com sucesso! Redirecionando...');
 
-      // 3. Wait for profile to refresh BEFORE navigating, otherwise
-      // ProtectedRoute will see the stale mustChangePassword=true and bounce back
-      await refreshProfile();
+      // 3. Refresh profile and navigate. We await refresh to ensure
+      // mustChangePassword is false before ProtectedRoute re-evaluates.
+      try {
+        await refreshProfile();
+      } catch (refreshErr) {
+        console.warn('Profile refresh failed, navigating anyway:', refreshErr);
+      }
 
       const landingPage = role ? ROLE_LANDING_PAGES[role] : '/';
-      navigate(landingPage, { replace: true });
+      // Small delay to let toast render and state propagate
+      setTimeout(() => {
+        navigate(landingPage, { replace: true });
+      }, 300);
 
     } catch (err) {
       console.error('Unexpected error changing password:', err);
