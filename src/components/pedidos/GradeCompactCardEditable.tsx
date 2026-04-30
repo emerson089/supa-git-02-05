@@ -46,7 +46,10 @@ export function GradeCompactCardEditable({
     const subtotal = totalPecas * valorUnitario;
 
     const handleRemoveGrupo = async () => {
-        await Promise.all(grupo.itens.map(({ item }) => onRemove(item.id)));
+        // Sequencial para evitar race conditions no cálculo de estoque
+        for (const { item } of grupo.itens) {
+            await onRemove(item.id);
+        }
     };
 
     // Agrupar e ordenar tamanhos

@@ -27,7 +27,6 @@ import { EditarRetornoCargaModal } from '@/components/feira/EditarRetornoCargaMo
 import { NovaCargaFeiraModal } from '@/components/feira/NovaCargaFeiraModal';
 import { EditarCargaModal } from '@/components/feira/EditarCargaModal';
 import { AddGradeCargaModal } from '@/components/feira/AddGradeCargaModal';
-import { RetornoEmMassaModal } from '@/components/feira/RetornoEmMassaModal';
 import { OfflineBanner } from '@/components/feira/OfflineBanner';
 import { useFeiraOffline } from '@/hooks/useFeiraOffline';
 import { RoleGate } from '@/components/RoleGate';
@@ -185,8 +184,6 @@ export default function Feira() {
   });
   const draftValidatedRef = useRef(false);
   const [showAddGrade, setShowAddGrade] = useState(false);
-  const [showRetornoEmMassa, setShowRetornoEmMassa] = useState(false);
-  const [retornoEmMassaLoading, setRetornoEmMassaLoading] = useState(false);
   const [itensRetorno, setItensRetorno] = useState<{
     itemId: string;
     quantidadeRetornada: number;
@@ -922,7 +919,7 @@ export default function Feira() {
 
       {/* Filtros Fixos no Topo - Mobile */}
       {isMobile && (
-        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/50 px-4 py-3 shadow-sm">
+        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/50 px-4 py-3 shadow-sm shrink-0">
           <FiltroFeiraPro
             filtros={filtros}
             onChange={setFiltros}
@@ -931,14 +928,13 @@ export default function Feira() {
         </div>
       )}
 
-      {/* Mobile usa div simples — ScrollArea não respeita overflow-x-hidden em seu viewport interno */}
+      {/* Conteúdo com Rolagem */}
       <div className={cn(
-        "flex-1 bg-slate-50/50 dark:bg-background",
-        isMobile ? "overflow-y-auto overflow-x-hidden w-full" : "overflow-hidden"
+        "flex-1 min-h-0 bg-slate-50/50 dark:bg-background overflow-y-auto overflow-x-hidden"
       )}>
         <div className={cn(
-          "space-y-6 w-full max-w-full",
-          isMobile ? "p-4 pb-40" : "p-6"
+          "w-full max-w-full",
+          isMobile ? "p-4 space-y-6 pb-40" : "p-6 space-y-6"
         )}>
           {/* Desktop Filters (Keep here) */}
           {!isMobile && (
@@ -964,7 +960,6 @@ export default function Feira() {
             <CargasAtivasAlerta
               cargasAtivas={todasCargasAtivas || []}
               onRegistrarRetorno={handleOpenRetornoFromHistorico}
-              onRegistrarRetornoEmMassa={todasCargasAtivas && todasCargasAtivas.length >= 2 ? () => setShowRetornoEmMassa(true) : undefined}
               onEditarCarga={hasPermission('feira.edit') && !isVendedor ? handleEditarCarga : undefined}
               onGerarPDF={hasPermission('feira.generate_pdf') ? handleOpenPDFOptions : undefined}
               periodoEhHoje={periodoEhHoje}
@@ -1470,62 +1465,6 @@ export default function Feira() {
     {/* Modal Editar Carga */}
     <EditarCargaModal carga={cargaEditar} produtos={produtosAcabados} getDisponivelCentral={getDisponivelCentral} onClose={() => setCargaEditar(null)} onSalvar={handleSalvarEdicaoCarga} isPending={editarCarga.isPending} formatCurrency={formatCurrency} />
 
-    {/* Modal Retorno em Massa */}
-    <RetornoEmMassaModal
-      open={showRetornoEmMassa}
-      cargas={(todasCargasAtivas || []).map(c => ({
-        transferenciaId: c.id,
-        titulo: c.observacoes || '',
-        horario: format(new Date(c.dataSaida), 'HH:mm'),
-        itens: c.itens.map(i => ({
-          itemId: i.itemId,
-          produtoNome: i.produtoNome || '',
-          produtoImagem: i.produtoImagem,
-          quantidadeEnviada: i.quantidadeEnviada,
-        })),
-      }))}
-      onClose={() => setShowRetornoEmMassa(false)}
-      onConfirmar={async (retornos) => {
-        setRetornoEmMassaLoading(true);
-        try {
-          for (const r of retornos) {
-            await registrarRetorno.mutateAsync({
-              transferenciaId: r.transferenciaId,
-              itensRetornados: r.itens,
-            });
-            
-            // Notificar WhatsApp para cada carga individualmente
-            const cargaOriginal = todasCargasAtivas?.find(c => c.id === r.transferenciaId);
-            if (cargaOriginal) {
-              const totalEnviado = cargaOriginal.itens.reduce((sum, i) => sum + i.quantidadeEnviada, 0);
-              const totalRetornado = r.itens.reduce((sum, i) => sum + i.quantidadeRetornada, 0);
-              const totalVendido = totalEnviado - totalRetornado;
-              const valorTotalVendido = cargaOriginal.itens.reduce((sum, i) => {
-                const ret = r.itens.find(it => it.itemId === i.itemId)?.quantidadeRetornada || 0;
-                const vend = i.quantidadeEnviada - ret;
-                const preco = i.precoUnitario || (i as any).produtoPreco || 0;
-                return sum + (vend * preco);
-              }, 0);
-
-              handleSendWhatsAppResumo({
-                titulo: cargaOriginal.observacoes || 'Carga Sem Título',
-                enviado: totalEnviado,
-                retornado: totalRetornado,
-                vendido: totalVendido,
-                valorTotal: valorTotalVendido
-              });
-            }
-          }
-          toast.success(`Retorno registrado para ${retornos.length} carga(s)!`);
-          setShowRetornoEmMassa(false);
-        } catch (error: any) {
-          toast.error(error.message || 'Erro ao registrar retorno em massa');
-        } finally {
-          setRetornoEmMassaLoading(false);
-        }
-      }}
-      isLoading={retornoEmMassaLoading}
-    />
 
     {/* Modal Opções do PDF */}
     <Dialog open={pdfOptionsModal.isOpen} onOpenChange={open => !open && setPdfOptionsModal({

@@ -166,38 +166,33 @@ export function BottomNavigation() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border z-50 md:hidden safe-area-pb">
-        <div className="relative flex justify-around items-center h-16 px-2">
+      <nav className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border/50 z-50 md:hidden pb-[env(safe-area-inset-bottom,0px)]">
+        <div className="relative flex justify-around items-center h-16 px-4">
           {/* Left items */}
-          {visibleLeftItems.map((item) => (
-            <NavItem
-              key={item.path}
-              item={item}
-              isActive={isActive(item.path)}
-              onClick={() => navigate(item.path)}
-            />
-          ))}
-
-          {/* FAB Central - Quick Actions */}
-          <div className="flex-1 flex items-center justify-center">
-            <button
-              onClick={() => setQuickActionsOpen(true)}
-              className="absolute -top-7 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgb(0,0,0,0.2)] flex items-center justify-center hover:bg-primary/90 active:scale-90 transition-all duration-300 border-[6px] border-background group"
-            >
-              <Plus size={28} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-500" />
-            </button>
+          <div className="flex flex-1 justify-around items-center h-full max-w-[40%]">
+            {visibleLeftItems.map((item) => (
+              <NavItem
+                key={item.path}
+                item={item}
+                isActive={isActive(item.path)}
+                onClick={() => navigate(item.path)}
+              />
+            ))}
           </div>
 
-          {/* Right items */}
-          {visibleRightItems.map((item) => (
-            <NavItem
-              key={item.path}
-              item={item}
-              isActive={isActive(item.path)}
-              onClick={() => navigate(item.path)}
-            />
-          ))}
+          <div className="flex-1" />
 
+          {/* Right items */}
+          <div className="flex flex-1 justify-around items-center h-full max-w-[45%]">
+            {visibleRightItems.map((item) => (
+              <NavItem
+                key={item.path}
+                item={item}
+                isActive={isActive(item.path)}
+                onClick={() => navigate(item.path)}
+              />
+            ))}
+          </div>
         </div>
       </nav>
 
