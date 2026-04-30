@@ -49,7 +49,7 @@ const emptyCliente = {
   excursao: ''
 };
 type Ordenacao = 'nome' | 'recente' | 'maior_historico';
-type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | 'novos' | 'top_pareto';
+type FiltroStatus = 'todos' | 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | 'novos' | 'top_pareto' | 'inativo_mes';
 const PAGE_SIZE = 24;
 function formatCurrency(value: number): string {
   return value.toLocaleString('pt-BR', {
@@ -850,6 +850,7 @@ export default function Clientes() {
           { key: 'frequente', label: '🔵 Frequentes', active: 'bg-blue-500 text-white shadow-blue-500/30',            inactive: 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40' },
           { key: 'risco',     label: '⚠️ Risco',       active: 'bg-rose-500 text-white shadow-rose-500/30',            inactive: 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/40' },
           { key: 'pendente',  label: '🟡 Pendentes',  active: 'bg-orange-500 text-white shadow-orange-500/30',        inactive: 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/40' },
+          { key: 'inativo_mes', label: '📉 Inativos no Mês', active: 'bg-slate-600 text-white shadow-slate-500/30', inactive: 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800' },
         ] as { key: FiltroStatus; label: string; active: string; inactive: string }[]).map(f => (
           <button
             key={f.key}

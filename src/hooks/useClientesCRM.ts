@@ -62,7 +62,7 @@ export function hasRiskAlert(stats: ClienteCRMStats | undefined): boolean {
 
 const PAGE_SIZE = 1000;
 
-async function fetchAllPedidos() {
+async function fetchAllPedidos(userId: string) {
   let allPedidos: any[] = [];
   let from = 0;
   let hasMore = true;
@@ -71,6 +71,7 @@ async function fetchAllPedidos() {
     const { data, error } = await supabase
       .from('pedidos')
       .select('cliente_id, valor_total, status_pagamento, status_pedido, created_at')
+      .eq('user_id', userId)
       .not('cliente_id', 'is', null)
       .range(from, from + PAGE_SIZE - 1);
     
@@ -95,7 +96,7 @@ export function useClientesCRM() {
     queryKey: ['clientes-crm', user?.id],
     queryFn: async () => {
       // Fetch ALL pedidos using pagination to avoid 1000 row limit
-      const pedidos = await fetchAllPedidos();
+      const pedidos = await fetchAllPedidos(user.id);
 
       const statusCancelados = ['CANCELADO', 'GOLPE', 'GOLPE CANCELADO'];
       

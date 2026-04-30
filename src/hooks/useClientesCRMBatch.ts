@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { differenceInDays } from 'date-fns';
+import { differenceInDays, startOfMonth } from 'date-fns';
 
 export interface ClienteCRMBatchStats {
   clienteId: string;
@@ -9,6 +9,7 @@ export interface ClienteCRMBatchStats {
   pedidosPagos: number;
   cancelamentos: number;
   ultimaCompra: Date | null;
+  ultimaCompraReal: Date | null;
   ultimoPedidoValor: number | null;
   ultimoPedidoStatus: string | null;
   ultimoPedidoPendenteValor: number | null;
@@ -87,6 +88,7 @@ export function useClientesCRMBatch(clienteIds: string[]) {
           pedidosPagos: 0,
           cancelamentos: 0,
           ultimaCompra: null,
+          ultimaCompraReal: null,
           ultimoPedidoValor: null,
           ultimoPedidoStatus: null,
           ultimoPedidoPendenteValor: null,
@@ -104,6 +106,7 @@ export function useClientesCRMBatch(clienteIds: string[]) {
 
         const isPago = pedido.status_pagamento?.toUpperCase() === 'PAGO';
         const isCancelado = pedido.status_pedido && statusCancelados.includes(pedido.status_pedido.toUpperCase());
+        const isPendente = pedido.status_pagamento?.toUpperCase() === 'PENDENTE' && !isCancelado;
         const valorTotal = Number(pedido.valor_total) || 0;
         const createdAt = pedido.created_at ? new Date(pedido.created_at) : null;
 
@@ -123,8 +126,13 @@ export function useClientesCRMBatch(clienteIds: string[]) {
           stats.ultimoPedidoStatus = pedido.status_pagamento || null;
         }
 
+        // Track the last REAL activity (Paid or Valid Pending)
+        const isValidActivity = isPago || (isPendente && !isCancelado);
+        if (isValidActivity && createdAt && (!stats.ultimaCompraReal || createdAt > stats.ultimaCompraReal)) {
+          stats.ultimaCompraReal = createdAt;
+        }
+
         // Track the most recent PENDING order
-        const isPendente = pedido.status_pagamento?.toUpperCase() === 'PENDENTE' && !isCancelado;
         if (isPendente && createdAt) {
           if (!stats.ultimoPedidoPendenteData || createdAt > stats.ultimoPedidoPendenteData) {
             stats.ultimoPedidoPendenteData = createdAt;
@@ -179,7 +187,7 @@ async function fetchAllClientesMinimal(userId: string) {
   while (hasMore) {
     const { data, error } = await supabase
       .from('clientes')
-      .select('id, created_at')
+      .select('id, created_at, user_id')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE_CRM - 1);
@@ -202,7 +210,7 @@ async function fetchAllClientesMinimal(userId: string) {
  * or highest total purchased for 'maior_historico' sorting).
  */
 export function useClientesCRMFilter(
-  filtroStatus: 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | 'novos' | 'top_pareto' | null,
+  filtroStatus: 'vip' | 'frequente' | 'risco' | 'pendente' | 'sem_compras' | 'novos' | 'top_pareto' | 'inativo_mes' | null,
   ordenacao?: 'nome' | 'recente' | 'maior_historico'
 ) {
   const { user } = useAuth();
@@ -234,6 +242,7 @@ export function useClientesCRMFilter(
           pedidosPagos: 0,
           cancelamentos: 0,
           ultimaCompra: null,
+          ultimaCompraReal: null,
           ultimoPedidoValor: null,
           ultimoPedidoStatus: null,
           ultimoPedidoPendenteValor: null,
@@ -268,6 +277,12 @@ export function useClientesCRMFilter(
           stats.ultimaCompra = createdAt;
           stats.ultimoPedidoValor = valorTotal;
           stats.ultimoPedidoStatus = pedido.status_pagamento || null;
+        }
+
+        // Track the last REAL activity (Paid or Valid Pending)
+        const isValidActivity = isPago || (isPendente && !isCancelado);
+        if (isValidActivity && createdAt && (!stats.ultimaCompraReal || createdAt > stats.ultimaCompraReal)) {
+          stats.ultimaCompraReal = createdAt;
         }
 
         // Track the OLDEST pending order for sorting
@@ -321,6 +336,10 @@ export function useClientesCRMFilter(
             break;
           case 'top_pareto':
             matches = stats.totalComprado >= paretoThreshold && stats.totalComprado > 0;
+            break;
+          case 'inativo_mes':
+            // Clientes que nunca compraram REALMENTE OU cuja última compra VÁLIDA foi antes do mês atual
+            matches = !stats.ultimaCompraReal || stats.ultimaCompraReal < startOfMonth(hoje);
             break;
         }
 
