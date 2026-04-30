@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+
 import { useRole } from '@/contexts/RoleContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,6 @@ export default function AlterarSenha() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({});
   
-  const { user } = useAuth();
   const { role, mustChangePassword, refreshProfile } = useRole();
   const navigate = useNavigate();
 
@@ -59,6 +58,20 @@ export default function AlterarSenha() {
     return true;
   };
 
+  const translateAuthError = (raw: string): string => {
+    const msg = raw.toLowerCase();
+    if (msg.includes('different from the old password') || msg.includes('same_password')) {
+      return 'A nova senha precisa ser diferente da senha temporária que você recebeu.';
+    }
+    if (msg.includes('weak') || msg.includes('password should be')) {
+      return 'Senha muito fraca. Use letras maiúsculas, minúsculas e números.';
+    }
+    if (msg.includes('session') || msg.includes('jwt')) {
+      return 'Sua sessão expirou. Faça login novamente.';
+    }
+    return raw || 'Erro ao atualizar senha';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -68,37 +81,41 @@ export default function AlterarSenha() {
     setLoading(true);
 
     try {
-      // Update password
+      // 1. Update auth password
       const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword,
       });
 
       if (updateError) {
-        toast.error(updateError.message || 'Erro ao atualizar senha');
+        toast.error(translateAuthError(updateError.message));
         setLoading(false);
         return;
       }
 
-      // Update profile to mark password changed
-      if (user) {
-        await supabase
-          .from('profiles')
-          .update({ must_change_password: false })
-          .eq('user_id', user.id);
+      // 2. Clear must_change_password via security-definer RPC
+      // (direct UPDATE is blocked by fn_protect_must_change_password trigger
+      // for non-admin users — the RPC bypasses it safely)
+      const { error: rpcError } = await supabase.rpc('mark_password_changed');
+
+      if (rpcError) {
+        console.error('Failed to mark password changed:', rpcError);
+        toast.error('Senha alterada, mas houve um erro ao atualizar seu perfil. Faça login novamente.');
+        setLoading(false);
+        return;
       }
 
       toast.success('Senha alterada com sucesso!');
-      
-      // Refresh profile to update mustChangePassword
+
+      // 3. Wait for profile to refresh BEFORE navigating, otherwise
+      // ProtectedRoute will see the stale mustChangePassword=true and bounce back
       await refreshProfile();
 
-      // Redirect to landing page
       const landingPage = role ? ROLE_LANDING_PAGES[role] : '/';
       navigate(landingPage, { replace: true });
 
-    } catch {
+    } catch (err) {
+      console.error('Unexpected error changing password:', err);
       toast.error('Erro ao alterar senha. Tente novamente.');
-    } finally {
       setLoading(false);
     }
   };
@@ -118,6 +135,11 @@ export default function AlterarSenha() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {mustChangePassword && (
+            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200">
+              ⚠️ Use uma senha <strong>diferente</strong> da que você recebeu por mensagem. Mínimo 8 caracteres com maiúscula, minúscula e número.
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="newPassword">Nova Senha</Label>

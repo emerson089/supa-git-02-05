@@ -1162,6 +1162,7 @@ export type Database = {
         Row: {
           checklist_aprontamento: Json | null
           created_date: string
+          etapa_iniciada_em: string | null
           id: string
           id_producao: string
           imagem_url: string | null
@@ -1187,6 +1188,7 @@ export type Database = {
         Insert: {
           checklist_aprontamento?: Json | null
           created_date?: string
+          etapa_iniciada_em?: string | null
           id?: string
           id_producao: string
           imagem_url?: string | null
@@ -1212,6 +1214,7 @@ export type Database = {
         Update: {
           checklist_aprontamento?: Json | null
           created_date?: string
+          etapa_iniciada_em?: string | null
           id?: string
           id_producao?: string
           imagem_url?: string | null
@@ -1746,6 +1749,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      mark_password_changed: { Args: never; Returns: undefined }
       rpc_ajustar_estoque_local: {
         Args: {
           p_item_id: string

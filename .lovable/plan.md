@@ -1,68 +1,92 @@
-## Objetivo
 
-Tornar a lista de **saudações aleatórias** totalmente configurável pelo usuário, com um campo dedicado dentro do modal de Envio em Massa (`TransmissaoManagerModal`), substituindo a lista hardcoded atual de 20 frases.
+## Diagnóstico
 
-## Como vai funcionar (visão do usuário)
+Reproduzi o problema da Maria (`emerson089@gmail.com.br`) cruzando 3 fontes:
 
-Dentro do modal **Envio em Massa**, será adicionado um novo bloco recolhível chamado **"Saudações Aleatórias"** com:
-
-- Um **textarea** editável onde cada **linha = uma saudação**.
-- Suporte a tags `{nome}`, `{cidade}`, `{estado}`, `{excursao}`.
-- Botões: **Salvar**, **Restaurar Padrão** (volta às 20 frases atuais) e **Adicionar Linha**.
-- Contador mostrando quantas saudações estão ativas.
-- Dica visual explicando que a saudação só é prefixada quando a mensagem do catálogo **não contém** `{nome}`.
-
-As saudações ficam salvas por usuário no banco e são carregadas automaticamente toda vez que o modal abrir. Se o usuário não tiver nenhuma personalizada, o sistema usa as 20 saudações padrão.
-
-## Onde aparece
-
-- **Apenas no modal de Envio em Massa** (`TransmissaoManagerModal`), conforme solicitado.
-- O envio individual (botão de catálogo no card do cliente — `WhatsAppCatalogButton`) **continua usando sua lista curta atual** (sem alterações), pois o pedido é específico para a aba de envio em massa.
-
-## Detalhes técnicos
-
-**1. Banco de dados (migration)**
-
-Adicionar coluna `saudacoes_personalizadas` em `perfil_configuracoes`:
-
-```sql
-ALTER TABLE public.perfil_configuracoes
-ADD COLUMN IF NOT EXISTS saudacoes_personalizadas text[] NOT NULL DEFAULT '{}';
+**Auth logs (Supabase):**
+```
+07:48:17  PUT /user  422  same_password   ← tentou senha igual à temp
+07:48:22  PUT /user  422  same_password   ← tentou de novo
+07:48:29  PUT /user  200  OK              ← finalmente trocou
+07:53:05  POST /token 400 refresh_token_not_found  ← sessão expirou
 ```
 
-A tabela já tem RLS por `user_id = auth.uid()`, então herda as políticas existentes.
+**Banco:** `must_change_password = true` ainda hoje, mesmo após o update bem-sucedido às 07:48:29.
 
-**2. Hook `useMassSending.ts`**
+**Causa raiz — três bugs encadeados em `src/pages/AlterarSenha.tsx`:**
 
-- Estender `getPerfilConfig` / `savePerfilConfig` para incluir `saudacoes_personalizadas: string[]`.
-- Adicionar helper `getSaudacoes()` que retorna o array salvo OU o `SAUDACOES_PADRAO` quando vazio.
+1. **Senha igual à temporária retorna erro cru.** O Supabase retorna `same_password` ("New password should be different from the old password") em inglês. O usuário não entende e tenta de novo. Não há validação client-side que avise antes.
 
-**3. Componente `TransmissaoManagerModal.tsx`**
+2. **`UPDATE profiles` sem checagem de erro nem garantia de execução.** Após `supabase.auth.updateUser({password})`, em alguns casos a sessão é rotacionada/invalidada e o `UPDATE` em `profiles` falha por RLS (sem `auth.uid()` válido) — mas o código faz `await supabase.from('profiles').update(...)` sem checar `.error`, então o toast de sucesso aparece e o flag continua `true` para sempre. Resultado: o vendedor faz login → cai em `/alterar-senha` → "muda" a senha → é redirecionado → próximo login cai de novo em `/alterar-senha`. Loop eterno.
 
-- Extrair a constante `SAUDACOES` (linha 37) para `src/lib/saudacoes-padrao.ts` exportando `SAUDACOES_PADRAO`.
-- Adicionar estado `saudacoesCustom: string[]` carregado de `perfil_configuracoes` no `useEffect` de abertura do modal.
-- Substituir os dois pontos de uso (linhas 96 e 275) por uma função `pickSaudacao()` que sorteia a partir de `saudacoesCustom.length > 0 ? saudacoesCustom : SAUDACOES_PADRAO`.
-- Novo bloco UI (entre o card de "Velocidade" e o de "Filtros"):
-  - Header com chevron expand/collapse (mesmo padrão dos outros cards do modal).
-  - `Textarea` controlado: `value={saudacoesCustom.join('\n')}` → onChange faz `split('\n')` e filtra linhas vazias no save.
-  - Botões: **Salvar saudações** (chama `savePerfilConfig`), **Restaurar padrão** (preenche com `SAUDACOES_PADRAO`), **Limpar tudo**.
-  - Badge: `{count} saudações ativas`.
-  - Texto auxiliar: "Use `{nome}` para personalizar. A saudação só é adicionada quando a mensagem do catálogo não contém `{nome}`."
+3. **`refreshProfile()` corre antes do update do banco propagar.** Mesmo quando o update funciona, o refresh é disparado em paralelo e pode ler o valor antigo, mantendo `mustChangePassword=true` em memória → ProtectedRoute redireciona de volta.
 
-**4. Persistência e UX**
+Há ainda um problema de UX adjacente: o badge "Senha pendente" na tela de Gestão de Usuários nunca sai porque depende do mesmo flag.
 
-- Salvar é manual (botão), não auto-save, para evitar gravar a cada tecla.
-- Toast de sucesso/erro no save.
-- Validação leve: ignorar linhas vazias; permitir lista vazia (que cai no padrão).
+## Solução
 
-## Arquivos afetados
+### 1. `src/pages/AlterarSenha.tsx` — reescrita do `handleSubmit`
 
-- `supabase/migrations/<novo>.sql` — adiciona coluna `saudacoes_personalizadas`.
-- `src/lib/saudacoes-padrao.ts` — novo arquivo com `SAUDACOES_PADRAO`.
-- `src/hooks/useMassSending.ts` — tipos e helper de saudações.
-- `src/components/clientes/TransmissaoManagerModal.tsx` — nova UI + leitura/escrita + uso da lista dinâmica.
+- Validar e tratar `same_password` ANTES de chamar Supabase: avisar "A nova senha precisa ser diferente da senha temporária".
+- Após `auth.updateUser({password})` retornar OK, chamar **uma RPC server-side** `mark_password_changed()` (security definer) em vez de UPDATE direto na tabela. Isso elimina a dependência de RLS/sessão.
+- Checar o `error` da RPC explicitamente. Se falhar, mostrar toast e NÃO redirecionar.
+- Aguardar `await refreshProfile()` ANTES de `navigate()`.
+- Mapear todas as mensagens do Supabase Auth para PT-BR (`same_password`, `weak_password`, `session_not_found`).
 
-## Fora do escopo
+### 2. Nova RPC `public.mark_password_changed()` (migration)
 
-- Não altera `WhatsAppCatalogButton` (envio individual).
-- Não cria página separada de configuração — o campo vive dentro do próprio modal de envio em massa, conforme pedido.
+```sql
+create or replace function public.mark_password_changed()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+  update public.profiles
+    set must_change_password = false,
+        updated_at = now()
+    where user_id = auth.uid();
+end;
+$$;
+
+revoke all on function public.mark_password_changed() from public;
+grant execute on function public.mark_password_changed() to authenticated;
+```
+
+Roda como definer → não esbarra em corridas/RLS.
+
+### 3. `src/pages/Auth.tsx` — redirect direto p/ landing correta
+
+Hoje após login redireciona para `/`. O `Index` então decide. Manter, mas garantir que o `ProtectedRoute` em `/alterar-senha` deixe o usuário entrar mesmo sem role definido (vendedor recém-criado).
+
+Verificado: `ProtectedRoute` já lida com isso (sem `allowedRoles` em `/alterar-senha`). OK.
+
+### 4. Correção retroativa para a Maria
+
+Migration adicional roda uma vez:
+```sql
+update public.profiles
+   set must_change_password = false
+ where user_id = '19a575cc-e97b-4b32-9bf5-99da2d6c2471'
+   and last_sign_in_at is not null;
+```
+Ela já trocou a senha com sucesso (log 200 às 07:48:29), o flag só ficou preso pelo bug. Isso destrava o login dela imediatamente.
+
+### 5. Melhoria de UX no formulário
+
+- Mostrar dica visível: "Use uma senha **diferente** da que você recebeu por mensagem."
+- Validar mínimo 8 chars + maiúscula/minúscula/número (já existe no schema, manter).
+
+## Arquivos alterados
+
+- `supabase/migrations/<timestamp>_mark_password_changed_rpc.sql` (novo)
+- `src/pages/AlterarSenha.tsx` (reescrita do submit + dica visual + tradução de erros)
+
+## Fora de escopo
+
+- Não vou mexer em `invite-user` (geração de senha temp está OK).
+- Não vou mexer em `RoleContext` nem `ProtectedRoute` — a lógica deles está correta, o bug era só no fluxo de "alterar senha".
