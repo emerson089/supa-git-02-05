@@ -784,7 +784,7 @@ export default function Clientes() {
       console.error('Export error:', error);
       toast.error('Erro ao exportar clientes.', { id: toastId });
     }
-  }, [user?.id, isAllMatchingSelected, selectedIds, totalCount, filtroStatus, crmFilterIds, busca]);
+  }, [user?.id, isAllMatchingSelected, selectedIds, paginatedData?.count, filtroStatus, crmFilterIds, busca]);
 
   const handleExportCSV = async () => {
     if (!user?.id) {
