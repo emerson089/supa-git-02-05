@@ -136,6 +136,11 @@ export default function AlterarSenha() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {mustChangePassword && (
+            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200">
+              ⚠️ Use uma senha <strong>diferente</strong> da que você recebeu por mensagem. Mínimo 8 caracteres com maiúscula, minúscula e número.
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="newPassword">Nova Senha</Label>
