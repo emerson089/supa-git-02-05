@@ -177,7 +177,7 @@ export default function Feira() {
   const [cargaEditar, setCargaEditar] = useState<TransferenciaComItensHistorico | null>(null);
   const [itensCarga, setItensCarga] = useState<ItemCarga[]>(() => {
     const draft = loadFeiraDraft(user?.id);
-    return draft?.itensCarga ?? [];
+    return (draft?.itensCarga ?? []).map((i) => ({ ...i, modeloId: (i as ItemCarga).modeloId ?? null }));
   });
   const [tituloCarga, setTituloCarga] = useState(() => {
     const draft = loadFeiraDraft(user?.id);
@@ -1064,14 +1064,13 @@ export default function Feira() {
                   <Card key={k.label} className={cn("overflow-hidden border", k.bg)}>
                     <CardContent className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className={cn("p-2 rounded-lg shrink-0", k.iconBg)}>{k.icon}</div>
+                        <div className="p-2 rounded-lg shrink-0 bg-background/60">{k.icon}</div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs text-muted-foreground truncate">{k.label}</p>
                           <div className="flex items-baseline gap-1.5 flex-wrap">
-                            <p className={cn("font-bold text-xl", k.valueColor)}>{k.value}</p>
+                            <p className="font-bold text-xl">{k.value}</p>
                             {k.unit && <span className="text-xs text-muted-foreground">{k.unit}</span>}
                           </div>
-                          {k.sub && <p className="text-xs text-muted-foreground">{k.sub}</p>}
                           {k.delta}
                         </div>
                       </div>
@@ -1105,7 +1104,6 @@ export default function Feira() {
             <CargasAtivasAlerta
               cargasAtivas={todasCargasAtivas || []}
               onRegistrarRetorno={handleOpenRetornoFromHistorico}
-              onRegistrarRetornoEmMassa={todasCargasAtivas && todasCargasAtivas.length >= 2 ? () => setShowRetornoEmMassa(true) : undefined}
               onEditarCarga={hasPermission('feira.edit') && !isVendedor ? handleEditarCarga : undefined}
               onGerarPDF={hasPermission('feira.generate_pdf') ? handleOpenPDFOptions : undefined}
               periodoEhHoje={periodoEhHoje}
