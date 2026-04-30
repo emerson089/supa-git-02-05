@@ -132,7 +132,7 @@ export default function AlterarSenha() {
         if (checkData && checkData[0]) {
           const p = checkData[0];
           if (p.must_change_password === false) {
-            finalRole = p.role;
+            finalRole = p.role as typeof role;
             perfilConfirmado = true;
             break;
           }
