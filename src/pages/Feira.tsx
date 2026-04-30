@@ -921,21 +921,27 @@ export default function Feira() {
         </div>
       </header>}
 
-      {/* Mobile Action Button - Hidden for vendedor */}
-      {isMobile && !isVendedor && <div className="px-4 py-3">
-        <Button onClick={handleOpenNovaCarga} className="w-full gap-2 relative">
-          <Plus size={18} />
-          Nova Carga
-          {itensCarga.length > 0 && !showNovaCarga && (
-            <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 tabular-nums">
-              {itensCarga.length}
-            </Badge>
-          )}
-        </Button>
-      </div>}
+      {/* Filtros Fixos no Topo - Mobile */}
+      {isMobile && (
+        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/50 px-4 py-3 shadow-sm">
+          <FiltroFeiraPro
+            filtros={filtros}
+            onChange={setFiltros}
+            totalModelos={rankingFiltrado.topVendidos.length + rankingFiltrado.topRetorno.length}
+          />
+        </div>
+      )}
 
-      <ScrollArea className="flex-1">
-        <div className={cn("p-4 space-y-4", !isMobile && "p-6 space-y-6", isMobile && "pb-32")}>
+      <ScrollArea className="flex-1 bg-slate-50/50 dark:bg-background overflow-x-hidden">
+        <div className={cn("p-4 space-y-6", !isMobile && "p-6 space-y-6", isMobile && "pb-40")}>
+          {/* Desktop Filters (Keep here) */}
+          {!isMobile && (
+            <FiltroFeiraPro
+              filtros={filtros}
+              onChange={setFiltros}
+              totalModelos={rankingFiltrado.topVendidos.length + rankingFiltrado.topRetorno.length}
+            />
+          )}
 
           {/* Offline Banner */}
           <OfflineBanner
@@ -947,7 +953,7 @@ export default function Feira() {
             onSyncNow={syncOfflineRetornos}
           />
 
-          {/* Mobile: Cargas em Andamento primeiro (ação principal do vendedor) */}
+          {/* Mobile: Cargas em Andamento - Destaque Principal */}
           {isMobile && (
             <CargasAtivasAlerta
               cargasAtivas={todasCargasAtivas || []}
@@ -959,13 +965,6 @@ export default function Feira() {
               isGeneratingPDF={generatingPDFId !== null}
             />
           )}
-
-          {/* Filtro de Período — compacto no mobile */}
-          <FiltroFeiraPro
-            filtros={filtros}
-            onChange={setFiltros}
-            totalModelos={rankingFiltrado.topVendidos.length + rankingFiltrado.topRetorno.length}
-          />
 
           {/* Resumo do Período */}
           {(() => {
@@ -986,20 +985,13 @@ export default function Feira() {
               );
             };
 
-            const taxaColor = resumo.taxaVenda >= 80 ? "text-emerald-600" : resumo.taxaVenda >= 50 ? "text-amber-600" : "text-red-600";
-            const taxaBg = resumo.taxaVenda >= 80 ? "bg-emerald-50/50 dark:bg-emerald-950/20" : resumo.taxaVenda >= 50 ? "bg-amber-50/50 dark:bg-amber-950/20" : "bg-red-50/50 dark:bg-red-950/20";
-            const taxaIcon = resumo.taxaVenda >= 80 ? "bg-emerald-100 dark:bg-emerald-900/50" : resumo.taxaVenda >= 50 ? "bg-amber-100 dark:bg-amber-900/50" : "bg-red-100 dark:bg-red-900/50";
-
             const kpiCards = [
               {
                 label: 'Carga',
                 value: `${resumo.totalCarga}`,
                 unit: 'pç',
-                sub: `${resumo.totalModelos} mod`,
                 icon: <Truck className="h-4 w-4 text-blue-600" />,
-                iconBg: 'bg-blue-100 dark:bg-blue-900/50',
-                bg: 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/50',
-                valueColor: 'text-blue-600',
+                bg: 'bg-blue-50/30 border-blue-100 dark:bg-blue-950/10 dark:border-blue-900/30',
                 delta: <Delta kpi={comparacao.carga} />,
               },
               {
@@ -1007,9 +999,7 @@ export default function Feira() {
                 value: `${resumo.totalRetorno}`,
                 unit: 'pç',
                 icon: <RotateCcw className="h-4 w-4 text-amber-600" />,
-                iconBg: 'bg-amber-100 dark:bg-amber-900/50',
-                bg: 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/50',
-                valueColor: 'text-amber-600',
+                bg: 'bg-amber-50/30 border-amber-100 dark:bg-amber-950/10 dark:border-amber-900/30',
                 delta: <Delta kpi={comparacao.retorno} invert />,
               },
               {
@@ -1017,9 +1007,7 @@ export default function Feira() {
                 value: `${resumo.totalVendido}`,
                 unit: 'pç',
                 icon: <ShoppingBag className="h-4 w-4 text-emerald-600" />,
-                iconBg: 'bg-emerald-100 dark:bg-emerald-900/50',
-                bg: 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50',
-                valueColor: 'text-emerald-600',
+                bg: 'bg-emerald-50/30 border-emerald-100 dark:bg-emerald-950/10 dark:border-emerald-900/30',
                 delta: <Delta kpi={comparacao.vendido} />,
               },
               {
@@ -1027,45 +1015,33 @@ export default function Feira() {
                 value: `${(resumo.valorVendido / 1000).toFixed(1)}k`,
                 unit: '',
                 icon: <DollarSign className="h-4 w-4 text-primary" />,
-                iconBg: 'bg-primary/10',
-                bg: 'bg-primary/5 border-primary/20',
-                valueColor: 'text-primary',
+                bg: 'bg-primary/5 border-primary/10 dark:bg-primary/10 dark:border-primary/20',
                 delta: <Delta kpi={comparacao.valor} />,
-              },
-              {
-                label: 'Taxa Venda',
-                value: resumo.totalCarga === 0 ? '—' : `${resumo.taxaVenda}%`,
-                unit: '',
-                icon: <TrendingUp className={cn("h-4 w-4", taxaColor)} />,
-                iconBg: taxaIcon,
-                bg: taxaBg,
-                valueColor: taxaColor,
-                delta: <Delta kpi={comparacao.taxa} />,
               },
             ];
 
             return isMobile ? (
-              /* Mobile: tira horizontal rolável — sem grid, sem corte */
-              <div className="-mx-4 px-4">
-                <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none snap-x snap-mandatory">
+              <div className="-mx-4 px-4 overflow-hidden">
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x">
                   {kpiCards.map((k) => (
                     <div
                       key={k.label}
                       className={cn(
-                        "flex-none w-[140px] rounded-xl border p-3 snap-start",
+                        "flex-none w-[110px] rounded-2xl border p-3 snap-start backdrop-blur-sm shadow-sm",
                         k.bg
                       )}
                     >
-                      <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center mb-2", k.iconBg)}>
+                      <div className="flex items-center justify-between mb-2">
                         {k.icon}
+                        {k.delta}
                       </div>
-                      <p className="text-[11px] text-muted-foreground font-medium leading-none mb-1">{k.label}</p>
-                      <div className="flex items-baseline gap-1">
-                        <span className={cn("text-xl font-bold leading-none", k.valueColor)}>{k.value}</span>
-                        {k.unit && <span className="text-xs text-muted-foreground">{k.unit}</span>}
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter opacity-70">{k.label}</span>
+                        <div className="flex items-baseline gap-0.5">
+                          <span className="text-lg font-black tracking-tight">{k.value}</span>
+                          <span className="text-[10px] font-bold opacity-50">{k.unit}</span>
+                        </div>
                       </div>
-                      {k.sub && <p className="text-[10px] text-muted-foreground mt-0.5">{k.sub}</p>}
-                      <div className="mt-1">{k.delta}</div>
                     </div>
                   ))}
                 </div>
@@ -1625,5 +1601,24 @@ export default function Feira() {
       onAdd={handleAddGradeItems}
       getDisponivelCentral={getDisponivelCentral}
     />
+
+    {/* Floating Action Button (FAB) - Mobile Only */}
+    {isMobile && !isVendedor && (
+      <div className="fixed bottom-24 right-4 z-40">
+        <Button 
+          onClick={handleOpenNovaCarga}
+          className="w-14 h-14 rounded-2xl shadow-[0_8px_32px_rgba(79,70,229,0.4)] flex items-center justify-center p-0 active:scale-90 transition-all border-none bg-primary text-primary-foreground group"
+        >
+          <div className="relative">
+            <Plus size={32} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-300" />
+            {itensCarga.length > 0 && !showNovaCarga && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-white text-[10px] font-black rounded-full border-2 border-white flex items-center justify-center animate-bounce">
+                {itensCarga.length}
+              </span>
+            )}
+          </div>
+        </Button>
+      </div>
+    )}
   </div>;
 }
