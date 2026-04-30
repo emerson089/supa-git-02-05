@@ -971,14 +971,6 @@ export default function Clientes() {
           </div>
         </div>
         
-        <button 
-          onClick={() => setShowAutoMerge(true)}
-          className="neu-card px-4 flex flex-col items-center justify-center gap-1 text-primary hover:bg-primary/5 transition-colors group rounded-2xl"
-          title="Identificar cadastros duplicados"
-        >
-          <GitMerge size={20} className="group-hover:scale-110 transition-transform" />
-          <span className="text-[10px] font-bold uppercase tracking-tight">Unificar</span>
-        </button>
       </div>
 
       {/* Filters Bar */}
