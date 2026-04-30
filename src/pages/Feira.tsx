@@ -16,6 +16,7 @@ import { PeriodoFeira, calcularPeriodo, useResumoComComparacao, useRankingModelo
 import { RankingModelosFeira } from '@/components/feira/RankingModelosFeira';
 import { AnaliseDiaSemanaFeira } from '@/components/feira/AnaliseDiaSemanaFeira';
 import { FiltroPeriodo, salvarFiltroPeriodo, carregarFiltroPeriodo } from '@/components/feira/FiltroPeriodo';
+import { FiltroFeiraPro, FiltrosFeiraPro } from '@/components/feira/FiltroFeiraPro';
 import { HistoricoAgrupado } from '@/components/feira/HistoricoAgrupado';
 import { DetalhesCargaModal } from '@/components/feira/DetalhesCargaModal';
 import { CargasAtivasAlerta } from '@/components/feira/CargasAtivasAlerta';
@@ -121,8 +122,28 @@ export default function Feira() {
     syncAll: syncOfflineRetornos,
   } = useFeiraOffline();
 
-  // Estado do período - carregado do localStorage
-  const [periodo, setPeriodo] = useState<PeriodoFeira>(() => carregarFiltroPeriodo());
+  // Estado de filtros avançados
+  const [filtros, setFiltros] = useState<FiltrosFeiraPro>(() => {
+    const saved = localStorage.getItem('feira-filtros-pro');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          ...parsed,
+          periodo: carregarFiltroPeriodo()
+        };
+      } catch (e) {}
+    }
+    return {
+      periodo: carregarFiltroPeriodo(),
+      busca: '',
+      classe: 'todas',
+      estoque: 'todos',
+      verComparativo: true
+    };
+  });
+
+  const periodo = filtros.periodo;
 
   // Hooks de histórico baseados no período (com comparação ao período anterior)
   const {
@@ -202,6 +223,47 @@ export default function Feira() {
   const [locaisCreationFailed, setLocaisCreationFailed] = useState(false);
   const locaisCreationAttempted = useRef(false);
 
+  // Ranking de modelos filtrado
+  const rankingFiltrado = useMemo(() => {
+    const { topVendidos, topRetorno } = rankingModelos;
+    
+    const applyFilters = (lista: any[]) => {
+      let result = [...lista];
+      
+      // 1. Busca
+      if (filtros.busca) {
+        const termo = filtros.busca.toLowerCase();
+        result = result.filter(m => m.nome.toLowerCase().includes(termo));
+      }
+      
+      // 2. Curva (Classe)
+      if (filtros.classe !== 'todas') {
+        result = result.filter(m => {
+          if (filtros.classe === 'curvaA') return m.taxaVenda >= 70;
+          if (filtros.classe === 'curvaB') return m.taxaVenda >= 30 && m.taxaVenda < 70;
+          return m.taxaVenda < 30;
+        });
+      }
+      
+      // 3. Estoque
+      if (filtros.estoque !== 'todos') {
+        result = result.filter(m => {
+          const disp = getDisponivelCentral(m.id);
+          if (filtros.estoque === 'disponivel') return disp > 5;
+          if (filtros.estoque === 'baixo') return disp > 0 && disp <= 5;
+          return disp === 0;
+        });
+      }
+      
+      return result;
+    };
+
+    return {
+      topVendidos: applyFilters(topVendidos),
+      topRetorno: applyFilters(topRetorno)
+    };
+  }, [rankingModelos, filtros, getDisponivelCentral]);
+
   // Cargas ativas de HOJE (para mostrar na seção principal quando filtro = hoje)
   const cargasAtivasHoje = useMemo(() => (todasCargasAtivas || []).filter(c => isToday(new Date(c.dataSaida))), [todasCargasAtivas]);
 
@@ -218,10 +280,14 @@ export default function Feira() {
     queryClient.refetchQueries({ queryKey: ['estoque-locais'] });
   };
 
-  // Salvar período no localStorage quando mudar
+  // Salvar filtros no localStorage
   useEffect(() => {
-    salvarFiltroPeriodo(periodo);
-  }, [periodo]);
+    localStorage.setItem('feira-filtros-pro', JSON.stringify({
+      ...filtros,
+      periodo: undefined // Não salvar o objeto Date complexo aqui, já salvamos via salvarFiltroPeriodo
+    }));
+    salvarFiltroPeriodo(filtros.periodo);
+  }, [filtros]);
 
   // Persistir rascunho da Nova Carga (itens + título) no localStorage
   useEffect(() => {
@@ -868,10 +934,8 @@ export default function Feira() {
         </Button>
       </div>}
 
-      <ScrollArea className="flex-1 overflow-hidden">
+      <ScrollArea className="flex-1">
         <div className={cn("p-4 space-y-4", !isMobile && "p-6 space-y-6", isMobile && "pb-32")}>
-          {/* Filtro de Período */}
-          <FiltroPeriodo periodo={periodo} onChange={setPeriodo} />
 
           {/* Offline Banner */}
           <OfflineBanner
@@ -881,6 +945,26 @@ export default function Feira() {
             pendingCount={offlinePendingCount}
             errorCount={offlineErrorCount}
             onSyncNow={syncOfflineRetornos}
+          />
+
+          {/* Mobile: Cargas em Andamento primeiro (ação principal do vendedor) */}
+          {isMobile && (
+            <CargasAtivasAlerta
+              cargasAtivas={todasCargasAtivas || []}
+              onRegistrarRetorno={handleOpenRetornoFromHistorico}
+              onRegistrarRetornoEmMassa={todasCargasAtivas && todasCargasAtivas.length >= 2 ? () => setShowRetornoEmMassa(true) : undefined}
+              onEditarCarga={hasPermission('feira.edit') && !isVendedor ? handleEditarCarga : undefined}
+              onGerarPDF={hasPermission('feira.generate_pdf') ? handleOpenPDFOptions : undefined}
+              periodoEhHoje={periodoEhHoje}
+              isGeneratingPDF={generatingPDFId !== null}
+            />
+          )}
+
+          {/* Filtro de Período — compacto no mobile */}
+          <FiltroFeiraPro
+            filtros={filtros}
+            onChange={setFiltros}
+            totalModelos={rankingFiltrado.topVendidos.length + rankingFiltrado.topRetorno.length}
           />
 
           {/* Resumo do Período */}
@@ -906,94 +990,107 @@ export default function Feira() {
             const taxaBg = resumo.taxaVenda >= 80 ? "bg-emerald-50/50 dark:bg-emerald-950/20" : resumo.taxaVenda >= 50 ? "bg-amber-50/50 dark:bg-amber-950/20" : "bg-red-50/50 dark:bg-red-950/20";
             const taxaIcon = resumo.taxaVenda >= 80 ? "bg-emerald-100 dark:bg-emerald-900/50" : resumo.taxaVenda >= 50 ? "bg-amber-100 dark:bg-amber-900/50" : "bg-red-100 dark:bg-red-900/50";
 
-            return (
-              <div className={cn("grid gap-3 overflow-hidden", isMobile ? "grid-cols-2" : "grid-cols-5")}>
-                {/* Carga */}
-                <Card className="overflow-hidden bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/50">
-                  <CardContent className={cn("p-4", isMobile && "p-3")}>
-                    <div className="flex items-center gap-3">
-                      <div className={cn("p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 shrink-0", isMobile && "p-1.5")}>
-                        <Truck className={cn("h-5 w-5 text-blue-600", isMobile && "h-4 w-4")} />
+            const kpiCards = [
+              {
+                label: 'Carga',
+                value: `${resumo.totalCarga}`,
+                unit: 'pç',
+                sub: `${resumo.totalModelos} mod`,
+                icon: <Truck className="h-4 w-4 text-blue-600" />,
+                iconBg: 'bg-blue-100 dark:bg-blue-900/50',
+                bg: 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/50',
+                valueColor: 'text-blue-600',
+                delta: <Delta kpi={comparacao.carga} />,
+              },
+              {
+                label: 'Retorno',
+                value: `${resumo.totalRetorno}`,
+                unit: 'pç',
+                icon: <RotateCcw className="h-4 w-4 text-amber-600" />,
+                iconBg: 'bg-amber-100 dark:bg-amber-900/50',
+                bg: 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/50',
+                valueColor: 'text-amber-600',
+                delta: <Delta kpi={comparacao.retorno} invert />,
+              },
+              {
+                label: 'Vendido',
+                value: `${resumo.totalVendido}`,
+                unit: 'pç',
+                icon: <ShoppingBag className="h-4 w-4 text-emerald-600" />,
+                iconBg: 'bg-emerald-100 dark:bg-emerald-900/50',
+                bg: 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50',
+                valueColor: 'text-emerald-600',
+                delta: <Delta kpi={comparacao.vendido} />,
+              },
+              {
+                label: 'Receita',
+                value: `${(resumo.valorVendido / 1000).toFixed(1)}k`,
+                unit: '',
+                icon: <DollarSign className="h-4 w-4 text-primary" />,
+                iconBg: 'bg-primary/10',
+                bg: 'bg-primary/5 border-primary/20',
+                valueColor: 'text-primary',
+                delta: <Delta kpi={comparacao.valor} />,
+              },
+              {
+                label: 'Taxa Venda',
+                value: resumo.totalCarga === 0 ? '—' : `${resumo.taxaVenda}%`,
+                unit: '',
+                icon: <TrendingUp className={cn("h-4 w-4", taxaColor)} />,
+                iconBg: taxaIcon,
+                bg: taxaBg,
+                valueColor: taxaColor,
+                delta: <Delta kpi={comparacao.taxa} />,
+              },
+            ];
+
+            return isMobile ? (
+              /* Mobile: tira horizontal rolável — sem grid, sem corte */
+              <div className="-mx-4 px-4">
+                <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none snap-x snap-mandatory">
+                  {kpiCards.map((k) => (
+                    <div
+                      key={k.label}
+                      className={cn(
+                        "flex-none w-[140px] rounded-xl border p-3 snap-start",
+                        k.bg
+                      )}
+                    >
+                      <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center mb-2", k.iconBg)}>
+                        {k.icon}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted-foreground truncate">Carga</p>
-                        <div className="flex items-baseline gap-1.5 flex-wrap">
-                          <p className={cn("font-bold text-blue-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalCarga} pç</p>
-                          <p className="text-xs font-medium text-blue-600/60">{resumo.totalModelos} mod</p>
+                      <p className="text-[11px] text-muted-foreground font-medium leading-none mb-1">{k.label}</p>
+                      <div className="flex items-baseline gap-1">
+                        <span className={cn("text-xl font-bold leading-none", k.valueColor)}>{k.value}</span>
+                        {k.unit && <span className="text-xs text-muted-foreground">{k.unit}</span>}
+                      </div>
+                      {k.sub && <p className="text-[10px] text-muted-foreground mt-0.5">{k.sub}</p>}
+                      <div className="mt-1">{k.delta}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* Desktop: grade de 5 colunas */
+              <div className="grid gap-3 grid-cols-5">
+                {kpiCards.map((k) => (
+                  <Card key={k.label} className={cn("overflow-hidden border", k.bg)}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className={cn("p-2 rounded-lg shrink-0", k.iconBg)}>{k.icon}</div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-muted-foreground truncate">{k.label}</p>
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <p className={cn("font-bold text-xl", k.valueColor)}>{k.value}</p>
+                            {k.unit && <span className="text-xs text-muted-foreground">{k.unit}</span>}
+                          </div>
+                          {k.sub && <p className="text-xs text-muted-foreground">{k.sub}</p>}
+                          {k.delta}
                         </div>
-                        <Delta kpi={comparacao.carga} />
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Retorno — para retorno, alta é negativa (mais retorno = pior) */}
-                <Card className="overflow-hidden bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/50">
-                  <CardContent className={cn("p-4", isMobile && "p-3")}>
-                    <div className="flex items-center gap-3">
-                      <div className={cn("p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50 shrink-0", isMobile && "p-1.5")}>
-                        <RotateCcw className={cn("h-5 w-5 text-amber-600", isMobile && "h-4 w-4")} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted-foreground truncate">Retorno</p>
-                        <p className={cn("font-bold text-amber-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalRetorno}</p>
-                        <Delta kpi={comparacao.retorno} invert />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Vendido */}
-                <Card className="overflow-hidden bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50">
-                  <CardContent className={cn("p-4", isMobile && "p-3")}>
-                    <div className="flex items-center gap-3">
-                      <div className={cn("p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 shrink-0", isMobile && "p-1.5")}>
-                        <ShoppingBag className={cn("h-5 w-5 text-emerald-600", isMobile && "h-4 w-4")} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted-foreground truncate">Vendido</p>
-                        <p className={cn("font-bold text-emerald-600", isMobile ? "text-lg" : "text-xl")}>{resumo.totalVendido}</p>
-                        <Delta kpi={comparacao.vendido} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Valor */}
-                <Card className="overflow-hidden bg-primary/5 border-primary/20">
-                  <CardContent className={cn("p-4", isMobile && "p-3")}>
-                    <div className="flex items-center gap-3">
-                      <div className={cn("p-2 rounded-lg bg-primary/10 shrink-0", isMobile && "p-1.5")}>
-                        <DollarSign className={cn("h-5 w-5 text-primary", isMobile && "h-4 w-4")} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted-foreground truncate">Valor</p>
-                        <p className={cn("font-bold text-primary", isMobile ? "text-lg" : "text-xl")}>
-                          {isMobile ? `${(resumo.valorVendido / 1000).toFixed(1)}k` : formatCurrency(resumo.valorVendido)}
-                        </p>
-                        <Delta kpi={comparacao.valor} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Taxa Venda */}
-                <Card className={cn("overflow-hidden", taxaBg)}>
-                  <CardContent className={cn("p-4", isMobile && "p-3")}>
-                    <div className="flex items-center gap-3">
-                      <div className={cn("p-2 rounded-lg shrink-0", isMobile && "p-1.5", taxaIcon)}>
-                        <TrendingUp className={cn("h-5 w-5", isMobile && "h-4 w-4", taxaColor)} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted-foreground truncate">Taxa Venda</p>
-                        <p className={cn("font-bold", isMobile ? "text-lg" : "text-xl", taxaColor)}>
-                          {resumo.totalCarga === 0 ? '—' : `${resumo.taxaVenda}%`}
-                        </p>
-                        <Delta kpi={comparacao.taxa} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             );
           })()}
@@ -1001,8 +1098,8 @@ export default function Feira() {
           {/* Ranking de modelos — visível apenas para quem pode ver histórico */}
           <RoleGate requiredPermission="feira.view_history">
             <RankingModelosFeira
-              topVendidos={rankingModelos.topVendidos}
-              topRetorno={rankingModelos.topRetorno}
+              topVendidos={rankingFiltrado.topVendidos}
+              topRetorno={rankingFiltrado.topRetorno}
               isLoading={isLoadingRanking}
               isMobile={isMobile}
             />
@@ -1016,16 +1113,18 @@ export default function Feira() {
             />
           </RoleGate>
 
-          {/* Alerta de Cargas Ativas */}
-          <CargasAtivasAlerta
-            cargasAtivas={todasCargasAtivas || []}
-            onRegistrarRetorno={handleOpenRetornoFromHistorico}
-            onRegistrarRetornoEmMassa={todasCargasAtivas && todasCargasAtivas.length >= 2 ? () => setShowRetornoEmMassa(true) : undefined}
-            onEditarCarga={hasPermission('feira.edit') && !isVendedor ? handleEditarCarga : undefined}
-            onGerarPDF={hasPermission('feira.generate_pdf') ? handleOpenPDFOptions : undefined}
-            periodoEhHoje={periodoEhHoje}
-            isGeneratingPDF={generatingPDFId !== null}
-          />
+          {/* Alerta de Cargas Ativas — desktop only (mobile já aparece acima) */}
+          {!isMobile && (
+            <CargasAtivasAlerta
+              cargasAtivas={todasCargasAtivas || []}
+              onRegistrarRetorno={handleOpenRetornoFromHistorico}
+              onRegistrarRetornoEmMassa={todasCargasAtivas && todasCargasAtivas.length >= 2 ? () => setShowRetornoEmMassa(true) : undefined}
+              onEditarCarga={hasPermission('feira.edit') && !isVendedor ? handleEditarCarga : undefined}
+              onGerarPDF={hasPermission('feira.generate_pdf') ? handleOpenPDFOptions : undefined}
+              periodoEhHoje={periodoEhHoje}
+              isGeneratingPDF={generatingPDFId !== null}
+            />
+          )}
 
           {/* Histórico Agrupado - Hidden for vendedor */}
           <RoleGate requiredPermission="feira.view_history">
