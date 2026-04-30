@@ -168,6 +168,7 @@ async function fetchAllPedidosMinimal(userId: string) {
       .eq('user_id', userId)
       .not('cliente_id', 'is', null)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE_CRM - 1);
     if (error) throw error;
     if (data && data.length > 0) {
@@ -190,6 +191,7 @@ async function fetchAllClientesMinimal(userId: string) {
       .select('id, created_at, user_id')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE_CRM - 1);
     if (error) throw error;
     if (data && data.length > 0) {

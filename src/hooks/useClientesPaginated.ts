@@ -62,7 +62,69 @@ export function useClientesPaginated(params: ClientesPaginatedParams) {
       const from = page * pageSize;
       const to = from + pageSize - 1;
 
-      // Build base query with count
+      // Threshold: how many IDs we can safely cram into a single .in(...) clause
+      // before the PostgREST URL becomes too long (limit ~8KB; each UUID ~ 38 chars).
+      const IN_CHUNK_SIZE = 150;
+
+      // ============================================================
+      // CRM filter path (filterByIds set): we may need many chunked
+      // requests + local sort + local pagination.
+      // ============================================================
+      if (filterByIds) {
+        const ids = filterByIds;
+
+        // Helper: fetch all matching client rows in chunks of IN_CHUNK_SIZE
+        const fetchAllByIds = async () => {
+          const results: any[] = [];
+          for (let i = 0; i < ids.length; i += IN_CHUNK_SIZE) {
+            const chunk = ids.slice(i, i + IN_CHUNK_SIZE);
+            let q = (supabase
+              .from('clientes')
+              .select('*') as any)
+              .eq('user_id', user.id)
+              .in('id', chunk);
+
+            if (debouncedSearch) {
+              const searchTerm = `%${debouncedSearch}%`;
+              const searchClause = `nome.ilike.${searchTerm},telefone.ilike.${searchTerm},cidade.ilike.${searchTerm},excursao.ilike.${searchTerm}`;
+              q = q.or(searchClause);
+            }
+
+            // Always cap per-chunk to PostgREST default 1000 (chunk size is well below).
+            const { data, error } = await q;
+            if (error) throw error;
+            if (data && data.length) results.push(...data);
+          }
+          return results;
+        };
+
+        const allData = await fetchAllByIds();
+
+        // Sort locally respecting the exact order of filterByIds
+        // (preserves CRM priority like "oldest pending first" or "maior_historico")
+        const idToIndexMap = new Map<string, number>();
+        ids.forEach((id, index) => idToIndexMap.set(id, index));
+
+        allData.sort((a, b) => {
+          const indexA = idToIndexMap.has(a.id) ? idToIndexMap.get(a.id)! : 999999;
+          const indexB = idToIndexMap.has(b.id) ? idToIndexMap.get(b.id)! : 999999;
+          return indexA - indexB;
+        });
+
+        const totalCount = allData.length;
+        const totalPages = Math.ceil(totalCount / pageSize);
+        const paginatedData = allData.slice(from, from + pageSize) as any[];
+
+        return {
+          data: paginatedData,
+          count: totalCount,
+          totalPages,
+        };
+      }
+
+      // ============================================================
+      // No CRM filter: standard server-side query with count + range
+      // ============================================================
       let countQuery = (supabase
         .from('clientes')
         .select('*', { count: 'exact', head: true }) as any)
@@ -73,56 +135,11 @@ export function useClientesPaginated(params: ClientesPaginatedParams) {
         .select('*') as any)
         .eq('user_id', user.id);
 
-      // Apply ID filter BEFORE pagination (for CRM filters like Pendentes, VIP, etc.)
-      if (filterByIds && filterByIds.length > 0) {
-        countQuery = countQuery.in('id', filterByIds);
-        dataQuery = dataQuery.in('id', filterByIds);
-      }
-
-      // Apply search filter (server-side)
       if (debouncedSearch) {
         const searchTerm = `%${debouncedSearch}%`;
         const searchClause = `nome.ilike.${searchTerm},telefone.ilike.${searchTerm},cidade.ilike.${searchTerm},excursao.ilike.${searchTerm}`;
         countQuery = countQuery.or(searchClause);
         dataQuery = dataQuery.or(searchClause);
-      }
-
-      // If we are filtering by CRM IDs, doing Server-Side sorting/pagination ruins out custom
-      // frontend order (like "highest days without purchase" or "maior_historico").
-      // So we fetch all matching rows, sort them by filterByIds, and paginate locally.
-      if (filterByIds) {
-        // Execute queries (no range)
-        const [countResult, dataResult] = await Promise.all([
-          countQuery,
-          dataQuery,
-        ]);
-
-        if (countResult.error) throw countResult.error;
-        if (dataResult.error) throw dataResult.error;
-
-        let allData = dataResult.data || [];
-
-        // Sort locally respecting the exact order of filterByIds
-        // Optimization: Use a Map for O(1) lookup during sort
-        const idToIndexMap = new Map();
-        filterByIds.forEach((id, index) => idToIndexMap.set(id, index));
-
-        allData.sort((a, b) => {
-          const indexA = idToIndexMap.has(a.id) ? idToIndexMap.get(a.id) : 999999;
-          const indexB = idToIndexMap.has(b.id) ? idToIndexMap.get(b.id) : 999999;
-          return indexA - indexB;
-        });
-
-        // Apply pagination locally
-        const totalCount = allData.length;
-        const totalPages = Math.ceil(totalCount / pageSize);
-        const paginatedData = allData.slice(from, from + pageSize) as any[];
-
-        return {
-          data: paginatedData,
-          count: totalCount,
-          totalPages,
-        };
       }
 
       // NO CRM filter: Apply normal server-side sorting and pagination

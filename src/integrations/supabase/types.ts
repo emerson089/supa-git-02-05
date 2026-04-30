@@ -1670,6 +1670,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      confirm_password_change: { Args: never; Returns: undefined }
       get_curva_mes:
         | {
             Args: { p_mes: number; p_user_id: string }
