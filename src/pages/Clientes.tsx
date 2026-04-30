@@ -41,7 +41,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FeedbackModal } from '@/components/clientes/FeedbackModal';
 import { MesclarClientesModal } from '@/components/clientes/MesclarClientesModal';
-import { AutoMergeDuplicatesModal } from '@/components/clientes/AutoMergeDuplicatesModal';
+
 import { useClientes } from '@/hooks/useClientesData';
 
 
@@ -505,7 +505,7 @@ export default function Clientes() {
   const [clienteToDelete, setClienteToDelete] = useState<ClientePaginatedDB | null>(null);
   const [excursaoPopoverOpen, setExcursaoPopoverOpen] = useState(false);
   const [mesclandoCliente, setMesclandoCliente] = useState<ClientePaginatedDB | null>(null);
-  const [showAutoMerge, setShowAutoMerge] = useState(false);
+  
 
 
   // Selection mode state
@@ -1305,14 +1305,6 @@ export default function Clientes() {
         onOpenChange={(v) => { if (!v) setMesclandoCliente(null); }}
       />
     )}
-
-    {/* Modal de Unificação Inteligente (Auto Merge) */}
-    <AutoMergeDuplicatesModal 
-      clientes={clientes || []}
-      open={showAutoMerge}
-      onOpenChange={setShowAutoMerge}
-    />
-
 
     {/* Bottom Navigation */}
     <BottomNavigation />
