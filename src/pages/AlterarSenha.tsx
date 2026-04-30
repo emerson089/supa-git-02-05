@@ -32,7 +32,6 @@ export default function AlterarSenha() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({});
   
-  const { user } = useAuth();
   const { role, mustChangePassword, refreshProfile } = useRole();
   const navigate = useNavigate();
 
