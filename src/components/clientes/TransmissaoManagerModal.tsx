@@ -215,7 +215,9 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     }
   }, [open, status, total]);
 
-  // Carregar saudações personalizadas do banco quando o modal abrir
+  // Carregar saudações personalizadas do banco apenas quando o modal ABRE
+  // getPerfilConfig é intencionalmente omitida das deps: não é memoizada no hook
+  // e causaria re-execução a cada render (sobrescrevendo edições do usuário)
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -231,7 +233,8 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
       setSaudacoesDirty(false);
     })();
     return () => { cancelled = true; };
-  }, [open, getPerfilConfig]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Auto-select active catalog
   useEffect(() => {
@@ -394,8 +397,17 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
         // Sem .pdf no final — a Z-API adiciona a extensão via o campo extension
         const fileName = cat.nome.replace(/[^a-zA-Z0-9 ]/g, '').trim() || 'Catalogo';
 
+        const isVideo = cat.file_path.toLowerCase().includes('.mp4');
+        const isImage = cat.file_path.toLowerCase().includes('.jpg') || cat.file_path.toLowerCase().includes('.png') || cat.file_path.toLowerCase().includes('.jpeg') || cat.file_path.toLowerCase().includes('.webp');
+        
         const { error } = await supabase.functions.invoke('send-whatsapp', {
-          body: { type: 'document', phone: phoneResult.phone, documentUrl: signedData.signedUrl, fileName, caption },
+          body: { 
+            type: isVideo ? 'video' : isImage ? 'image' : 'document', 
+            phone: phoneResult.phone, 
+            documentUrl: signedData.signedUrl, 
+            fileName, 
+            caption 
+          },
         });
         if (error) throw error;
 
@@ -413,9 +425,10 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentIndex: index + 1, sucessos: next, falhas, selectedCatalogoId }));
         return next;
       });
-    } catch (err) {
+    } catch (err: any) {
       const primeiroNome = clientesFinais[index]?.nome?.split(' ')[0] ?? 'Cliente';
-      logMessage(`Falha ao enviar para ${primeiroNome}`, 'error');
+      const errorMsg = err.message || (typeof err === 'string' ? err : 'Erro desconhecido');
+      logMessage(`Falha ao enviar para ${primeiroNome}: ${errorMsg}`, 'error');
       setFalhas(prev => {
         const next = prev + 1;
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentIndex: index + 1, sucessos, falhas: next, selectedCatalogoId }));
@@ -468,12 +481,16 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
         const { data: signed, error: storageError } = await supabase.storage.from('lotes').createSignedUrl(cat.file_path, 3600);
         if (storageError) throw new Error(`Erro no arquivo: ${storageError.message}`);
         
+        const isVideo = cat.file_path.toLowerCase().includes('.mp4');
+        const isImage = cat.file_path.toLowerCase().includes('.jpg') || cat.file_path.toLowerCase().includes('.png') || cat.file_path.toLowerCase().includes('.jpeg') || cat.file_path.toLowerCase().includes('.webp');
+        const extension = cat.file_path.split('.').pop() || 'pdf';
+
         const { data, error: functionError } = await supabase.functions.invoke('send-whatsapp', {
             body: {
-                type: 'document',
+                type: isVideo ? 'video' : isImage ? 'image' : 'document',
                 phone: phone.phone,
                 documentUrl: signed?.signedUrl,
-                fileName: 'teste.pdf',
+                fileName: `teste.${extension}`,
                 caption: formatMessage(cat.mensagem, clientes[0] || { 
                     id: 'teste', 
                     nome: 'Teste', 
@@ -858,8 +875,8 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                                 <div className="bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded-md mb-2 flex items-center gap-2 border border-emerald-100 dark:border-emerald-900/30">
                                     <FileText size={16} className="text-primary" />
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[10px] font-bold truncate">{selectedCatalogo.nome}.pdf</p>
-                                        <p className="text-[8px] text-muted-foreground">Catálogo • PDF</p>
+                                        <p className="text-[10px] font-bold truncate">{selectedCatalogo.nome}</p>
+                                        <p className="text-[8px] text-muted-foreground">Catálogo • {selectedCatalogo.file_path.split('.').pop()?.toUpperCase() || 'Arquivo'}</p>
                                     </div>
                                 </div>
                                 <p className="text-[11px] whitespace-pre-wrap leading-relaxed">
