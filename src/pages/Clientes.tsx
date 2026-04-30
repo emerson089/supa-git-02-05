@@ -41,7 +41,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FeedbackModal } from '@/components/clientes/FeedbackModal';
 import { MesclarClientesModal } from '@/components/clientes/MesclarClientesModal';
-import { AutoMergeDuplicatesModal } from '@/components/clientes/AutoMergeDuplicatesModal';
+
 import { useClientes } from '@/hooks/useClientesData';
 
 
@@ -505,7 +505,7 @@ export default function Clientes() {
   const [clienteToDelete, setClienteToDelete] = useState<ClientePaginatedDB | null>(null);
   const [excursaoPopoverOpen, setExcursaoPopoverOpen] = useState(false);
   const [mesclandoCliente, setMesclandoCliente] = useState<ClientePaginatedDB | null>(null);
-  const [showAutoMerge, setShowAutoMerge] = useState(false);
+  
 
 
   // Selection mode state
@@ -971,14 +971,6 @@ export default function Clientes() {
           </div>
         </div>
         
-        <button 
-          onClick={() => setShowAutoMerge(true)}
-          className="neu-card px-4 flex flex-col items-center justify-center gap-1 text-primary hover:bg-primary/5 transition-colors group rounded-2xl"
-          title="Identificar cadastros duplicados"
-        >
-          <GitMerge size={20} className="group-hover:scale-110 transition-transform" />
-          <span className="text-[10px] font-bold uppercase tracking-tight">Unificar</span>
-        </button>
       </div>
 
       {/* Filters Bar */}
@@ -1305,14 +1297,6 @@ export default function Clientes() {
         onOpenChange={(v) => { if (!v) setMesclandoCliente(null); }}
       />
     )}
-
-    {/* Modal de Unificação Inteligente (Auto Merge) */}
-    <AutoMergeDuplicatesModal 
-      clientes={clientes || []}
-      open={showAutoMerge}
-      onOpenChange={setShowAutoMerge}
-    />
-
 
     {/* Bottom Navigation */}
     <BottomNavigation />
