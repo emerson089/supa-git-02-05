@@ -30,6 +30,7 @@ import NotFound from "./pages/NotFound";
 import PecasEmConserto from "./pages/PecasEmConserto";
 import Comprovantes from "./pages/Comprovantes";
 import Transferencias from "./pages/Transferencias";
+import ConfigLocais from "./pages/ConfigLocais";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -115,6 +116,14 @@ function App() {
                       element={
                         <ProtectedRoute allowedRoles={['admin', 'gerente']}>
                           <ConfigCobrancas />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/configuracoes/locais"
+                      element={
+                        <ProtectedRoute allowedRoles={['admin', 'gerente']}>
+                          <ConfigLocais />
                         </ProtectedRoute>
                       }
                     />

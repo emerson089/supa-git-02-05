@@ -2,7 +2,7 @@ import {
   Package, LayoutDashboard, Warehouse, Users,
   ShoppingCart, HelpCircle, LogOut,
   ChevronRight, List,
-  Store, Factory, UserPlus, Settings2, Bus, DollarSign, Wrench, FileText, MessageSquare, Receipt
+  Store, Factory, UserPlus, Settings2, Bus, DollarSign, Wrench, FileText, MessageSquare, Receipt, MapPin
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/contexts/RoleContext';
@@ -102,6 +102,12 @@ const bottomNavGroups: NavItem[] = [
     label: 'Excursões',
     icon: <Bus size={18} />,
     path: '/configuracoes/excursoes',
+    roles: ['admin', 'gerente']
+  },
+  {
+    label: 'Locais de Estoque',
+    icon: <MapPin size={18} />,
+    path: '/configuracoes/locais',
     roles: ['admin', 'gerente']
   },
   {

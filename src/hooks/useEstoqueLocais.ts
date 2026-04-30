@@ -8,6 +8,7 @@ export interface EstoqueLocal {
   tipo: 'central' | 'loja' | 'banca';
   ativo: boolean;
   createdAt: string;
+  userId: string;
 }
 
 export interface EstoquePorLocal {
@@ -44,6 +45,7 @@ const mapDbLocalToLocal = (db: DbLocal): EstoqueLocal => ({
   tipo: db.tipo as 'central' | 'loja' | 'banca',
   ativo: db.ativo,
   createdAt: db.created_at,
+  userId: db.user_id,
 });
 
 const mapDbEstoquePorLocal = (db: DbEstoquePorLocal): EstoquePorLocal => ({
@@ -55,22 +57,25 @@ const mapDbEstoquePorLocal = (db: DbEstoquePorLocal): EstoquePorLocal => ({
   updatedAt: db.updated_at,
 });
 
-// Hook para buscar locais
-export function useLocais() {
+// Hook para buscar locais (apenas ativos por padrão)
+export function useLocais(apenasAtivos = true) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['estoque-locais', user?.id],
+    queryKey: ['estoque-locais', user?.id, apenasAtivos],
     queryFn: async () => {
       if (!user) return [];
 
-      // Não filtramos por user_id — a RLS decide quem pode ver.
-      // Isso permite que vendedor_loja veja locais compartilhados.
-      const { data, error } = await supabase
+      let query = supabase
         .from('estoque_locais')
         .select('*')
-        .eq('ativo', true)
         .order('created_at', { ascending: true });
+
+      if (apenasAtivos) {
+        query = query.eq('ativo', true);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return (data as DbLocal[]).map(mapDbLocalToLocal);
@@ -544,6 +549,101 @@ export function useSincronizarEstoqueInicial() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['estoque-por-local'] });
+    },
+  });
+}
+
+// Hook para criar um novo local
+export function useCriarLocal() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ nome, tipo }: { nome: string; tipo: 'central' | 'loja' | 'banca' }) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const { error } = await supabase
+        .from('estoque_locais')
+        .insert({
+          user_id: user.id,
+          nome,
+          tipo,
+          ativo: true,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estoque-locais'] });
+    },
+  });
+}
+
+// Hook para editar um local existente
+export function useEditarLocal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, nome, tipo }: { id: string; nome: string; tipo: 'central' | 'loja' | 'banca' }) => {
+      const { error } = await supabase
+        .from('estoque_locais')
+        .update({ nome, tipo })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estoque-locais'] });
+    },
+  });
+}
+
+// Hook para alternar o status de ativo de um local
+export function useAlternarAtivoLocal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
+      const { error } = await supabase
+        .from('estoque_locais')
+        .update({ ativo })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estoque-locais'] });
+    },
+  });
+}
+
+// Hook para excluir um local
+export function useExcluirLocal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Verificar se existem itens vinculados a este local
+      const { data, error: checkError } = await supabase
+        .from('estoque_por_local')
+        .select('id')
+        .eq('local_id', id);
+
+      if (checkError) throw checkError;
+      
+      if (data && data.length > 0) {
+        throw new Error('Não é possível excluir um local que possui registros de estoque. Desative-o em vez disso.');
+      }
+
+      const { error } = await supabase
+        .from('estoque_locais')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estoque-locais'] });
     },
   });
 }

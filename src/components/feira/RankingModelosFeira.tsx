@@ -49,7 +49,16 @@ function ModeloRow({ modelo, rank, showValor }: { modelo: ModeloRankingFeira; ra
 
       {/* Info principal */}
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-bold text-foreground truncate leading-none mb-0.5">{modelo.nome}</p>
+        <div className="flex items-center">
+          <p className="text-xs font-bold text-foreground truncate leading-none">{modelo.nome}</p>
+          {modelo.taxaVenda >= 70 ? (
+            <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded uppercase tracking-tighter ml-1.5 border border-emerald-100">Curva A</span>
+          ) : modelo.taxaVenda >= 30 ? (
+            <span className="text-[8px] font-black text-amber-600 bg-amber-50 px-1 py-0.5 rounded uppercase tracking-tighter ml-1.5 border border-amber-100">Curva B</span>
+          ) : (
+            <span className="text-[8px] font-black text-slate-400 bg-slate-50 px-1 py-0.5 rounded uppercase tracking-tighter ml-1.5 border border-slate-100">Curva C</span>
+          )}
+        </div>
 
         {/* Barra de venda */}
         <div className="flex items-center gap-1.5 mb-1">

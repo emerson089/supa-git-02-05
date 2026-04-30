@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,6 +57,7 @@ export function EditarCargaModal({
   const [observacoes, setObservacoes] = useState('');
   const [addGradeOpen, setAddGradeOpen] = useState(false);
   const [showDraftAlert, setShowDraftAlert] = useState(false);
+  const initializedCargaId = useRef<string | null>(null);
   
   // STORAGE KEY
   const STORAGE_KEY = carga ? `df_edit_carga_${carga.id}` : null;
@@ -69,10 +70,9 @@ export function EditarCargaModal({
     return produtos.find(p => p.id === itemId)?.quantidade ?? 0;
   };
 
-  // Inicializar itens quando a carga muda (sem getDisponivelCentral na deps para
-  // evitar reset do estado a cada re-render do pai)
+  // Inicializar itens apenas quando o ID da carga muda de fato
   useEffect(() => {
-    if (carga && STORAGE_KEY) {
+    if (carga && STORAGE_KEY && initializedCargaId.current !== carga.id) {
       // 1. Sempre carregar os dados oficiais inicialmente
       const serverItens = carga.itens.map((item) => ({
         itemId: item.itemId,
@@ -89,6 +89,7 @@ export function EditarCargaModal({
       setItensEdicao(serverItens);
       setObservacoes(carga.observacoes || '');
       setBuscaProduto('');
+      initializedCargaId.current = carga.id;
 
       // 2. Verificar se existe rascunho divergente
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -256,7 +257,12 @@ export function EditarCargaModal({
   };
 
   const handleSalvar = () => {
-    if (!carga || itensEdicao.length === 0) return;
+    if (!carga) return;
+
+    if (itensEdicao.length === 0) {
+      toast.error('A carga deve ter pelo menos 1 item. Para remover todos os itens, exclua a carga inteira no histórico.');
+      return;
+    }
 
     const itensInvalidos = itensEdicao.filter((i) => i.quantidade < 1);
     if (itensInvalidos.length > 0) {
@@ -516,13 +522,11 @@ export function EditarCargaModal({
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleRemoveGrupo(grupo.ids);
-                                }}
+                                className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                onClick={() => handleRemoveGrupo(grupo.ids)}
+                                title="Remover este modelo da carga"
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={18} />
                               </Button>
                             </div>
                           </div>
