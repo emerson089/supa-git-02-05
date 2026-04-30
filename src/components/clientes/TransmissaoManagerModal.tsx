@@ -277,9 +277,11 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
       msg = msg.split(tag).join(val);
     });
 
-    // Se a mensagem do catálogo não tem {nome}, adiciona saudação com contexto no topo
+    // Se a mensagem do catálogo não tem {nome}, adiciona saudação no topo
     if (!template.includes('{nome}')) {
-      const pool = saudacoesAtivas.length > 0 ? saudacoesAtivas : SAUDACOES_PADRAO;
+      // Usa apenas saudações que contêm {nome} — garante personalização correta
+      const poolComNome = saudacoesAtivas.filter(s => s.includes('{nome}'));
+      const pool = poolComNome.length > 0 ? poolComNome : SAUDACOES_PADRAO;
       const saudacao = pool[Math.floor(Math.random() * pool.length)];
       const saudacaoComNome = saudacao.replace(/\{nome\}/g, primeiroNome);
       msg = `${saudacaoComNome}\n\n${msg}`;
@@ -721,6 +723,15 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                     {saudacoesDirty && (
                       <p className="text-[10px] text-amber-600 font-bold">Você tem alterações não salvas.</p>
                     )}
+                    {(() => {
+                      const semNome = saudacoesAtivas.filter(s => !s.includes('{nome}'));
+                      if (semNome.length === 0) return null;
+                      return (
+                        <p className="text-[10px] text-red-600 font-bold flex items-center gap-1">
+                          ⚠ {semNome.length} saudação(ões) sem {'{nome}'} — serão ignoradas no envio. Adicione {'{nome}'} em todas as linhas.
+                        </p>
+                      );
+                    })()}
                   </div>
                 )}
               </Card>
