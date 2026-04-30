@@ -127,6 +127,18 @@ export function generatePedidoPDF(
       }
       return i.produtoNome || '';
     },
+    getItemModeloId: (i) => {
+      const produto = estoqueItens.find((p) => p.id === i.produtoId);
+      if (produto?.localizacao) {
+        try {
+          const loc = JSON.parse(produto.localizacao);
+          return loc.modeloId || null;
+        } catch (e) {
+          return null;
+        }
+      }
+      return null;
+    },
   });
 
   const tableData = groupedItens.map((item) => [

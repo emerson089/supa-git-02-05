@@ -45,7 +45,18 @@ Deno.serve(async (req) => {
       ? body.fileName.trim()
       : "catalogo.pdf";
     const caption = typeof body?.caption === "string" ? body.caption.trim() : "";
-    const type = body?.type === "document" || documentUrl.length > 0 ? "document" : "text";
+    const type = body?.type || (documentUrl.length > 0 ? "document" : "text");
+    
+    // Auto-detect type from URL if possible
+    let finalType = type;
+    if (documentUrl) {
+      const urlLower = documentUrl.toLowerCase();
+      if (urlLower.includes('.jpg') || urlLower.includes('.jpeg') || urlLower.includes('.png') || urlLower.includes('.webp')) {
+        finalType = 'image';
+      } else if (urlLower.includes('.mp4') || urlLower.includes('.mov') || urlLower.includes('.avi')) {
+        finalType = 'video';
+      }
+    }
 
     if (!phone || phone.length < 12 || phone.length > 13) {
       return new Response(JSON.stringify({ error: "Telefone inválido" }), {
@@ -54,7 +65,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (type === 'text') {
+    if (finalType === 'text') {
       if (!message) {
         return new Response(JSON.stringify({ error: "Mensagem não pode estar vazia" }), {
           status: 400,
@@ -73,36 +84,55 @@ Deno.serve(async (req) => {
     const zapiToken = Deno.env.get("ZAPI_TOKEN");
     const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN");
 
-    if (!instanceId || !zapiToken || !clientToken) {
-      console.error("Missing Z-API env vars:", { hasInstanceId: !!instanceId, hasToken: !!zapiToken, hasClientToken: !!clientToken });
-      return new Response(JSON.stringify({ error: "Credenciais Z-API não configuradas" }), {
+    if (!instanceId || !zapiToken) {
+      console.error("Missing Z-API env vars:", { hasInstanceId: !!instanceId, hasToken: !!zapiToken });
+      return new Response(JSON.stringify({ error: "Credenciais Z-API não configuradas (Instance ID ou Token faltando)" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (clientToken) {
+      headers["Client-Token"] = clientToken;
+    }
+
     let zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-text`;
     let requestBody: any = { phone, message };
 
-    if (type === 'document') {
-      zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-document/pdf`;
+    if (finalType === 'image') {
+      zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-image`;
+      requestBody = {
+        phone,
+        image: documentUrl,
+        caption: caption || message || ""
+      };
+    } else if (finalType === 'video') {
+      zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-video`;
+      requestBody = {
+        phone,
+        video: documentUrl,
+        caption: caption || message || ""
+      };
+    } else if (finalType === 'document') {
+      const extension = documentUrl.split('?')[0].split('.').pop()?.toLowerCase() || 'pdf';
+      zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-document/${extension}`;
       requestBody = {
         phone,
         document: documentUrl,
-        extension: ".pdf",
-        fileName: fileName || "catalogo.pdf",
+        extension: `.${extension}`,
+        fileName: fileName.endsWith(`.${extension}`) ? fileName : `${fileName}.${extension}`,
         caption: caption || message || ""
       };
     }
 
-    console.log(`[send-whatsapp] -> ${type} to ${phone} (fileName=${fileName})`);
+    console.log(`[send-whatsapp] -> ${finalType} to ${phone} (fileName=${fileName})`);
 
     const zapiResponse = await fetch(zapiUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Client-Token": clientToken,
-      },
+      headers,
       body: JSON.stringify(requestBody),
     });
 

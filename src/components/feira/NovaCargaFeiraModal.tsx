@@ -27,6 +27,7 @@ export interface ItemCarga {
   precoUnitario: number;
   disponivelCentral: number;
   imagemUrl: string | null;
+  modeloId: string | null;
 }
 
 interface NovaCargaFeiraModalProps {
@@ -127,7 +128,8 @@ export function NovaCargaFeiraModal({
       getItemPreco: i => i.precoUnitario,
       getItemQtd: i => i.quantidade,
       getItemImagem: i => i.imagemUrl,
-      getItemReferencia: i => i.referencia
+      getItemReferencia: i => i.referencia,
+      getItemModeloId: i => i.modeloId
     });
     return Object.values(groups);
   }, [itensCarga]);
@@ -264,6 +266,7 @@ export function NovaCargaFeiraModal({
           precoUnitario: selectedModel.precoUnitario || 0,
           disponivelCentral: getDisponivelCentral(selectedModel.id),
           imagemUrl: selectedModel.imagemUrl ?? null,
+          modeloId: selectedModel.id
         });
       }
     } else {
@@ -278,6 +281,7 @@ export function NovaCargaFeiraModal({
             precoUnitario: selectedModel.precoUnitario || 0,
             disponivelCentral: s.disponivel,
             imagemUrl: v.imagemUrl ?? selectedModel.imagemUrl ?? null,
+            modeloId: selectedModel.id
           });
         }
       }

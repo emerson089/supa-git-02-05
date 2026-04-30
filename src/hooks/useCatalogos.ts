@@ -54,7 +54,8 @@ export const useCatalogos = () => {
     if (!user?.id) throw new Error('Usuário não autenticado');
 
     const uuid = crypto.randomUUID();
-    const filePath = `${user.id}/catalogos/${uuid}.pdf`;
+    const extension = file.name.split('.').pop()?.toLowerCase() || 'pdf';
+    const filePath = `${user.id}/catalogos/${uuid}.${extension}`;
 
     const { error: uploadError } = await supabase.storage
       .from('lotes')

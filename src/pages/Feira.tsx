@@ -76,6 +76,7 @@ interface ItemCarga {
   precoUnitario: number;
   disponivelCentral: number;
   imagemUrl: string | null;
+  modeloId: string | null;
 }
 export default function Feira() {
   const { user } = useAuth();
@@ -349,6 +350,7 @@ export default function Feira() {
     referencia?: string;
     precoUnitario: number | null;
     imagemUrl?: string | null;
+    localizacao?: string | null;
   }, quantidade: number = 1): boolean => {
     const disponivel = getDisponivelCentral(produto.id);
     if (disponivel <= 0) {
@@ -370,7 +372,13 @@ export default function Feira() {
       quantidade: qtdFinal,
       precoUnitario: produto.precoUnitario || 0,
       disponivelCentral: disponivel,
-      imagemUrl: produto.imagemUrl ?? null
+      imagemUrl: produto.imagemUrl ?? null,
+      modeloId: (() => {
+        try {
+          const loc = JSON.parse(produto.localizacao || '{}');
+          return loc.modeloId || null;
+        } catch { return null; }
+      })()
     }]);
     return true;
   };
@@ -525,6 +533,7 @@ export default function Feira() {
       getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
       getItemImagem: (i) => (i as any).produtoImagem || (i as any).item?.imagem_url || null,
       getItemReferencia: (i) => (i as any).produtoNome || (i as any).item?.nome || '',
+      getItemModeloId: (i) => (i as any).modeloId || null,
     });
 
     const valoresSalvos = retornosSalvos[carga.id];
@@ -751,6 +760,7 @@ export default function Feira() {
       getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
       getItemImagem: (i) => (i as any).produtoImagem,
       getItemReferencia: (i) => (i as any).produtoNome || '',
+      getItemModeloId: (i) => (i as any).modeloId || null,
     });
   }, [cargaSelecionada]);
 

@@ -646,6 +646,16 @@ Qualquer dúvida é só chamar! 😊`;
     },
     getItemPreco: (i: typeof itens[0]) => i.valor_unitario ?? 0,
     getItemQtd: (i: typeof itens[0]) => i.quantidade ?? 0,
+    getItemModeloId: (i: typeof itens[0]) => {
+      const produto = estoqueItens.find(p => p.id === i.produto_id);
+      if (produto?.localizacao) {
+        try {
+          const loc = JSON.parse(produto.localizacao);
+          return loc.modeloId || null;
+        } catch { return null; }
+      }
+      return null;
+    }
   });
 
   const getModelosResumo = (pedido: PedidoPaginatedDB) => {
@@ -1475,6 +1485,16 @@ Qualquer dúvida é só chamar! 😊`;
             getItemImagem: (item: any) => {
               const produto = estoqueItens.find(p => p.id === item.produto_id);
               return produto?.imagemUrl || null;
+            },
+            getItemModeloId: (item: any) => {
+              const produto = estoqueItens.find(p => p.id === item.produto_id);
+              if (produto?.localizacao) {
+                try {
+                  const loc = JSON.parse(produto.localizacao);
+                  return loc.modeloId || null;
+                } catch { return null; }
+              }
+              return null;
             }
           });
 

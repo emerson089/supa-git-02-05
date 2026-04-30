@@ -429,6 +429,7 @@ export default function Clientes() {
     user
   } = useAuth();
   const {
+    clientes,
     addCliente,
     updateCliente,
     removeCliente
@@ -489,6 +490,7 @@ export default function Clientes() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<ClientePaginatedDB | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState(emptyCliente);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clienteToDelete, setClienteToDelete] = useState<ClientePaginatedDB | null>(null);
@@ -497,8 +499,10 @@ export default function Clientes() {
   // Selection mode state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isAllMatchingSelected, setIsAllMatchingSelected] = useState(false);
 
   const handleToggleSelect = useCallback((id: string) => {
+    setIsAllMatchingSelected(false); // Reset global selection on manual toggle
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -510,6 +514,7 @@ export default function Clientes() {
   const handleExitSelection = useCallback(() => {
     setIsSelectionMode(false);
     setSelectedIds(new Set());
+    setIsAllMatchingSelected(false);
   }, []);
 
   const { data: excursoesAtivas } = useExcursoesAtivas();
@@ -537,12 +542,19 @@ export default function Clientes() {
 
   // Select-all needs rawClientes so it must be declared after it
   const handleSelectAll = useCallback(() => {
+    setIsAllMatchingSelected(false);
     if (selectedIds.size === rawClientes.length) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(rawClientes.map(c => c.id)));
     }
   }, [rawClientes, selectedIds.size]);
+
+  const handleSelectAllMatching = useCallback(() => {
+    setIsAllMatchingSelected(true);
+    // When all matching is selected, we keep selectedIds as just the current page for visual feedback
+    // but the logic will prioritize isAllMatchingSelected
+  }, []);
 
   // Get IDs of visible clients for batch CRM stats
   const visibleClienteIds = useMemo(() => {
@@ -596,12 +608,41 @@ export default function Clientes() {
     setModalOpen(true);
   }, []);
   const handleSave = async () => {
+    if (isSaving) return;
+
+    const normalizedNome = formData.nome.trim();
+    const normalizedTelefone = formData.telefone.replace(/\D/g, '');
+
+    if (!normalizedNome) {
+      toast.error('O nome do cliente é obrigatório.');
+      return;
+    }
+
+    // Trava de segurança imediata
+    setIsSaving(true);
+
+    // Trava de segurança: apenas para novos clientes
+    if (!editingCliente) {
+      const duplicado = clientes.find(c => 
+        c.nome.trim().toLowerCase() === normalizedNome.toLowerCase() &&
+        c.telefone.replace(/\D/g, '') === normalizedTelefone
+      );
+
+      if (duplicado) {
+        toast.error(`Já existe um cliente cadastrado com este nome e telefone: ${duplicado.nome}`);
+        setIsSaving(false);
+        return;
+      }
+    }
+
     const result = ClienteSchema.safeParse(formData);
     if (!result.success) {
       const firstError = result.error.errors[0]?.message || 'Dados inválidos';
       toast.error(firstError);
+      setIsSaving(false);
       return;
     }
+
     try {
       let cleanedTelefone = result.data.telefone.replace(/\D/g, '');
       
@@ -633,8 +674,8 @@ export default function Clientes() {
       setModalOpen(false);
       setFormData(emptyCliente);
       setEditingCliente(null);
-    } catch (error) {
-      toast.error('Erro ao salvar cliente');
+    } finally {
+      setIsSaving(false);
     }
   };
   const handleDeleteClick = useCallback((cliente: ClientePaginatedDB) => {
@@ -671,15 +712,79 @@ export default function Clientes() {
     URL.revokeObjectURL(url);
   };
 
-  const handleExportSelected = useCallback(() => {
-    const selected = rawClientes.filter(c => selectedIds.has(c.id));
-    if (selected.length === 0) {
+  const handleExportSelected = useCallback(async () => {
+    if (!user?.id) return;
+    
+    const count = isAllMatchingSelected ? totalCount : selectedIds.size;
+    if (count === 0) {
       toast.error('Nenhum cliente selecionado.');
       return;
     }
-    buildAndDownloadCSV(selected, `clientes_selecionados_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`);
-    toast.success(`${selected.length} cliente(s) exportado(s) com sucesso!`);
-  }, [rawClientes, selectedIds]);
+
+    const toastId = toast.loading(`Preparando exportação de ${count} cliente(s)...`);
+    
+    try {
+      let clientsToExport: ClientePaginatedDB[] = [];
+
+      if (isAllMatchingSelected) {
+        // Fetch ALL matching clients (respecting filter and search)
+        let from = 0;
+        const batchSize = 1000;
+        let hasMore = true;
+        
+        while (hasMore) {
+          let query = supabase
+            .from('clientes')
+            .select('id, nome, telefone, cidade, estado, excursao, created_at, user_id')
+            .eq('user_id', user.id);
+
+          // Apply CRM filters if any
+          if (filtroStatus !== 'todos' && crmFilterIds) {
+            query = query.in('id', crmFilterIds);
+          }
+
+          // Apply search if any
+          if (busca) {
+            const searchTerm = `%${busca}%`;
+            query = query.or(`nome.ilike.${searchTerm},telefone.ilike.${searchTerm},cidade.ilike.${searchTerm},excursao.ilike.${searchTerm}`);
+          }
+
+          const { data, error } = await query
+            .order('nome')
+            .range(from, from + batchSize - 1);
+
+          if (error) throw error;
+          if (data && data.length > 0) {
+            clientsToExport = [...clientsToExport, ...data];
+            from += batchSize;
+            hasMore = data.length === batchSize;
+          } else {
+            hasMore = false;
+          }
+        }
+      } else {
+        // Fetch specifically selected IDs in batches of 1000
+        const idsArray = Array.from(selectedIds);
+        for (let i = 0; i < idsArray.length; i += 1000) {
+          const batchIds = idsArray.slice(i, i + 1000);
+          const { data, error } = await supabase
+            .from('clientes')
+            .select('id, nome, telefone, cidade, estado, excursao, created_at, user_id')
+            .in('id', batchIds)
+            .order('nome');
+          
+          if (error) throw error;
+          if (data) clientsToExport = [...clientsToExport, ...data];
+        }
+      }
+
+      buildAndDownloadCSV(clientsToExport, `clientes_selecionados_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`);
+      toast.success(`${clientsToExport.length} cliente(s) exportado(s) com sucesso!`, { id: toastId });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Erro ao exportar clientes.', { id: toastId });
+    }
+  }, [user?.id, isAllMatchingSelected, selectedIds, totalCount, filtroStatus, crmFilterIds, busca]);
 
   const handleExportCSV = async () => {
     if (!user?.id) {
@@ -966,11 +1071,22 @@ export default function Clientes() {
             </button>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">
-                {selectedIds.size === 0
-                  ? 'Nenhum selecionado'
-                  : `${selectedIds.size} cliente${selectedIds.size > 1 ? 's' : ''} selecionado${selectedIds.size > 1 ? 's' : ''}`}
+                {isAllMatchingSelected
+                  ? `Todos os ${totalCount.toLocaleString()} clientes selecionados`
+                  : `${selectedIds.size} cliente${selectedIds.size > 1 ? 's' : ''} selecionado${selectedIds.size > 1 ? 's' : ''}`
+                }
               </p>
-              <p className="text-xs text-muted-foreground">Clique nos cards para selecionar</p>
+              {!isAllMatchingSelected && selectedIds.size === rawClientes.length && totalCount > rawClientes.length && (
+                <button
+                  onClick={handleSelectAllMatching}
+                  className="text-xs text-primary hover:underline font-medium block"
+                >
+                  Selecionar todos os {totalCount.toLocaleString()} clientes?
+                </button>
+              )}
+              {!isAllMatchingSelected && (selectedIds.size < rawClientes.length || totalCount <= rawClientes.length) && (
+                <p className="text-xs text-muted-foreground">Clique nos cards para selecionar</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -982,7 +1098,7 @@ export default function Clientes() {
             </button>
             <Button
               onClick={handleExportSelected}
-              disabled={selectedIds.size === 0}
+              disabled={selectedIds.size === 0 && !isAllMatchingSelected}
               className="h-9 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               <Download size={15} className="mr-2" />
@@ -1088,8 +1204,17 @@ export default function Clientes() {
             <Button variant="outline" onClick={() => setModalOpen(false)} className="flex-1 h-11 rounded-xl border-0 text-muted-foreground hover:text-foreground">
               Cancelar
             </Button>
-            <Button onClick={handleSave} className="flex-1 h-11 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground">
-              {editingCliente ? 'Salvar Alterações' : 'Cadastrar'}
+            <Button 
+              onClick={handleSave} 
+              disabled={isSaving}
+              className="flex-1 h-11 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground"
+            >
+              {isSaving ? (
+                <>
+                  <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
+                  Salvando...
+                </>
+              ) : editingCliente ? 'Salvar Alterações' : 'Cadastrar'}
             </Button>
           </div>
         </div>

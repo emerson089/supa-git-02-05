@@ -105,6 +105,7 @@ export function DetalhesCargaModal({ carga, onClose, onExcluirCarga, onRegistrar
     getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
     getItemImagem: (i) => i.produtoImagem,
     getItemReferencia: (i) => i.produtoNome || "",
+    getItemModeloId: (i) => i.modeloId || null,
   }).map(g => {
     const retornado = g.itens.reduce((sum: number, item: any) => sum + (Number(item.quantidadeRetornada) || 0), 0);
     const enviado = g.quantidadeTotal;

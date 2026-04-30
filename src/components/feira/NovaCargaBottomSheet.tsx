@@ -16,6 +16,7 @@ interface ItemCarga {
   precoUnitario: number;
   disponivelCentral: number;
   imagemUrl: string | null;
+  modeloId: string | null;
 }
 
 interface NovaCargaBottomSheetProps {

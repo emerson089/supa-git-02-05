@@ -163,7 +163,7 @@ export function EditarCargaModal({
       getItemQtd: (i) => i.quantidade,
       getItemImagem: (i) => i.imagemUrl,
       getItemReferencia: (i) => i.nome,
-      getItemModeloId: (i) => i.modeloId,
+      getItemModeloId: (i) => i.modeloId || null,
     }),
     [itensEdicao]
   );

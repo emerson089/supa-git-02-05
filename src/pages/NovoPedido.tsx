@@ -180,6 +180,7 @@ const NovoPedido = () => {
     estado: '',
     excursao: ''
   });
+  const [isSavingCliente, setIsSavingCliente] = useState(false);
 
   // Calculate totals
   const valorItens = items.reduce((sum, item) => sum + item.quantidade * item.valorUnitario, 0);
@@ -541,13 +542,40 @@ Após o pagamento, envie o comprovante aqui e a gente já separa o seu pedido. �
     setShowAddCliente(true);
   }, []);
   const handleSaveNovoCliente = useCallback(async () => {
+    if (isSavingCliente) return;
+
+    const normalizedNome = novoCliente.nome.trim();
+    const normalizedTelefone = novoCliente.telefone.replace(/\D/g, '');
+
+    if (!normalizedNome) {
+      toast.error('O nome do cliente é obrigatório.');
+      return;
+    }
+    
+    // Trava de segurança imediata
+    setIsSavingCliente(true);
+
+    // Trava de segurança: verificar se já existe cliente com mesmo nome e telefone
+    const duplicado = clientes.find(c => 
+      c.nome.trim().toLowerCase() === normalizedNome.toLowerCase() &&
+      c.telefone.replace(/\D/g, '') === normalizedTelefone
+    );
+
+    if (duplicado) {
+      toast.error(`Já existe um cliente cadastrado com este nome e telefone: ${duplicado.nome}`);
+      setIsSavingCliente(false);
+      return;
+    }
+
     // Custom pre-flight validations for UI alerts
     if (!novoCliente.telefone) {
       toast.error('O telefone é obrigatório.');
+      setIsSavingCliente(false);
       return;
     }
     if (!novoCliente.excursao) {
       toast.error('Por favor, selecione a excursão.');
+      setIsSavingCliente(false);
       return;
     }
 
@@ -562,8 +590,10 @@ Após o pagamento, envie o comprovante aqui e a gente já separa o seu pedido. �
     if (!result.success) {
       const firstError = result.error.errors[0]?.message || 'Dados inválidos';
       toast.error(firstError);
+      setIsSavingCliente(false);
       return;
     }
+
     try {
       let cleanedTelefone = result.data.telefone; // Already stripped by rawData
       
@@ -612,10 +642,10 @@ Após o pagamento, envie o comprovante aqui e a gente já separa o seu pedido. �
         estado: '',
         excursao: ''
       });
-    } catch (error) {
-      toast.error('Erro ao cadastrar cliente');
+    } finally {
+      setIsSavingCliente(false);
     }
-  }, [novoCliente, addCliente, excursoesAtivas]);
+  }, [novoCliente, addCliente, excursoesAtivas, clientes, isSavingCliente]);
   return <div className="min-h-screen bg-background flex overflow-hidden">
     {/* Mobile Header */}
     {isMobile && <MobileHeader title="Novo Pedido" />}
@@ -825,8 +855,17 @@ Após o pagamento, envie o comprovante aqui e a gente já separa o seu pedido. �
           <Button variant="outline" onClick={() => setShowAddCliente(false)} className="flex-1 h-11 rounded-xl border-0 text-muted-foreground hover:text-foreground">
             Cancelar
           </Button>
-          <Button onClick={handleSaveNovoCliente} className="flex-1 h-11 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground">
-            Salvar Cliente
+          <Button 
+            onClick={handleSaveNovoCliente} 
+            disabled={isSavingCliente}
+            className="flex-1 h-11 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground"
+          >
+            {isSavingCliente ? (
+              <>
+                <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
+                Salvando...
+              </>
+            ) : 'Salvar Cliente'}
           </Button>
         </div>
       </DialogContent>

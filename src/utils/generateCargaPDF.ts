@@ -167,7 +167,8 @@ export async function generateCargaPDF(
     getItemReferencia: (i) => i.produtoNome || "",
     getItemPreco: (i) => Number(i.precoUnitario) || Number(i.produtoPreco) || 0,
     getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
-    getItemImagem: (i) => i.produtoImagem
+    getItemImagem: (i) => i.produtoImagem,
+    getItemModeloId: (i) => i.modeloId || null
   });
 
   doc.setDrawColor(...primaryColor);

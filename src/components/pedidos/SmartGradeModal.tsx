@@ -445,7 +445,7 @@ export function SmartGradeModal({
                                 />
                             </div>
 
-                            <ScrollArea className="flex-1 -mx-2 px-2">
+                            <div className="flex-1 overflow-y-auto -mx-2 px-2 min-h-0">
                                 <div className="grid grid-cols-1 gap-2 pb-4">
                                     {filteredModels.map(m => (
                                         <button
@@ -484,10 +484,10 @@ export function SmartGradeModal({
                                         </div>
                                     )}
                                 </div>
-                            </ScrollArea>
+                            </div>
                         </div>
                     ) : (
-                        <ScrollArea className="flex-1">
+                        <div className="flex-1 overflow-y-auto min-h-0">
                             <div className="p-6 space-y-6">
                                 {/* Card do Modelo Selecionado */}
                                 <div className="p-4 rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 flex items-center justify-between gap-4 shadow-sm">
@@ -667,7 +667,7 @@ export function SmartGradeModal({
                                     </>
                                 )}
                             </div>
-                        </ScrollArea>
+                        </div>
                     )}
                 </div>
 

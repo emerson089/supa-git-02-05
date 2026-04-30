@@ -68,6 +68,7 @@ export function RetornoEmMassaModal({ open, cargas, onClose, onConfirmar, isLoad
                 getItemQtd: (i) => Number(i.quantidadeEnviada) || 0,
                 getItemImagem: (i) => i.produtoImagem,
                 getItemReferencia: (i) => i.produtoNome || '',
+                getItemModeloId: (i) => (i as any).modeloId || null,
             }),
         })),
         [cargas]

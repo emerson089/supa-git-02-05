@@ -11,6 +11,7 @@ interface Produto {
   nome: string;
   precoUnitario: number | null;
   imagemUrl?: string | null;
+  localizacao?: string | null;
 }
 
 interface ItemCarga {
@@ -20,6 +21,7 @@ interface ItemCarga {
   precoUnitario: number;
   disponivelCentral: number;
   imagemUrl: string | null;
+  modeloId: string | null;
 }
 
 interface SkuInfo {
@@ -94,9 +96,16 @@ export function NovaCargaStepProdutos({
     for (const produto of produtos) {
       const info = parseProductName(produto.nome, produto.id);
       const preco = produto.precoUnitario || 0;
-      // Só agrupa quando há tamanho real extraído (ex: 36, 38, P, M, G…).
-      // Sem tamanho cada SKU vira sua própria entrada para evitar chips idênticos.
-      const key = info.tamanho ? `${info.refBase}-${preco}` : `solo-${produto.id}`;
+      
+      const modeloId = (() => {
+        try {
+          const loc = JSON.parse(produto.localizacao || '{}');
+          return loc.modeloId || null;
+        } catch { return null; }
+      })();
+
+      // Prioriza modeloId para agrupamento, senão usa lógica baseada em nome/ref
+      const key = modeloId ? `mod-${modeloId}-${preco}` : (info.tamanho ? `${info.refBase}-${preco}` : `solo-${produto.id}`);
 
       if (!groups[key]) {
         groups[key] = {

@@ -44,8 +44,8 @@ export const parseProductName = (nome: string, referencia: string): ProductInfo 
       numeros = looseMatchName[1];
     } else {
       // Fallback final: último grupo numérico de qualquer tamanho
-      const numMatchRef = currentRef.match(/(\d+)\D*$/);
-      const numMatchName = currentName.match(/(\d+)\D*$/);
+      const numMatchRef = currentRef.match(/(\d{3,})\D*$/);
+      const numMatchName = currentName.match(/(\d{3,})\D*$/);
       numeros = numMatchRef ? numMatchRef[1] : (numMatchName ? numMatchName[1] : "");
     }
   }

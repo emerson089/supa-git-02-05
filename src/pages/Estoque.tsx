@@ -136,6 +136,7 @@ export default function Estoque() {
   const [showDuplicadoModal, setShowDuplicadoModal] = useState(false);
   const [produtoDuplicado, setProdutoDuplicado] = useState<ItemEstoque | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [novoModeloForm, setNovoModeloForm] = useState({
     nome: '',
@@ -712,7 +713,9 @@ export default function Estoque() {
       setUploadingImage(false);
     }
   };
-  const handleSaveNovoModelo = () => {
+  const handleSaveNovoModelo = async () => {
+    if (isSaving) return;
+
     // Validate with Zod schema
     const result = NovoModeloAcabadoSchema.safeParse(novoModeloForm);
     if (!result.success) {
@@ -721,47 +724,57 @@ export default function Estoque() {
       return;
     }
 
+    setIsSaving(true);
+
     // Verificar se já existe um produto com o mesmo nome/referência
     const nomeCompleto = novoModeloForm.referencia ? `${novoModeloForm.nome} - ${novoModeloForm.referencia}` : novoModeloForm.nome;
     const produtoExistente = itens.find(item => item.tipo === 'acabado' && item.nome.toLowerCase() === nomeCompleto.toLowerCase());
     if (produtoExistente) {
       setProdutoDuplicado(produtoExistente);
       setShowDuplicadoModal(true);
+      setIsSaving(false);
       return;
     }
 
     // Criar novo produto
-    criarNovoModeloAcabado(nomeCompleto, false);
+    await criarNovoModeloAcabado(nomeCompleto, false);
   };
-  const criarNovoModeloAcabado = (nomeCompleto: string, somarQuantidade: boolean) => {
-    if (somarQuantidade && produtoDuplicado) {
-      // Somar à quantidade existente
-      updateItem(produtoDuplicado.id, {
-        quantidade: produtoDuplicado.quantidade + novoModeloForm.quantidade,
-        quantidadeInicial: (produtoDuplicado.quantidadeInicial || 0) + novoModeloForm.quantidade,
-        precoUnitario: novoModeloForm.precoVenda || (produtoDuplicado.precoUnitario ?? 0),
-        imagemUrl: novoModeloForm.imagemUrl || produtoDuplicado.imagemUrl || undefined
-      });
-      toast.success(`Quantidade somada ao produto existente!`);
-    } else {
-      // Criar novo
-      addItem({
-        nome: nomeCompleto,
-        tipo: 'acabado',
-        categoria: 'Modelo Manual',
-        quantidade: novoModeloForm.quantidade,
-        unidade: 'peças',
-        quantidadeMinima: 0,
-        precoUnitario: novoModeloForm.precoVenda,
-        localizacao: 'Estoque Produção',
-        imagemUrl: novoModeloForm.imagemUrl,
-        quantidadeInicial: novoModeloForm.quantidade
-      });
-      toast.success('Modelo adicionado ao estoque!');
+  const criarNovoModeloAcabado = async (nomeCompleto: string, somarQuantidade: boolean) => {
+    try {
+      if (somarQuantidade && produtoDuplicado) {
+        // Somar à quantidade existente
+        await updateItem(produtoDuplicado.id, {
+          quantidade: produtoDuplicado.quantidade + novoModeloForm.quantidade,
+          quantidadeInicial: (produtoDuplicado.quantidadeInicial || 0) + novoModeloForm.quantidade,
+          precoUnitario: novoModeloForm.precoVenda || (produtoDuplicado.precoUnitario ?? 0),
+          imagemUrl: novoModeloForm.imagemUrl || produtoDuplicado.imagemUrl || undefined
+        });
+        toast.success(`Quantidade somada ao produto existente!`);
+      } else {
+        // Criar novo
+        await addItem({
+          nome: nomeCompleto,
+          tipo: 'acabado',
+          categoria: 'Modelo Manual',
+          quantidade: novoModeloForm.quantidade,
+          unidade: 'peças',
+          quantidadeMinima: 0,
+          precoUnitario: novoModeloForm.precoVenda,
+          localizacao: 'Estoque Produção',
+          imagemUrl: novoModeloForm.imagemUrl,
+          quantidadeInicial: novoModeloForm.quantidade
+        });
+        toast.success('Modelo adicionado ao estoque!');
+      }
+      setShowNovoModeloModal(false);
+      setShowDuplicadoModal(false);
+      setProdutoDuplicado(null);
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao salvar o modelo.');
+    } finally {
+      setIsSaving(false);
     }
-    setShowNovoModeloModal(false);
-    setShowDuplicadoModal(false);
-    setProdutoDuplicado(null);
   };
   return <div className="min-h-screen bg-background flex overflow-hidden">
     {/* Mobile Header */}
@@ -1540,9 +1553,13 @@ export default function Estoque() {
           <Button variant="outline" onClick={() => setShowNovoModeloModal(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSaveNovoModelo} disabled={uploadingImage} className="gap-2 bg-gradient-to-r from-primary to-primary/80">
-            <Check size={16} />
-            Adicionar ao Estoque
+          <Button 
+            onClick={handleSaveNovoModelo} 
+            disabled={uploadingImage || isSaving} 
+            className="gap-2 bg-gradient-to-r from-primary to-primary/80"
+          >
+            {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+            {isSaving ? 'Salvando...' : 'Adicionar ao Estoque'}
           </Button>
         </DialogFooter>
       </DialogContent>
