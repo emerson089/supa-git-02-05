@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, memo, useEffect } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw, ChevronLeft, ChevronRight, ChevronsUpDown, Check, CheckCircle2, PhoneCall, MessageCircle, MessageSquarePlus, Send, Loader2 } from 'lucide-react';
+import { Search, Phone, MapPin, Tag, User, Plus, Pencil, FileSpreadsheet, Download, Trash2, AlertTriangle, Users, Receipt, TrendingUp, Calendar, RefreshCw, ChevronLeft, ChevronRight, ChevronsUpDown, Check, CheckCircle2, PhoneCall, MessageCircle, MessageSquarePlus, Send, Loader2, GitMerge } from 'lucide-react';
 import { useExcursoesAtivas } from '@/hooks/useExcursoes';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -40,6 +40,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FeedbackModal } from '@/components/clientes/FeedbackModal';
+import { MesclarClientesModal } from '@/components/clientes/MesclarClientesModal';
+import { AutoMergeDuplicatesModal } from '@/components/clientes/AutoMergeDuplicatesModal';
+import { useClientes } from '@/hooks/useClientesData';
+
 
 const emptyCliente = {
   nome: '',
@@ -108,6 +112,7 @@ const ClienteCard = memo(function ClienteCard({
   isMobile,
   onEdit,
   onDelete,
+  onMesclar,
   prioridadeNivel,
   showPrioridade,
   contatoInfo,
@@ -123,6 +128,7 @@ const ClienteCard = memo(function ClienteCard({
   isMobile: boolean;
   onEdit: (cliente: ClientePaginatedDB) => void;
   onDelete: (cliente: ClientePaginatedDB) => void;
+  onMesclar?: (cliente: ClientePaginatedDB) => void;
   prioridadeNivel?: PrioridadeNivel;
   showPrioridade?: boolean;
   contatoInfo?: { data: string; canal: string } | null;
@@ -304,6 +310,9 @@ const ClienteCard = memo(function ClienteCard({
 
           <button onClick={() => onEdit(cliente)} className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors flex-shrink-0">
             <Pencil size={14} className="text-muted-foreground hover:text-primary" />
+          </button>
+          <button onClick={() => onMesclar?.(cliente)} className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-violet-500/10 transition-colors flex-shrink-0" title="Mesclar com outro cliente">
+            <GitMerge size={14} className="text-muted-foreground hover:text-violet-500" />
           </button>
           <button onClick={() => onDelete(cliente)} className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-destructive/10 transition-colors flex-shrink-0">
             <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
@@ -495,6 +504,9 @@ export default function Clientes() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clienteToDelete, setClienteToDelete] = useState<ClientePaginatedDB | null>(null);
   const [excursaoPopoverOpen, setExcursaoPopoverOpen] = useState(false);
+  const [mesclandoCliente, setMesclandoCliente] = useState<ClientePaginatedDB | null>(null);
+  const [showAutoMerge, setShowAutoMerge] = useState(false);
+
 
   // Selection mode state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -539,11 +551,16 @@ export default function Clientes() {
   });
 
   const rawClientes = paginatedData?.data || [];
+  const totalCount = paginatedData?.count || 0;
+  const totalPages = paginatedData?.totalPages || 1;
+  const fromItem = totalCount === 0 ? 0 : currentPage * PAGE_SIZE + 1;
+  const toItem = Math.min((currentPage + 1) * PAGE_SIZE, totalCount);
+  const isLoading = paginatedLoading || (filtroStatus !== 'todos' && crmFilterLoading);
 
   // Select-all needs rawClientes so it must be declared after it
   const handleSelectAll = useCallback(() => {
     setIsAllMatchingSelected(false);
-    if (selectedIds.size === rawClientes.length) {
+    if (selectedIds.size === rawClientes.length && rawClientes.length > 0) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(rawClientes.map(c => c.id)));
@@ -623,15 +640,25 @@ export default function Clientes() {
 
     // Trava de segurança: apenas para novos clientes
     if (!editingCliente) {
-      const duplicado = clientes.find(c => 
-        c.nome.trim().toLowerCase() === normalizedNome.toLowerCase() &&
-        c.telefone.replace(/\D/g, '') === normalizedTelefone
-      );
+      try {
+        const { data: duplicateData, error: duplicateError } = await supabase
+          .from('clientes')
+          .select('id, nome')
+          .eq('user_id', user!.id)
+          .ilike('nome', normalizedNome)
+          .eq('telefone', normalizedTelefone)
+          .maybeSingle();
 
-      if (duplicado) {
-        toast.error(`Já existe um cliente cadastrado com este nome e telefone: ${duplicado.nome}`);
-        setIsSaving(false);
-        return;
+        if (duplicateError) throw duplicateError;
+
+        if (duplicateData) {
+          toast.error(`Já existe um cliente cadastrado com este nome e telefone: ${duplicateData.nome}`);
+          setIsSaving(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Error checking for duplicates:', err);
+        // Continue if check fails, but log it
       }
     }
 
@@ -825,12 +852,8 @@ export default function Clientes() {
   };
 
 
-  // Pagination info
-  const totalCount = paginatedData?.count || 0;
-  const totalPages = paginatedData?.totalPages || 1;
-  const fromItem = totalCount === 0 ? 0 : currentPage * PAGE_SIZE + 1;
-  const toItem = Math.min((currentPage + 1) * PAGE_SIZE, totalCount);
-  const isLoading = paginatedLoading || filtroStatus !== 'todos' && crmFilterLoading;
+  // State-derived constants moved above
+
   return <div className="flex min-h-screen bg-background">
     {/* Mobile Header */}
     {isMobile && <MobileHeader title="Clientes" />}
@@ -936,15 +959,26 @@ export default function Clientes() {
         </Card>
       </div>
 
-      {/* Search Bar */}
-      <div className="neu-card p-4 mb-4 rounded-2xl">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-          <Input placeholder="Buscar por nome, telefone, cidade ou excursão..." value={busca} onChange={e => handleSearchChange(e.target.value)} className="h-12 pl-12 rounded-xl neu-input border-0 bg-background text-base" />
-          {isFetching && <div className="absolute right-4 top-1/2 -translate-y-1/2">
-            <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-          </div>}
+      {/* Search Bar & Auto Merge */}
+      <div className="flex gap-3 mb-4">
+        <div className="flex-1 neu-card p-4 rounded-2xl">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+            <Input placeholder="Buscar por nome, telefone, cidade ou excursão..." value={busca} onChange={e => handleSearchChange(e.target.value)} className="h-12 pl-12 rounded-xl neu-input border-0 bg-background text-base" />
+            {isFetching && <div className="absolute right-4 top-1/2 -translate-y-1/2">
+              <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>}
+          </div>
         </div>
+        
+        <button 
+          onClick={() => setShowAutoMerge(true)}
+          className="neu-card px-4 flex flex-col items-center justify-center gap-1 text-primary hover:bg-primary/5 transition-colors group rounded-2xl"
+          title="Identificar cadastros duplicados"
+        >
+          <GitMerge size={20} className="group-hover:scale-110 transition-transform" />
+          <span className="text-[10px] font-bold uppercase tracking-tight">Unificar</span>
+        </button>
       </div>
 
       {/* Filters Bar */}
@@ -1014,6 +1048,7 @@ export default function Clientes() {
               isMobile={isMobile}
               onEdit={handleOpenEdit}
               onDelete={handleDeleteClick}
+              onMesclar={setMesclandoCliente}
               prioridadeNivel={prio.nivel}
               showPrioridade={false}
               contatoInfo={contato}
@@ -1090,6 +1125,19 @@ export default function Clientes() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {selectedIds.size === 2 && (
+              <Button
+                onClick={() => {
+                  const ids = Array.from(selectedIds);
+                  const c1 = rawClientes.find(c => c.id === ids[0]);
+                  if (c1) setMesclandoCliente(c1);
+                }}
+                className="h-9 px-4 rounded-xl bg-violet-500 hover:bg-violet-600 text-white shadow-md shadow-violet-500/30 transition-all"
+              >
+                <GitMerge size={15} className="mr-2" />
+                Mesclar
+              </Button>
+            )}
             <button
               onClick={handleSelectAll}
               className="h-9 px-3 rounded-xl text-xs font-medium border border-border bg-background hover:bg-muted/60 text-foreground transition-colors"
@@ -1246,6 +1294,24 @@ export default function Clientes() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+
+    {/* Modal de Mesclar Clientes Manual */}
+    {mesclandoCliente && (
+      <MesclarClientesModal
+        fonte={mesclandoCliente}
+        clientes={rawClientes}
+        open={!!mesclandoCliente}
+        onOpenChange={(v) => { if (!v) setMesclandoCliente(null); }}
+      />
+    )}
+
+    {/* Modal de Unificação Inteligente (Auto Merge) */}
+    <AutoMergeDuplicatesModal 
+      clientes={clientes || []}
+      open={showAutoMerge}
+      onOpenChange={setShowAutoMerge}
+    />
 
 
     {/* Bottom Navigation */}

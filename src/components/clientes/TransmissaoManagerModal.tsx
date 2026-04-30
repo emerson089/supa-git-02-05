@@ -215,26 +215,43 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
     }
   }, [open, status, total]);
 
-  // Carregar saudações personalizadas do banco apenas quando o modal ABRE
-  // getPerfilConfig é intencionalmente omitida das deps: não é memoizada no hook
-  // e causaria re-execução a cada render (sobrescrevendo edições do usuário)
+  const SAUDACOES_LS_KEY = 'transmissao_saudacoes';
+
+  // Carregar saudações: DB primeiro, localStorage como fallback, padrão como último recurso
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     (async () => {
       const cfg: any = await getPerfilConfig();
       if (cancelled) return;
-      const list: string[] | undefined = cfg?.saudacoes_personalizadas;
-      if (Array.isArray(list) && list.length > 0) {
-        setSaudacoesText(list.join('\n'));
+      const listDB: string[] | undefined = cfg?.saudacoes_personalizadas;
+      if (Array.isArray(listDB) && listDB.length > 0) {
+        setSaudacoesText(listDB.join('\n'));
       } else {
-        setSaudacoesText(SAUDACOES_PADRAO.join('\n'));
+        // Fallback: localStorage (salvo localmente como backup)
+        const lsRaw = localStorage.getItem(SAUDACOES_LS_KEY);
+        const listLS = lsRaw ? JSON.parse(lsRaw) : null;
+        if (Array.isArray(listLS) && listLS.length > 0) {
+          setSaudacoesText(listLS.join('\n'));
+        } else {
+          setSaudacoesText(SAUDACOES_PADRAO.join('\n'));
+        }
       }
       setSaudacoesDirty(false);
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Aviso de saída quando transmissão está em andamento
+  useEffect(() => {
+    if (status !== 'running') return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [status]);
 
   // Auto-select active catalog
   useEffect(() => {
@@ -684,10 +701,14 @@ export const TransmissaoManagerModal: React.FC<TransmissaoManagerModalProps> = (
                         onClick={async () => {
                           setSavingSaudacoes(true);
                           const lista = saudacoesText.split('\n').map(s => s.trim()).filter(Boolean);
+                          // Salva sempre no localStorage como backup local
+                          try { localStorage.setItem(SAUDACOES_LS_KEY, JSON.stringify(lista)); } catch {}
                           const { error } = await savePerfilConfig({ saudacoes_personalizadas: lista });
                           setSavingSaudacoes(false);
                           if (error) {
-                            toast.error('Erro ao salvar saudações');
+                            // DB falhou mas localStorage salvou — avisa mas não bloqueia
+                            toast.warning(`Salvo localmente (${lista.length} saudações). Execute a migração SQL no Supabase para persistência total.`);
+                            setSaudacoesDirty(false);
                           } else {
                             setSaudacoesDirty(false);
                             toast.success(`${lista.length} saudações salvas`);

@@ -72,51 +72,59 @@ export function useClientesPaginated(params: ClientesPaginatedParams) {
       // ============================================================
       if (filterByIds) {
         const ids = filterByIds;
+        let totalCount = ids.length;
+        let finalIds = ids;
 
-        // Helper: fetch all matching client rows in chunks of IN_CHUNK_SIZE
-        const fetchAllByIds = async () => {
-          const results: any[] = [];
+        if (debouncedSearch) {
+          const matchingIds: string[] = [];
+          const searchTerm = `%${debouncedSearch}%`;
+          const searchClause = `nome.ilike.${searchTerm},telefone.ilike.${searchTerm},cidade.ilike.${searchTerm},excursao.ilike.${searchTerm}`;
+
           for (let i = 0; i < ids.length; i += IN_CHUNK_SIZE) {
             const chunk = ids.slice(i, i + IN_CHUNK_SIZE);
-            let q = (supabase
+            const { data, error } = await supabase
               .from('clientes')
-              .select('*') as any)
+              .select('id')
               .eq('user_id', user.id)
-              .in('id', chunk);
+              .in('id', chunk)
+              .or(searchClause);
 
-            if (debouncedSearch) {
-              const searchTerm = `%${debouncedSearch}%`;
-              const searchClause = `nome.ilike.${searchTerm},telefone.ilike.${searchTerm},cidade.ilike.${searchTerm},excursao.ilike.${searchTerm}`;
-              q = q.or(searchClause);
-            }
-
-            // Always cap per-chunk to PostgREST default 1000 (chunk size is well below).
-            const { data, error } = await q;
             if (error) throw error;
-            if (data && data.length) results.push(...data);
+            if (data) matchingIds.push(...data.map(d => d.id));
           }
-          return results;
-        };
+          
+          const idToIndexMap = new Map<string, number>();
+          ids.forEach((id, index) => idToIndexMap.set(id, index));
+          matchingIds.sort((a, b) => (idToIndexMap.get(a) ?? 0) - (idToIndexMap.get(b) ?? 0));
+          
+          finalIds = matchingIds;
+          totalCount = matchingIds.length;
+        }
 
-        const allData = await fetchAllByIds();
+        const pageIds = finalIds.slice(from, from + pageSize);
+        
+        let pageData: ClientePaginatedDB[] = [];
+        if (pageIds.length > 0) {
+          const { data, error } = await supabase
+            .from('clientes')
+            .select('*')
+            .in('id', pageIds);
+          
+          if (error) throw error;
+          
+          if (data) {
+            const pageIdToIndexMap = new Map<string, number>();
+            pageIds.forEach((id, index) => pageIdToIndexMap.set(id, index));
+            pageData = [...data].sort((a, b) => 
+              (pageIdToIndexMap.get(a.id) ?? 0) - (pageIdToIndexMap.get(b.id) ?? 0)
+            ) as ClientePaginatedDB[];
+          }
+        }
 
-        // Sort locally respecting the exact order of filterByIds
-        // (preserves CRM priority like "oldest pending first" or "maior_historico")
-        const idToIndexMap = new Map<string, number>();
-        ids.forEach((id, index) => idToIndexMap.set(id, index));
-
-        allData.sort((a, b) => {
-          const indexA = idToIndexMap.has(a.id) ? idToIndexMap.get(a.id)! : 999999;
-          const indexB = idToIndexMap.has(b.id) ? idToIndexMap.get(b.id)! : 999999;
-          return indexA - indexB;
-        });
-
-        const totalCount = allData.length;
         const totalPages = Math.ceil(totalCount / pageSize);
-        const paginatedData = allData.slice(from, from + pageSize) as any[];
 
         return {
-          data: paginatedData,
+          data: pageData,
           count: totalCount,
           totalPages,
         };
