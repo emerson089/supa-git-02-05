@@ -1,0 +1,40 @@
+project_id = "xoyyhtxakbrlzykthdca"
+
+[functions.invite-user]
+verify_jwt = false
+
+[functions.admin-reset-password]
+verify_jwt = false
+
+[functions.update-user-role]
+verify_jwt = false
+
+[functions.toggle-user-status]
+verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
+
+[functions.brazilian-holidays]
+verify_jwt = false
+
+[functions.send-whatsapp]
+verify_jwt = false
+
+[functions.create-infinitepay-link]
+verify_jwt = false
+
+[functions.infinitepay-webhook]
+verify_jwt = false
+
+[functions.webhook-comprovantes]
+verify_jwt = false
+
+[functions.discover-group-id]
+verify_jwt = false
+
+[functions.cobranca-pendentes]
+verify_jwt = false
+
+[functions.zapi-config-grupos]
+verify_jwt = false

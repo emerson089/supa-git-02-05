@@ -1,0 +1,168 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    // Validate auth
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false } }
+    );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Token inválido" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse and validate body
+    const body = await req.json();
+    const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
+    const message = typeof body?.message === "string" ? body.message.trim() : "";
+    const documentUrl = typeof body?.documentUrl === "string" ? body.documentUrl.trim() : "";
+    const fileName = typeof body?.fileName === "string" && body.fileName.trim().length > 0
+      ? body.fileName.trim()
+      : "catalogo.pdf";
+    const caption = typeof body?.caption === "string" ? body.caption.trim() : "";
+    const type = body?.type || (documentUrl.length > 0 ? "document" : "text");
+    
+    // Auto-detect type from URL if possible
+    let finalType = type;
+    if (documentUrl) {
+      const urlLower = documentUrl.toLowerCase();
+      if (urlLower.includes('.jpg') || urlLower.includes('.jpeg') || urlLower.includes('.png') || urlLower.includes('.webp')) {
+        finalType = 'image';
+      } else if (urlLower.includes('.mp4') || urlLower.includes('.mov') || urlLower.includes('.avi')) {
+        finalType = 'video';
+      }
+    }
+
+    if (!phone || phone.length < 12 || phone.length > 13) {
+      return new Response(JSON.stringify({ error: "Telefone inválido" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (finalType === 'text') {
+      if (!message) {
+        return new Response(JSON.stringify({ error: "Mensagem não pode estar vazia" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (!documentUrl) {
+      return new Response(JSON.stringify({ error: "URL do documento não informada" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Call Z-API
+    const instanceId = Deno.env.get("ZAPI_INSTANCE_ID");
+    const zapiToken = Deno.env.get("ZAPI_TOKEN");
+    const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN");
+
+    if (!instanceId || !zapiToken) {
+      console.error("Missing Z-API env vars:", { hasInstanceId: !!instanceId, hasToken: !!zapiToken });
+      return new Response(JSON.stringify({ error: "Credenciais Z-API não configuradas (Instance ID ou Token faltando)" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (clientToken) {
+      headers["Client-Token"] = clientToken;
+    }
+
+    let zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-text`;
+    let requestBody: any = { phone, message };
+
+    if (finalType === 'image') {
+      zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-image`;
+      requestBody = {
+        phone,
+        image: documentUrl,
+        caption: caption || message || ""
+      };
+    } else if (finalType === 'video') {
+      zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-video`;
+      requestBody = {
+        phone,
+        video: documentUrl,
+        caption: caption || message || ""
+      };
+    } else if (finalType === 'document') {
+      const extension = documentUrl.split('?')[0].split('.').pop()?.toLowerCase() || 'pdf';
+      zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-document/${extension}`;
+      requestBody = {
+        phone,
+        document: documentUrl,
+        extension: `.${extension}`,
+        fileName: fileName.endsWith(`.${extension}`) ? fileName : `${fileName}.${extension}`,
+        caption: caption || message || ""
+      };
+    }
+
+    console.log(`[send-whatsapp] -> ${finalType} to ${phone} (fileName=${fileName})`);
+
+    const zapiResponse = await fetch(zapiUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    const zapiData = await zapiResponse.json();
+
+    if (!zapiResponse.ok) {
+      console.error(`[send-whatsapp] Z-API error (${zapiResponse.status}) for ${phone}:`, zapiData);
+      return new Response(
+        JSON.stringify({ error: "Erro ao enviar mensagem", details: zapiData }),
+        {
+          status: zapiResponse.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    console.log(`[send-whatsapp] OK ${phone} messageId=${zapiData?.messageId ?? zapiData?.zaapId ?? 'n/a'}`);
+
+    return new Response(JSON.stringify({ success: true, data: zapiData }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("send-whatsapp error:", error);
+    return new Response(
+      JSON.stringify({ error: "Erro interno ao enviar mensagem" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+});

@@ -1,0 +1,1676 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { AppSidebar } from '@/components/layout/AppSidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
+import { BottomNavigation } from '@/components/layout/BottomNavigation';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Pedido } from '@/contexts/PedidosContext';
+import { generateCargaPDF } from '@/utils/generateCargaPDF';
+import { groupItensByModel, parseProductName } from '@/utils/productNameUtils';
+import { usePedidosPaginated, PedidoPaginatedDB } from '@/hooks/usePedidosPaginated';
+import { usePedidosTotals } from '@/hooks/usePedidosTotals';
+import { useUpdatePedido, useRemovePedido, usePedidoById } from '@/hooks/usePedidosData';
+import { EditPedidoModal } from '@/components/pedidos/EditPedidoModal';
+import { useEstoque } from '@/contexts/EstoqueContext';
+import { ImportPedidosCSVModal } from '@/components/pedidos/ImportPedidosCSVModal';
+import { ClearPedidosDataModal } from '@/components/pedidos/ClearPedidosDataModal';
+import { ProductSummaryModal } from '@/components/pedidos/ProductSummaryModal';
+import { MobileOrderCard } from '@/components/pedidos/MobileOrderCard';
+import { MobileFiltersSheet } from '@/components/pedidos/MobileFiltersSheet';
+import { MobileSummaryCards } from '@/components/pedidos/MobileSummaryCards';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { InlineStatusSelect } from '@/components/pedidos/InlineStatusSelect';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { statusPagamentoOptions, statusPedidoOptions, statusEntregaOptions } from '@/components/pedidos/StatusSelector';
+import { StatusMultiSelect } from '@/components/pedidos/StatusMultiSelect';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Search, Plus, Eye, EyeOff, Trash2, ShoppingBag, DollarSign, Package, MapPin, Phone, Bus, MoreHorizontal, ArrowUpDown, FileText, Pencil, Calendar as CalendarIcon, X, Download, Upload, Loader2, RefreshCw, BellOff, Bell } from 'lucide-react';
+import { format, isWithinInterval, startOfDay, endOfDay, parse, subDays, startOfWeek, addDays, isValid } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { generatePedidoPDF } from '@/utils/generatePedidoPDF';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+
+// Status colors mapping
+const statusPagamentoColors: Record<string, string> = {
+  'PAGO': 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  'PENDENTE': 'bg-amber-100 text-amber-700 border-amber-300',
+  'CANCELADO': 'bg-red-100 text-red-700 border-red-300',
+  'INCOMPLETO': 'bg-purple-100 text-purple-700 border-purple-300',
+  'PEND. ENTREGA': 'bg-blue-100 text-blue-700 border-blue-300',
+  'GOLPE CANCELADO': 'bg-zinc-900 text-white border-zinc-900'
+};
+const statusPedidoColors: Record<string, string> = {
+  'SEPARADO': 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  'NÃO SEPARADO': 'bg-amber-100 text-amber-700 border-amber-300',
+  'AMANHÃ': 'bg-blue-100 text-blue-700 border-blue-300',
+  'INCOMPLETO': 'bg-purple-100 text-purple-700 border-purple-300',
+  'CANCELADO': 'bg-red-100 text-red-700 border-red-300',
+  'GOLPE CANCELADO': 'bg-zinc-900 text-white border-zinc-900'
+};
+const statusEntregaColors: Record<string, string> = {
+  'ENTREGUE': 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  'RETIRADA': 'bg-blue-100 text-blue-700 border-blue-300',
+  'PRÓX. SEMANA': 'bg-amber-100 text-amber-700 border-amber-300',
+  'PEND. ENTREGA': 'bg-blue-100 text-blue-700 border-blue-300',
+  'NÃO ENTREGOU': 'bg-red-100 text-red-700 border-red-300',
+  'ENTREGOU ERRADO': 'bg-red-100 text-red-700 border-red-300',
+  'CANCELADO': 'bg-red-100 text-red-700 border-red-300',
+  'NO CARRO': 'bg-purple-100 text-purple-700 border-purple-300',
+  'ENTREGA TORITAMA': 'bg-purple-100 text-purple-700 border-purple-300'
+};
+type SortField = 'created_at' | 'valor_total';
+type SortDirection = 'asc' | 'desc';
+
+// Constante para chave do localStorage
+const FILTERS_STORAGE_KEY = 'pedidosCriados_filters';
+
+// Interface para filtros persistidos
+interface PersistedFilters {
+  startDate?: string;
+  endDate?: string;
+  filterStatusPagamento: string[];
+  filterStatusPedido: string[];
+  filterStatusEntrega: string[];
+  filterModelo: string;
+  searchTerm: string;
+}
+
+// Função para carregar filtros do localStorage com tratamento de erro e migração
+const loadPersistedFilters = (): PersistedFilters => {
+  const defaultFilters: PersistedFilters = {
+    filterStatusPagamento: [],
+    filterStatusPedido: [],
+    filterStatusEntrega: [],
+    filterModelo: '',
+    searchTerm: ''
+  };
+  try {
+    const stored = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+
+      // Migration: convert old string format to array format
+      if (typeof parsed.filterStatusPagamento === 'string') {
+        parsed.filterStatusPagamento = parsed.filterStatusPagamento === 'all' ? [] : [parsed.filterStatusPagamento];
+      }
+      if (typeof parsed.filterStatusPedido === 'string') {
+        parsed.filterStatusPedido = parsed.filterStatusPedido === 'all' ? [] : [parsed.filterStatusPedido];
+      }
+      if (typeof parsed.filterStatusEntrega === 'string') {
+        parsed.filterStatusEntrega = parsed.filterStatusEntrega === 'all' ? [] : [parsed.filterStatusEntrega];
+      }
+
+      return {
+        ...defaultFilters,
+        ...parsed
+      };
+    }
+  } catch (error) {
+    console.error('Erro ao carregar filtros do localStorage:', error);
+    // Remove dados corrompidos
+    localStorage.removeItem(FILTERS_STORAGE_KEY);
+  }
+  return defaultFilters;
+};
+
+// Função para salvar filtros no localStorage
+const savePersistedFilters = (filters: PersistedFilters): void => {
+  try {
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  } catch (error) {
+    console.error('Erro ao salvar filtros no localStorage:', error);
+  }
+};
+export default function PedidosCriados() {
+  const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const { mutate: updatePedidoMutate } = useUpdatePedido();
+  const { mutate: removePedidoMutate } = useRemovePedido();
+  const {
+    itens: estoqueItens,
+    getItemById,
+    updateItem: updateEstoqueItem
+  } = useEstoque();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Carregar filtros persistidos uma única vez
+  const [persistedFilters] = useState(() => loadPersistedFilters());
+
+  // Date filters - Semana atual (Segunda a Sábado) como default
+  const [startDate, setStartDate] = useState<Date | undefined>(() => {
+    const defaultStart = startOfWeek(new Date(), {
+      weekStartsOn: 1
+    });
+    if (persistedFilters.startDate) {
+      const persistedDate = new Date(persistedFilters.startDate);
+      // Se a data salva for válida e do futuro ou desta semana, mantemos
+      if (isValid(persistedDate) && persistedDate >= defaultStart) {
+        return persistedDate;
+      }
+    }
+    return defaultStart;
+  });
+  const [endDate, setEndDate] = useState<Date | undefined>(() => {
+    const defaultStart = startOfWeek(new Date(), {
+      weekStartsOn: 1
+    });
+    const defaultEnd = addDays(defaultStart, 5);
+    if (persistedFilters.endDate) {
+      const persistedDate = new Date(persistedFilters.endDate);
+      const sDate = persistedFilters.startDate ? new Date(persistedFilters.startDate) : null;
+      // Se a data de fim for válida e a data de início (se existir) também for desta semana, mantemos
+      if (isValid(persistedDate) && (!sDate || (isValid(sDate) && sDate >= defaultStart))) {
+        return persistedDate;
+      }
+    }
+    return defaultEnd;
+  });
+
+  // App state
+  const [searchTerm, setSearchTerm] = useState(persistedFilters.searchTerm || '');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedPedido, setSelectedPedido] = useState<any | null>(null);
+  const [editingPedidoId, setEditingPedidoId] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>('created_at');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+
+  // Flag: indica se os filtros vieram de parâmetros na URL (atalhos do dashboard)
+  const isFromUrl = !!searchParams.get('status');
+
+  // Limpa o localStorage preventivamente se estivermos acessando via atalho URL
+  // Isso impede que filtros temporários fiquem presos caso o usuário saia da página
+  if (isFromUrl) {
+    try {
+      localStorage.removeItem(FILTERS_STORAGE_KEY);
+    } catch (e) { }
+  }
+
+  // Advanced filters - priorizam URL, caso contrário usa localStorage
+  const [filterStatusPagamento, setFilterStatusPagamento] = useState<string[]>(() => {
+    const urlStatus = searchParams.get('status');
+    if (urlStatus) {
+      const statuses = urlStatus.split(',').filter(Boolean);
+      return statuses.length > 0 ? statuses : [];
+    }
+    return persistedFilters.filterStatusPagamento;
+  });
+
+  // Limpa a URL imediatamente após os estados iniciais serem lidos.
+  // Isso evita que a barra de endereços continue forçando filtros reativamente após o usuário tentar desmarcá-los.
+  useEffect(() => {
+    if (searchParams.has('status')) {
+      const currentParams = new URLSearchParams(searchParams);
+      currentParams.delete('status');
+      setSearchParams(currentParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const [filterStatusPedido, setFilterStatusPedido] = useState<string[]>(() =>
+    isFromUrl ? [] : persistedFilters.filterStatusPedido
+  );
+  const [filterStatusEntrega, setFilterStatusEntrega] = useState<string[]>(() =>
+    isFromUrl ? [] : persistedFilters.filterStatusEntrega
+  );
+  const [filterModelo, setFilterModelo] = useState(
+    isFromUrl ? '' : persistedFilters.filterModelo
+  );
+
+  // Modals
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+
+  const [exportingCSV, setExportingCSV] = useState(false);
+  const [showValor, setShowValor] = useState(false);
+  const maskedValue = "R$ ••••••";
+  const {
+    user
+  } = useAuth();
+
+  // Use paginated hook for data
+  const {
+    data: paginatedResult,
+    isLoading
+  } = usePedidosPaginated({
+    page: currentPage,
+    pageSize,
+    search: searchTerm,
+    statusPagamento: filterStatusPagamento,
+    statusPedido: filterStatusPedido,
+    statusEntrega: filterStatusEntrega,
+    startDate,
+    endDate,
+    sortField,
+    sortDirection,
+    modeloFilter: filterModelo
+  });
+
+  // Use totals hook for summary cards
+  const {
+    data: totals
+  } = usePedidosTotals({
+    search: searchTerm,
+    statusPagamento: filterStatusPagamento,
+    statusPedido: filterStatusPedido,
+    statusEntrega: filterStatusEntrega,
+    startDate,
+    endDate,
+    modeloFilter: filterModelo
+  });
+  const pedidosList = paginatedResult?.data || [];
+  const totalPages = paginatedResult?.totalPages || 0;
+  const totalCount = paginatedResult?.count || 0;
+
+  // Sincronizar selectedPedido com dados atualizados do React Query
+  useEffect(() => {
+    if (selectedPedido && pedidosList.length > 0) {
+      const updated = pedidosList.find(p => p.id === selectedPedido.id);
+      if (updated && updated !== selectedPedido) {
+        setSelectedPedido(updated);
+      }
+    }
+  }, [pedidosList]);
+
+  // Reset to first page when any filter changes
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, filterStatusPagamento, filterStatusPedido, filterStatusEntrega, startDate, endDate, filterModelo]);
+
+  // Persistir filtros no localStorage quando mudarem
+  // Quando os filtros vêm da URL (atalhos do dashboard), ignora a primeira execução
+  // para não 'contaminar' o localStorage com filtros temporários
+  const isFirstRender = React.useRef(isFromUrl);
+
+  useEffect(() => {
+    // Se veio da URL, pula apenas a PRIMEIRA execução (montagem inicial com valores da URL)
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    savePersistedFilters({
+      startDate: startDate && isValid(startDate) ? startDate.toISOString() : undefined,
+      endDate: endDate && isValid(endDate) ? endDate.toISOString() : undefined,
+      filterStatusPagamento,
+      filterStatusPedido,
+      filterStatusEntrega,
+      filterModelo,
+      searchTerm
+    });
+  }, [startDate, endDate, filterStatusPagamento, filterStatusPedido, filterStatusEntrega, filterModelo, searchTerm]);
+
+  // Legacy handler for backwards compatibility
+  const handleFilterChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) => {
+    setter(value);
+  };
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  // Função para estornar estoque (devolver peças ao estoque)
+  const estornarEstoque = (pedido: Pedido): number => {
+    let totalEstornado = 0;
+    for (const item of pedido.itens) {
+      // Encontrar o produto no estoque pelo nome
+      const produtoEstoque = estoqueItens.find(p => p.tipo === 'acabado' && (p.id === item.produtoId || p.nome.toLowerCase() === item.produtoNome.toLowerCase()));
+      if (produtoEstoque) {
+        const novaQuantidade = produtoEstoque.quantidade + item.quantidade;
+        updateEstoqueItem(produtoEstoque.id, {
+          quantidade: novaQuantidade
+        });
+        totalEstornado += item.quantidade;
+      }
+    }
+    return totalEstornado;
+  };
+
+  // Helper para converter formato do banco (paginado) para interface interna compatível
+  const mapPedidoPaginatedToPedido = (pd: PedidoPaginatedDB): Pedido => ({
+    id: pd.id,
+    clienteId: pd.cliente_id || '',
+    clienteNome: pd.cliente_nome,
+    cidade: pd.cidade || '',
+    estado: pd.estado || '',
+    telefone: pd.telefone || '',
+    excursao: pd.excursao || '',
+    excursaoId: pd.excursao_id,
+    taxaExcursao: pd.taxa_excursao || 0,
+    status: pd.status || '',
+    statusPagamento: pd.status_pagamento || '',
+    statusPedido: pd.status_pedido || '',
+    statusEntrega: pd.status_entrega || '',
+    formaPagamento: pd.forma_pagamento || '',
+    observacoes: pd.observacoes || '',
+    itens: (pd.pedido_itens || []).map(i => ({
+      id: i.id,
+      produtoId: i.produto_id || '',
+      produtoNome: i.produto_nome,
+      quantidade: i.quantidade,
+      valorUnitario: i.valor_unitario
+    })),
+    totalPecas: pd.total_pecas || 0,
+    valorTotal: pd.valor_total || 0,
+    desconto: pd.desconto || 0,
+    dataCriacao: pd.created_at,
+    dataPagamento: pd.paid_at,
+    estornoRealizado: pd.estorno_realizado || false,
+    notificadoSeparado: pd.notificado_separado || false,
+    notificadoNoCarro: pd.notificado_no_carro || false
+  });
+
+  // Função para subtrair estoque ao descancelar pedido
+  const subtrairEstoque = async (pedido: Pedido): Promise<{
+    sucesso: boolean;
+    mensagem: string;
+  }> => {
+    const itensIndisponiveis: string[] = [];
+
+    // Verificar disponibilidade primeiro
+    for (const item of pedido.itens) {
+      const produtoEstoque = estoqueItens.find(p => p.tipo === 'acabado' && (p.id === item.produtoId || p.nome.toLowerCase() === item.produtoNome.toLowerCase()));
+      if (!produtoEstoque || produtoEstoque.quantidade < item.quantidade) {
+        const disponivel = produtoEstoque?.quantidade || 0;
+        itensIndisponiveis.push(`${item.produtoNome}: necessário ${item.quantidade}, disponível ${disponivel}`);
+      }
+    }
+    if (itensIndisponiveis.length > 0) {
+      return {
+        sucesso: false,
+        mensagem: `Estoque insuficiente:\n${itensIndisponiveis.join('\n')}`
+      };
+    }
+
+    // Subtrair do estoque
+    for (const item of pedido.itens) {
+      const produtoEstoque = estoqueItens.find(p => p.tipo === 'acabado' && (p.id === item.produtoId || p.nome.toLowerCase() === item.produtoNome.toLowerCase()));
+      if (produtoEstoque) {
+        const novaQuantidade = produtoEstoque.quantidade - item.quantidade;
+        updateEstoqueItem(produtoEstoque.id, {
+          quantidade: novaQuantidade
+        });
+      }
+    }
+    return {
+      sucesso: true,
+      mensagem: ''
+    };
+  };
+
+  // Handle inline status update with cancellation automation and stock reversal
+  const handleStatusUpdate = async (pedidoItem: PedidoPaginatedDB, field: 'statusPagamento' | 'statusPedido' | 'statusEntrega', value: string) => {
+    const pedidoId = pedidoItem.id;
+    const pedido = mapPedidoPaginatedToPedido(pedidoItem);
+    const updates: Partial<Pedido> = {
+      [field]: value
+    };
+
+    const applyUpdate = (upd: Partial<Pedido>) => {
+      const dbUpdates: any = {};
+      if (upd.statusPagamento !== undefined) dbUpdates.status_pagamento = upd.statusPagamento;
+      if (upd.statusPedido !== undefined) dbUpdates.status_pedido = upd.statusPedido;
+      if (upd.statusEntrega !== undefined) dbUpdates.status_entrega = upd.statusEntrega;
+      if (upd.estornoRealizado !== undefined) dbUpdates.estorno_realizado = upd.estornoRealizado;
+      if (upd.notificadoSeparado !== undefined) dbUpdates.notificado_separado = upd.notificadoSeparado;
+      if (upd.notificadoNoCarro !== undefined) dbUpdates.notificado_no_carro = upd.notificadoNoCarro;
+      
+      updatePedidoMutate({ id: pedidoId, data: dbUpdates });
+    };
+
+    // CASO ESPECIAL: GOLPE CANCELADO selecionado na coluna Pedido - preenche automaticamente os outros
+    if (field === 'statusPedido' && value === 'GOLPE CANCELADO') {
+      updates.statusPagamento = 'GOLPE CANCELADO';
+      updates.statusEntrega = 'CANCELADO'; 
+      
+      const estavaCancelado = (pedido.statusPagamento === 'CANCELADO' || pedido.statusPedido === 'CANCELADO' || pedido.statusPagamento === 'GOLPE CANCELADO' || pedido.statusPedido === 'GOLPE CANCELADO');
+      const jaEstornou = pedido.estornoRealizado === true;
+      if (!estavaCancelado && !jaEstornou) {
+        const pecasEstornadas = estornarEstoque(pedido);
+        updates.estornoRealizado = true;
+        if (pecasEstornadas > 0) {
+          toast.success(`GOLPE CANCELADO aplicado! ${pecasEstornadas} peças retornaram ao estoque.`);
+        } else {
+          toast.success('Status GOLPE CANCELADO aplicado a todos os campos!');
+        }
+      } else {
+        toast.success('Status GOLPE CANCELADO aplicado a todos os campos!');
+      }
+      applyUpdate(updates);
+      return;
+    }
+
+    // Verificar estados
+    const estavaCancelado = (pedidoItem.status_pagamento === 'CANCELADO' || pedidoItem.status_pedido === 'CANCELADO' || pedidoItem.status_pagamento === 'GOLPE CANCELADO' || pedidoItem.status_pedido === 'GOLPE CANCELADO');
+    const estaCancelando = value === 'CANCELADO' || value === 'GOLPE CANCELADO';
+    const jaEstornou = (pedidoItem.estorno_realizado === true);
+
+    // CASO 1: Descancelando (saindo de cancelado para outro status)
+    if (estavaCancelado && !estaCancelando && jaEstornou) {
+      const resultado = await subtrairEstoque(pedido);
+      if (!resultado.sucesso) {
+        toast.error(resultado.mensagem, {
+          description: 'Não é possível reativar este pedido sem estoque suficiente.',
+          duration: 6000
+        });
+        return; 
+      }
+      updates.estornoRealizado = false;
+      applyUpdate(updates);
+      toast.success(`Pedido reativado! ${pedidoItem.total_pecas} peças subtraídas do estoque.`);
+    }
+    // CASO 2: Cancelando (indo para cancelado)
+    else if (estaCancelando && !estavaCancelado && !jaEstornou) {
+      const pecasEstornadas = estornarEstoque(pedido);
+      updates.estornoRealizado = true;
+
+      if (field === 'statusPagamento') {
+        updates.statusPedido = value === 'GOLPE CANCELADO' ? 'GOLPE CANCELADO' : 'CANCELADO';
+        updates.statusEntrega = 'CANCELADO';
+      }
+      if (pecasEstornadas > 0) {
+        toast.success(`Pedido cancelado e ${pecasEstornadas} peças retornaram ao estoque com sucesso`);
+      } else {
+        toast.success('Status atualizado com sucesso!');
+      }
+      
+      applyUpdate(updates);
+    } else {
+      applyUpdate(updates);
+
+      if (field === 'statusPedido' && value === 'SEPARADO') {
+        const jaNotificado = pedidoItem.notificado_separado === true;
+        const telefone = pedidoItem.telefone;
+        if (!jaNotificado && telefone) {
+          const clienteNome = pedidoItem.cliente_nome?.split(' ')[0] || 'Cliente';
+          const mensagem = `Olá, ${clienteNome}! 👋
+
+✅ Seu pedido já foi *separado* aqui na *Delookii Jeans*!
+
+Qualquer dúvida é só chamar! 😊`;
+
+          let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
+          if (digits && !digits.startsWith('55')) digits = '55' + digits;
+
+          if (digits.length >= 12 && digits.length <= 13) {
+            try {
+              const { error: sendError } = await supabase.functions.invoke('send-whatsapp', {
+                body: { phone: digits, message: mensagem },
+              });
+              if (!sendError) {
+                applyUpdate({ notificadoSeparado: true });
+                toast.success('Pedido separado e cliente avisado!');
+              } else {
+                throw sendError;
+              }
+            } catch (err) {
+              console.error('Erro ao enviar WhatsApp:', err);
+              toast.error('Pedido separado, mas erro ao enviar WhatsApp.');
+            }
+          } else {
+            toast.success('Pedido marcado como SEPARADO!');
+          }
+        } else {
+          toast.success('Pedido marcado como SEPARADO!');
+        }
+      } else if (field === 'statusEntrega' && value === 'NO CARRO') {
+        const jaNotificadoCarro = pedidoItem.notificado_no_carro === true;
+        const telefone = pedidoItem.telefone;
+        if (!jaNotificadoCarro && telefone) {
+          const clienteNome = pedidoItem.cliente_nome?.split(' ')[0] || 'Cliente';
+          const mensagem = `Olá, ${clienteNome}! 👋
+
+📦 Seu pedido já está *no carro*!
+
+🚗 O envio será realizado *amanhã* — assim que deixarmos na excursão, enviamos o comprovante para você. ✅
+
+Qualquer dúvida é só chamar! 😊`;
+
+          let digits = telefone.replace(/\D/g, '').replace(/^0+/, '');
+          if (digits && !digits.startsWith('55')) digits = '55' + digits;
+
+          if (digits.length >= 12 && digits.length <= 13) {
+            try {
+              const { error: sendError } = await supabase.functions.invoke('send-whatsapp', {
+                body: { phone: digits, message: mensagem },
+              });
+              if (!sendError) {
+                applyUpdate({ notificadoNoCarro: true });
+                toast.success('Pedido no carro e cliente avisado!');
+              } else {
+                throw sendError;
+              }
+            } catch (err) {
+              console.error('Erro ao enviar WhatsApp:', err);
+              toast.error('Pedido no carro, mas erro ao enviar WhatsApp.');
+            }
+          } else {
+            toast.success('Entrega atualizada para NO CARRO!');
+          }
+        } else {
+          toast.success('Entrega atualizada para NO CARRO!');
+        }
+      } else {
+        toast.success('Status atualizado com sucesso!');
+      }
+    }
+  };
+
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
+  const handleToggleCobranca = (pedido: PedidoPaginatedDB) => {
+    const novoValor = !pedido.excluir_cobranca_automatica;
+    updatePedidoMutate({ id: pedido.id, data: { excluir_cobranca_automatica: novoValor } });
+    toast.success(novoValor ? 'Pedido excluído das cobranças automáticas' : 'Pedido incluído nas cobranças automáticas');
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+
+    try {
+      const pedidoItem = pedidosList.find(p => p.id === deleteId);
+      const pedido = pedidoItem ? mapPedidoPaginatedToPedido(pedidoItem) : null;
+      
+      if (pedido && !pedido.estornoRealizado) {
+        const pecasDevolvidas = estornarEstoque(pedido);
+
+        if (pecasDevolvidas > 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      removePedidoMutate(deleteId, {
+        onSuccess: () => {
+          toast.success('Pedido excluído com sucesso!');
+          setDeleteId(null);
+        },
+        onError: () => {
+          toast.error('Erro ao excluir pedido');
+          setDeleteId(null);
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao excluir pedido:', error);
+      toast.error('Erro ao excluir pedido');
+      setDeleteId(null);
+    }
+  };
+  const buildModeloGroupConfig = (itens: PedidoPaginatedDB['pedido_itens']) => ({
+    getItemId: (i: typeof itens[0]) => i.id || "",
+    getItemNome: (i: typeof itens[0]) => {
+      const produto = estoqueItens.find(p => p.id === i.produto_id);
+      return produto?.nome || i.produto_nome || "";
+    },
+    getItemReferencia: (i: typeof itens[0]) => {
+      const produto = estoqueItens.find(p => p.id === i.produto_id);
+      if (produto?.localizacao) {
+        try {
+          const loc = JSON.parse(produto.localizacao);
+          if (loc.referencia) return loc.referencia as string;
+        } catch { /* ignore */ }
+      }
+      if (i.produto_nome?.includes(' | REF: ')) {
+        return i.produto_nome.split(' | REF: ')[1] || "";
+      }
+      return i.produto_nome || "";
+    },
+    getItemPreco: (i: typeof itens[0]) => i.valor_unitario ?? 0,
+    getItemQtd: (i: typeof itens[0]) => i.quantidade ?? 0,
+    getItemModeloId: (i: typeof itens[0]) => {
+      const produto = estoqueItens.find(p => p.id === i.produto_id);
+      if (produto?.localizacao) {
+        try {
+          const loc = JSON.parse(produto.localizacao);
+          return loc.modeloId || null;
+        } catch { return null; }
+      }
+      return null;
+    }
+  });
+
+  const getModelosResumo = (pedido: PedidoPaginatedDB) => {
+    const itens = pedido.pedido_itens || [];
+    if (itens.length === 0) return '-';
+
+    const grouped = groupItensByModel(itens, buildModeloGroupConfig(itens));
+
+    if (grouped.length === 0) return '-';
+
+    const primeiroNome = grouped[0].nomeExibicao;
+    if (grouped.length === 1) return primeiroNome;
+    return `${primeiroNome} +${grouped.length - 1}`;
+  };
+  const clearDateFilters = () => {
+    setStartDate(undefined);
+    setEndDate(undefined);
+  };
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setFilterStatusPagamento([]);
+    setFilterStatusPedido([]);
+    setFilterStatusEntrega([]);
+    setFilterModelo('');
+    // Limpar também do localStorage
+    localStorage.removeItem(FILTERS_STORAGE_KEY);
+  };
+
+  // Atalhos rápidos de filtro
+  const applyQuickFilter = (filter: 'hoje' | 'ontem' | '7dias' | 'estaSemana' | 'pendPagamento' | 'naoSeparado') => {
+    // Reset all filters first
+    setSearchTerm('');
+    setFilterStatusPagamento([]);
+    setFilterStatusPedido([]);
+    setFilterStatusEntrega([]);
+    setFilterModelo('');
+    switch (filter) {
+      case 'hoje':
+        setStartDate(new Date());
+        setEndDate(new Date());
+        break;
+      case 'ontem':
+        const ontem = subDays(new Date(), 1);
+        setStartDate(ontem);
+        setEndDate(ontem);
+        break;
+      case '7dias':
+        setStartDate(subDays(new Date(), 6));
+        setEndDate(new Date());
+        break;
+      case 'estaSemana':
+        setStartDate(startOfWeek(new Date(), {
+          weekStartsOn: 1
+        }));
+        setEndDate(addDays(startOfWeek(new Date(), {
+          weekStartsOn: 1
+        }), 5));
+        break;
+      case 'pendPagamento':
+        setStartDate(undefined);
+        setEndDate(undefined);
+        setFilterStatusPagamento(['PENDENTE']);
+        break;
+      case 'naoSeparado':
+        setStartDate(undefined);
+        setEndDate(undefined);
+        setFilterStatusPedido(['NÃO SEPARADO']);
+        break;
+    }
+  };
+
+  // Determinar qual atalho está ativo
+  const getActiveQuickFilter = (): string | null => {
+    const hoje = new Date();
+    const ontem = subDays(hoje, 1);
+    const seteDiasAtras = subDays(hoje, 6);
+
+    const noStatusFilters = filterStatusPagamento.length === 0 && filterStatusPedido.length === 0 && filterStatusEntrega.length === 0;
+
+    // Verificar se é "Hoje"
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && noStatusFilters) {
+      return 'hoje';
+    }
+
+    // Verificar se é "Ontem"
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd') && noStatusFilters) {
+      return 'ontem';
+    }
+
+    // Verificar se é "Últimos 7 dias"
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(seteDiasAtras, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd') && noStatusFilters) {
+      return '7dias';
+    }
+
+    // Verificar se é "Esta semana" (Segunda a Sábado)
+    const inicioSemana = startOfWeek(hoje, {
+      weekStartsOn: 1
+    });
+    const sabadoSemana = addDays(inicioSemana, 5);
+    if (startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(inicioSemana, 'yyyy-MM-dd') && format(endDate, 'yyyy-MM-dd') === format(sabadoSemana, 'yyyy-MM-dd') && noStatusFilters) {
+      return 'estaSemana';
+    }
+
+    // Verificar filtros de status
+    if (!startDate && !endDate) {
+      if (filterStatusEntrega.length === 1 && filterStatusEntrega[0] === 'PEND. ENTREGA' && filterStatusPagamento.length === 0 && filterStatusPedido.length === 0) {
+        return 'emAberto';
+      }
+      if (filterStatusPagamento.length === 1 && filterStatusPagamento[0] === 'PENDENTE' && filterStatusPedido.length === 0 && filterStatusEntrega.length === 0) {
+        return 'pendPagamento';
+      }
+      if (filterStatusPedido.length === 1 && filterStatusPedido[0] === 'NÃO SEPARADO' && filterStatusPagamento.length === 0 && filterStatusEntrega.length === 0) {
+        return 'naoSeparado';
+      }
+    }
+    return null;
+  };
+  const activeQuickFilter = getActiveQuickFilter();
+
+  // Função de refresh manual
+  const handleRefreshData = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries({
+      queryKey: ['pedidos-paginated']
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ['pedidos-totals']
+    });
+    setIsRefreshing(false);
+    toast.success('Dados atualizados');
+  };
+  const hasAnyFilter = searchTerm || startDate || endDate || filterStatusPagamento.length > 0 || filterStatusPedido.length > 0 || filterStatusEntrega.length > 0 || filterModelo;
+
+  // Use totals from server-side hook
+  const calculatedTotals = {
+    totalPedidos: totals?.totalPedidos || 0,
+    totalPecas: totals?.totalPecas || 0,
+    totalValor: totals?.totalValor || 0
+  };
+  const hasActiveFilters = startDate || endDate || filterStatusPagamento.length > 0 || filterStatusPedido.length > 0 || filterStatusEntrega.length > 0 || filterModelo;
+
+  // Count active filters for mobile badge
+  const activeFilterCount = [
+    startDate,
+    endDate,
+    filterStatusPagamento.length > 0 ? filterStatusPagamento : null,
+    filterStatusPedido.length > 0 ? filterStatusPedido : null,
+    filterStatusEntrega.length > 0 ? filterStatusEntrega : null,
+    filterModelo
+  ].filter(Boolean).length;
+
+  // PDF Generation
+  const generatePDF = (pedido: PedidoPaginatedDB) => {
+    const { save } = generatePedidoPDF(pedido as any, estoqueItens as any);
+    save();
+    toast.success('PDF gerado com sucesso!');
+  };
+
+  // CSV Export - Fetch ALL filtered pedidos from database
+  const exportCSV = async () => {
+    if (!user) {
+      toast.error('Usuário não autenticado');
+      return;
+    }
+    setExportingCSV(true);
+    try {
+      // Fetch all pedidos with same filters applied
+      const PAGE_SIZE = 1000;
+      let allPedidos: PedidoPaginatedDB[] = [];
+      let from = 0;
+      let hasMore = true;
+      while (hasMore) {
+        let query = supabase.from('pedidos').select(`
+            *,
+            pedido_itens (
+              id,
+              produto_id,
+              produto_nome,
+              quantidade,
+              valor_unitario
+            )
+          `).order('created_at', {
+          ascending: sortDirection === 'asc'
+        });
+
+        // Apply filters
+        if (searchTerm) {
+          query = query.or(`cliente_nome.ilike.%${searchTerm}%,telefone.ilike.%${searchTerm}%,cidade.ilike.%${searchTerm}%`);
+        }
+        if (filterStatusPagamento.length > 0) {
+          query = query.in('status_pagamento', filterStatusPagamento);
+        }
+        if (filterStatusPedido.length > 0) {
+          query = query.in('status_pedido', filterStatusPedido);
+        }
+        if (filterStatusEntrega.length > 0) {
+          query = query.in('status_entrega', filterStatusEntrega);
+        }
+        if (startDate) {
+          query = query.gte('created_at', startOfDay(startDate).toISOString());
+        }
+        if (endDate) {
+          query = query.lte('created_at', endOfDay(endDate).toISOString());
+        }
+        query = query.range(from, from + PAGE_SIZE - 1);
+        const {
+          data,
+          error
+        } = await query;
+        if (error) throw error;
+        if (data && data.length > 0) {
+          // Filter by model if needed (client-side)
+          let filteredData = (data as unknown) as PedidoPaginatedDB[];
+
+          if (filterModelo) {
+            const modeloLower = filterModelo.toLowerCase();
+            filteredData = filteredData.filter(p => p.pedido_itens?.some(i => i.produto_nome.toLowerCase().includes(modeloLower)));
+          }
+          allPedidos = [...allPedidos, ...filteredData];
+          from += PAGE_SIZE;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      if (allPedidos.length === 0) {
+        toast.error('Nenhum pedido encontrado para exportar');
+        return;
+      }
+      const headers = ['ID Pedido', 'Data', 'Cliente', 'Telefone', 'Excursão', 'Produto', 'Quantidade', 'Valor Unit.', 'Desconto', 'Pagamento', 'Pedido', 'Entrega'];
+      
+      const rows: string[][] = [];
+      
+      allPedidos.forEach(pedido => {
+        const itens = pedido.pedido_itens || [];
+        const dataFormatada = format(new Date(pedido.created_at), "dd/MM/yyyy");
+        const idPedido = pedido.id.substring(0, 8); // ID Curto para legibilidade
+        
+        if (itens.length === 0) {
+          // Caso raro: pedido sem itens, exporta o cabeçalho do pedido
+          rows.push([
+            idPedido,
+            dataFormatada,
+            pedido.cliente_nome || '',
+            pedido.telefone || '',
+            pedido.excursao || '',
+            '-',
+            '0',
+            '0.00',
+            pedido.desconto?.toFixed(2) || '0.00',
+            pedido.status_pagamento || '',
+            pedido.status_pedido || '',
+            pedido.status_entrega || ''
+          ]);
+        } else {
+          // Exporta uma linha para cada item
+          itens.forEach(item => {
+            const itemEstoque = getItemById(item.produto_id || '');
+            let refTecnica = '';
+            if (itemEstoque?.localizacao) {
+              try {
+                const loc = JSON.parse(itemEstoque.localizacao);
+                refTecnica = loc.referencia || '';
+              } catch (e) {}
+            }
+            
+            // Usa o nome do estoque se disponível, fallback para o nome salvo no item
+            const nomeParaParse = itemEstoque?.nome || item.produto_nome || '';
+            const info = parseProductName(nomeParaParse, refTecnica);
+            
+            rows.push([
+              idPedido,
+              dataFormatada,
+              pedido.cliente_nome || '',
+              pedido.telefone || '',
+              pedido.excursao || '',
+              info.nomeExibicao,
+              item.quantidade.toString(),
+              item.valor_unitario.toFixed(2),
+              pedido.desconto?.toFixed(2) || '0.00',
+              pedido.status_pagamento || '',
+              pedido.status_pedido || '',
+              pedido.status_entrega || ''
+            ]);
+          });
+        }
+      });
+      const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))].join('\n');
+      const blob = new Blob(['\uFEFF' + csvContent], {
+        type: 'text/csv;charset=utf-8;'
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pedidos_${format(new Date(), 'dd-MM-yyyy')}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${allPedidos.length} pedidos exportados com sucesso!`);
+    } catch (error) {
+      console.error('Erro ao exportar CSV:', error);
+      toast.error('Erro ao exportar pedidos');
+    } finally {
+      setExportingCSV(false);
+    }
+  };
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('pt-BR').format(value);
+  };
+  return <div className="min-h-screen bg-background flex overflow-hidden">
+    {/* Mobile Header */}
+    {isMobile && <MobileHeader title="Vendas" />}
+
+    {/* Desktop Sidebar */}
+    {!isMobile && <AppSidebar />}
+
+    <main className={cn("flex-1 flex flex-col h-screen overflow-hidden", isMobile && "pt-14 pb-20")}>
+      {/* Desktop Header */}
+      {!isMobile && <header className="px-8 py-6 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">PEDIDOS CRIADOS</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Centro operacional de gestão de pedidos
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={handleRefreshData} disabled={isRefreshing} title="Atualizar dados">
+            <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+          </Button>
+        </div>
+      </header>}
+
+      {/* Content */}
+      <div className={cn("flex-1 overflow-y-auto pb-8", isMobile ? "px-4" : "px-8")}>
+        <div className="max-w-full space-y-4">
+          {/* Summary Cards - Mobile uses compact 3-column layout */}
+          {isMobile ? <MobileSummaryCards totalPedidos={calculatedTotals.totalPedidos} totalValor={calculatedTotals.totalValor} totalPecas={calculatedTotals.totalPecas} filterModelo={filterModelo} showValor={showValor} onToggleValor={() => setShowValor(v => !v)} /> : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="neu-card p-5 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-primary/10 shadow-inner">
+                <ShoppingBag className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total de Pedidos</p>
+                <p className="text-2xl font-bold text-primary">{formatNumber(calculatedTotals.totalPedidos)}</p>
+                {filterModelo && <Badge variant="outline" className="text-xs text-primary border-primary mt-1">
+                  Modelo: "{filterModelo}"
+                </Badge>}
+              </div>
+            </div>
+
+            <div className="neu-card p-5 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-emerald-500/10 shadow-inner">
+                <DollarSign className="h-6 w-6 text-emerald-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-muted-foreground">Valor Total</p>
+                <p className="text-2xl font-bold text-emerald-600">{showValor ? formatCurrency(calculatedTotals.totalValor) : maskedValue}</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setShowValor(v => !v)} className="h-8 w-8">
+                {showValor ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+              </Button>
+            </div>
+
+            <div className="neu-card p-5 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-primary/10 shadow-inner">
+                <Package className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total de Peças</p>
+                <p className="text-2xl font-bold text-primary">{formatNumber(calculatedTotals.totalPecas)}</p>
+              </div>
+            </div>
+          </div>}
+
+          {/* Quick Filter Shortcuts */}
+          <div className={cn("flex gap-2 overflow-x-auto pb-1 scrollbar-hide", isMobile ? "-mx-4 px-4" : "")}>
+            <Button variant={activeQuickFilter === 'hoje' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('hoje')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'hoje' && "bg-primary text-primary-foreground")}>
+              Hoje
+            </Button>
+            <Button variant={activeQuickFilter === 'ontem' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('ontem')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'ontem' && "bg-primary text-primary-foreground")}>
+              Ontem
+            </Button>
+            <Button variant={activeQuickFilter === '7dias' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('7dias')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === '7dias' && "bg-primary text-primary-foreground")}>
+              Últimos 7 dias
+            </Button>
+            <Button variant={activeQuickFilter === 'estaSemana' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('estaSemana')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'estaSemana' && "bg-primary text-primary-foreground")}>
+              Esta semana
+            </Button>
+            <Button variant={activeQuickFilter === 'pendPagamento' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('pendPagamento')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'pendPagamento' && "bg-primary text-primary-foreground")}>
+              Pend. Pagamento
+            </Button>
+            <Button variant={activeQuickFilter === 'naoSeparado' ? 'default' : 'outline'} size="sm" onClick={() => applyQuickFilter('naoSeparado')} className={cn("rounded-full whitespace-nowrap text-xs h-8 px-3", activeQuickFilter === 'naoSeparado' && "bg-primary text-primary-foreground")}>
+              Não separado
+            </Button>
+            {hasAnyFilter && <Button variant="ghost" size="sm" onClick={clearAllFilters} className="rounded-full whitespace-nowrap text-xs h-8 px-3 text-muted-foreground hover:text-foreground">
+              <X className="h-3 w-3 mr-1" />
+              Limpar
+            </Button>}
+          </div>
+
+          {/* Filters and Actions Bar */}
+          {isMobile ? (/* Mobile Filters */
+            <div className="space-y-3">
+              {/* Search */}
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-11 rounded-xl neu-input border-0 bg-background" />
+              </div>
+
+              {/* Filters Sheet + New Order Button */}
+              <div className="flex gap-2">
+                  <div className="flex-1">
+                  <MobileFiltersSheet filterStatusPagamento={filterStatusPagamento} filterStatusPedido={filterStatusPedido} filterStatusEntrega={filterStatusEntrega} filterModelo={filterModelo} startDate={startDate} endDate={endDate} onFilterStatusPagamentoChange={setFilterStatusPagamento} onFilterStatusPedidoChange={setFilterStatusPedido} onFilterStatusEntregaChange={setFilterStatusEntrega} onFilterModeloChange={setFilterModelo} onStartDateChange={setStartDate} onEndDateChange={setEndDate} onClearAll={clearAllFilters} activeCount={activeFilterCount} />
+                </div>
+                <Button onClick={() => navigate('/pedidos/novo')} className="h-11 px-4 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-medium gap-2">
+                  <Plus className="h-4 w-4" />
+                  Novo
+                </Button>
+              </div>
+            </div>) : (/* Desktop Filters */
+            <div className="neu-card p-4">
+              <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+                {/* Search */}
+                <div className="relative flex-1 w-full lg:max-w-xs">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Buscar cliente, ID ou status..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-11 rounded-xl neu-input border-0 bg-background" />
+                </div>
+
+                {/* Status Filters - Multi-Select */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusMultiSelect
+                    label="Pagamentos"
+                    options={statusPagamentoOptions}
+                    selected={filterStatusPagamento}
+                    onSelectionChange={setFilterStatusPagamento}
+                    placeholder="Todos Pagamentos"
+                  />
+
+                  <StatusMultiSelect
+                    label="Pedidos"
+                    options={statusPedidoOptions}
+                    selected={filterStatusPedido}
+                    onSelectionChange={setFilterStatusPedido}
+                    placeholder="Todos Pedidos"
+                  />
+
+                  <StatusMultiSelect
+                    label="Entregas"
+                    options={statusEntregaOptions}
+                    selected={filterStatusEntrega}
+                    onSelectionChange={setFilterStatusEntrega}
+                    placeholder="Todas Entregas"
+                  />
+                </div>
+
+                {/* Modelo Filter */}
+                <div className="relative w-full lg:w-40">
+                  <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Modelo..." value={filterModelo} onChange={e => setFilterModelo(e.target.value)} className="pl-10 h-11 rounded-xl neu-input border-0 bg-background" />
+                </div>
+
+                {/* Date Range Filter */}
+                <div className="flex items-center gap-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-11 rounded-xl neu-button border-0 bg-background gap-2">
+                        <CalendarIcon className="h-4 w-4" />
+                        {startDate ? format(startDate, "dd/MM/yy") : "Início"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 z-50" align="start">
+                      <Calendar mode="single" selected={startDate} onSelect={setStartDate} defaultMonth={startDate} locale={ptBR} initialFocus className="pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+
+                  <span className="text-muted-foreground">-</span>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-11 rounded-xl neu-button border-0 bg-background gap-2">
+                        <CalendarIcon className="h-4 w-4" />
+                        {endDate ? format(endDate, "dd/MM/yy") : "Fim"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 z-50" align="start">
+                      <Calendar mode="single" selected={endDate} onSelect={setEndDate} defaultMonth={endDate} locale={ptBR} initialFocus className="pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+
+                  {hasAnyFilter && <Button variant="ghost" onClick={clearAllFilters} className="h-11 rounded-xl hover:bg-destructive/10 hover:text-destructive gap-2">
+                    <X className="h-4 w-4" />
+                    Limpar
+                  </Button>}
+                </div>
+              </div>
+
+              {/* Second row: CSV and New Order */}
+              <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border/50 items-center justify-between">
+                {/* CSV and Clear Buttons */}
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={() => setClearDataModalOpen(true)} className="h-10 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Limpar Dados
+                  </Button>
+
+                  <Button variant="outline" onClick={exportCSV} disabled={exportingCSV || pedidosList.length === 0} className="h-10 rounded-xl neu-button border-0 bg-background gap-2">
+                    <Download className="h-4 w-4" />
+                    Exportar CSV
+                  </Button>
+
+                  <Button variant="outline" onClick={() => setImportModalOpen(true)} className="h-10 rounded-xl neu-button border-0 bg-background gap-2">
+                    <Upload className="h-4 w-4" />
+                    Importar CSV
+                  </Button>
+                </div>
+
+                {/* New Order Button */}
+                <Button onClick={() => navigate('/pedidos/novo')} className="h-10 px-5 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-medium gap-2">
+                  <Plus className="h-4 w-4" />
+                  Novo Pedido
+                </Button>
+              </div>
+
+              {/* Filtered Totals Panel */}
+              {hasActiveFilters && <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap items-center gap-6 text-sm">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  <span className="text-muted-foreground">Total de Peças Filtrado:</span>
+                  <span className="font-bold text-primary">{calculatedTotals.totalPecas}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-emerald-600" />
+                  <span className="text-muted-foreground">Valor Total Filtrado:</span>
+                  <span className="font-bold text-emerald-600">{showValor ? formatCurrency(calculatedTotals.totalValor) : maskedValue}</span>
+                </div>
+                {filterModelo && <Badge variant="outline" className="text-xs border-primary text-primary">
+                  Filtrando modelo: "{filterModelo}"
+                </Badge>}
+              </div>}
+            </div>)}
+
+          {/* Orders - Mobile Cards or Desktop Table */}
+          {isLoading ? <div className="neu-card p-4 flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">Carregando pedidos...</span>
+          </div> : pedidosList.length === 0 ? <div className="neu-card p-4 text-center py-12">
+            <ShoppingBag className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-foreground">Nenhum pedido encontrado</h3>
+            <p className="text-muted-foreground mb-4">
+              {hasAnyFilter ? 'Nenhum pedido com os filtros selecionados' : 'Crie seu primeiro pedido para começar'}
+            </p>
+          </div> : isMobile ? (/* Mobile: Card List */
+            <div className="space-y-3">
+              {pedidosList.map(pedido => <MobileOrderCard key={pedido.id} pedido={pedido} onView={() => setSelectedPedido(pedido)} onEdit={() => setEditingPedidoId(pedido.id)} onDelete={() => setDeleteId(pedido.id)} onGeneratePDF={() => generatePDF(pedido)} onStatusUpdate={(field, value) => handleStatusUpdate(pedido, field, value)} />)}
+            </div>) : (/* Desktop: Table */
+            <div className="neu-card p-4 overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
+                    <TableRow className="border-b-2 border-border/50 hover:bg-transparent">
+                      <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider cursor-pointer hover:text-primary transition-colors py-3" onClick={() => handleSort('created_at')}>
+                        <div className="flex items-center gap-1">
+                          Data
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3">
+                        Cliente
+                      </TableHead>
+                      <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3">
+                        Excursão
+                      </TableHead>
+                      <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
+                        Qtd
+                      </TableHead>
+                      <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider cursor-pointer hover:text-primary transition-colors py-3" onClick={() => handleSort('valor_total')}>
+                        <div className="flex items-center gap-1">
+                          Valor
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
+                        Pagamento
+                      </TableHead>
+                      <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
+                        Pedido
+                      </TableHead>
+                      <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-center">
+                        Entrega
+                      </TableHead>
+                      <TableHead className="text-xs font-bold text-foreground uppercase tracking-wider py-3 text-right">
+                        Ações
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pedidosList.map(pedido => <TableRow key={pedido.id} className="group border-0 transition-all duration-200 hover:shadow-[inset_0_2px_8px_rgba(0,0,0,0.06)] rounded-xl">
+                      <TableCell className="py-2.5 text-sm text-muted-foreground font-medium">
+                        {format(new Date(pedido.created_at), "dd/MM/yyyy HH:mm", {
+                          locale: ptBR
+                        })}
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <span className="font-semibold text-foreground text-sm">{pedido.cliente_nome}</span>
+                      </TableCell>
+                      <TableCell className="py-2.5 text-sm text-muted-foreground max-w-[200px] truncate">
+                        {pedido.excursao || '-'}
+                      </TableCell>
+                      <TableCell className="py-2.5 text-center">
+                        <span className="font-bold text-primary text-sm">{pedido.total_pecas || 0}</span>
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <span className="font-bold text-emerald-600 text-sm">{formatCurrency(pedido.valor_total || 0)}</span>
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <InlineStatusSelect options={statusPagamentoOptions} value={pedido.status_pagamento || 'PENDENTE'} onChange={value => handleStatusUpdate(pedido, 'statusPagamento', value)} />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <InlineStatusSelect options={statusPedidoOptions} value={pedido.status_pedido || 'NÃO SEPARADO'} onChange={value => handleStatusUpdate(pedido, 'statusPedido', value)} />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <InlineStatusSelect options={statusEntregaOptions} value={pedido.status_entrega || 'NÃO ENTREGUE'} onChange={value => handleStatusUpdate(pedido, 'statusEntrega', value)} />
+                      </TableCell>
+                      <TableCell className="py-2.5 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="neu-card border-0 rounded-xl shadow-lg z-50">
+                            <DropdownMenuItem onClick={() => setSelectedPedido(pedido)} className="gap-2 cursor-pointer">
+                              <Eye className="h-4 w-4" />
+                              Ver Detalhes
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditingPedidoId(pedido.id)} className="gap-2 cursor-pointer">
+                              <Pencil className="h-4 w-4" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => generatePDF(pedido)} className="gap-2 cursor-pointer">
+                              <FileText className="h-4 w-4" />
+                              Gerar PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleToggleCobranca(pedido)} className="gap-2 cursor-pointer">
+                              {pedido.excluir_cobranca_automatica
+                                ? <><Bell className="h-4 w-4" /> Incluir na cobrança auto.</>
+                                : <><BellOff className="h-4 w-4" /> Excluir da cobrança auto.</>
+                              }
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDeleteId(pedido.id)} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                              Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>)}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50">
+                <div className="text-sm text-muted-foreground">
+                  Mostrando {currentPage * pageSize + 1} - {Math.min((currentPage + 1) * pageSize, totalCount)} de {totalCount} pedidos
+                </div>
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious onClick={() => setCurrentPage(p => Math.max(0, p - 1))} className={currentPage === 0 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} />
+                    </PaginationItem>
+
+                    {/* Page numbers with first/last anchors */}
+                    {(() => {
+                      if (totalPages <= 7) {
+                        return Array.from({ length: totalPages }, (_, i) => (
+                          <PaginationItem key={i}>
+                            <PaginationLink onClick={() => setCurrentPage(i)} isActive={currentPage === i} className="cursor-pointer">
+                              {i + 1}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ));
+                      }
+
+                      // Calculate window of 5 pages around current
+                      let windowStart: number;
+                      if (currentPage < 3) {
+                        windowStart = 0;
+                      } else if (currentPage >= totalPages - 3) {
+                        windowStart = totalPages - 5;
+                      } else {
+                        windowStart = currentPage - 2;
+                      }
+                      const window5 = Array.from({ length: 5 }, (_, i) => windowStart + i);
+
+                      const showLeftEllipsis = windowStart > 1;
+                      const showRightEllipsis = windowStart + 5 < totalPages - 1;
+
+                      return (
+                        <>
+                          {/* First page */}
+                          {windowStart > 0 && (
+                            <PaginationItem key="first">
+                              <PaginationLink onClick={() => setCurrentPage(0)} isActive={currentPage === 0} className="cursor-pointer">1</PaginationLink>
+                            </PaginationItem>
+                          )}
+                          {showLeftEllipsis && (
+                            <PaginationItem key="ellipsis-left"><PaginationEllipsis /></PaginationItem>
+                          )}
+
+                          {window5.map(p => (
+                            <PaginationItem key={p}>
+                              <PaginationLink onClick={() => setCurrentPage(p)} isActive={currentPage === p} className="cursor-pointer">
+                                {p + 1}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+
+                          {showRightEllipsis && (
+                            <PaginationItem key="ellipsis-right"><PaginationEllipsis /></PaginationItem>
+                          )}
+                          {/* Last page */}
+                          {windowStart + 5 < totalPages && (
+                            <PaginationItem key="last">
+                              <PaginationLink onClick={() => setCurrentPage(totalPages - 1)} isActive={currentPage === totalPages - 1} className="cursor-pointer">{totalPages}</PaginationLink>
+                            </PaginationItem>
+                          )}
+                        </>
+                      );
+                    })()}
+
+                    <PaginationItem>
+                      <PaginationNext onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} className={currentPage >= totalPages - 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>}
+            </div>)}
+        </div>
+      </div>
+    </main>
+
+    {/* Bottom Navigation for Mobile */}
+    <BottomNavigation />
+
+    {/* Delete Confirmation Dialog */}
+    <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+      <AlertDialogContent className="sm:max-w-[400px]">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="rounded-xl border-0">Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90 rounded-xl">
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Order Details Modal */}
+    <Dialog open={!!selectedPedido} onOpenChange={() => setSelectedPedido(null)}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        {/* ── Header: título + nome + status ── */}
+        <DialogHeader className="pb-0">
+          <DialogTitle className="text-base font-semibold text-muted-foreground tracking-wide uppercase">
+            Detalhes do Pedido
+          </DialogTitle>
+          <div className="flex items-center justify-between mt-1">
+            <div>
+              <p className="text-xl font-bold text-foreground leading-tight">{selectedPedido?.cliente_nome}</p>
+              {selectedPedido?.telefone && (
+                <a href={`tel:${selectedPedido.telefone}`} className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  {selectedPedido.telefone}
+                </a>
+              )}
+            </div>
+            <Badge className={`${statusPagamentoColors[selectedPedido?.status_pagamento || ''] || 'bg-muted'} border text-[11px] px-3 py-1`}>
+              {selectedPedido?.status_pagamento || 'Pendente'}
+            </Badge>
+          </div>
+        </DialogHeader>
+
+        {selectedPedido && (() => {
+          const allItems = selectedPedido.pedido_itens || [];
+          const taxa = selectedPedido.taxa_excursao || 0;
+          const desconto = selectedPedido.desconto || 0;
+          const total = selectedPedido.valor_total || 0;
+          const subtotal = total + desconto - taxa;
+          const temAjustes = taxa > 0 || desconto > 0;
+
+          // Agrupamento centralizado para uso no Modal usando utilitário centralizado
+          const groupedItens = groupItensByModel(allItems as any[], {
+            getItemId: (item: any) => {
+              const produtoId = item.produto_id || '';
+              const produto = estoqueItens.find(p => p.id === produtoId);
+              if (produto?.localizacao) {
+                try {
+                  const loc = JSON.parse(produto.localizacao);
+                  if (loc.referencia) return loc.referencia;
+                } catch (e) {}
+              }
+              if (item.produto_nome?.includes(' | REF: ')) {
+                return item.produto_nome.split(' | REF: ')[1] || "";
+              }
+              return item.produto_nome || "";
+            },
+            getItemNome: (item: any) => {
+              const produto = estoqueItens.find(p => p.id === item.produto_id);
+              if (produto?.nome) return produto.nome;
+              const refLegado = item.produto_nome;
+              if (refLegado) {
+                const porRef = estoqueItens.find(p => {
+                  if (!p.localizacao) return false;
+                  try { return JSON.parse(p.localizacao)?.referencia === refLegado; } catch { return false; }
+                });
+                if (porRef?.nome) return porRef.nome;
+              }
+              return item.produto_nome || "";
+            },
+            getItemPreco: (item: any) => item.valor_unitario || 0,
+            getItemQtd: (item: any) => item.quantidade || 0,
+            getItemImagem: (item: any) => {
+              const produto = estoqueItens.find(p => p.id === item.produto_id);
+              return produto?.imagemUrl || null;
+            },
+            getItemModeloId: (item: any) => {
+              const produto = estoqueItens.find(p => p.id === item.produto_id);
+              if (produto?.localizacao) {
+                try {
+                  const loc = JSON.parse(produto.localizacao);
+                  return loc.modeloId || null;
+                } catch { return null; }
+              }
+              return null;
+            }
+          });
+
+          return (
+            <div className="space-y-4 mt-4">
+
+              {/* ── Card único: localização + excursão + data + pagamento + status ── */}
+              <div className="neu-card p-4 rounded-xl space-y-3">
+                {/* Linha 1: localização, excursão, data, pagamento */}
+                <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                  {(selectedPedido.cidade || selectedPedido.estado) && (
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" />
+                      <span className="font-medium text-foreground">{[selectedPedido.cidade, selectedPedido.estado].filter(Boolean).join(', ')}</span>
+                    </span>
+                  )}
+                  {selectedPedido.excursao && (
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Bus className="h-3.5 w-3.5 shrink-0" />
+                      <span className="font-medium text-foreground">{selectedPedido.excursao}</span>
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="font-medium text-foreground">
+                      {format(new Date(selectedPedido.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </span>
+                  </span>
+                  {selectedPedido.forma_pagamento && (
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5 shrink-0" />
+                      <span className="font-medium text-foreground">{selectedPedido.forma_pagamento}</span>
+                    </span>
+                  )}
+                </div>
+                {/* Linha 2: badges de status */}
+                <div className="flex flex-wrap gap-1.5 pt-1 border-t border-border/30">
+                  <Badge className={`${statusPagamentoColors[selectedPedido.status_pagamento || ''] || 'bg-muted'} border text-[10px]`}>
+                    {selectedPedido.status_pagamento || 'Pendente'}
+                  </Badge>
+                  <Badge className={`${statusPedidoColors[selectedPedido.status_pedido || ''] || 'bg-muted'} border text-[10px]`}>
+                    {selectedPedido.status_pedido || 'Não separado'}
+                  </Badge>
+                  <Badge className={`${statusEntregaColors[selectedPedido.status_entrega || ''] || 'bg-muted'} border text-[10px]`}>
+                    {selectedPedido.status_entrega || 'Não entregue'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* ── Itens do Pedido ── */}
+              <div className="neu-card p-4 rounded-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-foreground">Itens do Pedido</h3>
+                  <span className="text-xs font-semibold text-primary bg-primary/10 rounded-full px-2.5 py-0.5">
+                    {selectedPedido.total_pecas || 0} peças · {groupedItens.length} {groupedItens.length === 1 ? 'modelo' : 'modelos'}
+                  </span>
+                </div>
+                {/* Cabeçalho da lista */}
+                {groupedItens.length > 0 && (
+                  <div className="flex justify-between text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest px-1 mb-1">
+                    <span>Modelo</span>
+                    <span>Total</span>
+                  </div>
+                )}
+                {groupedItens.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhum item</p>
+                ) : (
+                  <div>
+                    {groupedItens.map((group, index) => (
+                      <div key={index} className="flex justify-between items-start py-2.5 border-b border-border/40 last:border-0 gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground text-sm leading-snug">{group.nomeExibicao}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                            {(group.tamanhosComQtd ?? []).length > 0
+                              ? `${group.tamanhosComQtd.map(({ tamanho, quantidade }: { tamanho: string; quantidade: number }) => `${quantidade}×${tamanho}`).join(' · ')} · `
+                              : ''}
+                            {group.quantidadeTotal} peça{group.quantidadeTotal !== 1 ? 's' : ''} · {formatCurrency(group.valorUnitario)}
+                          </p>
+                        </div>
+                        <p className="font-bold text-emerald-600 shrink-0 text-sm">{formatCurrency(group.subtotal)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Resumo Financeiro estilo recibo ── */}
+              <div className="neu-card p-4 rounded-xl">
+                <div className="space-y-1.5 text-sm">
+                  {temAjustes && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Subtotal</span>
+                      <span className="font-medium text-foreground">{formatCurrency(subtotal)}</span>
+                    </div>
+                  )}
+                  {taxa > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Taxa Excursão{selectedPedido.excursao ? ` (${selectedPedido.excursao})` : ''}</span>
+                      <span className="font-medium text-amber-600">+ {formatCurrency(taxa)}</span>
+                    </div>
+                  )}
+                  {desconto > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Desconto (interno)</span>
+                      <span className="font-medium text-rose-600">- {formatCurrency(desconto)}</span>
+                    </div>
+                  )}
+                  <div className={`flex justify-between items-center ${temAjustes ? 'pt-2 mt-1 border-t border-border/50' : ''}`}>
+                    <span className="font-bold text-foreground text-base uppercase tracking-wide">Total</span>
+                    <span className="font-bold text-emerald-600 text-xl">{formatCurrency(total)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Observações ── */}
+              {selectedPedido.observacoes && (
+                <div className="flex gap-3 p-4 rounded-xl border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-950/20 neu-card">
+                  <FileText className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1">Observações</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{selectedPedido.observacoes}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </DialogContent>
+    </Dialog>
+
+    {/* Edit Pedido Modal */}
+    <EditPedidoModalWrapper pedidoId={editingPedidoId} onClose={() => setEditingPedidoId(null)} />
+
+    {/* Import CSV Modal */}
+    <ImportPedidosCSVModal open={importModalOpen} onOpenChange={setImportModalOpen} />
+
+    {/* Clear Data Modal */}
+    <ClearPedidosDataModal open={clearDataModalOpen} onOpenChange={setClearDataModalOpen} />
+
+    {/* Product Summary Modal */}
+    <ProductSummaryModal
+      open={summaryModalOpen}
+      onOpenChange={setSummaryModalOpen}
+      pedidos={pedidosList}
+    />
+  </div>;
+}
+
+// Wrapper component to fetch pedido data for editing
+function EditPedidoModalWrapper({
+  pedidoId,
+  onClose
+}: {
+  pedidoId: string | null;
+  onClose: () => void;
+}) {
+  const {
+    data: pedidoDB,
+    isLoading
+  } = usePedidoById(pedidoId || undefined);
+  if (!pedidoId) return null;
+
+  // Transform data to modal format
+  const pedidoData = pedidoDB ? {
+    id: pedidoDB.id,
+    cliente_nome: pedidoDB.cliente_nome,
+    total_pecas: pedidoDB.total_pecas || 0,
+    valor_total: pedidoDB.valor_total || 0,
+    desconto: pedidoDB.desconto ?? 0,
+    itens: (pedidoDB.itens || []).map(item => ({
+      id: item.id,
+      produto_id: item.produto_id,
+      produto_nome: item.produto_nome,
+      quantidade: item.quantidade,
+      valor_unitario: item.valor_unitario
+    }))
+  } : null;
+  return <EditPedidoModal pedido={pedidoData} open={!!pedidoId && !isLoading} onClose={onClose} />;
+}
