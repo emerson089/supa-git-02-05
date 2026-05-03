@@ -1,2 +1,0 @@
-ALTER TABLE public.excursoes
-ADD COLUMN IF NOT EXISTS origem TEXT;

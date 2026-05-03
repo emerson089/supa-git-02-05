@@ -1,1 +1,0 @@
-ALTER TABLE transferencias DROP CONSTRAINT IF EXISTS transferencias_motivo_check;

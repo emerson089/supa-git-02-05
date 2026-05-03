@@ -1,1 +1,0 @@
-ALTER TABLE public.pedidos ADD COLUMN IF NOT EXISTS notificado_no_carro boolean DEFAULT false;
